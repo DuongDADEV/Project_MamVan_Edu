@@ -1435,12 +1435,14 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                   onChange={(e) => setGeminiModelInput(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-[#D1C7B7] bg-[#FAF5EB]/50 text-xs text-[#2F3E6B] font-bold focus:outline-none focus:border-[#E2704A]"
                 >
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Khuyên dùng - Nhanh & mới nhất)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Tốc độ cao, ổn định)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Suy luận sâu, ngữ văn nâng cao)</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash (Thử nghiệm thế hệ mới)</option>
+                  <option value="gemini-2.0-flash">gemini-2.0-flash (Khuyên dùng - Siêu tốc & Thông minh)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn ổn định)</option>
+                  <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Tiết kiệm token)</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro (Suy luận ngữ văn sâu)</option>
                 </select>
                 <p className="text-[11px] text-[#6B7280]">
-                  Gợi ý: <strong>gemini-2.5-flash</strong> phản hồi siêu tốc dưới 1 giây.
+                  Gợi ý: Hệ thống hỗ trợ đa model và tự động chuyển model dự phòng khi có tình trạng nghẽn token.
                 </p>
               </div>
             </div>

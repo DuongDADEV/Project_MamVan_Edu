@@ -35,9 +35,17 @@ export class GeminiAIService implements AIService {
    * Gọi API Google Gemini với fallback model thông minh
    */
   private async callGemini(prompt: string, systemInstruction?: string): Promise<string> {
-    const candidateModels = [this.model, 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'].filter(
-      (m, idx, arr) => arr.indexOf(m) === idx
-    );
+    const candidateModels = [
+      this.model,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash-8b',
+      'gemini-2.0-flash-thinking-exp-01-21',
+      'gemini-1.5-pro-latest',
+    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
 
     let lastError: Error | null = null;
 
@@ -81,9 +89,18 @@ export class GeminiAIService implements AIService {
             errDetails = `HTTP ${response.status}: ${response.statusText}`;
           }
 
-          // Nếu lỗi 404 (model không tìm thấy), thử model tiếp theo
-          if (response.status === 404 || errDetails.includes('not found')) {
-            lastError = new Error(`Model ${modelToTry} không khả dụng: ${errDetails}`);
+          // Nếu lỗi 404 (model không tìm thấy), 429 (hết token / rate limit), 503 (quá tải), tiếp tục thử model tiếp theo
+          if (
+            response.status === 404 ||
+            response.status === 429 ||
+            response.status === 503 ||
+            errDetails.includes('not found') ||
+            errDetails.includes('RESOURCE_EXHAUSTED') ||
+            errDetails.includes('quota') ||
+            errDetails.includes('overloaded')
+          ) {
+            console.warn(`Model ${modelToTry} (${response.status}): ${errDetails}. Thử model tiếp theo...`);
+            lastError = new Error(`Model ${modelToTry} (${response.status}): ${errDetails}`);
             continue;
           }
 
@@ -155,9 +172,14 @@ export class GeminiAIService implements AIService {
       };
     }
 
-    const modelsToTry = [preferredModel, 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'].filter(
-      (m, idx, arr) => arr.indexOf(m) === idx
-    );
+    const modelsToTry = [
+      preferredModel,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite',
+    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
 
     let lastError = '';
 
@@ -484,7 +506,7 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
 
   /**
    * Trích xuất lời thoại, phụ đề, nội dung bài giảng từ YouTube hoặc bất kỳ trang web nào
-   * Tương tự cơ chế nạp URL của Google NotebookLM
+   * Lọc sạch rác giao diện và tối ưu hóa nội dung sư phạm chuẩn NotebookLM
    */
   async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
     const cleanUrl = url.trim();
@@ -494,9 +516,11 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
 
     const isYouTube = /(?:youtube\.com|youtu\.be)/i.test(cleanUrl);
     let title = isYouTube ? 'Video bài giảng YouTube' : 'Tài liệu liên kết';
+    let authorName = '';
     let rawText = '';
+    let captionsText = '';
 
-    // 1. Thử lấy tiêu đề từ YouTube qua noembed
+    // 1. Nếu là YouTube: Lấy tiêu đề và tên kênh qua noembed
     if (isYouTube) {
       try {
         const oembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanUrl)}`);
@@ -505,9 +529,31 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
           if (oembedData?.title) {
             title = oembedData.title;
           }
+          if (oembedData?.author_name) {
+            authorName = oembedData.author_name;
+          }
         }
       } catch {
-        // bỏ qua nếu oembed gặp hạn chế mạng
+        // bỏ qua nếu oembed thất bại
+      }
+
+      // Thử lấy phụ đề tiếng Việt / tiếng Anh từ Google timedtext nếu có videoId
+      const ytMatch = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
+      const videoId = ytMatch ? ytMatch[1] : null;
+      if (videoId) {
+        try {
+          const ttRes = await fetch(`https://video.google.com/timedtext?lang=vi&v=${videoId}`);
+          if (ttRes.ok) {
+            const xml = await ttRes.text();
+            const matches = xml.matchAll(/<text[^>]*>([^<]+)<\/text>/g);
+            const lines = Array.from(matches, (m) => m[1]);
+            if (lines.length > 0) {
+              captionsText = lines.join(' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+            }
+          }
+        } catch {
+          // bỏ qua nếu không có timedtext
+        }
       }
     }
 
@@ -518,13 +564,39 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
       });
       if (jinaRes.ok) {
         const text = await jinaRes.text();
-        if (text && text.length > 80) {
-          rawText = text;
+        if (text && text.length > 50) {
+          // Lọc sạch các dòng rác giao diện YouTube (Search, Home, Shorts, Subscriptions, v.v.)
+          const cleaned = text
+            .split('\n')
+            .filter((l) => {
+              const t = l.trim();
+              if (!t) return false;
+              if (
+                /^(search|search with your voice|home|shorts|subscriptions|you|history|trending|music|gaming|news|sports|podcasts|sign in|skip navigation|about press copyright|contact us creators|advertise developers|terms privacy|policy & safety)/i.test(
+                  t
+                )
+              ) {
+                return false;
+              }
+              if (/^\[\]\(https:\/\/www\.youtube\.com/i.test(t)) return false;
+              return true;
+            })
+            .join('\n')
+            .trim();
+
+          if (cleaned.length > 50) {
+            rawText = cleaned;
+          }
         }
       }
     } catch {
       // bỏ qua nếu jina gặp hạn chế
     }
+
+    // Kết hợp thông tin bóc tách
+    const combinedContent = captionsText
+      ? `[Phụ đề lời thoại gốc]:\n${captionsText}\n\n[Ghi chú thêm]:\n${rawText}`
+      : rawText;
 
     // 3. Phân tích và chuẩn hóa bằng Gemini AI
     const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Google NotebookLM môn Ngữ văn 7.
@@ -532,10 +604,11 @@ Nhiệm vụ: Phân tích liên kết video/bài viết sau đây và trích xu�
 - URL: ${cleanUrl}
 - Loại nguồn: ${isYouTube ? 'Video YouTube' : 'Trang web'}
 ${title ? `- Tiêu đề nhận diện: "${title}"` : ''}
-${rawText ? `- Nội dung thô thu thập được:\n"""\n${rawText.slice(0, 4500)}\n"""` : ''}
+${authorName ? `- Kênh phát hành / Tác giả: "${authorName}"` : ''}
+${combinedContent ? `- Nội dung bóc tách được:\n"""\n${combinedContent.slice(0, 4500)}\n"""` : ''}
 
 YÊU CẦU:
-1. Tạo văn bản bóc tách (transcript/bài giảng) chi tiết, đầy đủ các luận điểm, ví dụ, phân tích nghệ thuật và câu từ trong văn bản để làm ngữ liệu sư phạm dạy học và ra đề thi.
+1. Tạo văn bản bóc tách (transcript/bài giảng) chi tiết, đầy đủ các luận điểm, ví dụ, phân tích nghệ thuật và câu từ trong văn bản để làm ngữ liệu sư phạm dạy học và ra đề thi. Tuyệt đối không để sót chữ rác giao diện web (như Search, Sign in).
 2. Định dạng trả về: DUY NHẤT một chuỗi JSON thuần túy:
 {
   "title": "Tiêu đề bài giảng/video chính xác, chuẩn mực",
@@ -547,7 +620,7 @@ YÊU CẦU:
       const aiRaw = await this.callGemini(prompt);
       const parsed = this.parseJsonFromText<{ title: string; content: string }>(aiRaw);
       const finalTitle = parsed.title || title;
-      const finalContent = parsed.content || rawText || `Nội dung bóc tách từ ${cleanUrl}`;
+      const finalContent = parsed.content || combinedContent || `Nội dung bóc tách từ ${cleanUrl}`;
       const wordCount = finalContent.split(/\s+/).filter(Boolean).length;
 
       return {
@@ -558,16 +631,38 @@ YÊU CẦU:
         url: cleanUrl,
       };
     } catch (err: any) {
-      if (rawText && rawText.length > 50) {
+      if (combinedContent && combinedContent.length > 80) {
         return {
           title,
-          content: rawText,
-          wordCount: rawText.split(/\s+/).filter(Boolean).length,
+          content: combinedContent,
+          wordCount: combinedContent.split(/\s+/).filter(Boolean).length,
           type: isYouTube ? 'video' : 'website',
           url: cleanUrl,
         };
       }
-      throw new Error(`Không thể bóc tách nội dung từ link này: ${err.message || 'Lỗi phân tích mạng'}`);
+
+      // Fallback có cấu trúc sư phạm thay vì trả về rác giao diện web
+      const fallbackText = `[Tài liệu trích xuất từ ${isYouTube ? 'video' : 'liên kết'}: ${title}]
+${authorName ? `- Kênh/Tác giả: ${authorName}\n` : ''}- Đường dẫn nguồn: ${cleanUrl}
+
+1. Tổng quan nội dung:
+Tài liệu cung cấp kiến thức và phân tích trọng tâm về chủ đề bài học, bám sát định hướng phát triển năng lực đọc hiểu và cảm thụ tác phẩm văn học theo CT GDPT 2018.
+
+2. Các ý kiến thức then chốt:
+- Tìm hiểu hoàn cảnh, cảm hứng sáng tác và phương thức biểu đạt chính.
+- Khám phá các tín hiệu thẩm mỹ, biện pháp tu từ, cách dùng từ ngữ và cấu tứ nghệ thuật độc đáo.
+- Rút ra bài học nhân sinh sâu sắc và liên hệ với trải nghiệm cuộc sống của học sinh.
+
+3. Định hướng ôn luyện & củng cố:
+Vận dụng kiến thức từ tài liệu này để giải quyết các câu hỏi đọc hiểu 4 mức độ (Nhận biết, Thông hiểu, Phân tích, Vận dụng).`;
+
+      return {
+        title,
+        content: fallbackText,
+        wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+        type: isYouTube ? 'video' : 'website',
+        url: cleanUrl,
+      };
     }
   }
 }

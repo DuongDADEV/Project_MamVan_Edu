@@ -1310,9 +1310,11 @@ Vì tiếng gà cục tác
                   onChange={(e) => setModalModelInput(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
                 >
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Khuyên dùng - Nhanh nhất)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Ổn định, phản hồi tốt)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Suy luận sâu)</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash (Thử nghiệm thế hệ mới)</option>
+                  <option value="gemini-2.0-flash">gemini-2.0-flash (Khuyên dùng - Siêu tốc & Thông minh)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn ổn định)</option>
+                  <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Tiết kiệm token)</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro (Suy luận ngữ văn sâu)</option>
                 </select>
               </div>
 
