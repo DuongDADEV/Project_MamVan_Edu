@@ -80,7 +80,33 @@ export class SupabaseAuthRepository implements AuthRepository {
     }
 
     try {
-      // 1. Phân hệ Giáo viên / Admin
+      // 0. Phân hệ Quản trị viên (Admin)
+      if (role === 'admin') {
+        if ((uClean === 'admin' || uClean === 'quantri') && (pClean === '123456' || pClean === 'admin123')) {
+          const session: AuthSession = {
+            user: {
+              id: 'admin_001',
+              name: 'Quản trị viên Hệ thống',
+              username: 'admin',
+              role: 'admin',
+              email: 'admin@mamvan.edu.vn',
+            },
+            role: 'admin',
+            signedInAt: Date.now(),
+          };
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+          }
+          syncEventBus.emit('auth', session, 'supabase-auth');
+          return { success: true, session };
+        }
+        return {
+          success: false,
+          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: admin / 123456)',
+        };
+      }
+
+      // 1. Phân hệ Giáo viên
       if (role === 'teacher') {
         const { data: teacher, error } = await supabase
           .from('teachers')

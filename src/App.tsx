@@ -242,7 +242,9 @@ export default function App() {
         const nextJson = JSON.stringify(session);
         if (currentJson !== nextJson) {
           setCurrentSession(session);
-          if (session?.role === 'teacher') {
+          if (session?.role === 'admin') {
+            navigateTo('/admin');
+          } else if (session?.role === 'teacher') {
             navigateTo('/teacher');
           } else if (session?.role === 'student') {
             navigateTo('/');
@@ -323,7 +325,9 @@ export default function App() {
   // 7. Xử lý Đăng nhập & Đổi người dùng
   const handleLoginSuccess = (session: AuthSession) => {
     setCurrentSession(session);
-    if (session.role === 'teacher') {
+    if (session.role === 'admin') {
+      navigateTo('/admin');
+    } else if (session.role === 'teacher') {
       navigateTo('/teacher');
     } else if (session.role === 'student') {
       navigateTo('/');

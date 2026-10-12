@@ -2429,7 +2429,11 @@ export const settingRepo = new MockSettingRepository();
 // ==========================================
 export class MockTeacherRepository implements TeacherRepository {
   async getTeachers(): Promise<TeacherProfile[]> {
-    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    let teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    if (!teachers || teachers.length === 0) {
+      teachers = SEED_TEACHERS;
+      writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    }
     return teachers.map((t) => ({
       ...t,
       status: t.status || 'active',
