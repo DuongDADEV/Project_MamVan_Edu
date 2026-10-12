@@ -40,6 +40,7 @@ import {
   supabaseStudentRepo,
   supabaseAttemptRepo,
   supabaseEssayRepo,
+  supabaseRewardRepo,
 } from './supabase/supabaseRepositories.ts';
 import { syncEventBus } from './mock/eventBus.ts';
 
@@ -58,8 +59,8 @@ export const attemptService: AttemptRepository = supabaseAttemptRepo;
 export const attemptRepository: AttemptRepository = supabaseAttemptRepo;
 export const essayService: EssayRepository = supabaseEssayRepo;
 export const essayRepository: EssayRepository = supabaseEssayRepo;
-export const rewardService: RewardRepository = rewardRepo;
-export const rewardRepository: RewardRepository = rewardRepo;
+export const rewardService: RewardRepository = supabaseRewardRepo;
+export const rewardRepository: RewardRepository = supabaseRewardRepo;
 export const auditService: AuditRepository = auditRepo;
 export const auditRepository: AuditRepository = auditRepo;
 export const settingService: SettingRepository = settingRepo;

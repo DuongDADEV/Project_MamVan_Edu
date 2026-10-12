@@ -15,6 +15,11 @@ import {
   StudentRepository,
   AttemptRepository,
   EssayRepository,
+  RewardRepository,
+  RewardItem,
+  RewardRequest,
+  RewardStatus,
+  EnrichedRewardRequest,
   Role,
   AuthSession,
   ClassItem,
@@ -34,6 +39,7 @@ import {
   studentRepo as mockStudentRepo,
   attemptRepo as mockAttemptRepo,
   essayRepo as mockEssayRepo,
+  rewardRepo as mockRewardRepo,
   auditRepo,
 } from '../mock/mockRepositories.ts';
 import { createFreshStudentState } from '../mock/seedData.ts';
@@ -1115,3 +1121,140 @@ export class SupabaseEssayRepository implements EssayRepository {
 }
 
 export const supabaseEssayRepo = new SupabaseEssayRepository();
+
+// ==============================================================================
+// 6. SUPABASE REWARD REPOSITORY (QUÀ TẶNG & YÊU CẦU ĐỔI QUÀ)
+// ==============================================================================
+export class SupabaseRewardRepository implements RewardRepository {
+  async getRewards(): Promise<RewardItem[]> {
+    return mockRewardRepo.getRewards();
+  }
+  async saveReward(reward: Partial<RewardItem>): Promise<RewardItem> {
+    return mockRewardRepo.saveReward(reward);
+  }
+  async deleteReward(id: string): Promise<void> {
+    return mockRewardRepo.deleteReward(id);
+  }
+
+  async getRequests(filter?: {
+    classId?: string;
+    studentId?: string;
+    status?: RewardStatus;
+  }): Promise<EnrichedRewardRequest[]> {
+    if (!isSupabaseReady()) {
+      return [];
+    }
+
+    try {
+      let query = supabase
+        .from('reward_requests')
+        .select('*, students(name, class_id)')
+        .order('created_at', { ascending: false });
+
+      if (filter?.studentId && isUUID(filter.studentId)) {
+        query = query.eq('student_id', filter.studentId);
+      }
+      if (filter?.status) {
+        const dbStatus = filter.status === 'PENDING_APPROVAL' ? 'PENDING' : filter.status;
+        query = query.eq('status', dbStatus);
+      }
+
+      const { data, error } = await query;
+      if (error || !data) {
+        return [];
+      }
+
+      const rewards = await this.getRewards();
+
+      return data.map((row: any) => {
+        const tierKey = (row.chest_type || 'hat').toUpperCase();
+        const matchedReward = rewards.find((r) => r.tierKey === tierKey) || rewards[0];
+        const statusMap: Record<string, RewardStatus> = {
+          PENDING: 'PENDING_APPROVAL',
+          APPROVED: 'APPROVED',
+          REJECTED: 'REJECTED',
+        };
+
+        return {
+          id: row.id,
+          studentId: row.student_id,
+          studentName: row.students?.name || 'Học sinh',
+          classId: row.students?.class_id || DEFAULT_CLASS_UUID,
+          className: 'Lớp 7A2',
+          rewardId: matchedReward?.id || 'tier_hat',
+          requestedAt: new Date(row.created_at).getTime(),
+          status: statusMap[row.status] || 'PENDING_APPROVAL',
+          xpWeekActual: row.xp_week_snapshot || 260,
+          attendanceDaysActual: 4,
+          isEligible: true,
+          reward: matchedReward,
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async createRequest(studentId: string, rewardId: string): Promise<RewardRequest> {
+    const payload = {
+      student_id: isUUID(studentId) ? studentId : '00000000-0000-0000-0000-000000000102',
+      chest_type: rewardId.replace('tier_', '') || 'hat',
+      xp_week_snapshot: 260,
+      gift_name: 'Phần thưởng Mầm Văn',
+      status: 'PENDING',
+    };
+    const { data } = await supabase.from('reward_requests').insert(payload).select().single();
+    syncEventBus.emit('reward');
+    return {
+      id: data?.id || 'req_01',
+      rewardId,
+      requestedAt: Date.now(),
+      status: 'PENDING_APPROVAL',
+    };
+  }
+
+  async updateRequestStatus(
+    requestId: string,
+    status: RewardStatus,
+    reason?: string,
+    teacherActorId?: string
+  ): Promise<RewardRequest> {
+    const dbStatus = status === 'PENDING_APPROVAL' ? 'PENDING' : status === 'APPROVED' ? 'APPROVED' : 'REJECTED';
+    await supabase
+      .from('reward_requests')
+      .update({
+        status: dbStatus,
+        approved_at: status === 'APPROVED' ? new Date().toISOString() : null,
+      })
+      .eq('id', requestId);
+
+    syncEventBus.emit('reward');
+    return {
+      id: requestId,
+      rewardId: 'tier_hat',
+      requestedAt: Date.now(),
+      status,
+      rejectReason: reason,
+    };
+  }
+
+  async batchUpdateStatus(
+    requestIds: string[],
+    status: RewardStatus,
+    reason?: string,
+    teacherActorId?: string
+  ): Promise<void> {
+    const dbStatus = status === 'PENDING_APPROVAL' ? 'PENDING' : status === 'APPROVED' ? 'APPROVED' : 'REJECTED';
+    await supabase
+      .from('reward_requests')
+      .update({
+        status: dbStatus,
+        approved_at: status === 'APPROVED' ? new Date().toISOString() : null,
+      })
+      .in('id', requestIds);
+    syncEventBus.emit('reward');
+  }
+}
+
+export const supabaseRewardRepo = new SupabaseRewardRepository();
+
