@@ -123,9 +123,6 @@ Vì tiếng gà cục tác
   const [activeTabSourceInput, setActiveTabSourceInput] = useState<'paste' | 'file' | 'video'>('paste');
   const [newSourceTitle, setNewSourceTitle] = useState('');
   const [newSourceContent, setNewSourceContent] = useState('');
-  const [videoUrlInput, setVideoUrlInput] = useState('');
-  const [isExtractingUrl, setIsExtractingUrl] = useState(false);
-  const [extractedNotice, setExtractedNotice] = useState<string | null>(null);
   const [showAddSourceForm, setShowAddSourceForm] = useState(false);
   const [unsupportedFileNotice, setUnsupportedFileNotice] = useState<string | null>(null);
   const [previewingSource, setPreviewingSource] = useState<AISource | null>(null);
@@ -248,28 +245,6 @@ Vì tiếng gà cục tác
       reader.readAsText(file);
     } else {
       setUnsupportedFileNotice(`Định dạng "${file.name}" sắp được hỗ trợ. Hiện tại vui lòng dùng file .txt hoặc dán nội dung trực tiếp.`);
-    }
-  };
-
-  // Bóc tách transcript và nội dung từ link YouTube / Video web
-  const handleExtractUrl = async () => {
-    if (!videoUrlInput.trim()) {
-      alert('Vui lòng dán liên kết video YouTube hoặc bài viết web.');
-      return;
-    }
-    setIsExtractingUrl(true);
-    setExtractedNotice(null);
-    try {
-      const res = await aiService.extractContentFromUrl(videoUrlInput.trim());
-      setNewSourceTitle(res.title);
-      setNewSourceContent(res.content);
-      setExtractedNotice(
-        `✅ Đã bóc tách thành công: "${res.title}" (${res.wordCount} từ). Thầy/cô có thể kiểm tra nội dung và bấm "Lưu nguồn" bên dưới.`
-      );
-    } catch (err: any) {
-      alert(`Không thể trích xuất nội dung từ liên kết: ${err.message || 'Lỗi mạng hoặc phân tích'}`);
-    } finally {
-      setIsExtractingUrl(false);
     }
   };
 
@@ -827,7 +802,7 @@ Vì tiếng gà cục tác
                     activeTabSourceInput === 'video' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
                   }`}
                 >
-                  Bản ghi video
+                  Ghi chú / Lời giảng
                 </button>
               </div>
 
@@ -860,61 +835,20 @@ Vì tiếng gà cục tác
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {activeTabSourceInput === 'video' && (
-                    <div className="p-2.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] space-y-2">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#2F3E6B]">
-                        <Link2 className="w-3.5 h-3.5 text-[#E2704A]" />
-                        <span>Bóc tách từ link YouTube hoặc URL bài giảng:</span>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="text"
-                          placeholder="Dán link YouTube (vd: https://youtube.com/watch?v=...)"
-                          value={videoUrlInput}
-                          onChange={(e) => setVideoUrlInput(e.target.value)}
-                          className="flex-1 px-2.5 py-1.5 rounded-lg bg-white border border-[#E6DCC8] text-[11px] text-[#2F3E6B] outline-none focus:border-[#E2704A]"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleExtractUrl}
-                          disabled={isExtractingUrl || !videoUrlInput.trim()}
-                          className="px-2.5 py-1.5 rounded-lg bg-[#2F3E6B] hover:bg-[#1E293B] disabled:opacity-40 text-white text-[11px] font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          {isExtractingUrl ? (
-                            <>
-                              <RefreshCw className="w-3 h-3 animate-spin" />
-                              <span>Đang lọc text...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="w-3 h-3 text-amber-400" />
-                              <span>Lọc text AI</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      {extractedNotice && (
-                        <p className="text-[10px] text-emerald-800 bg-emerald-50 p-1.5 rounded-lg border border-emerald-200">
-                          {extractedNotice}
-                        </p>
-                      )}
-                      <p className="text-[10px] text-[#8C7E6A] italic">
-                        💡 Tự động bóc tách phụ đề, lời thoại và tổng hợp kiến thức từ video chuẩn Google NotebookLM.
-                      </p>
-                    </div>
-                  )}
-
                   <textarea
-                    rows={4}
+                    rows={5}
                     placeholder={
                       activeTabSourceInput === 'video'
-                        ? 'Nội dung bóc tách lời giảng (Transcript video) sẽ hiển thị ở đây hoặc dán trực tiếp...'
-                        : 'Dán đoạn trích bài thơ, văn bản tác phẩm hoặc ghi chú bài dạy...'
+                        ? 'Dán lời giảng bài học, ghi chép nội dung video hoặc transcript tại đây...'
+                        : 'Dán đoạn trích tác phẩm văn học, bài thơ hoặc tài liệu tham khảo bài dạy...'
                     }
                     value={newSourceContent}
                     onChange={(e) => setNewSourceContent(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
                   />
+                  <p className="text-[10px] text-[#8C7E6A] italic">
+                    💡 Thầy/cô chỉ cần dán trực tiếp đoạn văn bản, thơ ca hoặc lời giảng vào đây rồi bấm "Lưu nguồn".
+                  </p>
                 </div>
               )}
 
