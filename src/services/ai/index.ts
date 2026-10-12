@@ -1,8 +1,8 @@
 /**
  * XUẤT KHẨU AISERVICE INSTANCE VÀ CÁC KIỂU DỮ LIỆU
  * Tự động chuyển đổi thông minh:
- * - Khi người dùng đã nhập Google AI Studio API Key: Gọi Gemini API thật (GeminiAIService)
- * - Khi chưa có API Key hoặc bị lỗi mạng: Tự động dùng MockAIService giả lập chất lượng cao
+ * - Khi người dùng đã nhập Google AI Studio API Key: Gọi Gemini AI thật 100%
+ * - Khi chưa có API Key: Báo rõ ràng cần nhập API Key để kích hoạt AI thật, tránh trả lời mặc định gây hiểu lầm
  */
 
 import {
@@ -25,7 +25,11 @@ const STORAGE_MODEL_KEY = 'mamvan_gemini_model';
 
 export const getGeminiApiKey = (): string => {
   if (typeof window === 'undefined') return '';
-  return localStorage.getItem(STORAGE_API_KEY) || '';
+  const stored = localStorage.getItem(STORAGE_API_KEY);
+  if (stored && stored.trim()) return stored.trim();
+  const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  if (envKey && typeof envKey === 'string' && envKey.trim()) return envKey.trim();
+  return '';
 };
 
 export const setGeminiApiKey = (key: string): void => {
@@ -50,12 +54,12 @@ export const setGeminiModel = (model: string): void => {
 export const testGeminiApiKey = async (
   key: string,
   model?: string
-): Promise<{ success: boolean; message: string; latencyMs: number }> => {
+): Promise<{ success: boolean; message: string; latencyMs: number; workingModel?: string }> => {
   return GeminiAIService.testConnection(key, model || getGeminiModel());
 };
 
 /**
- * SmartAIService: Tự động gọi Gemini thật khi có API Key, fallback sang Mock
+ * SmartAIService: Gọi Gemini AI thật khi có API Key, báo rõ ràng khi chưa cấu hình
  */
 class SmartAIService implements AIService {
   private mock = new MockAIService();
@@ -73,10 +77,12 @@ class SmartAIService implements AIService {
     if (gemini) {
       try {
         return await gemini.generateKeySummary(sources, options);
-      } catch (err) {
-        console.warn('GeminiAIService lỗi, tự động chuyển về MockAIService:', err);
+      } catch (err: any) {
+        console.error('GeminiAIService lỗi:', err);
+        throw new Error(`Google AI Studio lỗi: ${err.message || 'Không thể sinh ý trọng tâm'}`);
       }
     }
+    // Nếu chưa có API Key: dùng Mock kèm thông báo
     return this.mock.generateKeySummary(sources, options);
   }
 
@@ -85,8 +91,9 @@ class SmartAIService implements AIService {
     if (gemini) {
       try {
         return await gemini.generateTheory(sources, options);
-      } catch (err) {
-        console.warn('GeminiAIService lỗi, tự động chuyển về MockAIService:', err);
+      } catch (err: any) {
+        console.error('GeminiAIService lỗi:', err);
+        throw new Error(`Google AI Studio lỗi: ${err.message || 'Không thể sinh lý thuyết'}`);
       }
     }
     return this.mock.generateTheory(sources, options);
@@ -97,11 +104,13 @@ class SmartAIService implements AIService {
     if (gemini) {
       try {
         return await gemini.generateQuestions(sources, options);
-      } catch (err) {
-        console.warn('GeminiAIService lỗi, tự động chuyển về MockAIService:', err);
+      } catch (err: any) {
+        console.error('Gemini generateQuestions lỗi:', err);
+        throw new Error(`Google AI Studio lỗi sinh câu hỏi: ${err.message || 'Không thể sinh câu hỏi'}`);
       }
     }
-    return this.mock.generateQuestions(sources, options);
+    // Nếu chưa có API Key, ném lỗi rõ ràng để UI hiển thị nút nhập Key thay vì trả về mock ngầm
+    throw new Error('Chưa cấu hình Google AI Studio API Key! Vui lòng nhập API Key để kích hoạt AI thật sinh câu hỏi.');
   }
 
   async suggestEssayGrade(
@@ -114,8 +123,8 @@ class SmartAIService implements AIService {
     if (gemini) {
       try {
         return await gemini.suggestEssayGrade(essayText, rubric, sampleEssays, options);
-      } catch (err) {
-        console.warn('GeminiAIService lỗi, tự động chuyển về MockAIService:', err);
+      } catch (err: any) {
+        console.error('GeminiAIService lỗi:', err);
       }
     }
     return this.mock.suggestEssayGrade(essayText, rubric, sampleEssays, options);
@@ -130,11 +139,20 @@ class SmartAIService implements AIService {
     if (gemini) {
       try {
         return await gemini.chatWithSources(sources, message, history);
-      } catch (err) {
-        console.warn('GeminiAIService lỗi, tự động chuyển về MockAIService:', err);
+      } catch (err: any) {
+        console.error('Gemini live chat error:', err);
+        return {
+          reply: `⚠️ Lỗi khi kết nối Google AI Studio (${err.message || 'Lỗi mạng'}).\n\nVui lòng kiểm tra lại API Key hoặc đổi mô hình (Model) trong phần cài đặt API Key.`,
+          citations: [],
+        };
       }
     }
-    return this.mock.chatWithSources(sources, message, history);
+
+    // Khi CHƯA có API key:
+    return {
+      reply: `⚠️ **Chưa kích hoạt Google AI Studio API Key!**\n\nĐể AI hoạt động **thật 100% giống như NotebookLM** (đọc hiểu, đối chiếu ngữ liệu, trích dẫn từng câu thơ và trả lời theo ngữ cảnh), thầy/cô vui lòng bấm vào nút **"🔑 Cấu hình API Key"** ở thanh trên cùng để dán API Key của Google AI Studio (miễn phí tại \`aistudio.google.com\`).`,
+      citations: [],
+    };
   }
 }
 

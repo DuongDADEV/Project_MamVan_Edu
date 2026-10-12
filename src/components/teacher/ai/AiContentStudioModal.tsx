@@ -19,8 +19,20 @@ import {
   Check,
   RefreshCw,
   Quote,
+  Eye,
+  KeyRound,
+  Zap,
+  ExternalLink,
+  Lightbulb,
 } from 'lucide-react';
 import { AISource, aiService } from '../../../services/index.ts';
+import {
+  getGeminiApiKey,
+  setGeminiApiKey,
+  getGeminiModel,
+  setGeminiModel,
+  testGeminiApiKey,
+} from '../../../services/ai/index.ts';
 import { MamMuc } from '../../MamMuc.tsx';
 import { SkillLevel, Difficulty, QuestionType } from '../../../types.ts';
 
@@ -46,7 +58,20 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   isEmbedded = false,
   onApplyDraft,
 }) => {
-  // 1. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI)
+  // 1. TRẠNG THÁI API KEY & AI THẬT
+  const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!getGeminiApiKey());
+  const [activeModel, setActiveModel] = useState<string>(() => getGeminiModel());
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [modalKeyInput, setModalKeyInput] = useState<string>(() => getGeminiApiKey());
+  const [modalModelInput, setModalModelInput] = useState<string>(() => getGeminiModel());
+  const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
+  const [keyTestResult, setKeyTestResult] = useState<{
+    success: boolean;
+    message: string;
+    latencyMs: number;
+  } | null>(null);
+
+  // 2. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI)
   const [sources, setSources] = useState<AISource[]>([
     {
       id: 'src_demo_01',
@@ -98,25 +123,33 @@ Vì tiếng gà cục tác
   const [newSourceContent, setNewSourceContent] = useState('');
   const [showAddSourceForm, setShowAddSourceForm] = useState(false);
   const [unsupportedFileNotice, setUnsupportedFileNotice] = useState<string | null>(null);
+  const [previewingSource, setPreviewingSource] = useState<AISource | null>(null);
 
-  // 2. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA)
+  // 3. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA)
   const [chatMessages, setChatMessages] = useState<
     { role: 'user' | 'assistant'; text: string; citations?: { sourceTitle: string; snippet: string }[] }[]
   >([
     {
       role: 'assistant',
-      text: 'Xin chào thầy/cô! Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi để kiểm tra nội dung hoặc yêu cầu tôi trích dẫn các ý quan trọng trước khi tạo bài.',
+      text: 'Xin chào thầy/cô! Tôi là trợ lý AI NotebookLM Mầm Văn. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  // 3. STATE XƯỞNG TẠO (VÙNG PHẢI)
+  // Gợi ý câu hỏi nhanh chuẩn NotebookLM
+  const suggestedPrompts = [
+    'Tóm tắt các ý chính trong văn bản',
+    'Biện pháp tu từ và tác dụng nghệ thuật',
+    'Ý nghĩa hình tượng tiếng gà trưa và thông điệp',
+    'Gợi ý 4 câu hỏi đọc hiểu 4 mức năng lực',
+  ];
+
+  // 4. STATE XƯỞNG TẠO (VÙNG PHẢI)
   const [outputType, setOutputType] = useState<'video' | 'theory' | 'quiz'>(targetTypeInitial);
   const [totalQuestions, setTotalQuestions] = useState(5);
   const [targetQuizKind, setTargetQuizKind] = useState<'quick' | 'mastery' | 'practice'>('quick');
 
-  // Số lượng từng dạng câu hỏi
   const [typeCounts, setTypeCounts] = useState<{
     single: number;
     multi: number;
@@ -127,14 +160,6 @@ Vì tiếng gà cục tác
     multi: 1,
     fill: 1,
     essay: 1,
-  });
-
-  // Tỉ lệ mức năng lực (tổng 100%)
-  const [skillRatios, setSkillRatios] = useState({
-    nhanBiet: 30,
-    thongHieu: 30,
-    phanTich: 20,
-    vanDung: 20,
   });
 
   const [difficulty, setDifficulty] = useState<Difficulty>('TB');
@@ -193,10 +218,10 @@ Vì tiếng gà cục tác
     }
   };
 
-  // Trò chuyện với nguồn
-  const handleSendMessage = async () => {
-    if (!chatInput.trim() || isChatLoading) return;
-    const userMsg = chatInput.trim();
+  // Trò chuyện với nguồn (Gửi tin nhắn)
+  const handleSendMessage = async (textToSend?: string) => {
+    const userMsg = (textToSend || chatInput).trim();
+    if (!userMsg || isChatLoading) return;
     setChatInput('');
     setChatMessages((prev) => [...prev, { role: 'user', text: userMsg }]);
     setIsChatLoading(true);
@@ -211,16 +236,53 @@ Vì tiếng gà cục tác
           citations: response.citations,
         },
       ]);
-    } catch (e) {
+    } catch (e: any) {
       setChatMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          text: 'Xin lỗi, không thể tra cứu lúc này. Vui lòng kiểm tra lại các nguồn tài liệu đã bật.',
+          text: `⚠️ Lỗi khi kết nối AI: ${e.message || 'Không thể tra cứu'}. Vui lòng kiểm tra lại API Key.`,
         },
       ]);
     } finally {
       setIsChatLoading(false);
+    }
+  };
+
+  // Lưu API Key từ Modal Quick
+  const handleSaveModalKey = () => {
+    setGeminiApiKey(modalKeyInput);
+    setGeminiModel(modalModelInput);
+    const keyValid = !!modalKeyInput.trim();
+    setHasApiKey(keyValid);
+    setActiveModel(modalModelInput);
+    setShowApiKeyModal(false);
+    alert(
+      keyValid
+        ? 'Đã kích hoạt Google AI Studio (Gemini) thật! Bây giờ AI sẽ đọc ngữ liệu và sinh nội dung trực tiếp.'
+        : 'Đã xóa API Key.'
+    );
+  };
+
+  // Kiểm tra kết nối trong Modal Quick
+  const handleTestModalKey = async () => {
+    if (!modalKeyInput.trim()) {
+      alert('Vui lòng dán API Key trước khi kiểm tra.');
+      return;
+    }
+    setIsTestingKey(true);
+    setKeyTestResult(null);
+    try {
+      const res = await testGeminiApiKey(modalKeyInput.trim(), modalModelInput);
+      setKeyTestResult(res);
+    } catch (err: any) {
+      setKeyTestResult({
+        success: false,
+        message: err.message || 'Lỗi mạng khi kiểm tra.',
+        latencyMs: 0,
+      });
+    } finally {
+      setIsTestingKey(false);
     }
   };
 
@@ -232,12 +294,19 @@ Vì tiếng gà cục tác
       return;
     }
 
+    // Kiểm tra xem đã có API Key chưa
+    if (!getGeminiApiKey()) {
+      alert('⚠️ Chưa cấu hình Google AI Studio API Key! Vui lòng dán API Key để kích hoạt AI thật sinh câu hỏi theo đúng ngữ liệu của thầy/cô.');
+      setShowApiKeyModal(true);
+      return;
+    }
+
     setIsGenerating(true);
-    setGenerationStep('Đang phân tích cấu trúc văn bản nguồn...');
+    setGenerationStep('Gemini AI đang đọc và phân tích cấu trúc văn bản nguồn...');
 
     try {
       if (outputType === 'video') {
-        setGenerationStep('Đang trích xuất các ý kiến thức trọng tâm và ví dụ minh họa...');
+        setGenerationStep('Đang trích xuất các ý kiến thức trọng tâm bài giảng và ví dụ minh họa...');
         const keyPoints = await aiService.generateKeySummary(activeSources, {
           focusTopic: topicTitle,
           includeExamples: true,
@@ -249,7 +318,7 @@ Vì tiếng gà cục tác
           onApplyDraft({
             type: 'video',
             data: {
-              title: `Bài giảng: Tìm hiểu ${topicTitle} (Bản nháp AI)`,
+              title: `Bài giảng: Tìm hiểu ${topicTitle} (Sinh bởi Gemini AI)`,
               description: `Video bài giảng bám sát ngữ liệu: ${activeSources[0].title}.`,
               durationSec: 12 * 60,
               subtopics: [topicTitle, 'Đặc trưng thể loại'],
@@ -259,9 +328,9 @@ Vì tiếng gà cục tác
             },
           });
           onClose();
-        }, 800);
+        }, 600);
       } else if (outputType === 'theory') {
-        setGenerationStep('Đang xây dựng khối lý thuyết theo chuẩn GDPT 2018...');
+        setGenerationStep('Đang xây dựng khối lý thuyết chuyên sâu theo chuẩn GDPT 2018...');
         const blocks = await aiService.generateTheory(activeSources, {
           topicTitle,
           depth: 'detailed',
@@ -274,7 +343,7 @@ Vì tiếng gà cục tác
           onApplyDraft({
             type: 'theory',
             data: {
-              title: `Lý thuyết chuyên sâu: ${topicTitle} (Bản nháp AI)`,
+              title: `Lý thuyết chuyên sâu: ${topicTitle} (Sinh bởi Gemini AI)`,
               kind: 'general_topic',
               minReadSeconds: 180,
               blocks,
@@ -283,16 +352,15 @@ Vì tiếng gà cục tác
             },
           });
           onClose();
-        }, 800);
+        }, 600);
       } else {
-        setGenerationStep(`Đang sinh bộ câu hỏi 4 mức năng lực (${totalQuestions} câu)...`);
+        setGenerationStep(`Gemini AI đang soạn bộ câu hỏi 4 mức năng lực (${totalQuestions} câu)...`);
         const questions = await aiService.generateQuestions(activeSources, {
           topicTitle,
           totalQuestions,
           difficulty,
         });
 
-        // Đảm bảo gắn cờ AI và nguồn tham chiếu
         const processedQuestions = questions.map((q) => ({
           ...q,
           isAiGenerated: true,
@@ -300,13 +368,13 @@ Vì tiếng gà cục tác
           aiSourceSnippet: q.aiSourceSnippet || activeSources[0].content.slice(0, 100),
         }));
 
-        setGenerationStep('Hoàn tất! Đang đưa vào trình tạo bài tập...');
+        setGenerationStep('Hoàn tất! Đang lưu vào Ngân hàng câu hỏi...');
         setTimeout(() => {
           setIsGenerating(false);
           onApplyDraft({
             type: 'quiz',
             data: {
-              title: `${targetQuizKind === 'quick' ? 'Kiểm tra nhanh' : targetQuizKind === 'mastery' ? 'Mastery Check' : 'Luyện tập'}: ${topicTitle} (Bản nháp AI)`,
+              title: `${targetQuizKind === 'quick' ? 'Kiểm tra nhanh' : targetQuizKind === 'mastery' ? 'Mastery Check' : 'Luyện tập'}: ${topicTitle} (Sinh bởi Gemini AI)`,
               kind: targetQuizKind,
               topicId,
               timeLimitMinutes: targetQuizKind === 'quick' ? 7 : 15,
@@ -317,11 +385,11 @@ Vì tiếng gà cục tác
             },
           });
           onClose();
-        }, 800);
+        }, 600);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Lỗi sinh bản nháp AI:', e);
-      alert('Đã xảy ra lỗi khi tạo nội dung với AI. Vui lòng thử lại.');
+      alert(`⚠️ Lỗi sinh nội dung AI: ${e.message || 'Lỗi mạng hoặc API Key chưa hợp lệ'}. Vui lòng bấm vào nút cấu hình API Key để kiểm tra lại.`);
       setIsGenerating(false);
     }
   };
@@ -339,7 +407,7 @@ Vì tiếng gà cục tác
             <Sparkles className="w-5 h-5 animate-pulse" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-lora font-bold text-lg text-[#2F3E6B]">
                 Xưởng Sáng Tạo AI Mầm Văn
               </h2>
@@ -355,479 +423,450 @@ Vì tiếng gà cục tác
             </p>
           </div>
         </div>
-        {!isEmbedded && (
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-black/5 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
+
+        {/* NÚT TRẠNG THÁI AI & ĐÓNG MODAL */}
+        <div className="flex items-center gap-2">
+          {hasApiKey ? (
+            <button
+              type="button"
+              onClick={() => {
+                setModalKeyInput(getGeminiApiKey());
+                setModalModelInput(getGeminiModel());
+                setKeyTestResult(null);
+                setShowApiKeyModal(true);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Cấu hình Google AI Studio API Key"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
+              <span>🟢 Gemini AI Thật ({activeModel})</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setModalKeyInput(getGeminiApiKey());
+                setModalModelInput(getGeminiModel());
+                setKeyTestResult(null);
+                setShowApiKeyModal(true);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer animate-pulse"
+              title="Bấm để kích hoạt AI thật bằng API Key của bạn"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>🔑 Kích hoạt AI Thật (Nhập Key)</span>
+            </button>
+          )}
+
+          {!isEmbedded && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-black/5 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
-        {/* NỘI DUNG 3 VÙNG */}
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-[#E6DCC8]">
-          {/* ========================================================= */}
-          {/* VÙNG 1: NGUỒN TÀI LIỆU (BÊN TRÁI ~ 310px) */}
-          {/* ========================================================= */}
-          <div className="w-full md:w-[320px] lg:w-[340px] flex flex-col shrink-0 bg-[#FAF5EB]/50">
-            <div className="p-4 border-b border-[#E6DCC8] flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-[#E2704A]" />
-                  <span>1. Nguồn tài liệu ({sources.length})</span>
-                </h3>
-                <p className="text-[11px] text-[#8C7E6A] mt-0.5">
-                  Đã bật {sources.filter((s) => s.isEnabled).length}/{sources.length} nguồn ({totalEnabledWords} từ)
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddSourceForm(!showAddSourceForm)}
-                className="px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#E2704A] hover:bg-[#FAF5EB] transition-colors"
-              >
-                + Thêm nguồn
-              </button>
+      {/* NỘI DUNG 3 VÙNG CHUẨN NOTEBOOKLM */}
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-[#E6DCC8]">
+        {/* ========================================================= */}
+        {/* VÙNG 1: NGUỒN TÀI LIỆU (BÊN TRÁI ~ 330px) */}
+        {/* ========================================================= */}
+        <div className="w-full md:w-[320px] lg:w-[340px] flex flex-col shrink-0 bg-[#FAF5EB]/50">
+          <div className="p-4 border-b border-[#E6DCC8] flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-[#E2704A]" />
+                <span>1. Nguồn tài liệu ({sources.length})</span>
+              </h3>
+              <p className="text-[11px] text-[#8C7E6A] mt-0.5">
+                Đã bật {sources.filter((s) => s.isEnabled).length}/{sources.length} nguồn ({totalEnabledWords} từ)
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowAddSourceForm(!showAddSourceForm)}
+              className="px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#E2704A] hover:bg-[#FAF5EB] transition-colors cursor-pointer"
+            >
+              + Thêm nguồn
+            </button>
+          </div>
 
-            {/* Form thêm nguồn */}
-            {showAddSourceForm && (
-              <div className="p-4 bg-white border-b border-[#E6DCC8] space-y-3 animate-in slide-in-from-top duration-150">
-                <div className="flex rounded-xl bg-[#FAF5EB] p-1 border border-[#E6DCC8]">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTabSourceInput('paste')}
-                    className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors ${
-                      activeTabSourceInput === 'paste' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
-                    }`}
-                  >
-                    Dán văn bản
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTabSourceInput('file')}
-                    className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors ${
-                      activeTabSourceInput === 'file' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
-                    }`}
-                  >
-                    Tải file (.txt)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTabSourceInput('video')}
-                    className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors ${
-                      activeTabSourceInput === 'video' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
-                    }`}
-                  >
-                    Bản ghi video
-                  </button>
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="Tiêu đề tài liệu nguồn..."
-                  value={newSourceTitle}
-                  onChange={(e) => setNewSourceTitle(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
-                />
-
-                {activeTabSourceInput === 'file' ? (
-                  <div className="space-y-2">
-                    <label className="border-2 border-dashed border-[#E6DCC8] hover:border-[#E2704A] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#FAF5EB]">
-                      <Upload className="w-5 h-5 text-[#8C7E6A] mb-1" />
-                      <span className="text-xs font-bold text-[#2F3E6B]">Chọn tệp văn bản (.txt)</span>
-                      <span className="text-[10px] text-[#8C7E6A]">(.docx / .pdf sắp hỗ trợ)</span>
-                      <input
-                        type="file"
-                        accept=".txt,.docx,.pdf"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-                    {unsupportedFileNotice && (
-                      <p className="text-[11px] text-amber-600 bg-amber-50 p-2 rounded-xl border border-amber-200">
-                        {unsupportedFileNotice}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <textarea
-                    rows={4}
-                    placeholder={
-                      activeTabSourceInput === 'video'
-                        ? 'Dán phụ đề hoặc bản ghi âm lời giảng video vào đây...'
-                        : 'Dán bài thơ, truyện ngắn, trích đoạn văn bản vào đây...'
-                    }
-                    value={newSourceContent}
-                    onChange={(e) => setNewSourceContent(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A] resize-none"
-                  />
-                )}
-
-                {activeTabSourceInput !== 'file' && (
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddSourceForm(false)}
-                      className="px-3 py-1 rounded-xl text-xs text-[#8C7E6A] hover:bg-black/5"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAddSource}
-                      disabled={!newSourceContent.trim()}
-                      className="px-3.5 py-1 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] disabled:opacity-40 text-white text-xs font-bold shadow-xs transition-colors"
-                    >
-                      Lưu nguồn
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Danh sách nguồn */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-              {sources.map((src) => (
-                <div
-                  key={src.id}
-                  className={`p-3 rounded-2xl border transition-all ${
-                    src.isEnabled
-                      ? 'bg-white border-[#E6DCC8] shadow-xs'
-                      : 'bg-[#FAF5EB]/40 border-dashed border-[#E6DCC8] opacity-60'
+          {/* Form thêm nguồn */}
+          {showAddSourceForm && (
+            <div className="p-4 bg-white border-b border-[#E6DCC8] space-y-3 animate-in slide-in-from-top duration-150">
+              <div className="flex rounded-xl bg-[#FAF5EB] p-1 border border-[#E6DCC8]">
+                <button
+                  type="button"
+                  onClick={() => setActiveTabSourceInput('paste')}
+                  className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                    activeTabSourceInput === 'paste' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <label className="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={src.isEnabled}
-                        onChange={(e) => {
-                          setSources(
-                            sources.map((s) => (s.id === src.id ? { ...s, isEnabled: e.target.checked } : s))
-                          );
-                        }}
-                        className="mt-0.5 rounded text-[#E2704A] focus:ring-0 cursor-pointer"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#2F3E6B] truncate">{src.title}</p>
-                        <p className="text-[10px] text-[#8C7E6A] flex items-center gap-1.5 mt-0.5">
-                          <span>{src.wordCount} từ</span>
-                          <span>•</span>
-                          <span className="capitalize">{src.type === 'transcript' ? 'Bản ghi' : src.type}</span>
-                        </p>
-                      </div>
-                    </label>
+                  Dán văn bản
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTabSourceInput('file')}
+                  className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                    activeTabSourceInput === 'file' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
+                  }`}
+                >
+                  Tải file (.txt)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTabSourceInput('video')}
+                  className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                    activeTabSourceInput === 'video' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
+                  }`}
+                >
+                  Bản ghi video
+                </button>
+              </div>
+
+              <input
+                type="text"
+                placeholder="Tiêu đề tài liệu nguồn..."
+                value={newSourceTitle}
+                onChange={(e) => setNewSourceTitle(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
+              />
+
+              {activeTabSourceInput === 'file' ? (
+                <div className="space-y-2">
+                  <label className="border-2 border-dashed border-[#E6DCC8] hover:border-[#E2704A] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#FAF5EB]">
+                    <Upload className="w-5 h-5 text-[#8C7E6A] mb-1" />
+                    <span className="text-xs font-bold text-[#2F3E6B]">Chọn tệp văn bản (.txt)</span>
+                    <span className="text-[10px] text-[#8C7E6A]">Hỗ trợ file .txt chứa văn bản bài học</span>
+                    <input
+                      type="file"
+                      accept=".txt"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {unsupportedFileNotice && (
+                    <p className="text-[11px] text-amber-600 bg-amber-50 p-2 rounded-xl border border-amber-200">
+                      {unsupportedFileNotice}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <textarea
+                  rows={4}
+                  placeholder={
+                    activeTabSourceInput === 'video'
+                      ? 'Dán nội dung bản ghi lời giảng (Transcript video)...'
+                      : 'Dán đoạn trích bài thơ, văn bản tác phẩm hoặc ghi chú bài dạy...'
+                  }
+                  value={newSourceContent}
+                  onChange={(e) => setNewSourceContent(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
+                />
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAddSourceForm(false)}
+                  className="px-3 py-1 rounded-xl text-xs font-bold text-[#8C7E6A] hover:bg-black/5"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddSource}
+                  disabled={!newSourceContent.trim()}
+                  className="px-3 py-1 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] disabled:opacity-40 text-white text-xs font-bold shadow-xs transition-colors"
+                >
+                  Lưu nguồn
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Danh sách nguồn tài liệu */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+            {sources.map((src) => (
+              <div
+                key={src.id}
+                className={`p-3 rounded-2xl border transition-all ${
+                  src.isEnabled
+                    ? 'bg-white border-[#E6DCC8] shadow-2xs'
+                    : 'bg-[#FAF5EB]/50 border-dashed border-[#E6DCC8] opacity-60'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <label className="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={src.isEnabled}
+                      onChange={(e) => {
+                        setSources(
+                          sources.map((s) =>
+                            s.id === src.id ? { ...s, isEnabled: e.target.checked } : s
+                          )
+                        );
+                      }}
+                      className="mt-0.5 rounded text-[#E2704A] focus:ring-0 cursor-pointer"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#2F3E6B] truncate">{src.title}</p>
+                      <p className="text-[10px] text-[#8C7E6A] flex items-center gap-1.5 mt-0.5">
+                        <span>{src.wordCount} từ</span>
+                        <span>•</span>
+                        <span className="capitalize">{src.type === 'transcript' ? 'Bản ghi' : src.type}</span>
+                      </p>
+                    </div>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewingSource(src)}
+                      className="text-[#8C7E6A] hover:text-[#2F3E6B] p-1 transition-colors cursor-pointer"
+                      title="Xem toàn văn nguồn tài liệu"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setSources(sources.filter((s) => s.id !== src.id))}
-                      className="text-[#8C7E6A] hover:text-rose-600 p-1 transition-colors"
+                      className="text-[#8C7E6A] hover:text-rose-600 p-1 transition-colors cursor-pointer"
                       title="Xóa nguồn"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <p className="text-[11px] text-[#8C7E6A] mt-2 line-clamp-2 italic bg-[#FAF5EB] p-2 rounded-xl">
-                    "{src.content.slice(0, 100)}..."
-                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ========================================================= */}
-          {/* VÙNG 2: TRÒ CHUYỆN VỚI NGUỒN (Ở GIỮA) */}
-          {/* ========================================================= */}
-          <div className="flex-1 flex flex-col min-w-0 bg-white">
-            <div className="p-4 border-b border-[#E6DCC8] flex items-center justify-between bg-[#FAF5EB]/30">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-[#0D9488]" />
-                <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B]">
-                  2. Trò chuyện & Tra cứu tài liệu
-                </h3>
+                <p className="text-[11px] text-[#8C7E6A] mt-2 line-clamp-2 italic bg-[#FAF5EB] p-2 rounded-xl">
+                  "{src.content.slice(0, 100)}..."
+                </p>
               </div>
-              <span className="text-[10px] text-[#8C7E6A] italic">
-                AI chỉ trả lời dựa trên các nguồn đã bật
-              </span>
-            </div>
-
-            {/* Danh sách tin nhắn chat */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {chatMessages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  {msg.role === 'assistant' && (
-                    <div className="w-7 h-7 rounded-xl bg-[#0D9488]/10 text-[#0D9488] flex items-center justify-center shrink-0 mt-0.5">
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                  )}
-                  <div
-                    className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-[#2F3E6B] text-white rounded-br-xs'
-                        : 'bg-[#FAF5EB] text-[#2F3E6B] border border-[#E6DCC8] rounded-bl-xs'
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
-
-                    {/* Chú thích nguồn tham chiếu */}
-                    {msg.citations && msg.citations.length > 0 && (
-                      <div className="mt-2.5 pt-2 border-t border-[#E6DCC8] space-y-1">
-                        <p className="text-[10px] font-bold text-[#8C7E6A] uppercase flex items-center gap-1">
-                          <Quote className="w-3 h-3 text-[#E2704A]" />
-                          <span>Nguồn tham chiếu:</span>
-                        </p>
-                        {msg.citations.map((c, cIdx) => (
-                          <div
-                            key={cIdx}
-                            className="bg-white/70 p-1.5 rounded-lg border border-[#E6DCC8] text-[11px] text-[#2F3E6B]"
-                          >
-                            <span className="font-bold text-[#E2704A]">[{c.sourceTitle}]</span>: "{c.snippet}"
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {isChatLoading && (
-                <div className="flex gap-2 items-center text-xs text-[#8C7E6A] italic">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0D9488]" />
-                  <span>AI đang tra cứu tài liệu nguồn...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Ô gõ tin nhắn */}
-            <div className="p-3 border-t border-[#E6DCC8] bg-[#FAF5EB]/40 flex gap-2">
-              <input
-                type="text"
-                placeholder="Hỏi AI về từ ngữ, biện pháp tu từ hoặc chi tiết trong văn bản..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#0D9488]"
-              />
-              <button
-                type="button"
-                onClick={handleSendMessage}
-                disabled={!chatInput.trim() || isChatLoading}
-                className="px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0B7A70] disabled:opacity-40 text-white text-xs font-bold transition-colors flex items-center gap-1.5"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Hỏi</span>
-              </button>
-            </div>
+            ))}
           </div>
+        </div>
 
-          {/* ========================================================= */}
-          {/* VÙNG 3: XƯỞNG TẠO (BÊN PHẢI ~ 380px) */}
-          {/* ========================================================= */}
-          <div className="w-full md:w-[380px] lg:w-[410px] flex flex-col shrink-0 bg-[#FAF5EB]/70 overflow-y-auto">
-            <div className="p-4 border-b border-[#E6DCC8]">
-              <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
-                <Wand2 className="w-4 h-4 text-[#E2704A]" />
-                <span>3. Xưởng tạo đầu ra</span>
+        {/* ========================================================= */}
+        {/* VÙNG 2: TRÒ CHUYỆN VỚI NGUỒN (Ở GIỮA) */}
+        {/* ========================================================= */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white">
+          <div className="p-4 border-b border-[#E6DCC8] flex items-center justify-between bg-[#FAF5EB]/30">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-[#0D9488]" />
+              <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B]">
+                2. Trò chuyện & Tra cứu tài liệu (RAG Grounding)
               </h3>
-              <p className="text-[11px] text-[#8C7E6A] mt-0.5">
-                Cấu hình định dạng và tiêu chí sinh tự động
-              </p>
             </div>
+            <span className="text-[10px] text-[#8C7E6A] italic">
+              AI chỉ trả lời dựa trên các nguồn đã bật bên trái
+            </span>
+          </div>
 
-            <div className="p-4 space-y-4 flex-1">
-              {/* Chọn loại đầu ra */}
-              <div>
-                <label className="text-xs font-bold text-[#2F3E6B] block mb-1.5">
-                  Loại nội dung cần tạo:
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'quiz', label: 'Bộ câu hỏi', icon: HelpCircle },
-                    { id: 'video', label: 'Ý trọng tâm video', icon: Video },
-                    { id: 'theory', label: 'Lý thuyết chi tiết', icon: BookOpen },
-                  ].map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setOutputType(t.id as any)}
-                      className={`p-2.5 rounded-2xl border text-center transition-all ${
-                        outputType === t.id
-                          ? 'bg-white border-[#E2704A] text-[#E2704A] shadow-xs ring-1 ring-[#E2704A]'
-                          : 'bg-white/60 border-[#E6DCC8] text-[#8C7E6A] hover:bg-white'
-                      }`}
-                    >
-                      <t.icon className="w-4 h-4 mx-auto mb-1" />
-                      <span className="text-[11px] font-bold block">{t.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tùy chỉnh chi tiết nếu chọn BỘ CÂU HỎI */}
-              {outputType === 'quiz' && (
-                <div className="space-y-4 bg-white p-4 rounded-2xl border border-[#E6DCC8]">
-                  {/* Loại bài đích */}
-                  <div>
-                    <label className="text-xs font-bold text-[#2F3E6B] block mb-1">
-                      Loại bài kiểm tra đích:
-                    </label>
-                    <select
-                      value={targetQuizKind}
-                      onChange={(e) => {
-                        const kind = e.target.value as any;
-                        setTargetQuizKind(kind);
-                        if (kind === 'quick') setTotalQuestions(5);
-                        else if (kind === 'mastery') setTotalQuestions(10);
-                        else setTotalQuestions(5);
-                      }}
-                      className="w-full px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-                    >
-                      <option value="quick">Kiểm tra nhanh (mặc định 5 câu / 7 phút)</option>
-                      <option value="mastery">Mastery Check (mặc định 10 câu / 15 phút)</option>
-                      <option value="practice">Luyện tập sau video</option>
-                    </select>
+          {/* Danh sách tin nhắn chat */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {chatMessages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                {msg.role === 'assistant' && (
+                  <div className="w-7 h-7 rounded-xl bg-[#0D9488]/10 text-[#0D9488] flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles className="w-4 h-4" />
                   </div>
+                )}
+                <div
+                  className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-[#2F3E6B] text-white rounded-br-xs'
+                      : 'bg-[#FAF5EB] text-[#2F3E6B] border border-[#E6DCC8] rounded-bl-xs'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
 
-                  {/* Số lượng câu */}
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-bold text-[#2F3E6B]">Tổng số câu:</span>
-                      <span className="font-bold text-[#E2704A]">{totalQuestions} câu</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={3}
-                      max={12}
-                      value={totalQuestions}
-                      onChange={(e) => setTotalQuestions(Number(e.target.value))}
-                      className="w-full accent-[#E2704A]"
-                    />
-                  </div>
-
-                  {/* Phân bổ dạng câu */}
-                  <div>
-                    <label className="text-xs font-bold text-[#2F3E6B] block mb-1">
-                      Dạng câu hỏi dự kiến:
-                    </label>
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="p-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] flex items-center justify-between">
-                        <span>Trắc nghiệm (1 đáp án):</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={totalQuestions}
-                          value={typeCounts.single}
-                          onChange={(e) => setTypeCounts({ ...typeCounts, single: Number(e.target.value) })}
-                          className="w-10 px-1 py-0.5 rounded bg-white text-center font-bold"
-                        />
-                      </div>
-                      <div className="p-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] flex items-center justify-between">
-                        <span>Chọn nhiều đáp án:</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={totalQuestions}
-                          value={typeCounts.multi}
-                          onChange={(e) => setTypeCounts({ ...typeCounts, multi: Number(e.target.value) })}
-                          className="w-10 px-1 py-0.5 rounded bg-white text-center font-bold"
-                        />
-                      </div>
-                      <div className="p-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] flex items-center justify-between">
-                        <span>Điền vào ô trống:</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={totalQuestions}
-                          value={typeCounts.fill}
-                          onChange={(e) => setTypeCounts({ ...typeCounts, fill: Number(e.target.value) })}
-                          className="w-10 px-1 py-0.5 rounded bg-white text-center font-bold"
-                        />
-                      </div>
-                      <div className="p-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] flex items-center justify-between">
-                        <span>Viết đoạn văn (rubric):</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={totalQuestions}
-                          value={typeCounts.essay}
-                          onChange={(e) => setTypeCounts({ ...typeCounts, essay: Number(e.target.value) })}
-                          className="w-10 px-1 py-0.5 rounded bg-white text-center font-bold"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 4 Mức năng lực GDPT 2018 */}
-                  <div>
-                    <label className="text-xs font-bold text-[#2F3E6B] block mb-1">
-                      Phân bổ 4 mức năng lực:
-                    </label>
-                    <div className="space-y-1.5 text-[11px]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sky-700 font-bold">Nhận biết:</span>
-                        <span>{skillRatios.nhanBiet}%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden flex">
-                        <div style={{ width: `${skillRatios.nhanBiet}%` }} className="bg-sky-500" />
-                        <div style={{ width: `${skillRatios.thongHieu}%` }} className="bg-emerald-500" />
-                        <div style={{ width: `${skillRatios.phanTich}%` }} className="bg-amber-500" />
-                        <div style={{ width: `${skillRatios.vanDung}%` }} className="bg-rose-500" />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-[#8C7E6A] pt-1">
-                        <span className="text-sky-600 font-medium">NB: {skillRatios.nhanBiet}%</span>
-                        <span className="text-emerald-600 font-medium">TH: {skillRatios.thongHieu}%</span>
-                        <span className="text-amber-600 font-medium">PT: {skillRatios.phanTich}%</span>
-                        <span className="text-rose-600 font-medium">VD: {skillRatios.vanDung}%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Độ khó */}
-                  <div>
-                    <label className="text-xs font-bold text-[#2F3E6B] block mb-1">
-                      Độ khó tổng thể:
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'DE', label: 'Dễ' },
-                        { id: 'TB', label: 'Trung bình' },
-                        { id: 'KHO', label: 'Khó' },
-                      ].map((d) => (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => setDifficulty(d.id as Difficulty)}
-                          className={`py-1 text-xs rounded-xl border font-bold transition-colors ${
-                            difficulty === d.id
-                              ? 'bg-[#2F3E6B] text-white border-[#2F3E6B]'
-                              : 'bg-[#FAF5EB] text-[#8C7E6A] border-[#E6DCC8]'
-                          }`}
+                  {/* Chú thích nguồn tham chiếu */}
+                  {msg.citations && msg.citations.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-[#E6DCC8] space-y-1">
+                      <p className="text-[10px] font-bold text-[#8C7E6A] uppercase flex items-center gap-1">
+                        <Quote className="w-3 h-3 text-[#E2704A]" />
+                        <span>Trích dẫn đối chiếu từ nguồn:</span>
+                      </p>
+                      {msg.citations.map((c, cIdx) => (
+                        <div
+                          key={cIdx}
+                          className="bg-white/80 p-2 rounded-lg border border-[#E6DCC8] text-[11px] text-[#2F3E6B]"
                         >
-                          {d.label}
-                        </button>
+                          <span className="font-bold text-[#E2704A]">[{c.sourceTitle}]</span>: "{c.snippet}"
+                        </div>
                       ))}
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
+            ))}
 
-              {/* Thông tin quy tắc cam kết */}
-              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-[#2F3E6B] space-y-1.5">
-                <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
-                  <span>Quy tắc sư phạm Mầm Văn:</span>
-                </p>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Kết quả do AI tạo sẽ là <strong>bản nháp</strong>. Hệ thống sẽ gắn nhãn <em>"Tạo bởi AI – cần giáo viên duyệt"</em> và trích đoạn nguồn tham chiếu để thầy/cô đối chiếu, chỉnh sửa trước khi xuất bản lên web học sinh.
-                </p>
+            {isChatLoading && (
+              <div className="flex gap-2 items-center text-xs text-[#8C7E6A] italic p-2 bg-[#FAF5EB] rounded-xl w-fit">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0D9488]" />
+                <span>Gemini AI đang đọc tài liệu nguồn và trích xuất câu trả lời...</span>
+              </div>
+            )}
+          </div>
+
+          {/* GỢI Ý CÂU HỎI NHANH CHUẨN NOTEBOOKLM */}
+          <div className="px-3 pt-2 pb-1.5 border-t border-[#E6DCC8] bg-[#FAF5EB]/30 flex items-center gap-1.5 overflow-x-auto">
+            <span className="text-[10px] font-bold text-[#8C7E6A] shrink-0 flex items-center gap-1">
+              <Lightbulb className="w-3 h-3 text-[#E2704A]" /> Gợi ý:
+            </span>
+            {suggestedPrompts.map((pText, pIdx) => (
+              <button
+                key={pIdx}
+                type="button"
+                onClick={() => handleSendMessage(pText)}
+                className="px-2.5 py-1 rounded-lg bg-white border border-[#E6DCC8] hover:border-[#0D9488] hover:text-[#0D9488] text-[11px] text-[#2F3E6B] font-medium shrink-0 transition-colors cursor-pointer"
+              >
+                {pText}
+              </button>
+            ))}
+          </div>
+
+          {/* Ô gõ tin nhắn */}
+          <div className="p-3 border-t border-[#E6DCC8] bg-[#FAF5EB]/40 flex gap-2">
+            <input
+              type="text"
+              placeholder="Hỏi AI về từ ngữ, biện pháp tu từ hoặc chi tiết trong văn bản..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#0D9488]"
+            />
+            <button
+              type="button"
+              onClick={() => handleSendMessage()}
+              disabled={!chatInput.trim() || isChatLoading}
+              className="px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0B7A70] disabled:opacity-40 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Hỏi</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ========================================================= */}
+        {/* VÙNG 3: XƯỞNG TẠO (BÊN PHẢI ~ 380px) */}
+        {/* ========================================================= */}
+        <div className="w-full md:w-[380px] lg:w-[410px] flex flex-col shrink-0 bg-[#FAF5EB]/70 overflow-y-auto">
+          <div className="p-4 border-b border-[#E6DCC8]">
+            <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
+              <Wand2 className="w-4 h-4 text-[#E2704A]" />
+              <span>3. Xưởng tạo đầu ra</span>
+            </h3>
+            <p className="text-[11px] text-[#8C7E6A] mt-0.5">
+              Cấu hình định dạng và tiêu chí sinh tự động
+            </p>
+          </div>
+
+          <div className="p-4 space-y-4 flex-1">
+            {/* LỰA CHỌN LOẠI ĐẦU RA */}
+            <div>
+              <label className="text-xs font-bold text-[#2F3E6B] block mb-1.5">Loại nội dung cần tạo:</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOutputType('quiz')}
+                  className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-all ${
+                    outputType === 'quiz'
+                      ? 'bg-white border-[#E2704A] text-[#E2704A] font-bold shadow-xs'
+                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A]'
+                  }`}
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span className="text-[11px]">Bộ câu hỏi</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOutputType('video')}
+                  className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-all ${
+                    outputType === 'video'
+                      ? 'bg-white border-[#E2704A] text-[#E2704A] font-bold shadow-xs'
+                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A]'
+                  }`}
+                >
+                  <Video className="w-4 h-4" />
+                  <span className="text-[11px]">Ý trọng tâm video</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOutputType('theory')}
+                  className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-all ${
+                    outputType === 'theory'
+                      ? 'bg-white border-[#E2704A] text-[#E2704A] font-bold shadow-xs'
+                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A]'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span className="text-[11px]">Lý thuyết chi tiết</span>
+                </button>
               </div>
             </div>
 
-            {/* Nút hành động chính */}
-            <div className="p-4 border-t border-[#E6DCC8] bg-white space-y-2">
+            {/* CẤU HÌNH BỘ CÂU HỎI */}
+            {outputType === 'quiz' && (
+              <div className="space-y-3 p-3.5 bg-white rounded-2xl border border-[#E6DCC8]">
+                <div>
+                  <label className="text-xs font-bold text-[#2F3E6B] block mb-1">Loại bài kiểm tra đích:</label>
+                  <select
+                    value={targetQuizKind}
+                    onChange={(e) => setTargetQuizKind(e.target.value as any)}
+                    className="w-full px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B]"
+                  >
+                    <option value="quick">Kiểm tra nhanh (mặc định 5 câu / 7 phút)</option>
+                    <option value="mastery">Mastery Check (đánh giá chuyên sâu 10 câu)</option>
+                    <option value="practice">Luyện tập củng cố (không giới hạn)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-bold text-[#2F3E6B]">Tổng số câu:</span>
+                    <span className="font-bold text-[#E2704A]">{totalQuestions} câu</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={3}
+                    max={15}
+                    value={totalQuestions}
+                    onChange={(e) => setTotalQuestions(Number(e.target.value))}
+                    className="w-full accent-[#E2704A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#2F3E6B] block mb-1">Độ khó tổng thể:</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['DE', 'TB', 'KHO'] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDifficulty(d)}
+                        className={`py-1 rounded-xl text-xs font-bold border transition-all ${
+                          difficulty === d
+                            ? 'bg-[#2F3E6B] text-white border-[#2F3E6B]'
+                            : 'bg-[#FAF5EB] text-[#8C7E6A] border-[#E6DCC8]'
+                        }`}
+                      >
+                        {d === 'DE' ? 'Dễ' : d === 'TB' ? 'Trung bình' : 'Khó'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* NÚT SINH NỘI DUNG VỚI AI */}
+            <div className="pt-2 space-y-2">
               <button
                 type="button"
                 onClick={handleGenerateDraft}
@@ -837,21 +876,181 @@ Vì tiếng gà cục tác
                 {isGenerating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>{generationStep || 'Đang tạo nội dung...'}</span>
+                    <span>{generationStep || 'Gemini AI đang làm việc...'}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Tạo bản nháp với AI</span>
+                    <span>Tạo bản nháp với Gemini AI Thật</span>
                   </>
                 )}
               </button>
               <p className="text-[10px] text-center text-[#8C7E6A]">
-                Sau khi tạo, bản nháp sẽ mở trực tiếp trong trình biên tập thủ công.
+                AI sẽ trích xuất trực tiếp từ các nguồn đã bật và lưu thẳng vào Ngân hàng.
               </p>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL NHẬP QUICK API KEY TRỰC TIẾP TRÊN XƯỞNG AI        */}
+      {/* ========================================================= */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-60 bg-[#1E1B4B]/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl shadow-2xl p-6 space-y-4 text-[#2F3E6B] animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E6DCC8]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#E2704A]/10 text-[#E2704A] flex items-center justify-center">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-lora font-bold text-base">Cấu hình Google AI Studio API Key</h3>
+                  <p className="text-[11px] text-[#8C7E6A]">Kích hoạt Gemini AI thật cho toàn hệ thống Mầm Văn</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                className="p-1 rounded-lg text-[#8C7E6A] hover:bg-black/5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold block mb-1">
+                  Google Gemini API Key <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Dán API Key (bắt đầu bằng AIzaSy...)"
+                  value={modalKeyInput}
+                  onChange={(e) => setModalKeyInput(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-mono outline-none focus:border-[#E2704A]"
+                />
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-[#E2704A] hover:underline inline-flex items-center gap-1 mt-1 font-medium"
+                >
+                  <span>Lấy API Key miễn phí tại Google AI Studio</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold block mb-1">Mô hình AI (Model)</label>
+                <select
+                  value={modalModelInput}
+                  onChange={(e) => setModalModelInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
+                >
+                  <option value="gemini-2.5-flash">gemini-2.5-flash (Khuyên dùng - Nhanh nhất)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash (Ổn định, phản hồi tốt)</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro (Suy luận sâu)</option>
+                </select>
+              </div>
+
+              {keyTestResult && (
+                <div
+                  className={`p-3 rounded-xl border text-xs space-y-1 ${
+                    keyTestResult.success
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : 'bg-rose-50 border-rose-300 text-rose-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold">
+                    <span>{keyTestResult.success ? '✓ Kết nối thành công!' : '✗ Lỗi kết nối!'}</span>
+                    {keyTestResult.latencyMs > 0 && <span>{keyTestResult.latencyMs}ms</span>}
+                  </div>
+                  <p className="text-[11px] italic">"{keyTestResult.message}"</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-[#E6DCC8]">
+              <button
+                type="button"
+                onClick={handleTestModalKey}
+                disabled={isTestingKey || !modalKeyInput.trim()}
+                className="px-3.5 py-2 rounded-xl border border-[#2F3E6B] text-[#2F3E6B] hover:bg-[#2F3E6B]/5 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              >
+                {isTestingKey ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang kiểm tra...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Kiểm tra kết nối</span>
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowApiKeyModal(false)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#8C7E6A] hover:bg-black/5"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveModalKey}
+                  className="px-4 py-2 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  Lưu & Kích hoạt AI
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL XEM TOÀN VĂN TÀI LIỆU NGUỒN (SOURCE VIEWER)         */}
+      {/* ========================================================= */}
+      {previewingSource && (
+        <div className="fixed inset-0 z-60 bg-[#1E1B4B]/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl max-h-[85vh] bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-[#2F3E6B]">
+            <div className="px-6 py-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#E2704A]/10 text-[#E2704A] flex items-center justify-center">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-lora font-bold text-sm">{previewingSource.title}</h3>
+                  <p className="text-[10px] text-[#8C7E6A]">{previewingSource.wordCount} từ • Loại: {previewingSource.type}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewingSource(null)}
+                className="p-1 rounded-lg text-[#8C7E6A] hover:bg-black/5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 font-lora text-xs sm:text-sm leading-relaxed whitespace-pre-wrap text-[#2F3E6B] bg-[#FAF5EB]/20">
+              {previewingSource.content}
+            </div>
+            <div className="px-6 py-3 bg-[#FAF5EB] border-t border-[#E6DCC8] flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setPreviewingSource(null)}
+                className="px-4 py-1.5 rounded-xl bg-[#2F3E6B] text-white text-xs font-bold"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

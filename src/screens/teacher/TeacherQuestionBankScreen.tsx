@@ -23,6 +23,9 @@ import {
   BookOpenCheck,
   Eye,
   Copy,
+  KeyRound,
+  Zap,
+  ExternalLink,
 } from 'lucide-react';
 import {
   quizService,
@@ -35,6 +38,13 @@ import {
   TeacherProfile,
   ClassItem,
 } from '../../services/index.ts';
+import {
+  getGeminiApiKey,
+  setGeminiApiKey,
+  getGeminiModel,
+  setGeminiModel,
+  testGeminiApiKey,
+} from '../../services/ai/index.ts';
 import { QuestionType, SkillLevel, Difficulty, Question } from '../../types.ts';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
 import { AiContentStudioModal } from '../../components/teacher/ai/AiContentStudioModal.tsx';
@@ -81,6 +91,19 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   // 2. TABS ĐIỀU HƯỚNG CHÍNH: 'bank' (Kho câu hỏi) HOẶC 'ai_studio' (Xưởng AI NotebookLM)
   const [activeMainTab, setActiveMainTab] = useState<'bank' | 'ai_studio'>('bank');
+
+  // Trạng thái AI Key & Model
+  const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!getGeminiApiKey());
+  const [activeModel, setActiveModel] = useState<string>(() => getGeminiModel());
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [modalKeyInput, setModalKeyInput] = useState<string>(() => getGeminiApiKey());
+  const [modalModelInput, setModalModelInput] = useState<string>(() => getGeminiModel());
+  const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
+  const [keyTestResult, setKeyTestResult] = useState<{
+    success: boolean;
+    message: string;
+    latencyMs: number;
+  } | null>(null);
 
   // 3. BỘ LỌC KHO CÂU HỎI
   const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
@@ -424,6 +447,53 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           <span className="text-xs font-medium">{toastMessage}</span>
         </div>
       )}
+
+      {/* THANH BÁO TRẠNG THÁI AI GOOGLE STUDIO */}
+      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs transition-all ${
+        hasApiKey
+          ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
+          : 'bg-amber-50/80 border-amber-300 text-amber-950'
+      }`}>
+        <div className="flex items-center gap-3">
+          {hasApiKey ? (
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 font-bold">
+              <Sparkles className="w-4 h-4 text-emerald-700" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 font-bold">
+              <KeyRound className="w-4 h-4 text-amber-700" />
+            </div>
+          )}
+          <div>
+            <div className="flex items-center gap-2 font-bold text-xs">
+              <span>{hasApiKey ? `🟢 Đang kích hoạt Google Gemini AI thật (${activeModel})` : '⚠️ Chưa cấu hình Google AI Studio API Key!'}</span>
+            </div>
+            <p className="text-[11px] text-[#6B7280] mt-0.5">
+              {hasApiKey
+                ? 'Khi bấm sinh nội dung hoặc trò chuyện trong Xưởng AI, hệ thống sẽ gọi trực tiếp Google Gemini AI thật theo đúng ngữ liệu.'
+                : 'Để AI sinh câu hỏi thật bám sát ngữ liệu chuẩn NotebookLM (thay vì dữ liệu mặc định), vui lòng dán API Key của Google AI Studio tại đây.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setModalKeyInput(getGeminiApiKey());
+            setModalModelInput(getGeminiModel());
+            setKeyTestResult(null);
+            setShowApiKeyModal(true);
+          }}
+          className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors shrink-0 cursor-pointer ${
+            hasApiKey
+              ? 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+              : 'bg-[#E2704A] hover:bg-[#D45E36] text-white animate-pulse'
+          }`}
+        >
+          <KeyRound className="w-3.5 h-3.5" />
+          <span>{hasApiKey ? 'Cấu hình lại API Key' : '🔑 Nhập API Key ngay'}</span>
+        </button>
+      </div>
 
       {/* 2. TAB SWITCHER CHÍNH */}
       <div className="flex items-center gap-2 p-1.5 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl w-fit shadow-2xs">
@@ -1180,6 +1250,146 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               >
                 {editingQuestion ? 'Lưu thay đổi' : 'Thêm vào ngân hàng'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CẤU HÌNH API KEY TRỰC TIẾP TRÊN NGÂN HÀNG CÂU HỎI */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-60 bg-[#1E1B4B]/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl shadow-2xl p-6 space-y-4 text-[#2F3E6B] animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E6DCC8]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#E2704A]/10 text-[#E2704A] flex items-center justify-center font-bold">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-lora font-bold text-base">Cấu hình Google AI Studio API Key</h3>
+                  <p className="text-[11px] text-[#8C7E6A]">Kích hoạt Gemini AI thật cho toàn hệ thống Mầm Văn</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                className="p-1 rounded-lg text-[#8C7E6A] hover:bg-black/5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold block mb-1">
+                  Google Gemini API Key <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Dán API Key (bắt đầu bằng AIzaSy...)"
+                  value={modalKeyInput}
+                  onChange={(e) => setModalKeyInput(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-mono outline-none focus:border-[#E2704A]"
+                />
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-[#E2704A] hover:underline inline-flex items-center gap-1 mt-1 font-medium"
+                >
+                  <span>Lấy API Key miễn phí tại Google AI Studio</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold block mb-1">Mô hình AI (Model)</label>
+                <select
+                  value={modalModelInput}
+                  onChange={(e) => setModalModelInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
+                >
+                  <option value="gemini-2.5-flash">gemini-2.5-flash (Khuyên dùng - Nhanh nhất)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash (Ổn định, phản hồi tốt)</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro (Suy luận sâu)</option>
+                </select>
+              </div>
+
+              {keyTestResult && (
+                <div
+                  className={`p-3 rounded-xl border text-xs space-y-1 ${
+                    keyTestResult.success
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : 'bg-rose-50 border-rose-300 text-rose-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold">
+                    <span>{keyTestResult.success ? '✓ Kết nối thành công!' : '✗ Lỗi kết nối!'}</span>
+                    {keyTestResult.latencyMs > 0 && <span>{keyTestResult.latencyMs}ms</span>}
+                  </div>
+                  <p className="text-[11px] italic">"{keyTestResult.message}"</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-[#E6DCC8]">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!modalKeyInput.trim()) {
+                    alert('Vui lòng dán API Key trước khi kiểm tra.');
+                    return;
+                  }
+                  setIsTestingKey(true);
+                  setKeyTestResult(null);
+                  try {
+                    const res = await testGeminiApiKey(modalKeyInput.trim(), modalModelInput);
+                    setKeyTestResult(res);
+                  } catch (err: any) {
+                    setKeyTestResult({ success: false, message: err.message, latencyMs: 0 });
+                  } finally {
+                    setIsTestingKey(false);
+                  }
+                }}
+                disabled={isTestingKey || !modalKeyInput.trim()}
+                className="px-3.5 py-2 rounded-xl border border-[#2F3E6B] text-[#2F3E6B] hover:bg-[#2F3E6B]/5 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              >
+                {isTestingKey ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang kiểm tra...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Kiểm tra kết nối</span>
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowApiKeyModal(false)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#8C7E6A] hover:bg-black/5"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGeminiApiKey(modalKeyInput);
+                    setGeminiModel(modalModelInput);
+                    const keyValid = !!modalKeyInput.trim();
+                    setHasApiKey(keyValid);
+                    setActiveModel(modalModelInput);
+                    setShowApiKeyModal(false);
+                    showToast(keyValid ? 'Đã lưu API Key và kích hoạt Google AI Studio thật!' : 'Đã xóa API Key.');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  Lưu & Kích hoạt AI
+                </button>
+              </div>
             </div>
           </div>
         </div>
