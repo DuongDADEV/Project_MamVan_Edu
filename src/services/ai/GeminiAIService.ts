@@ -52,6 +52,16 @@ export class GeminiAIService implements AIService {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`;
 
+        const generationConfig: any = {
+          temperature: 0.3,
+          maxOutputTokens: 8192,
+        };
+
+        // Tắt thinking budget trên các model thế hệ mới để sinh câu hỏi siêu tốc (5s thay vì hơn 60s)
+        if (modelToTry.includes('flash-latest') || modelToTry.includes('gemini-3') || modelToTry.includes('flash')) {
+          generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        }
+
         const body: any = {
           contents: [
             {
@@ -59,10 +69,7 @@ export class GeminiAIService implements AIService {
               parts: [{ text: prompt }],
             },
           ],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 8192,
-          },
+          generationConfig,
         };
 
         if (systemInstruction) {
@@ -205,6 +212,9 @@ export class GeminiAIService implements AIService {
                 ],
               },
             ],
+            generationConfig: {
+              thinkingConfig: { thinkingBudget: 0 },
+            },
           }),
         });
 
