@@ -37,12 +37,12 @@ export class GeminiAIService implements AIService {
   private async callGemini(prompt: string, systemInstruction?: string): Promise<string> {
     const candidateModels = [
       this.model,
+      'gemini-flash-latest',
       'gemini-2.5-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash-latest',
       'gemini-1.5-flash',
       'gemini-2.5-pro',
-      'gemini-1.5-pro-latest',
       'gemini-1.5-pro',
     ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
 
@@ -50,7 +50,7 @@ export class GeminiAIService implements AIService {
 
     for (const modelToTry of candidateModels) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${this.apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`;
 
         const body: any = {
           contents: [
@@ -75,7 +75,7 @@ export class GeminiAIService implements AIService {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-goog-api-key': this.apiKey,
+            'X-goog-api-key': this.apiKey,
           },
           body: JSON.stringify(body),
         });
@@ -174,6 +174,7 @@ export class GeminiAIService implements AIService {
 
     const modelsToTry = [
       preferredModel,
+      'gemini-flash-latest',
       'gemini-2.5-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash-latest',
@@ -186,12 +187,12 @@ export class GeminiAIService implements AIService {
 
     for (const model of modelsToTry) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
         const res = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-goog-api-key': cleanKey,
+            'X-goog-api-key': cleanKey,
           },
           body: JSON.stringify({
             contents: [

@@ -1328,8 +1328,9 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                   onChange={(e) => setModalModelInput(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
                 >
+                  <option value="gemini-flash-latest">gemini-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
                   <option value="gemini-2.5-flash">gemini-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Khuyên dùng - Ổn định & Thông minh)</option>
+                  <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định & Thông minh)</option>
                   <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn)</option>
                   <option value="gemini-2.5-pro">gemini-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
                   <option value="gemini-1.5-pro">gemini-1.5-pro (Ngữ văn phân tích sâu)</option>

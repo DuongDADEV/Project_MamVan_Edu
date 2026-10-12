@@ -42,8 +42,8 @@ export const setGeminiApiKey = (key: string): void => {
 };
 
 export const getGeminiModel = (): string => {
-  if (typeof window === 'undefined') return 'gemini-2.5-flash';
-  return localStorage.getItem(STORAGE_MODEL_KEY) || 'gemini-2.5-flash';
+  if (typeof window === 'undefined') return 'gemini-flash-latest';
+  return localStorage.getItem(STORAGE_MODEL_KEY) || 'gemini-flash-latest';
 };
 
 export const setGeminiModel = (model: string): void => {
