@@ -39,7 +39,19 @@ import {
   Layers,
   History,
   Info,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Zap,
+  RefreshCw,
 } from 'lucide-react';
+import {
+  getGeminiApiKey,
+  setGeminiApiKey,
+  getGeminiModel,
+  setGeminiModel,
+  testGeminiApiKey,
+} from '../../services/ai/index.ts';
 
 interface TeacherSettingsScreenProps {
   teacher: TeacherProfile;
@@ -87,6 +99,52 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
   const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
   const [auditTimeFilter, setAuditTimeFilter] = useState<string>('all');
   const [auditSearchQuery, setAuditSearchQuery] = useState<string>('');
+
+  // Google AI Studio (Gemini) State
+  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => getGeminiApiKey());
+  const [geminiModelInput, setGeminiModelInput] = useState<string>(() => getGeminiModel());
+  const [showGeminiKey, setShowGeminiKey] = useState<boolean>(false);
+  const [isTestingAi, setIsTestingAi] = useState<boolean>(false);
+  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string; latencyMs: number } | null>(null);
+  const [isAiConfigSaved, setIsAiConfigSaved] = useState<boolean>(() => !!getGeminiApiKey());
+
+  const handleSaveAiConfig = () => {
+    setGeminiApiKey(geminiKeyInput);
+    setGeminiModel(geminiModelInput);
+    setIsAiConfigSaved(!!geminiKeyInput.trim());
+    showToast(
+      geminiKeyInput.trim()
+        ? 'Đã lưu API Key và kích hoạt Google AI Studio thật!'
+        : 'Đã xóa API Key. Hệ thống chuyển về dùng AI giả lập (Mock AI).'
+    );
+  };
+
+  const handleTestAiConnection = async () => {
+    if (!geminiKeyInput.trim()) {
+      showToast('Vui lòng nhập API Key trước khi kiểm tra kết nối.', 'error');
+      return;
+    }
+    setIsTestingAi(true);
+    setAiTestResult(null);
+    try {
+      const res = await testGeminiApiKey(geminiKeyInput.trim(), geminiModelInput);
+      setAiTestResult(res);
+      if (res.success) {
+        showToast(`Kết nối thành công (${res.latencyMs}ms)!`);
+      } else {
+        showToast('Kết nối thất bại. Vui lòng kiểm tra lại thông báo.', 'error');
+      }
+    } catch (e: any) {
+      setAiTestResult({
+        success: false,
+        message: e.message || 'Lỗi không xác định khi kết nối.',
+        latencyMs: 0,
+      });
+      showToast('Lỗi khi kiểm tra kết nối AI.', 'error');
+    } finally {
+      setIsTestingAi(false);
+    }
+  };
 
   useEffect(() => {
     if (remoteSettings) {
@@ -1296,6 +1354,164 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                 <Shield className="w-4 h-4 text-rose-600" />
                 <span>Đăng xuất khỏi tất cả các thiết bị khác</span>
               </button>
+            </div>
+          </div>
+
+          {/* CẤU HÌNH GOOGLE AI STUDIO (GEMINI API) */}
+          <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#E6DCC8]/70 gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#E2704A] to-[#F2B84B] text-white flex items-center justify-center font-bold shadow-xs">
+                  <Sparkles className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-lora font-bold text-base text-[#2F3E6B]">
+                      Cấu hình Google AI Studio (Gemini API)
+                    </h3>
+                    {isAiConfigSaved ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
+                        AI Thật Đang Hoạt Động
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF5EB] text-[#8C7E6A] border border-[#E6DCC8]">
+                        Đang dùng AI Giả lập (Mock Demo)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#6B7280] mt-0.5">
+                    Kích hoạt trí tuệ nhân tạo thật cho Xưởng NotebookLM, sinh câu hỏi, video và chấm bài tự luận
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold text-[#E2704A] hover:bg-[#FAF5EB]/80 transition-colors w-fit shrink-0"
+              >
+                <span>Lấy API Key tại Google AI Studio</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Ô NHẬP API KEY */}
+              <div className="lg:col-span-2 space-y-2">
+                <label className="block text-xs font-bold text-[#2F3E6B]">
+                  Google Gemini API Key <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showGeminiKey ? 'text' : 'password'}
+                    value={geminiKeyInput}
+                    onChange={(e) => setGeminiKeyInput(e.target.value)}
+                    placeholder="Dán API Key (bắt đầu bằng AIzaSy...)"
+                    className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-[#D1C7B7] bg-[#FAF5EB]/50 text-xs text-[#2F3E6B] font-mono focus:outline-none focus:border-[#E2704A]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C7E6A] hover:text-[#2F3E6B]"
+                    title={showGeminiKey ? 'Ẩn key' : 'Hiện key'}
+                  >
+                    {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#6B7280]">
+                  🔒 Khóa API được lưu cục bộ an toàn trong trình duyệt của thầy/cô, không chia sẻ cho bên thứ ba.
+                </p>
+              </div>
+
+              {/* CHỌN MODEL */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[#2F3E6B]">
+                  Mô hình Gemini AI
+                </label>
+                <select
+                  value={geminiModelInput}
+                  onChange={(e) => setGeminiModelInput(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-[#D1C7B7] bg-[#FAF5EB]/50 text-xs text-[#2F3E6B] font-bold focus:outline-none focus:border-[#E2704A]"
+                >
+                  <option value="gemini-2.5-flash">gemini-2.5-flash (Khuyên dùng - Nhanh & mới nhất)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash (Tốc độ cao, ổn định)</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro (Suy luận sâu, ngữ văn nâng cao)</option>
+                </select>
+                <p className="text-[11px] text-[#6B7280]">
+                  Gợi ý: <strong>gemini-2.5-flash</strong> phản hồi siêu tốc dưới 1 giây.
+                </p>
+              </div>
+            </div>
+
+            {/* KẾT QUẢ TEST NẾU CÓ */}
+            {aiTestResult && (
+              <div
+                className={`p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in duration-200 ${
+                  aiTestResult.success
+                    ? 'bg-emerald-50/80 border-emerald-300 text-emerald-900'
+                    : 'bg-rose-50/80 border-rose-300 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center justify-between font-bold flex-wrap gap-2">
+                  <span className="flex items-center gap-1.5">
+                    {aiTestResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{aiTestResult.success ? 'Kết nối thành công!' : 'Kết nối thất bại!'}</span>
+                  </span>
+                  {aiTestResult.latencyMs > 0 && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/60 font-mono">
+                      Độ trễ: {aiTestResult.latencyMs}ms
+                    </span>
+                  )}
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/70 border border-black/5 text-[11px] leading-relaxed italic">
+                  "{aiTestResult.message}"
+                </div>
+              </div>
+            )}
+
+            {/* HÀNG NÚT THAO TÁC */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <span className="text-xs text-[#8C7E6A]">
+                {isAiConfigSaved
+                  ? '✓ Đã kích hoạt. Khi có lệnh sinh nội dung, hệ thống sẽ gọi trực tiếp Google AI Studio.'
+                  : 'Chưa lưu API Key. Hệ thống đang chạy ở chế độ mô phỏng sư phạm.'}
+              </span>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleTestAiConnection}
+                  disabled={isTestingAi || !geminiKeyInput.trim()}
+                  className="px-4 py-2.5 rounded-xl border border-[#2F3E6B] text-[#2F3E6B] hover:bg-[#2F3E6B]/5 disabled:opacity-40 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  {isTestingAi ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang kiểm tra kết nối...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Kiểm tra kết nối AI</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveAiConfig}
+                  className="px-5 py-2.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Lưu cấu hình AI</span>
+                </button>
+              </div>
             </div>
           </div>
 
