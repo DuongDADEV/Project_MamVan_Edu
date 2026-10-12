@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bản Đồ Tính Năng Đã Làm – Mầm Văn 7</title>
+  <meta name="description" content="Bản đồ tương tác toàn bộ tính năng, màn hình, dịch vụ AI, hạ tầng đã xây dựng cho dự án Mầm Văn 7 (EdTech Ngữ văn lớp 7).">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main:#090d16; --bg-card:#121826; --bg-glass:rgba(18,24,38,.78);
+      --border-subtle:rgba(255,255,255,.08); --border-focus:rgba(255,255,255,.22);
+      --text-primary:#f8fafc; --text-secondary:#94a3b8; --text-muted:#64748b;
+      --teacher:#10b981; --teacher-light:#34d399;
+      --ai:#ec4899; --ai-light:#f472b6;
+      --student:#0284c7; --student-light:#38bdf8;
+      --game:#f59e0b; --game-light:#fbbf24;
+      --infra:#8b5cf6; --infra-light:#c084fc;
+      --todo:#64748b; --todo-light:#94a3b8;
+      --ok:#22c55e; --part:#eab308; --no:#ef4444; --rm:#64748b;
+      --font:'Be Vietnam Pro',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      font-family:var(--font);background:var(--bg-main);color:var(--text-primary);min-height:100vh;
+      background-image:
+        radial-gradient(circle at 8% 12%,rgba(16,185,129,.12),transparent 38%),
+        radial-gradient(circle at 92% 10%,rgba(2,132,199,.14),transparent 38%),
+        radial-gradient(circle at 50% 45%,rgba(236,72,153,.09),transparent 40%),
+        radial-gradient(circle at 12% 92%,rgba(139,92,246,.13),transparent 38%),
+        radial-gradient(circle at 90% 92%,rgba(245,158,11,.11),transparent 38%);
+      background-attachment:fixed;
+    }
+    .container{max-width:1720px;margin:0 auto;padding:36px 28px 60px}
+
+    header{text-align:center;margin-bottom:28px}
+    .brand-badge{
+      display:inline-flex;gap:8px;align-items:center;font-size:13px;font-weight:700;letter-spacing:.4px;
+      padding:7px 16px;border-radius:999px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.35);
+      color:var(--teacher-light);margin-bottom:16px;
+    }
+    .header-title{
+      font-size:clamp(26px,3.6vw,44px);font-weight:900;line-height:1.15;margin-bottom:12px;
+      background:linear-gradient(95deg,#34d399 0%,#38bdf8 35%,#f472b6 70%,#fbbf24 100%);
+      -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    }
+    .header-desc{max-width:960px;margin:0 auto;color:var(--text-secondary);font-size:15px;line-height:1.65}
+    .header-desc strong{color:#e2e8f0}
+
+    /* stats */
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+    .stat{
+      background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:16px;padding:16px 18px;
+      position:relative;overflow:hidden;transition:transform .25s,border-color .25s;
+    }
+    .stat:hover{transform:translateY(-3px);border-color:var(--border-focus)}
+    .stat::after{content:"";position:absolute;right:-24px;top:-24px;width:80px;height:80px;border-radius:50%;background:var(--c,#38bdf8);opacity:.13}
+    .stat-num{font-size:34px;font-weight:900;color:var(--c,#fff);font-family:var(--mono)}
+    .stat-label{font-size:12.5px;color:var(--text-secondary);font-weight:600;margin-top:2px}
+
+    /* toolbar */
+    .toolbar{
+      position:sticky;top:12px;z-index:50;background:var(--bg-glass);backdrop-filter:blur(14px);
+      border:1px solid var(--border-subtle);border-radius:16px;padding:12px 16px;margin-bottom:24px;
+      display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+      box-shadow:0 8px 30px rgba(0,0,0,.35);
+    }
+    .filter-group{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .filter-label{font-size:12.5px;font-weight:700;color:var(--text-secondary);margin-right:4px}
+    .filter-btn,.action-btn{
+      font-family:var(--font);font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px;cursor:pointer;
+      background:rgba(255,255,255,.04);color:var(--text-secondary);border:1px solid var(--border-subtle);transition:all .2s;
+    }
+    .filter-btn:hover,.action-btn:hover{color:#fff;border-color:var(--border-focus);transform:translateY(-1px)}
+    .filter-btn.active{color:#fff;border-color:var(--c,#fff);background:color-mix(in srgb,var(--c,#fff) 22%,transparent);box-shadow:0 0 18px color-mix(in srgb,var(--c,#fff) 35%,transparent)}
+    .search{
+      font-family:var(--font);font-size:13px;padding:8px 14px;border-radius:10px;min-width:220px;
+      background:rgba(0,0,0,.3);border:1px solid var(--border-subtle);color:#fff;outline:none;
+    }
+    .search:focus{border-color:var(--student-light)}
+    .quick-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+    /* diagram */
+    .diagram-panel{
+      background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:22px;padding:22px;margin-bottom:28px;
+      box-shadow:0 12px 40px rgba(0,0,0,.35);
+    }
+    .diagram-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+    .diagram-title{font-size:18px;font-weight:800;display:flex;gap:10px;align-items:center}
+    .diagram-hint{font-size:12.5px;color:var(--text-muted)}
+    .svg-viewport{overflow-x:auto;border-radius:14px;background:rgba(0,0,0,.2);border:1px solid var(--border-subtle)}
+    .master-svg{display:block;min-width:1280px;width:100%;height:auto;font-family:var(--font)}
+    .node-group{cursor:pointer;transition:opacity .3s,transform .3s;transform-box:fill-box;transform-origin:center}
+    .node-group:hover .node-body{filter:brightness(1.18)}
+    .node-body{transition:filter .2s}
+    .flow-group{transition:opacity .3s}
+    .flow-line{fill:none;stroke-width:3;stroke-dasharray:9 7;animation:flowDash 1.2s linear infinite}
+    .flow-line.dashed{stroke-dasharray:3 8;animation:none;opacity:.6}
+    @keyframes flowDash{to{stroke-dashoffset:-32}}
+    .flow-badge{cursor:pointer;transition:transform .2s;transform-box:fill-box;transform-origin:center}
+    .flow-badge:hover{transform:scale(1.22)}
+    .pulse{animation:pulse 2s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+    /* detail */
+    .role-detail-panel{
+      background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:20px;padding:24px;margin-bottom:28px;
+      box-shadow:0 10px 35px rgba(0,0,0,.3);
+    }
+    .role-detail-head{
+      display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+      margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border-subtle);
+    }
+    .role-detail-title{font-size:19px;font-weight:800}
+    .role-badge{font-size:12.5px;color:var(--text-secondary);background:rgba(255,255,255,.05);padding:5px 12px;border-radius:999px}
+    .group-title{
+      grid-column:1/-1;font-size:15px;font-weight:800;margin-top:10px;display:flex;align-items:center;gap:10px;
+      padding-bottom:6px;border-bottom:1px dashed var(--border-subtle);
+    }
+    .actions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}
+    .action-card{
+      background:rgba(0,0,0,.25);border:1px solid var(--border-subtle);border-left:3px solid var(--c);border-radius:14px;
+      padding:16px 18px;display:flex;flex-direction:column;gap:10px;transition:all .2s;animation:fadeUp .4s ease both;
+    }
+    .action-card:hover{background:rgba(255,255,255,.03);transform:translateY(-2px);border-color:var(--border-focus);border-left-color:var(--c)}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .action-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+    .action-card-title{font-size:15px;font-weight:700;color:#fff;line-height:1.35}
+    .code{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.08);color:var(--text-muted);white-space:nowrap}
+    .action-card-body{font-size:13.5px;color:var(--text-secondary);line-height:1.55}
+    .files{display:flex;flex-wrap:wrap;gap:6px}
+    .file{font-family:var(--mono);font-size:10.5px;color:var(--student-light);background:rgba(2,132,199,.12);border:1px solid rgba(2,132,199,.25);padding:2px 7px;border-radius:5px}
+    .status{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;width:fit-content}
+    .st-done{background:rgba(34,197,94,.13);color:#4ade80;border:1px solid rgba(34,197,94,.35)}
+    .st-part{background:rgba(234,179,8,.13);color:#facc15;border:1px solid rgba(234,179,8,.35)}
+    .st-todo{background:rgba(239,68,68,.13);color:#f87171;border:1px solid rgba(239,68,68,.35)}
+    .st-rm{background:rgba(100,116,139,.18);color:#cbd5e1;border:1px solid rgba(100,116,139,.4)}
+
+    /* matrix */
+    .matrix-panel{background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:20px;padding:24px;margin-bottom:28px;overflow-x:auto}
+    .matrix-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px;margin-top:14px;min-width:860px}
+    .matrix-table th,.matrix-table td{padding:14px 16px;border-bottom:1px solid var(--border-subtle);text-align:left;vertical-align:middle}
+    .matrix-table th{background:rgba(0,0,0,.35);color:var(--text-secondary);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+    .matrix-table tr:hover td{background:rgba(255,255,255,.02)}
+    .bar{height:9px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;min-width:140px}
+    .bar>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 55%,#fff));width:0;transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+
+    /* timeline */
+    .timeline{position:relative;margin-top:16px;padding-left:26px}
+    .timeline::before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:linear-gradient(#34d399,#38bdf8,#f472b6,#fbbf24)}
+    .tl-item{position:relative;margin-bottom:14px;padding:12px 16px;background:rgba(0,0,0,.25);border:1px solid var(--border-subtle);border-radius:12px}
+    .tl-item::before{content:"";position:absolute;left:-24px;top:16px;width:12px;height:12px;border-radius:50%;background:var(--c,#34d399);box-shadow:0 0 12px var(--c,#34d399)}
+    .tl-title{font-weight:700;font-size:14px}
+    .tl-body{font-size:13px;color:var(--text-secondary);margin-top:3px;line-height:1.5}
+
+    .legend{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    @media(max-width:1100px){.two-col{grid-template-columns:1fr}}
+    .stack-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+    .chip{font-family:var(--mono);font-size:12px;font-weight:700;padding:6px 12px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--border-subtle);color:#e2e8f0}
+
+    /* modal */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+    .modal{background:#141c2e;border:1px solid var(--border-focus);border-radius:18px;max-width:650px;width:100%;padding:26px;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.7);animation:fadeUp .3s ease}
+    .modal-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.08);border:none;color:var(--text-secondary);font-size:16px;width:32px;height:32px;border-radius:50%;cursor:pointer}
+    .modal-close:hover{background:rgba(255,255,255,.16);color:#fff}
+
+    footer{text-align:center;margin-top:50px;padding-top:20px;border-top:1px solid var(--border-subtle);color:var(--text-muted);font-size:13px}
+    ::-webkit-scrollbar{height:9px;width:9px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:9px}
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="brand-badge"><span>🌱 Mầm Văn 7</span> • <span>Bản Đồ Tổng Hợp Tính Năng Đã Hoàn Thành</span></div>
+    <h1 class="header-title">Bản Đồ Tất Cả Những Gì Đã Làm Được</h1>
+    <p class="header-desc">
+      Toàn bộ <strong>tính năng, màn hình, dịch vụ AI, logic gamification và hạ tầng</strong> đã xây dựng cho nền tảng học Ngữ văn lớp 7.
+      Nhấp vào từng khối để xem chi tiết, nhấp vào các mũi tên để hiểu luồng dữ liệu, và xem phần <strong>còn thiếu</strong> (Admin, Phụ huynh) ở khối xám.
+    </p>
+  </header>
+
+  <section class="stats" id="stats"></section>
+
+  <div class="toolbar">
+    <div class="filter-group" id="filters"></div>
+    <div class="quick-actions">
+      <input class="search" id="searchBox" type="search" placeholder="🔎 Tìm tính năng, file…" oninput="onSearch(this.value)">
+      <button class="action-btn" onclick="selectModule('all')">⟲ Mặc định</button>
+      <button class="action-btn" onclick="scrollToId('matrixSection')">📊 Bảng tiến độ</button>
+      <button class="action-btn" onclick="scrollToId('timelineSection')">🕒 Nhật ký</button>
+    </div>
+  </div>
+
+  <div class="diagram-panel">
+    <div class="diagram-head">
+      <div class="diagram-title"><span>🗺️</span> Bản Đồ Hệ Thống Mầm Văn 7 (Full Canvas)</div>
+      <div class="legend">
+        <span class="status st-done">● Hoàn thành</span>
+        <span class="status st-part">● Một phần / Mock</span>
+        <span class="status st-todo">● Chưa làm</span>
+        <span class="status st-rm">● Đã gỡ bỏ</span>
+      </div>
+    </div>
+    <div class="diagram-hint" style="margin-bottom:12px">💡 Nhấp vào khối module hoặc các vòng số trên mũi tên để xem diễn giải</div>
+    <div class="svg-viewport"><svg class="master-svg" id="mapSvg" viewBox="0 -60 1440 960" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  </div>
+
+  <section class="role-detail-panel" id="detailPanel">
+    <div class="role-detail-head">
+      <div class="role-detail-title" id="detailTitle"></div>
+      <div class="role-badge" id="detailBadge"></div>
+    </div>
+    <div class="actions-grid" id="detailGrid"></div>
+  </section>
+
+  <section class="matrix-panel" id="matrixSection">
+    <div class="diagram-title"><span>📊</span> Bảng Tiến Độ Theo Module</div>
+    <table class="matrix-table">
+      <thead><tr><th>Module</th><th>Hoàn thành</th><th>Tiến độ</th><th>Một phần</th><th>Chưa làm</th><th>Thư mục chính</th></tr></thead>
+      <tbody id="matrixBody"></tbody>
+    </table>
+  </section>
+
+  <div class="two-col">
+    <section class="matrix-panel" id="timelineSection" style="overflow:visible">
+      <div class="diagram-title"><span>🕒</span> Nhật Ký Các Việc Đã Làm Gần Đây</div>
+      <div class="timeline" id="timeline"></div>
+    </section>
+    <section class="matrix-panel" style="overflow:visible">
+      <div class="diagram-title"><span>🧰</span> Công Nghệ & Hạ Tầng</div>
+      <div class="stack-chips" id="stack"></div>
+      <div class="diagram-title" style="margin-top:26px;font-size:15px"><span>🔗</span> Địa Chỉ & Kho Mã</div>
+      <ul style="margin-top:12px;list-style:none;font-size:13.5px;color:var(--text-secondary);line-height:2">
+        <li>🌐 Production: <strong style="color:#fff">mamvan.vercel.app</strong></li>
+        <li>📦 Repo: <strong style="color:#fff">github.com/DuongDADEV/Project_MamVan_Edu</strong></li>
+        <li>🌿 Nhánh: <strong style="color:#fff">dev</strong> (làm việc) • <strong style="color:#fff">main</strong> (chưa đồng bộ)</li>
+        <li>🗄️ DB: <strong style="color:#fff">Supabase</strong> (9 bảng) + LocalStorage fallback</li>
+        <li>🤖 AI: <strong style="color:#fff">Gemini</strong> (<code style="font-family:var(--mono)">gemini-flash-latest</code>, header <code style="font-family:var(--mono)">X-goog-api-key</code>)</li>
+      </ul>
+    </section>
+  </div>
+
+  <footer>
+    <div>Bản Đồ Tính Năng Mầm Văn 7 • Tổng hợp từ mã nguồn thực tế</div>
+    <div style="margin-top:6px;font-size:12px;color:#475569">Phong cách đồng bộ với “Bản Đồ Luồng Tác Động Mầm Văn”</div>
+  </footer>
+</div>
+
+<div class="modal-overlay" id="modal" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="mBadge" style="font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:8px;color:#38bdf8">LUỒNG DỮ LIỆU</div>
+    <h3 id="mTitle" style="font-size:18px;margin-bottom:12px"></h3>
+    <p id="mDesc" style="font-size:14px;color:var(--text-secondary);line-height:1.65;margin-bottom:16px"></p>
+    <div style="background:rgba(0,0,0,.3);border-radius:10px;padding:12px;font-size:13px;border-left:3px solid #38bdf8">
+      <strong style="color:#38bdf8">Ý nghĩa:</strong>
+      <div id="mNote" style="color:#cbd5e1;margin-top:4px;line-height:1.55"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================ */
+/* DỮ LIỆU: toàn bộ tính năng đã làm                           */
+/* status: done | part | todo | rm                             */
+/* ============================================================ */
+const MODULES = {
+  teacher:{
+    key:'teacher', emoji:'👨‍🏫', name:'GIÁO VIÊN', color:'#10b981', light:'#34d399', grad:'gT',
+    x:40,y:40,w:380,h:360, dir:'src/screens/teacher/',
+    badge:'Cổng giáo viên • Quản lý lớp • Học liệu • Chấm bài • Thưởng',
+    features:[
+      {c:'TEA-01',s:'done',short:'Lớp & học sinh + nhập Excel',t:'Quản lý lớp & học sinh, nhập Excel',b:'Tạo lớp, thêm học sinh thủ công hoặc import file Excel (xlsx). Mã học sinh, tên đăng nhập, mật khẩu được sinh tự động.',f:['ClassesAndStudentsScreen.tsx','AddStudentModal','credentialUtils.ts']},
+      {c:'TEA-02',s:'done',short:'In phiếu đăng nhập / xuất Excel',t:'Phiếu tài khoản (Credential Vouchers)',b:'Popup in phiếu cắt phát cho học sinh/phụ huynh, tải Excel danh sách tài khoản. Học sinh không tự đổi mật khẩu.',f:['CredentialVouchersModal']},
+      {c:'TEA-03',s:'done',short:'Hồ sơ học sinh (drawer)',t:'Hồ sơ chi tiết học sinh',b:'Ngăn kéo hồ sơ: tiến độ, XP, streak, mastery, lịch sử làm bài của từng học sinh.',f:['StudentProfileDrawer']},
+      {c:'TEA-04',s:'done',short:'Tổng quan lớp & Analytics',t:'Tổng quan & Phân tích học tập',b:'Dashboard tổng quan lớp, phân tích mức độ tương tác, mastery, chất lượng câu hỏi, điểm số, hồ sơ học sinh qua metricsEngine.',f:['TeacherOverviewScreen.tsx','TeacherAnalyticsScreen.tsx','src/analytics/*']},
+      {c:'TEA-05',s:'done',short:'Soạn Video & Lý thuyết (block)',t:'Quản lý nội dung: Video & Lý thuyết',b:'Soạn bài video và bài lý thuyết bằng trình soạn thảo dạng block (heading, paragraph, ví dụ, ghi nhớ, danh sách).',f:['TeacherContentScreen.tsx','TheoryLessonEditor']},
+      {c:'TEA-06',s:'done',short:'Ngân hàng câu hỏi (kho + CRUD)',t:'Ngân hàng câu hỏi',b:'2 tab: Kho ngân hàng và Xưởng AI. Bộ lọc, thống kê, huy hiệu “Vừa tạo mới”, CRUD câu hỏi thủ công, modal nhập API key.',f:['TeacherQuestionBankScreen.tsx']},
+      {c:'TEA-07',s:'done',short:'Chấm văn rubric + AI gợi ý',t:'Chấm đoạn văn theo Rubric',b:'Hàng đợi chấm bài viết với 4 tiêu chí (Nội dung, Bố cục, Dùng từ, Sáng tạo), AI gợi ý điểm và lời phê.',f:['TeacherGradingScreen.tsx','components/teacher/grading/']},
+      {c:'TEA-08',s:'done',short:'Cấu hình rương & duyệt quà',t:'Rương thưởng: mốc XP & hàng đợi duyệt',b:'Cấu hình 4 mốc rương (Hạt, Lá, Hoa, Vàng), hàng đợi yêu cầu mở rương của học sinh để giáo viên duyệt.',f:['TeacherRewardsScreen.tsx','components/teacher/rewards/']},
+      {c:'TEA-09',s:'done',short:'Cài đặt: trần XP, AI, audit log',t:'Cài đặt hệ thống',b:'Trần XP ngày/tuần, cấu hình AI (Gemini key, model, test kết nối), tài khoản, nhật ký thao tác (audit log).',f:['TeacherSettingsScreen.tsx']},
+      {c:'TEA-10',s:'done',short:'Sidebar + Topbar điều hướng',t:'Khung điều hướng giáo viên',b:'TeacherSidebar & TeacherTopbar, điều hướng giữa các màn hình quản trị lớp học.',f:['TeacherSidebar.tsx','TeacherTopbar.tsx']}
+    ]
+  },
+  ai:{
+    key:'ai', emoji:'🤖', name:'AI STUDIO (GEMINI)', color:'#ec4899', light:'#f472b6', grad:'gA',
+    x:530,y:40,w:380,h:360, dir:'src/services/ai/ • components/teacher/ai/',
+    badge:'Xưởng AI kiểu NotebookLM • Gemini thật • Có fallback Mock',
+    features:[
+      {c:'AI-01',s:'done',short:'Xưởng AI NotebookLM 3 cột',t:'Xưởng AI Content Studio (3 cột)',b:'Cột Nguồn → Chat (RAG) → Studio kết quả. Dán ghi chú/lời giảng làm nguồn, sinh Bộ câu hỏi / Ý trọng tâm video / Lý thuyết chi tiết.',f:['AiContentStudioModal.tsx']},
+      {c:'AI-02',s:'done',short:'Chat RAG + lưu lịch sử theo chủ đề',t:'Chat theo nguồn (RAG) có lịch sử',b:'Hỏi đáp dựa trên nguồn đã dán, lưu lịch sử vào localStorage theo topicId, nút “Làm mới chat”, gợi ý câu hỏi nhanh.',f:['chatWithSources','localStorage per topic']},
+      {c:'AI-03',s:'done',short:'Sinh câu hỏi 3–15, độ khó, loại',t:'Sinh bộ câu hỏi',b:'Thanh trượt số câu 3–15, độ khó Dễ/TB/Khó, loại quiz (nhanh / mastery / luyện tập). Câu hỏi phân theo 4 mức Mastery.',f:['generateQuestions']},
+      {c:'AI-04',s:'done',short:'Xem trước bản nháp & chọn lưu',t:'Preview bản nháp (Draft review)',b:'Modal xem trước các câu hỏi AI tạo, tích chọn/bỏ chọn từng câu rồi mới lưu vào Ngân hàng, tránh rác dữ liệu.',f:['handleApplyDraftFromAi']},
+      {c:'AI-05',s:'done',short:'Ý trọng tâm video',t:'Tóm tắt ý trọng tâm',b:'Sinh danh sách ý chính của video/bài giảng để gắn vào bài học.',f:['generateKeySummary']},
+      {c:'AI-06',s:'done',short:'Lý thuyết chi tiết (blocks→sections)',t:'Sinh bài lý thuyết chi tiết',b:'AI sinh bài lý thuyết dạng blocks; khi lưu tự chuyển blocks → sections, thẻ lý thuyết hiển thị được cả hai định dạng (đã sửa lỗi hiển thị trống).',f:['generateTheory','TeacherQuestionBankScreen.tsx']},
+      {c:'AI-07',s:'done',short:'AI chấm gợi ý bài văn',t:'Gợi ý chấm văn bằng AI',b:'Trả về điểm theo rubric và lời phê gợi ý cho giáo viên tinh chỉnh.',f:['gradeEssay']},
+      {c:'AI-08',s:'done',short:'Gemini key/model/test kết nối',t:'Cấu hình Gemini chuẩn mới',b:'Key dạng AQ.… xác thực bằng header X-goog-api-key (không dùng ?key=). Mặc định gemini-flash-latest, danh sách model dự phòng, nút Test kết nối.',f:['GeminiAIService.ts','index.ts']},
+      {c:'AI-09',s:'done',short:'Tăng tốc: thinkingBudget = 0',t:'Tối ưu tốc độ phản hồi',b:'Tắt “thinking” của Gemini Flash bằng thinkingBudget: 0, giảm thời gian sinh từ ~66 giây xuống ~5–6 giây.',f:['callGemini','testConnection']},
+      {c:'AI-10',s:'part',short:'MockAIService dự phòng',t:'Mock AI fallback',b:'Khi chưa có key hoặc API lỗi, hệ thống dùng MockAIService để giao diện vẫn chạy được (nội dung mẫu).',f:['MockAIService']},
+      {c:'AI-11',s:'rm',short:'Lọc text từ link YouTube (đã gỡ)',t:'Trích text từ link YouTube – đã gỡ khỏi UI',b:'Từng làm bộ lọc cleanScrapedText (loại rác Shopee/Lazada/ảnh markdown…). Do khó dùng nên đã gỡ ô nhập link khỏi giao diện; chỉ còn dán văn bản “Ghi chú / Lời giảng”.',f:['extractContentFromUrl (không dùng)']}
+    ]
+  },
+  student:{
+    key:'student', emoji:'🎒', name:'HỌC SINH', color:'#0284c7', light:'#38bdf8', grad:'gS',
+    x:1020,y:40,w:380,h:360, dir:'src/screens/ • src/components/',
+    badge:'Cổng học sinh • Học video • Lý thuyết • Làm quiz',
+    features:[
+      {c:'STU-01',s:'done',short:'Đăng nhập bằng phiếu cô phát',t:'Đăng nhập học sinh',b:'LoginScreen: học sinh đăng nhập bằng tài khoản cô phát, không tự đổi mật khẩu.',f:['LoginScreen.tsx']},
+      {c:'STU-02',s:'done',short:'Trang chủ: điểm danh +2 XP, streak',t:'Trang chủ học sinh',b:'Điểm danh hằng ngày (+2 XP), chuỗi ngày (streak), tiếp tục bài đang học, bài tập về nhà (BTVN), cây tri thức thu nhỏ có tưới nước.',f:['HomeScreen.tsx']},
+      {c:'STU-03',s:'done',short:'Màn hình Học (video + lý thuyết)',t:'LearnScreen – Danh sách bài học',b:'Gộp Video và Lý thuyết trong một màn hình có bộ lọc để học sinh dễ tìm.',f:['LearnScreen.tsx','VideoCard']},
+      {c:'STU-04',s:'done',short:'Video: quy tắc xem đủ 80%',t:'Học video (quy tắc 80%)',b:'Chỉ tính hoàn thành khi xem đủ 80% thời lượng, đếm đoạn xem duy nhất (unique-watch) chống tua.',f:['VideoLessonScreen.tsx']},
+      {c:'STU-05',s:'done',short:'Lý thuyết + đếm thời gian học thật',t:'Học lý thuyết',b:'Hiển thị bài lý thuyết dạng block, tính thời gian học tích cực (Active Learning Time) – không tính treo máy.',f:['TheoryLessonScreen.tsx','useActiveLearningTimer.ts']},
+      {c:'STU-06',s:'done',short:'Làm quiz + màn kết quả',t:'Quiz Runner & Kết quả',b:'Làm trắc nghiệm theo bộ câu hỏi, chấm tự động, màn kết quả cập nhật mastery & XP (làm lại không cộng thêm XP).',f:['QuizRunner.tsx','QuizResult.tsx']},
+      {c:'STU-07',s:'done',short:'Hồ sơ cá nhân + đổi giao diện',t:'Profile & Theme',b:'Trang cá nhân, chọn chủ đề giao diện (ThemeSelectorModal), nhắc nghỉ giải lao (BreakReminderModal).',f:['ProfileScreen.tsx','ThemeSelectorModal','BreakReminderModal']},
+      {c:'STU-08',s:'done',short:'Mascot Mầm Mực + Logo + Navbar',t:'Nhận diện & điều hướng',b:'Linh vật Mầm Mực, logo Mầm Văn, thanh điều hướng mobile-first.',f:['MamMuc','MamVanLogo','Navbar']},
+      {c:'STU-09',s:'done',short:'Cổng xem dành cho giáo viên',t:'TeacherPortal (chuyển vai)',b:'Màn chuyển sang cổng giáo viên từ ứng dụng chính.',f:['TeacherPortal.tsx']}
+    ]
+  },
+  game:{
+    key:'game', emoji:'🌳', name:'GAMIFICATION & MASTERY', color:'#f59e0b', light:'#fbbf24', grad:'gG',
+    x:530,y:520,w:380,h:360, dir:'src/logic/ • screens/TreeScreen • rewards/',
+    badge:'Mastery • XP • Vườn Văn Mầm Mực • Rương quà',
+    features:[
+      {c:'GAM-01',s:'done',short:'Mastery 4 mức + suy giảm',t:'Engine Mastery 4 mức',b:'Nhận biết / Thông hiểu / Phân tích / Vận dụng, tính trọng số và suy giảm theo thời gian.',f:['logic/mastery.ts']},
+      {c:'GAM-02',s:'done',short:'XP Engine: trần ngày/tuần',t:'XP Engine',b:'Tính XP theo hoạt động, áp trần ngày (130–150) và tuần (900) do giáo viên cấu hình.',f:['logic/xpEngine.ts']},
+      {c:'GAM-03',s:'done',short:'Cây tri thức 6 giai đoạn lớn',t:'GrowthTree – Cây tri thức',b:'Cây lớn qua 6 giai đoạn, lá theo chủ đề đổi màu theo mastery (Vững / Tiến bộ / Cần ôn / Chưa học).',f:['GrowthTree.tsx']},
+      {c:'GAM-04',s:'done',short:'Tưới nước cho cây (+XP)',t:'Tưới nước Mầm Mực (mới)',b:'Thanh “Nước tưới Mầm Mực” và nút “Tưới nước cho cây (+XP)”, có hiệu ứng tưới trong GrowthTree.',f:['TreeScreen.tsx','App.tsx']},
+      {c:'GAM-05',s:'done',short:'Vườn Văn: ma trận mastery + huy hiệu',t:'Vườn Văn Mầm Mực (3 tab)',b:'Tab Cây / Ma trận mastery 4 mức / Huy hiệu. Lá chủ đề tô màu theo mức nắm bài.',f:['TreeScreen.tsx']},
+      {c:'GAM-06',s:'done',short:'Rương quà: mở, bộ sưu tập, lịch sử',t:'Hệ thống rương quà (Rewards)',b:'ChestCard, ChestIllustration, hiệu ứng mở rương, bộ sưu tập rương đã mở, lịch sử yêu cầu, đường đua phần thưởng.',f:['RewardsScreen.tsx','components/rewards/*']},
+      {c:'GAM-07',s:'done',short:'Streak & điểm danh',t:'Chuỗi học (Streak) & điểm danh',b:'Duy trì chuỗi ngọn lửa theo ngày, điểm danh cộng XP ở trang chủ.',f:['handleAttendanceCheckIn']},
+      {c:'GAM-08',s:'part',short:'Pháo hoa/Confetti khi mở rương',t:'Hiệu ứng chúc mừng',b:'Hiệu ứng mở rương có animation; phần pháo hoa confetti toàn màn hình cần rà lại.',f:['ChestOpeningModal']}
+    ]
+  },
+  infra:{
+    key:'infra', emoji:'🗄️', name:'DỮ LIỆU & HẠ TẦNG', color:'#8b5cf6', light:'#c084fc', grad:'gI',
+    x:40,y:520,w:380,h:360, dir:'src/services/ • database/ • docs/',
+    badge:'React 19 • Supabase • Vercel • Tài liệu kiến trúc',
+    features:[
+      {c:'INF-01',s:'done',short:'React 19 + Vite 8 + TS + Tailwind 4',t:'Nền tảng frontend',b:'React 19, Vite 8, TypeScript, Tailwind v4, recharts, lucide-react, xlsx. Mobile-first, điều hướng bằng state trong App.tsx.',f:['package.json','App.tsx']},
+      {c:'INF-02',s:'done',short:'Service registry + Repository',t:'Kiến trúc Repository',b:'services/index.ts đăng ký repo; có bản Mock và Supabase để hoán đổi, UI không phụ thuộc nguồn dữ liệu.',f:['services/index.ts','mock/','supabase/']},
+      {c:'INF-03',s:'done',short:'Supabase: 9 bảng + schema.sql',t:'Cơ sở dữ liệu Supabase',b:'teachers, classes, students, student_states, topics, questions, essay_submissions, reward_requests, system_settings.',f:['database/schema.sql','supabaseRepositories.ts']},
+      {c:'INF-04',s:'done',short:'Fallback LocalStorage',t:'Chạy offline với LocalStorage',b:'Khi chưa cấu hình Supabase, Auth/Class/Student/Attempt/Essay repo tự lưu LocalStorage.',f:['supabase/client.ts']},
+      {c:'INF-05',s:'done',short:'EventBus + dữ liệu seed demo',t:'Event bus & seed data',b:'eventBus đồng bộ sự kiện giữa màn hình; seedData & demoSeedHistory tạo dữ liệu demo.',f:['mock/eventBus.ts','seedData.ts','demoSeedHistory.ts']},
+      {c:'INF-06',s:'done',short:'Deploy Vercel (mamvan.vercel.app)',t:'Triển khai Vercel',b:'Deploy production lên mamvan.vercel.app bằng npx vercel --prod; nhánh dev làm việc, main chưa đồng bộ.',f:['vercel.json','.vercel']},
+      {c:'INF-07',s:'done',short:'Docs phase-1 / phase-2 / audit',t:'Tài liệu kiến trúc & audit',b:'Data flow audit, business rule gap, Supabase readiness, ERD, auth/RLS, roadmap, MAM_VAN_PROJECT_AUDIT.md.',f:['docs/phase-1','docs/phase-2']},
+      {c:'INF-08',s:'done',short:'DevPanel + ErrorBoundary',t:'Công cụ dev & an toàn lỗi',b:'DevPanel để thao tác dữ liệu demo, ErrorBoundary chặn crash toàn app.',f:['DevPanel','ErrorBoundary']},
+      {c:'INF-09',s:'part',short:'Supabase Auth thật + RLS chặt',t:'Xác thực thật & RLS',b:'RLS hiện đang mở để dev; chưa chuyển sang Supabase Auth thật và chính sách RLS theo vai trò.',f:['docs/phase-2 (auth/RLS)']}
+    ]
+  },
+  todo:{
+    key:'todo', emoji:'⛔', name:'CHƯA LÀM (ADMIN + PHỤ HUYNH)', color:'#64748b', light:'#94a3b8', grad:'gX',
+    x:1020,y:520,w:380,h:360, dir:'(chưa có)',
+    badge:'Nằm trong kế hoạch nghiệp vụ nhưng chưa xây dựng',
+    features:[
+      {c:'ADM-01',s:'done',short:'Cổng Admin quản trị giáo viên',t:'Cổng Admin Quản trị (Theme Giáo viên)',b:'Giao diện Admin đồng bộ theme giấy & mực: thống kê 4 thẻ (Tổng/Active/Trial/Locked), tìm kiếm, bộ lọc trạng thái.',f:['screens/admin/AdminPortal.tsx']},
+      {c:'ADM-02',s:'done',short:'Cấp tài khoản giáo viên & Dùng thử',t:'Cấp tài khoản giáo viên mới',b:'Tạo tài khoản: tên, username (tự sinh), mật khẩu (123456), trường, môn, loại dùng thử 3-7 ngày hoặc chính thức, ghi chú.',f:['CreateTeacherModal','teacherService']},
+      {c:'ADM-03',s:'done',short:'Sửa / Xóa / Khóa / Impersonate',t:'Quản trị vòng đời tài khoản giáo viên',b:'Sửa thông tin, gia hạn dùng thử, đổi mật khẩu, 1-click Khóa/Mở khóa, Xóa tài khoản, và Impersonate vào thẳng portal giáo viên.',f:['EditTeacherModal','toggleLockTeacher','deleteTeacher']},
+      {c:'PAR-01',s:'todo',short:'Cổng Phụ huynh + mã liên kết',t:'Cổng Phụ huynh',b:'Đăng nhập phụ huynh liên kết với hồ sơ con. Chưa triển khai.',f:[]},
+      {c:'PAR-02',s:'todo',short:'Xem phút học, streak, cây, bài văn',t:'Giám sát học tập của con',b:'Xem số phút thực học, streak, sức khỏe cây tri thức, nguyên văn bài viết và lời phê.',f:[]},
+      {c:'SYS-01',s:'todo',short:'Thông báo đẩy / Zalo / SMS',t:'Kênh thông báo',b:'Thông báo duyệt rương, nhắc học… chưa tích hợp.',f:[]}
+    ]
+  }
+};
+
+const FLOWS = {
+  f1:{from:'teacher',to:'ai',   path:'M420 110 L530 110', n:'1', color:'#10b981', bx:475,by:110,
+      title:'Luồng [1]: Giáo viên ➜ AI Studio', desc:'Giáo viên dán Ghi chú / Lời giảng làm nguồn, chọn số câu (3–15), độ khó, loại quiz và chat hỏi AI theo nguồn đó.', note:'Nguồn do cô kiểm soát nên AI không bịa ngoài tài liệu; lịch sử chat lưu theo từng chủ đề.'},
+  f2:{from:'ai',to:'teacher',   path:'M530 200 L420 200', n:'2', color:'#ec4899', bx:475,by:200,
+      title:'Luồng [2]: AI Studio ➜ Giáo viên', desc:'AI trả về bản nháp: bộ câu hỏi, ý trọng tâm, bài lý thuyết dạng blocks, gợi ý chấm văn. Giáo viên xem trước, chọn/bỏ chọn rồi mới lưu vào Ngân hàng.', note:'Preview draft giúp giáo viên là người quyết định cuối cùng, tránh dữ liệu rác.'},
+  f3:{from:'ai',to:'student',  path:'M910 150 L1020 150', n:'3', color:'#ec4899', bx:965,by:150,
+      title:'Luồng [3]: Nội dung AI ➜ Học sinh', desc:'Câu hỏi và bài lý thuyết sau khi được duyệt trở thành quiz/bài học hiển thị trên cổng học sinh.', note:'Học sinh không chat AI tự do – tiết kiệm API và an toàn nội dung.'},
+  f4:{from:'student',to:'teacher',path:'M1210 40 C1210 -50 230 -50 230 40', n:'4', color:'#0284c7', bx:720,by:-26,
+      title:'Luồng [4]: Học sinh ➜ Giáo viên', desc:'Bài viết đoạn văn được đẩy vào hàng đợi chấm; kết quả quiz, thời gian học, XP đổ về Analytics của giáo viên.', note:'Trắc nghiệm tự chấm, cô chỉ chấm đoạn văn theo rubric 4 tiêu chí.'},
+  f5:{from:'student',to:'game',   path:'M1070 400 C1070 480 880 440 880 520', n:'5', color:'#0284c7', bx:975,by:452,
+      title:'Luồng [5]: Học sinh ➜ Gamification', desc:'Xem video đủ 80%, đọc lý thuyết, làm quiz, điểm danh → XP Engine và Mastery cập nhật (áp trần ngày/tuần).', note:'Làm lại bài chỉ để ôn tập, không cộng thêm XP.'},
+  f6:{from:'game',to:'student',   path:'M800 520 C800 450 1190 480 1190 400', n:'6', color:'#f59e0b', bx:995,by:468,
+      title:'Luồng [6]: Gamification ➜ Học sinh', desc:'Cây tri thức đổi màu lá theo mastery, tăng giai đoạn lớn, tưới nước (+XP), huy hiệu và rương quà hiển thị lại trên cổng học sinh.', note:'Trực quan hóa thành quả để tạo động lực học tập.'},
+  f7:{from:'teacher',to:'game',  path:'M330 400 C330 470 620 440 620 520', n:'7', color:'#10b981', bx:475,by:455,
+      title:'Luồng [7]: Giáo viên ⇄ Gamification', desc:'Giáo viên cấu hình trần XP, mốc 4 rương (Hạt/Lá/Hoa/Vàng) và duyệt yêu cầu mở rương của học sinh.', note:'Kiểm soát nhịp độ học và nhắc thưởng thật cuối tuần.'},
+  f8:{from:'teacher',to:'infra', path:'M130 400 L130 520', n:'8', color:'#10b981', bx:130,by:460,
+      title:'Luồng [8]: Giáo viên ➜ Dữ liệu', desc:'Lớp, học sinh, câu hỏi, bài học, điểm, cài đặt được lưu qua Repository vào Supabase (hoặc LocalStorage khi offline).', note:'UI không phụ thuộc nguồn dữ liệu nhờ service registry.'},
+  f9:{from:'infra',to:'game',    path:'M420 700 L530 700', n:'9', color:'#8b5cf6', bx:475,by:700,
+      title:'Luồng [9]: Dữ liệu ⇄ Gamification', desc:'student_states, reward_requests lưu trạng thái XP/mastery/rương; eventBus đồng bộ sự kiện giữa các màn hình.', note:'Nền tảng cho việc chuyển hoàn toàn sang Supabase.'},
+  f10:{from:'game',to:'todo',     path:'M910 700 L1020 700', n:'?', color:'#64748b', bx:965,by:700, dashed:true,
+      title:'Luồng [?]: Chưa nối – Phụ huynh & Admin', desc:'Dữ liệu streak, phút học, cây tri thức, bài văn dự kiến hiển thị cho Phụ huynh; Admin theo dõi lớp của giáo viên. Hiện CHƯA có cổng.', note:'Đây là hạng mục kế tiếp theo kế hoạch nghiệp vụ.'}
+};
+
+const TIMELINE = [
+  {c:'#34d399',t:'Gỡ bộ lọc text AI từ link YouTube',b:'Bỏ ô nhập link khó dùng; tab nguồn đổi thành “Ghi chú / Lời giảng”, chỉ dán văn bản.'},
+  {c:'#fbbf24',t:'Thêm tưới nước cho cây trong Vườn Văn Mầm Mực',b:'isWatering, thanh “Nước tưới Mầm Mực”, nút tưới (+XP), truyền onCheckIn từ App.'},
+  {c:'#f472b6',t:'Sửa Gemini key mới & model',b:'Key AQ.… dùng header X-goog-api-key; đổi mặc định sang gemini-flash-latest; bỏ model 2.0 đã chết; thêm danh sách model dự phòng.'},
+  {c:'#38bdf8',t:'Tăng tốc AI từ ~66s xuống ~5s',b:'Thêm thinkingConfig.thinkingBudget = 0 cho model flash.'},
+  {c:'#c084fc',t:'Sửa hiển thị bài lý thuyết AI trống',b:'Chuyển blocks → sections khi lưu, thẻ lý thuyết render được blocks.'},
+  {c:'#34d399',t:'Xưởng AI: preview bản nháp, slider 3–15 câu, lưu lịch sử chat',b:'Chọn/bỏ chọn câu trước khi lưu; nút làm mới chat; gợi ý prompt.'},
+  {c:'#fbbf24',t:'Deploy Vercel production & giải thích nhánh dev/main',b:'mamvan.vercel.app chạy từ working tree nhánh dev (commit 6802037); main chưa merge.'},
+  {c:'#f472b6',t:'Tổng hợp bản đồ tính năng (file này)',b:'BAN_DO_TINH_NANG_DA_LAM_MAM_VAN.html – tổng hợp toàn bộ module đã làm.'}
+];
+
+const STACK = ['React 19','Vite 8','TypeScript','Tailwind v4','recharts','lucide-react','xlsx','Supabase JS','@google/genai','Gemini flash','Vercel','Be Vietnam Pro'];
+
+const STATUS = {
+  done:{label:'✅ Hoàn thành',cls:'st-done'},
+  part:{label:'🟡 Một phần / Mock',cls:'st-part'},
+  todo:{label:'⛔ Chưa làm',cls:'st-todo'},
+  rm:{label:'🗑️ Đã gỡ bỏ',cls:'st-rm'}
+};
+const DOT = {done:'#22c55e',part:'#eab308',todo:'#ef4444',rm:'#64748b'};
+
+/* ============================================================ */
+let current='all', query='';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const count = (m,s) => m.features.filter(f=>f.s===s).length;
+const allFeatures = () => Object.values(MODULES).flatMap(m=>m.features.map(f=>({...f,m})));
+
+/* ---------- stats ---------- */
+function renderStats(){
+  const all = allFeatures();
+  const n = s => all.filter(f=>f.s===s).length;
+  const items = [
+    ['Tổng tính năng', all.length, '#38bdf8'],
+    ['✅ Hoàn thành', n('done'), '#22c55e'],
+    ['🟡 Một phần / Mock', n('part'), '#eab308'],
+    ['⛔ Chưa làm', n('todo'), '#ef4444'],
+    ['Module chính', Object.keys(MODULES).length-1, '#c084fc'],
+    ['Bảng Supabase', 9, '#f59e0b']
+  ];
+  $('stats').innerHTML = items.map(([l,v,c])=>`<div class="stat" style="--c:${c}"><div class="stat-num" data-v="${v}">0</div><div class="stat-label">${l}</div></div>`).join('');
+  document.querySelectorAll('.stat-num').forEach(el=>{
+    const target=+el.dataset.v; let cur=0; const step=Math.max(1,Math.ceil(target/25));
+    const t=setInterval(()=>{cur=Math.min(target,cur+step);el.textContent=cur;if(cur>=target)clearInterval(t)},35);
+  });
+}
+
+/* ---------- filters ---------- */
+function renderFilters(){
+  const btns = [`<span class="filter-label">🎯 Tiêu điểm:</span>`,
+    `<button class="filter-btn active" data-m="all" style="--c:#fff" onclick="selectModule('all')">Toàn bộ hệ thống</button>`];
+  Object.values(MODULES).forEach(m=>{
+    btns.push(`<button class="filter-btn" data-m="${m.key}" style="--c:${m.color}" onclick="selectModule('${m.key}')">${m.emoji} ${m.name.split(' (')[0]}</button>`);
+  });
+  $('filters').innerHTML = btns.join('');
+}
+
+/* ---------- SVG map ---------- */
+function renderMap(){
+  const svg=$('mapSvg'); let s='<defs>';
+  Object.values(MODULES).forEach(m=>{
+    s+=`<linearGradient id="${m.grad}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${m.color}"/><stop offset="100%" stop-color="${shade(m.color)}"/></linearGradient>`;
+  });
+  [...new Set(Object.values(FLOWS).map(f=>f.color))].forEach(c=>{
+    s+=`<marker id="arr-${c.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="${c}"/></marker>`;
+  });
+  s+=`<pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="rgba(255,255,255,.035)"/></pattern></defs>`;
+  s+=`<rect x="0" y="-60" width="1440" height="960" fill="url(#grid)"/>`;
+
+  // flows
+  Object.entries(FLOWS).forEach(([k,f])=>{
+    s+=`<g class="flow-group" id="flow-${k}" data-mods="${f.from} ${f.to}">
+      <path class="flow-line ${f.dashed?'dashed':''}" d="${f.path}" stroke="${f.color}" marker-end="url(#arr-${f.color.slice(1)})"/>
+      <g class="flow-badge" onclick="showFlow('${k}')">
+        <circle cx="${f.bx}" cy="${f.by}" r="14" fill="#0b1220" stroke="${f.color}" stroke-width="2"/>
+        <text x="${f.bx}" y="${f.by+5}" text-anchor="middle" font-size="13" font-weight="800" fill="${f.color}">${f.n}</text>
+      </g></g>`;
+  });
+
+  // nodes
+  Object.values(MODULES).forEach(m=>{
+    const dashed = m.key==='todo' ? 'stroke-dasharray="8 6"' : '';
+    const done=count(m,'done'), tot=m.features.length;
+    s+=`<g class="node-group" id="node-${m.key}" onclick="selectModule('${m.key}')">
+      <rect class="node-body" x="${m.x}" y="${m.y}" width="${m.w}" height="${m.h}" rx="20" fill="#0f1626" stroke="${m.color}" stroke-width="2" ${dashed}/>
+      <rect x="${m.x}" y="${m.y}" width="${m.w}" height="62" rx="20" fill="url(#${m.grad})"/>
+      <rect x="${m.x}" y="${m.y+40}" width="${m.w}" height="22" fill="url(#${m.grad})"/>
+      <text x="${m.x+20}" y="${m.y+40}" font-size="26">${m.emoji}</text>
+      <text x="${m.x+60}" y="${m.y+30}" font-size="15" font-weight="800" fill="#fff">${esc(m.name)}</text>
+      <text x="${m.x+60}" y="${m.y+49}" font-size="11.5" font-weight="600" fill="rgba(255,255,255,.8)">${m.key==='todo'?`${tot} hạng mục chờ làm`:`${done}/${tot} tính năng hoàn thành`}</text>`;
+    m.features.slice(0,6).forEach((f,i)=>{
+      const y=m.y+92+i*38;
+      s+=`<circle class="${f.s==='part'?'pulse':''}" cx="${m.x+26}" cy="${y-4}" r="5" fill="${DOT[f.s]}"/>
+          <text x="${m.x+42}" y="${y}" font-size="13" font-weight="600" fill="#e2e8f0">${esc(f.short)}</text>`;
+    });
+    const more=m.features.length-6;
+    s+=`<text x="${m.x+20}" y="${m.y+m.h-14}" font-size="12" font-weight="700" fill="${m.light}">${more>0?`+${more} tính năng khác • `:''}Bấm để xem chi tiết ➜</text></g>`;
+  });
+  svg.innerHTML=s;
+}
+function shade(hex){
+  const n=parseInt(hex.slice(1),16);
+  const r=Math.round((n>>16)*0.5), g=Math.round(((n>>8)&255)*0.5), b=Math.round((n&255)*0.5);
+  return `rgb(${r},${g},${b})`;
+}
+
+/* ---------- detail ---------- */
+function cardHTML(f,m,i){
+  const st=STATUS[f.s];
+  return `<div class="action-card" style="--c:${m.color};animation-delay:${i*40}ms">
+    <div class="action-card-top"><span class="action-card-title">${esc(f.t)}</span><span class="code">${f.c}</span></div>
+    <span class="status ${st.cls}">${st.label}</span>
+    <div class="action-card-body">${esc(f.b)}</div>
+    ${f.f&&f.f.length?`<div class="files">${f.f.map(x=>`<span class="file">${esc(x)}</span>`).join('')}</div>`:''}
+  </div>`;
+}
+function renderDetail(){
+  const grid=$('detailGrid'), q=query.trim().toLowerCase();
+  const match=(f,m)=>!q||(f.t+' '+f.b+' '+f.c+' '+f.f.join(' ')+' '+m.name).toLowerCase().includes(q);
+  let html='', total=0;
+  const mods = current==='all'?Object.values(MODULES):[MODULES[current]];
+  mods.forEach(m=>{
+    const list=m.features.filter(f=>match(f,m));
+    if(!list.length) return;
+    total+=list.length;
+    if(current==='all'||q) html+=`<div class="group-title" style="color:${m.light}">${m.emoji} ${esc(m.name)} <span class="role-badge">${list.length} mục</span></div>`;
+    html+=list.map((f,i)=>cardHTML(f,m,i)).join('');
+  });
+  grid.innerHTML = html || `<div style="grid-column:1/-1;color:var(--text-muted);padding:30px;text-align:center">Không tìm thấy tính năng phù hợp.</div>`;
+  if(current==='all'){
+    $('detailTitle').innerHTML='📚 Toàn Bộ Tính Năng Theo Module'; $('detailTitle').style.color='#fff';
+    $('detailBadge').textContent=`${total} mục hiển thị`;
+  } else {
+    const m=MODULES[current];
+    $('detailTitle').innerHTML=`${m.emoji} Bóc Tách Chi Tiết: ${esc(m.name)}`; $('detailTitle').style.color=m.light;
+    $('detailBadge').textContent=m.badge;
+  }
+}
+
+/* ---------- select / search ---------- */
+function selectModule(key){
+  current=key;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.m===key));
+  Object.keys(MODULES).forEach(k=>{
+    const n=$('node-'+k); if(!n) return;
+    const on = key==='all'||key===k;
+    n.style.opacity = on?'1':'.3';
+    n.style.transform = key===k?'scale(1.015)':'scale(1)';
+  });
+  document.querySelectorAll('.flow-group').forEach(g=>{
+    g.style.opacity = (key==='all'|| g.dataset.mods.split(' ').includes(key))?'1':'.12';
+  });
+  renderDetail();
+  if(key!=='all') $('detailPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function onSearch(v){ query=v; renderDetail(); }
+function scrollToId(id){ $(id).scrollIntoView({behavior:'smooth'}); }
+
+/* ---------- flow modal ---------- */
+function showFlow(k){
+  const f=FLOWS[k]; if(!f) return;
+  $('mBadge').style.color=f.color; $('mBadge').textContent='LUỒNG DỮ LIỆU';
+  $('mTitle').textContent=f.title; $('mDesc').textContent=f.desc; $('mNote').textContent=f.note;
+  $('modal').style.display='flex';
+}
+function closeModal(){ $('modal').style.display='none'; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+/* ---------- matrix / timeline / stack ---------- */
+function renderMatrix(){
+  $('matrixBody').innerHTML = Object.values(MODULES).map(m=>{
+    const tot=m.features.length, d=count(m,'done'), p=count(m,'part'), t=count(m,'todo');
+    const pct=Math.round(d/tot*100);
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:8px;font-weight:800;color:${m.light}"><span>${m.emoji}</span>${esc(m.name)}</div></td>
+      <td><strong>${d}</strong> / ${tot}</td>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="bar" style="--c:${m.color}"><i data-w="${pct}"></i></div><strong style="font-family:var(--mono);font-size:12px">${pct}%</strong></div></td>
+      <td>${p?`<span class="status st-part">${p}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
+      <td>${t?`<span class="status st-todo">${t}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
+      <td><span class="file">${esc(m.dir)}</span></td>
+    </tr>`;
+  }).join('');
+  setTimeout(()=>document.querySelectorAll('.bar>i').forEach(i=>i.style.width=i.dataset.w+'%'),200);
+}
+function renderTimeline(){
+  $('timeline').innerHTML=TIMELINE.map(t=>`<div class="tl-item" style="--c:${t.c}"><div class="tl-title">${esc(t.t)}</div><div class="tl-body">${esc(t.b)}</div></div>`).join('');
+  $('stack').innerHTML=STACK.map(s=>`<span class="chip">${esc(s)}</span>`).join('');
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  renderStats(); renderFilters(); renderMap(); renderDetail(); renderMatrix(); renderTimeline();
+});
+</script>
+</body>
+</html>

@@ -17,6 +17,7 @@ import {
   RewardRepository,
   AuditRepository,
   SettingRepository,
+  TeacherRepository,
 } from './types.ts';
 import {
   authRepo,
@@ -29,6 +30,7 @@ import {
   rewardRepo,
   auditRepo,
   settingRepo,
+  teacherRepo,
   resetAllDemoData,
   bootstrapStorage,
   STORAGE_SCHEMA_VERSION,
@@ -41,12 +43,15 @@ import {
   supabaseAttemptRepo,
   supabaseEssayRepo,
   supabaseRewardRepo,
+  supabaseTeacherRepo,
 } from './supabase/supabaseRepositories.ts';
 import { syncEventBus } from './mock/eventBus.ts';
 
 // Xuất các repository instances (Kết nối Supabase trực tiếp)
 export const authService: AuthRepository = supabaseAuthRepo;
 export const authRepository: AuthRepository = supabaseAuthRepo;
+export const teacherService: TeacherRepository = supabaseTeacherRepo;
+export const teacherRepository: TeacherRepository = supabaseTeacherRepo;
 export const classService: ClassRepository = supabaseClassRepo;
 export const classRepository: ClassRepository = supabaseClassRepo;
 export const studentService: StudentRepository = supabaseStudentRepo;

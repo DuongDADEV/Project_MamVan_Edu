@@ -34,6 +34,7 @@ import {
   useLiveQuery,
   AuthSession,
   TeacherProfile,
+  AdminProfile,
 } from './services/index.ts';
 
 // Screens
@@ -46,18 +47,23 @@ import { ProfileScreen } from './screens/ProfileScreen.tsx';
 import { VideoLessonScreen } from './screens/VideoLessonScreen.tsx';
 import { TheoryLessonScreen } from './screens/TheoryLessonScreen.tsx';
 import { TeacherPortal } from './screens/TeacherPortal.tsx';
+import { AdminPortal } from './screens/admin/AdminPortal.tsx';
 
 const USER_STORAGE_KEY = 'vo_muc_active_user';
 const STATE_STORAGE_PREFIX = 'vo_muc_student_state_';
 
 export default function App() {
-  // 1. Quản lý Phiên đăng nhập (Session) - BỎ FALLBACK TỰ GÁN HS001
+  // 1. Quản lý Phiên đăng nhập (Session) - Hỗ trợ student, teacher, admin
   const [currentSession, setCurrentSession] = useState<AuthSession | null>(() => {
     try {
       const saved = localStorage.getItem('mam_van_auth_session');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.user && (parsed.role === 'student' || parsed.role === 'teacher')) {
+        if (
+          parsed &&
+          parsed.user &&
+          (parsed.role === 'student' || parsed.role === 'teacher' || parsed.role === 'admin')
+        ) {
           return parsed;
         }
       }
@@ -67,11 +73,15 @@ export default function App() {
     }
   });
 
-  // 1b. Quản lý Route URL (/teacher hoặc /)
+  // State lưu thông tin admin khi đang impersonate giáo viên
+  const [impersonatingFromAdmin, setImpersonatingFromAdmin] = useState<AdminProfile | null>(null);
+
+  // 1b. Quản lý Route URL (/admin, /teacher hoặc /)
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
       const h = window.location.hash;
+      if (p === '/admin' || h === '#/admin' || h === '#admin') return '/admin';
       if (p === '/teacher' || h === '#/teacher' || h === '#teacher') return '/teacher';
     }
     return '/';
@@ -80,7 +90,7 @@ export default function App() {
   const navigateTo = useCallback((path: string) => {
     setCurrentPath(path);
     if (typeof window !== 'undefined') {
-      const target = path === '/teacher' ? '/teacher' : '/';
+      const target = path === '/admin' ? '/admin' : path === '/teacher' ? '/teacher' : '/';
       if (window.location.pathname !== target) {
         window.history.pushState(null, '', target);
       }
@@ -92,7 +102,9 @@ export default function App() {
     const handlePopState = () => {
       const p = window.location.pathname;
       const h = window.location.hash;
-      if (p === '/teacher' || h === '#/teacher' || h === '#teacher') {
+      if (p === '/admin' || h === '#/admin' || h === '#admin') {
+        setCurrentPath('/admin');
+      } else if (p === '/teacher' || h === '#/teacher' || h === '#teacher') {
         setCurrentPath('/teacher');
       } else {
         setCurrentPath('/');
@@ -105,16 +117,20 @@ export default function App() {
   // Route Guard hai chiều & đồng bộ URL
   useEffect(() => {
     if (!currentSession) {
-      if (currentPath === '/teacher') {
+      if (currentPath === '/teacher' || currentPath === '/admin') {
         navigateTo('/');
+      }
+    } else if (currentSession.role === 'admin') {
+      if (currentPath !== '/admin') {
+        navigateTo('/admin');
       }
     } else if (currentSession.role === 'teacher') {
       if (currentPath !== '/teacher') {
         navigateTo('/teacher');
       }
     } else if (currentSession.role === 'student') {
-      // Học sinh không vào được khu giáo viên
-      if (currentPath === '/teacher') {
+      // Học sinh không vào được khu giáo viên hay admin
+      if (currentPath === '/teacher' || currentPath === '/admin') {
         navigateTo('/');
       }
     }
@@ -454,14 +470,62 @@ export default function App() {
     return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // Vai trò ADMIN -> Cổng Quản Trị Hệ Thống
+  if (currentSession.role === 'admin') {
+    return (
+      <AdminPortal
+        admin={currentSession.user as AdminProfile}
+        onLogout={handleLogout}
+        onImpersonateTeacher={(teacher) => {
+          setImpersonatingFromAdmin(currentSession.user as AdminProfile);
+          handleLoginSuccess({
+            user: teacher,
+            role: 'teacher',
+            signedInAt: Date.now(),
+          });
+        }}
+        onSwitchToStudentView={handleSwitchToStudentView}
+      />
+    );
+  }
+
   // Vai trò GIÁO VIÊN -> Không gian Giáo viên (Giấy & Mực)
   if (currentSession.role === 'teacher') {
     return (
-      <TeacherPortal
-        teacher={currentSession.user as TeacherProfile}
-        onLogout={handleLogout}
-        onSwitchToStudentView={handleSwitchToStudentView}
-      />
+      <div className="flex flex-col min-h-screen">
+        {impersonatingFromAdmin && (
+          <div className="bg-[#7C3AED] text-white px-4 sm:px-8 py-2.5 text-xs font-bold flex items-center justify-between sticky top-0 z-50 shadow-md">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full bg-white/20 uppercase tracking-wider text-[10px]">
+                🛡️ Xem dưới quyền GV
+              </span>
+              <span>
+                Đang truy cập với tư cách: {(currentSession.user as TeacherProfile).name} (
+                <span className="font-mono">{(currentSession.user as TeacherProfile).username}</span>)
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const adminProfile = impersonatingFromAdmin;
+                setImpersonatingFromAdmin(null);
+                handleLoginSuccess({
+                  user: adminProfile,
+                  role: 'admin',
+                  signedInAt: Date.now(),
+                });
+              }}
+              className="px-3 py-1 bg-white text-[#7C3AED] hover:bg-white/90 rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1 active:scale-[0.98]"
+            >
+              <span>← Quay lại trang Admin</span>
+            </button>
+          </div>
+        )}
+        <TeacherPortal
+          teacher={currentSession.user as TeacherProfile}
+          onLogout={handleLogout}
+          onSwitchToStudentView={handleSwitchToStudentView}
+        />
+      </div>
     );
   }
 

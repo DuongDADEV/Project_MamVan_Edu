@@ -32,6 +32,9 @@ import {
   RubricTemplate,
   GradedSampleEssay,
   AIGradingConfig,
+  TeacherRepository,
+  TeacherProfile,
+  CreateTeacherInput,
 } from '../types.ts';
 import {
   authRepo as mockAuthRepo,
@@ -40,6 +43,7 @@ import {
   attemptRepo as mockAttemptRepo,
   essayRepo as mockEssayRepo,
   rewardRepo as mockRewardRepo,
+  teacherRepo as mockTeacherRepo,
   auditRepo,
 } from '../mock/mockRepositories.ts';
 import { createFreshStudentState } from '../mock/seedData.ts';
@@ -1257,4 +1261,188 @@ export class SupabaseRewardRepository implements RewardRepository {
 }
 
 export const supabaseRewardRepo = new SupabaseRewardRepository();
+
+// ==============================================================================
+// 7. SUPABASE TEACHER REPOSITORY (ADMIN QUẢN LÝ GIÁO VIÊN)
+// ==============================================================================
+export class SupabaseTeacherRepository implements TeacherRepository {
+  async getTeachers(): Promise<TeacherProfile[]> {
+    if (!isSupabaseReady()) return mockTeacherRepo.getTeachers();
+    try {
+      const { data, error } = await supabase
+        .from('teachers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error || !data || data.length === 0) return mockTeacherRepo.getTeachers();
+
+      return data.map((t) => ({
+        id: t.id,
+        name: t.name,
+        username: t.username,
+        role: 'teacher',
+        email: t.email || undefined,
+        phone: t.phone || undefined,
+        school: t.school || 'THCS Giấy & Mực',
+        subject: t.subject || 'Ngữ văn 7',
+        classIds: [],
+        status: (t.status as any) || 'active',
+        trialExpiresAt: t.trial_expires_at || undefined,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+      }));
+    } catch {
+      return mockTeacherRepo.getTeachers();
+    }
+  }
+
+  async getTeacherById(id: string): Promise<TeacherProfile | null> {
+    if (!isSupabaseReady()) return mockTeacherRepo.getTeacherById(id);
+    try {
+      const { data, error } = await supabase
+        .from('teachers')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error || !data) return mockTeacherRepo.getTeacherById(id);
+
+      return {
+        id: data.id,
+        name: data.name,
+        username: data.username,
+        role: 'teacher',
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        school: data.school || 'THCS Giấy & Mực',
+        subject: data.subject || 'Ngữ văn 7',
+        classIds: [],
+        status: (data.status as any) || 'active',
+        trialExpiresAt: data.trial_expires_at || undefined,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      };
+    } catch {
+      return mockTeacherRepo.getTeacherById(id);
+    }
+  }
+
+  async createTeacher(data: CreateTeacherInput): Promise<TeacherProfile> {
+    if (!isSupabaseReady()) return mockTeacherRepo.createTeacher(data);
+    try {
+      const trialDays = data.trialDays || 3;
+      const trialExpiresAt =
+        data.status === 'trial'
+          ? new Date(Date.now() + trialDays * 86400000).toISOString()
+          : null;
+
+      const { data: created, error } = await supabase
+        .from('teachers')
+        .insert({
+          name: data.name,
+          username: data.username,
+          password_hash: data.password || '123456',
+          email: data.email || null,
+          phone: data.phone || null,
+          school: data.school || 'THCS Giấy & Mực',
+          subject: data.subject || 'Ngữ văn 7',
+          status: data.status || 'active',
+          trial_expires_at: trialExpiresAt,
+          role: 'teacher',
+        })
+        .select()
+        .single();
+
+      if (error || !created) {
+        console.warn('[SupabaseTeacher] Lỗi tạo giáo viên, fallback sang mock:', error?.message);
+        return mockTeacherRepo.createTeacher(data);
+      }
+
+      syncEventBus.emit('teacher');
+      return {
+        id: created.id,
+        name: created.name,
+        username: created.username,
+        role: 'teacher',
+        email: created.email || undefined,
+        phone: created.phone || undefined,
+        school: created.school || 'THCS Giấy & Mực',
+        subject: created.subject || 'Ngữ văn 7',
+        classIds: [],
+        status: (created.status as any) || 'active',
+        trialExpiresAt: created.trial_expires_at || undefined,
+        created_at: created.created_at,
+        updated_at: created.updated_at,
+      };
+    } catch {
+      return mockTeacherRepo.createTeacher(data);
+    }
+  }
+
+  async updateTeacher(id: string, data: Partial<TeacherProfile>): Promise<TeacherProfile> {
+    if (!isSupabaseReady()) return mockTeacherRepo.updateTeacher(id, data);
+    try {
+      const updatePayload: any = { updated_at: new Date().toISOString() };
+      if (data.name) updatePayload.name = data.name;
+      if (data.email !== undefined) updatePayload.email = data.email || null;
+      if (data.phone !== undefined) updatePayload.phone = data.phone || null;
+      if (data.school) updatePayload.school = data.school;
+      if (data.subject) updatePayload.subject = data.subject;
+      if (data.status) updatePayload.status = data.status;
+      if (data.password) updatePayload.password_hash = data.password;
+      if (data.trialExpiresAt) updatePayload.trial_expires_at = data.trialExpiresAt;
+
+      const { data: updated, error } = await supabase
+        .from('teachers')
+        .update(updatePayload)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error || !updated) return mockTeacherRepo.updateTeacher(id, data);
+
+      syncEventBus.emit('teacher');
+      return {
+        id: updated.id,
+        name: updated.name,
+        username: updated.username,
+        role: 'teacher',
+        email: updated.email || undefined,
+        phone: updated.phone || undefined,
+        school: updated.school || 'THCS Giấy & Mực',
+        subject: updated.subject || 'Ngữ văn 7',
+        classIds: [],
+        status: (updated.status as any) || 'active',
+        trialExpiresAt: updated.trial_expires_at || undefined,
+        created_at: updated.created_at,
+        updated_at: updated.updated_at,
+      };
+    } catch {
+      return mockTeacherRepo.updateTeacher(id, data);
+    }
+  }
+
+  async deleteTeacher(id: string): Promise<void> {
+    if (!isSupabaseReady()) return mockTeacherRepo.deleteTeacher(id);
+    try {
+      await supabase.from('teachers').delete().eq('id', id);
+      syncEventBus.emit('teacher');
+    } catch {
+      return mockTeacherRepo.deleteTeacher(id);
+    }
+  }
+
+  async toggleLockTeacher(id: string, locked?: boolean): Promise<TeacherProfile> {
+    const current = await this.getTeacherById(id);
+    const nextStatus =
+      typeof locked === 'boolean'
+        ? (locked ? 'locked' : 'active')
+        : (current?.status === 'locked' ? 'active' : 'locked');
+
+    return this.updateTeacher(id, { status: nextStatus });
+  }
+}
+
+export const supabaseTeacherRepo = new SupabaseTeacherRepository();
+
 

@@ -23,6 +23,8 @@ import {
   AuditRepository,
   AuditLog,
   TeacherProfile,
+  TeacherRepository,
+  CreateTeacherInput,
 } from '../types.ts';
 import {
   SEED_TEACHERS,
@@ -358,11 +360,50 @@ export class MockAuthRepository implements AuthRepository {
     const uClean = username.trim().toLowerCase();
     const pClean = password.trim();
 
+    if (role === 'admin') {
+      if ((uClean === 'admin' || uClean === 'quantri') && pClean === '123456') {
+        const session: AuthSession = {
+          user: {
+            id: 'admin_001',
+            name: 'Quản trị viên Hệ thống',
+            username: 'admin',
+            role: 'admin',
+            email: 'admin@mamvan.edu.vn',
+          },
+          role: 'admin',
+          signedInAt: Date.now(),
+        };
+        writeStorage(STORAGE_KEYS.SESSION, session);
+        syncEventBus.emit('auth', session, 'auth-service');
+        return { success: true, session };
+      }
+      return {
+        success: false,
+        error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: admin / 123456)',
+      };
+    }
+
     if (role === 'teacher') {
       const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
       const matched = teachers.find((t) => t.username.toLowerCase() === uClean);
-      // Mật khẩu demo giáo viên là 123456
-      if (matched && pClean === '123456') {
+      if (!matched) {
+        return {
+          success: false,
+          error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+        };
+      }
+
+      if (matched.status === 'locked') {
+        return {
+          success: false,
+          isLocked: true,
+          error: 'Tài khoản giáo viên đã bị tạm khóa bởi Quản trị viên. Vui lòng liên hệ hỗ trợ!',
+        };
+      }
+
+      // Mật khẩu giáo viên (mặc định 123456 hoặc mật khẩu riêng)
+      const validPw = (matched.password && matched.password === pClean) || pClean === '123456';
+      if (validPw) {
         const session: AuthSession = {
           user: matched,
           role: 'teacher',
@@ -374,7 +415,7 @@ export class MockAuthRepository implements AuthRepository {
       }
       return {
         success: false,
-        error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+        error: 'Mật khẩu giáo viên chưa chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
       };
     }
 
@@ -2382,3 +2423,176 @@ export class MockSettingRepository implements SettingRepository {
 }
 
 export const settingRepo = new MockSettingRepository();
+
+// ==========================================
+// 12. TEACHER REPOSITORY (ADMIN QUẢN LÝ GIÁO VIÊN)
+// ==========================================
+export class MockTeacherRepository implements TeacherRepository {
+  async getTeachers(): Promise<TeacherProfile[]> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    return teachers.map((t) => ({
+      ...t,
+      status: t.status || 'active',
+      role: 'teacher' as const,
+      created_at: t.created_at || '2026-09-01T08:00:00.000Z',
+    }));
+  }
+
+  async getTeacherById(id: string): Promise<TeacherProfile | null> {
+    const list = await this.getTeachers();
+    return list.find((t) => t.id === id) || null;
+  }
+
+  async createTeacher(data: CreateTeacherInput): Promise<TeacherProfile> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+
+    // Tự sinh username nếu chưa có
+    let username = data.username?.trim().toLowerCase();
+    if (!username) {
+      const count = teachers.length + 1;
+      username = `gv${String(count).padStart(3, '0')}`;
+      while (teachers.some((t) => t.username.toLowerCase() === username)) {
+        username = `gv${Math.floor(100 + Math.random() * 900)}`;
+      }
+    } else {
+      if (teachers.some((t) => t.username.toLowerCase() === username)) {
+        throw new Error(`Tên đăng nhập "${username}" đã tồn tại trên hệ thống.`);
+      }
+    }
+
+    const now = new Date().toISOString();
+    const trialDays = data.trialDays || 3;
+    const trialExpiresAt = data.status === 'trial'
+      ? new Date(Date.now() + trialDays * 86400000).toISOString()
+      : undefined;
+
+    const newTeacher: TeacherProfile = {
+      id: generateUUID(),
+      name: data.name.trim(),
+      username,
+      password: data.password?.trim() || '123456',
+      role: 'teacher',
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      school: data.school?.trim() || 'THCS Giấy & Mực',
+      subject: data.subject?.trim() || 'Ngữ văn 7',
+      classIds: [],
+      status: data.status || 'active',
+      trialDays: data.status === 'trial' ? trialDays : undefined,
+      trialExpiresAt,
+      notes: data.notes?.trim() || undefined,
+      created_at: now,
+      updated_at: now,
+    };
+
+    teachers.unshift(newTeacher);
+    writeStorage(STORAGE_KEYS.TEACHERS, teachers);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: 'CREATE_TEACHER',
+      target_type: 'teacher',
+      target_id: newTeacher.id,
+      target_name: `Tạo tài khoản giáo viên: ${newTeacher.name} (${newTeacher.username})`,
+      details: { status: newTeacher.status, trialDays },
+    });
+
+    syncEventBus.emit('teacher', newTeacher, 'teacher-create');
+    return newTeacher;
+  }
+
+  async updateTeacher(id: string, data: Partial<TeacherProfile>): Promise<TeacherProfile> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    const idx = teachers.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error('Không tìm thấy tài khoản giáo viên để cập nhật.');
+
+    const current = teachers[idx];
+    const now = new Date().toISOString();
+
+    const updated: TeacherProfile = {
+      ...current,
+      ...data,
+      id: current.id,
+      role: 'teacher',
+      updated_at: now,
+    };
+
+    teachers[idx] = updated;
+    writeStorage(STORAGE_KEYS.TEACHERS, teachers);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: 'UPDATE_TEACHER',
+      target_type: 'teacher',
+      target_id: updated.id,
+      target_name: `Cập nhật thông tin giáo viên: ${updated.name}`,
+    });
+
+    syncEventBus.emit('teacher', updated, 'teacher-update');
+    return updated;
+  }
+
+  async deleteTeacher(id: string): Promise<void> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    const target = teachers.find((t) => t.id === id);
+    if (!target) return;
+
+    if (target.username === 'gv001') {
+      throw new Error('Không thể xóa tài khoản mẫu cốt lõi gv001 của hệ thống.');
+    }
+
+    const filtered = teachers.filter((t) => t.id !== id);
+    writeStorage(STORAGE_KEYS.TEACHERS, filtered);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: 'DELETE_TEACHER',
+      target_type: 'teacher',
+      target_id: id,
+      target_name: `Xóa tài khoản giáo viên: ${target.name} (${target.username})`,
+    });
+
+    syncEventBus.emit('teacher', { id }, 'teacher-delete');
+  }
+
+  async toggleLockTeacher(id: string, locked?: boolean): Promise<TeacherProfile> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    const idx = teachers.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error('Không tìm thấy tài khoản giáo viên.');
+
+    const current = teachers[idx];
+    const nextStatus = typeof locked === 'boolean'
+      ? (locked ? 'locked' : 'active')
+      : (current.status === 'locked' ? 'active' : 'locked');
+
+    const updated: TeacherProfile = {
+      ...current,
+      status: nextStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    teachers[idx] = updated;
+    writeStorage(STORAGE_KEYS.TEACHERS, teachers);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: nextStatus === 'locked' ? 'LOCK_TEACHER' : 'UNLOCK_TEACHER',
+      target_type: 'teacher',
+      target_id: id,
+      target_name: `${nextStatus === 'locked' ? 'Khóa' : 'Mở khóa'} tài khoản giáo viên: ${current.name}`,
+    });
+
+    syncEventBus.emit('teacher', updated, 'teacher-status');
+    return updated;
+  }
+}
+
+export const teacherRepo = new MockTeacherRepository();
