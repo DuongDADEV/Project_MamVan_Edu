@@ -7,6 +7,7 @@ import { TeacherTopbar } from '../components/teacher/TeacherTopbar.tsx';
 import { TeacherOverviewScreen } from './teacher/TeacherOverviewScreen.tsx';
 import { ClassesAndStudentsScreen } from './teacher/ClassesAndStudentsScreen.tsx';
 import { TeacherContentScreen } from './teacher/TeacherContentScreen.tsx';
+import { TeacherQuestionBankScreen } from './teacher/TeacherQuestionBankScreen.tsx';
 import { TeacherGradingScreen } from './teacher/TeacherGradingScreen.tsx';
 import { TeacherRewardsScreen } from './teacher/TeacherRewardsScreen.tsx';
 import { TeacherAnalyticsScreen, AnalyticsTabKey } from './teacher/TeacherAnalyticsScreen.tsx';
@@ -258,6 +259,15 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
 
               {currentTab === 'content' && (
                 <TeacherContentScreen
+                  teacher={teacher}
+                  classes={classes || []}
+                  selectedClassId={selectedClassId}
+                  onRefreshData={refreshPortalData}
+                />
+              )}
+
+              {currentTab === 'question_bank' && (
+                <TeacherQuestionBankScreen
                   teacher={teacher}
                   classes={classes || []}
                   selectedClassId={selectedClassId}

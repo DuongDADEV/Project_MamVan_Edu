@@ -30,6 +30,7 @@ interface AiContentStudioModalProps {
   targetTypeInitial?: 'video' | 'theory' | 'quiz';
   topicId?: string;
   topicTitle?: string;
+  isEmbedded?: boolean;
   onApplyDraft: (payload: {
     type: 'video' | 'theory' | 'quiz';
     data: any;
@@ -42,6 +43,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   targetTypeInitial = 'quiz',
   topicId = 'topic_tho_bon_nam',
   topicTitle = 'Thơ bốn chữ, năm chữ',
+  isEmbedded = false,
   onApplyDraft,
 }) => {
   // 1. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI)
@@ -139,7 +141,7 @@ Vì tiếng gà cục tác
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState('');
 
-  if (!isOpen) return null;
+  if (!isOpen && !isEmbedded) return null;
 
   // Xử lý thêm nguồn mới
   const handleAddSource = () => {
@@ -328,39 +330,40 @@ Vì tiếng gà cục tác
     .filter((s) => s.isEnabled)
     .reduce((acc, curr) => acc + curr.wordCount, 0);
 
-  return (
-    <div className="fixed inset-0 z-50 bg-[#1E1B4B]/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-7xl h-[92vh] max-h-[880px] bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-[#2F3E6B]">
-        {/* THANH TIÊU ĐỀ STUDIO */}
-        <div className="px-6 py-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#E2704A] to-[#F2B84B] text-white flex items-center justify-center shadow-xs">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-lora font-bold text-lg text-[#2F3E6B]">
-                  Xưởng Sáng Tạo AI Mầm Văn
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF5EB] text-[#E2704A] border border-[#E2704A]/30">
-                  NotebookLM Style
-                </span>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#0D9488]/10 text-[#0D9488]">
-                  Chủ đề: {topicTitle}
-                </span>
-              </div>
-              <p className="text-xs text-[#8C7E6A]">
-                Tải lên nguồn ngữ liệu, đối chiếu trích dẫn và sinh bản nháp chuẩn sư phạm Ngữ văn 7
-              </p>
-            </div>
+  const studioBody = (
+    <div className={`w-full ${isEmbedded ? 'h-[780px] rounded-3xl border border-[#E6DCC8] shadow-xs' : 'max-w-7xl h-[92vh] max-h-[880px] rounded-3xl border border-[#E6DCC8] shadow-2xl'} bg-[#FFFDF8] flex flex-col overflow-hidden text-[#2F3E6B]`}>
+      {/* THANH TIÊU ĐỀ STUDIO */}
+      <div className="px-6 py-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#E2704A] to-[#F2B84B] text-white flex items-center justify-center shadow-xs">
+            <Sparkles className="w-5 h-5 animate-pulse" />
           </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-lora font-bold text-lg text-[#2F3E6B]">
+                Xưởng Sáng Tạo AI Mầm Văn
+              </h2>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF5EB] text-[#E2704A] border border-[#E2704A]/30">
+                NotebookLM Style
+              </span>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#0D9488]/10 text-[#0D9488]">
+                Chủ đề: {topicTitle}
+              </span>
+            </div>
+            <p className="text-xs text-[#8C7E6A]">
+              Tải lên nguồn ngữ liệu, đối chiếu trích dẫn và sinh bản nháp chuẩn sư phạm Ngữ văn 7
+            </p>
+          </div>
+        </div>
+        {!isEmbedded && (
           <button
             onClick={onClose}
             className="p-2 rounded-xl text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-black/5 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+        )}
+      </div>
 
         {/* NỘI DUNG 3 VÙNG */}
         <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-[#E6DCC8]">
@@ -846,10 +849,19 @@ Vì tiếng gà cục tác
               <p className="text-[10px] text-center text-[#8C7E6A]">
                 Sau khi tạo, bản nháp sẽ mở trực tiếp trong trình biên tập thủ công.
               </p>
-            </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  if (isEmbedded) {
+    return studioBody;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#1E1B4B]/50 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+      {studioBody}
     </div>
   );
 };

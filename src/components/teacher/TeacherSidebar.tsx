@@ -12,6 +12,7 @@ import {
   LogOut,
   GraduationCap,
   Sparkles,
+  HelpCircle,
 } from 'lucide-react';
 import { BrandWordmark } from '../MamVanLogo.tsx';
 
@@ -19,6 +20,7 @@ export type TeacherNavTab =
   | 'overview'
   | 'classes_students'
   | 'content'
+  | 'question_bank'
   | 'grading'
   | 'rewards'
   | 'analytics'
@@ -60,6 +62,11 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
       id: 'content' as TeacherNavTab,
       label: 'Nội dung học',
       icon: BookOpenCheck,
+    },
+    {
+      id: 'question_bank' as TeacherNavTab,
+      label: 'Ngân hàng câu hỏi',
+      icon: HelpCircle,
     },
     {
       id: 'grading' as TeacherNavTab,
