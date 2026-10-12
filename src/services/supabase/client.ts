@@ -1,32 +1,25 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl: string | undefined = import.meta.env.VITE_SUPABASE_URL;
-const supabasePublishableKey: string | undefined = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const DEFAULT_SUPABASE_URL = 'https://mktrtiqawvhettiwcels.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_ZBfzRL5pOM_wH5c9ZBL1AQ_pjgdzyOS';
 
-// Kiểm tra xem cấu hình biến môi trường có đầy đủ và hợp lệ hay không
-const isMissingConfig = !supabaseUrl || !supabasePublishableKey;
-const isPlaceholderKey =
-  Boolean(supabasePublishableKey) &&
-  (supabasePublishableKey === 'your_supabase_publishable_anon_key_here' ||
-    supabasePublishableKey?.toLowerCase().includes('placeholder'));
+const supabaseUrl: string = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabasePublishableKey: string = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
-const isConfigured = !isMissingConfig && !isPlaceholderKey;
-
-if (!isConfigured) {
-  console.warn(
-    '[Supabase Client] Cảnh báo: Biến môi trường VITE_SUPABASE_URL hoặc VITE_SUPABASE_PUBLISHABLE_KEY ' +
-      'chưa được cấu hình hợp lệ trong .env.local (hoặc đang là placeholder). ' +
-      'Vui lòng cập nhật .env.local để kích hoạt kết nối Supabase thực tế.'
-  );
-}
+// Kiểm tra xem cấu hình có hợp lệ hay không
+const isConfigured = Boolean(
+  supabaseUrl &&
+  supabasePublishableKey &&
+  !supabasePublishableKey.toLowerCase().includes('placeholder')
+);
 
 /**
  * Singleton Supabase Client instance dùng chung cho toàn bộ ứng dụng.
- * Được khởi tạo với URL và Publishable Anon Key an toàn từ biến môi trường.
+ * Được khởi tạo với URL và Publishable Anon Key an toàn.
  */
 export const supabase: SupabaseClient = createClient(
-  supabaseUrl || 'https://rhtyxtjqwwbipkbbwvzc.supabase.co',
-  supabasePublishableKey || 'placeholder-anon-key',
+  supabaseUrl,
+  supabasePublishableKey,
   {
     auth: {
       persistSession: true,
@@ -54,7 +47,9 @@ export function getSupabaseConfigStatus(): {
   return {
     isReady: isConfigured,
     url: supabaseUrl,
-    hasPublishableKey: Boolean(supabasePublishableKey && !isPlaceholderKey),
+    hasPublishableKey: Boolean(
+      supabasePublishableKey && !supabasePublishableKey.toLowerCase().includes('placeholder')
+    ),
   };
 }
 

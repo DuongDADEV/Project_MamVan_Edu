@@ -34,23 +34,30 @@ import {
   STORAGE_SCHEMA_VERSION,
   DEFAULT_SYSTEM_SETTINGS,
 } from './mock/mockRepositories.ts';
+import {
+  supabaseAuthRepo,
+  supabaseClassRepo,
+  supabaseStudentRepo,
+  supabaseAttemptRepo,
+  supabaseEssayRepo,
+} from './supabase/supabaseRepositories.ts';
 import { syncEventBus } from './mock/eventBus.ts';
 
-// Xuất các repository instances
-export const authService: AuthRepository = authRepo;
-export const authRepository: AuthRepository = authRepo;
-export const classService: ClassRepository = classRepo;
-export const classRepository: ClassRepository = classRepo;
-export const studentService: StudentRepository = studentRepo;
-export const studentRepository: StudentRepository = studentRepo;
+// Xuất các repository instances (Kết nối Supabase trực tiếp)
+export const authService: AuthRepository = supabaseAuthRepo;
+export const authRepository: AuthRepository = supabaseAuthRepo;
+export const classService: ClassRepository = supabaseClassRepo;
+export const classRepository: ClassRepository = supabaseClassRepo;
+export const studentService: StudentRepository = supabaseStudentRepo;
+export const studentRepository: StudentRepository = supabaseStudentRepo;
 export const contentService: ContentRepository = contentRepo;
 export const contentRepository: ContentRepository = contentRepo;
 export const quizService: QuizRepository = quizRepo;
 export const quizRepository: QuizRepository = quizRepo;
-export const attemptService: AttemptRepository = attemptRepo;
-export const attemptRepository: AttemptRepository = attemptRepo;
-export const essayService: EssayRepository = essayRepo;
-export const essayRepository: EssayRepository = essayRepo;
+export const attemptService: AttemptRepository = supabaseAttemptRepo;
+export const attemptRepository: AttemptRepository = supabaseAttemptRepo;
+export const essayService: EssayRepository = supabaseEssayRepo;
+export const essayRepository: EssayRepository = supabaseEssayRepo;
 export const rewardService: RewardRepository = rewardRepo;
 export const rewardRepository: RewardRepository = rewardRepo;
 export const auditService: AuditRepository = auditRepo;

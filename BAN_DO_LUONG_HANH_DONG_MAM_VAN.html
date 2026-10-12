@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ Đồ Luồng Hành Động & Tác Động Siêu Chi Tiết - Dự Án Mầm Văn</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --bg-main: #090d16;
+      --bg-card: #121826;
+      --bg-card-hover: #182238;
+      --bg-glass: rgba(18, 24, 38, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(255, 255, 255, 0.22);
+      
+      /* 4 Role Primary Colors */
+      --admin-color: #8b5cf6;
+      --admin-light: #c084fc;
+      --admin-bg: rgba(139, 92, 246, 0.12);
+      --admin-border: rgba(139, 92, 246, 0.35);
+      
+      --teacher-color: #10b981;
+      --teacher-light: #34d399;
+      --teacher-bg: rgba(16, 185, 129, 0.12);
+      --teacher-border: rgba(16, 185, 129, 0.35);
+      
+      --student-color: #0284c7;
+      --student-light: #38bdf8;
+      --student-bg: rgba(2, 132, 199, 0.12);
+      --student-border: rgba(2, 132, 199, 0.35);
+      
+      --parent-color: #f59e0b;
+      --parent-light: #fbbf24;
+      --parent-bg: rgba(245, 158, 11, 0.12);
+      --parent-border: rgba(245, 158, 11, 0.35);
+
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(16, 185, 129, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(2, 132, 199, 0.07) 0%, transparent 50%),
+        radial-gradient(circle at 85% 85%, rgba(245, 158, 11, 0.08) 0%, transparent 45%);
+      background-attachment: fixed;
+    }
+
+    .container {
+      max-width: 1720px;
+      margin: 0 auto;
+      padding: 24px 20px 80px;
+    }
+
+    /* Header */
+    header {
+      margin-bottom: 24px;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(245, 158, 11, 0.2));
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #34d399;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .header-title {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .header-desc {
+      font-size: 14.5px;
+      color: var(--text-secondary);
+      max-width: 1100px;
+      line-height: 1.55;
+    }
+
+    /* Interactive Toolbar */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 12px 18px;
+      margin-bottom: 24px;
+      position: sticky;
+      top: 12px;
+      z-index: 100;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .role-filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-right: 6px;
+    }
+
+    .filter-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .filter-btn.active[data-role="all"] {
+      background: #3b82f6;
+      border-color: #60a5fa;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+    }
+    .filter-btn.active[data-role="admin"] {
+      background: var(--admin-color);
+      border-color: var(--admin-light);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(139, 92, 246, 0.4);
+    }
+    .filter-btn.active[data-role="teacher"] {
+      background: var(--teacher-color);
+      border-color: var(--teacher-light);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+    .filter-btn.active[data-role="student"] {
+      background: var(--student-color);
+      border-color: var(--student-light);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(2, 132, 199, 0.4);
+    }
+    .filter-btn.active[data-role="parent"] {
+      background: var(--parent-color);
+      border-color: var(--parent-light);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+    }
+
+    .quick-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .action-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    /* ======================================================== */
+    /* MASTER SVG DIAGRAM CONTAINER                             */
+    /* ======================================================== */
+    .diagram-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 28px;
+      position: relative;
+      box-shadow: 0 14px 45px rgba(0, 0, 0, 0.45);
+      overflow-x: auto;
+    }
+
+    .diagram-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .diagram-title {
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .diagram-hint {
+      font-size: 13px;
+      color: #fbbf24;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(245, 158, 11, 0.1);
+      padding: 4px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .svg-viewport {
+      width: 100%;
+      min-width: 1280px;
+      background: rgba(10, 14, 24, 0.85);
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 10px;
+    }
+
+    /* SVG Elements Styling */
+    svg.master-network-svg {
+      width: 100%;
+      height: 820px;
+      user-select: none;
+    }
+
+    .node-group {
+      cursor: pointer;
+      transition: transform 0.25s ease, filter 0.25s ease;
+    }
+
+    .node-group:hover {
+      filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.2));
+    }
+
+    .flow-line {
+      stroke-dasharray: 7, 5;
+      animation: flowDash 22s linear infinite;
+      transition: stroke-width 0.3s, opacity 0.3s;
+    }
+
+    @keyframes flowDash {
+      to {
+        stroke-dashoffset: -1000;
+      }
+    }
+
+    .flow-badge-bg {
+      cursor: pointer;
+      transition: transform 0.2s, filter 0.2s;
+    }
+
+    .flow-badge-bg:hover {
+      filter: brightness(1.2);
+    }
+
+    /* ======================================================== */
+    /* SELECTED ROLE DEEP DIVE PANEL                            */
+    /* ======================================================== */
+    .role-detail-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 28px;
+      box-shadow: 0 10px 35px rgba(0,0,0,0.3);
+      transition: all 0.3s ease;
+    }
+
+    .role-detail-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .role-detail-title {
+      font-size: 19px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 18px;
+    }
+
+    .action-card {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .action-card:hover {
+      border-color: var(--border-focus);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .action-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .action-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .action-card-code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+    }
+
+    .action-card-body {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .action-impact-box {
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 10px;
+      padding: 10px 12px;
+      border-left: 3px solid #38bdf8;
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    .action-impact-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+
+    /* ======================================================== */
+    /* CROSS-IMPACT MATRIX TABLE                                */
+    /* ======================================================== */
+    .matrix-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 10px 35px rgba(0,0,0,0.3);
+      overflow-x: auto;
+    }
+
+    .matrix-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13.5px;
+      margin-top: 14px;
+    }
+
+    .matrix-table th, .matrix-table td {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .matrix-table th {
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text-secondary);
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .matrix-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .role-col-title-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 14.5px;
+    }
+
+    .impact-pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 5px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .pill-admin { background: var(--admin-bg); color: var(--admin-light); border: 1px solid var(--admin-border); }
+    .pill-teacher { background: var(--teacher-bg); color: var(--teacher-light); border: 1px solid var(--teacher-border); }
+    .pill-student { background: var(--student-bg); color: var(--student-light); border: 1px solid var(--student-border); }
+    .pill-parent { background: var(--parent-bg); color: var(--parent-light); border: 1px solid var(--parent-border); }
+
+    .bullet-items {
+      list-style: none;
+    }
+
+    .bullet-items li {
+      position: relative;
+      padding-left: 14px;
+      margin-bottom: 5px;
+      color: var(--text-secondary);
+      line-height: 1.45;
+    }
+
+    .bullet-items li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--text-muted);
+    }
+
+    /* Modal */
+    .flow-modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .flow-modal {
+      background: #141c2e;
+      border: 1px solid var(--border-focus);
+      border-radius: 18px;
+      max-width: 650px;
+      width: 100%;
+      padding: 24px;
+      position: relative;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    }
+
+    .flow-modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: var(--text-secondary);
+      font-size: 16px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand-badge">
+        <span>🌱 Mầm Văn 7</span> • <span>Sơ Đồ Mạng Lưới Dòng Chảy Hành Động & Tác Động</span>
+      </div>
+      <h1 class="header-title">Bản Đồ Luồng Tác Động Qua Lại Giữa 4 Vai Trò</h1>
+      <p class="header-desc">
+        Sơ đồ trực quan biểu diễn mối quan hệ hai chiều giữa <strong>Admin</strong>, <strong>Giáo viên</strong>, 
+        <strong>Học sinh</strong> và <strong>Phụ huynh</strong>. Từng khối vai trò chứa đầy đủ danh sách hành động cụ thể và 8 luồng mũi tên tác động qua lại rõ ràng.
+      </p>
+    </header>
+
+    <!-- Interactive Filter Toolbar -->
+    <div class="toolbar">
+      <div class="role-filter-group">
+        <span class="filter-label">🎯 Tiêu điểm vai trò:</span>
+        <button class="filter-btn active" data-role="all" onclick="selectRole('all')">Toàn bộ mạng lưới (4)</button>
+        <button class="filter-btn" data-role="admin" onclick="selectRole('admin')">🛡️ Admin</button>
+        <button class="filter-btn" data-role="teacher" onclick="selectRole('teacher')">👨‍🏫 Giáo viên</button>
+        <button class="filter-btn" data-role="student" onclick="selectRole('student')">🎒 Học sinh</button>
+        <button class="filter-btn" data-role="parent" onclick="selectRole('parent')">👨‍👩‍👧 Phụ huynh</button>
+      </div>
+
+      <div class="quick-actions">
+        <button class="action-btn" onclick="resetZoom()">⟲ Mặc định</button>
+        <button class="action-btn" onclick="scrollToMatrix()">📊 Xem Bảng Ma Trận</button>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MASTER SVG NETWORK GRAPH (GIỮ NGUYÊN SƠ ĐỒ TRỰC QUAN)     -->
+    <!-- ======================================================== -->
+    <div class="diagram-panel">
+      <div class="diagram-head">
+        <div class="diagram-title">
+          <span>🕸️</span> Sơ Đồ Mạng Lưới Dòng Chảy Hành Động & Tác Động (Full Canvas)
+        </div>
+        <div class="diagram-hint">
+          💡 Nhấp vào từng khối vai trò hoặc các hộp nhãn mũi tên để xem diễn giải chi tiết
+        </div>
+      </div>
+
+      <div class="svg-viewport">
+        <svg class="master-network-svg" viewBox="0 0 1440 860" xmlns="http://www.w3.org/2000/svg">
+          <!-- Defs & Markers -->
+          <defs>
+            <!-- Gradients -->
+            <linearGradient id="gradAdmin" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8b5cf6" />
+              <stop offset="100%" stop-color="#5b21b6" />
+            </linearGradient>
+            <linearGradient id="gradTeacher" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#10b981" />
+              <stop offset="100%" stop-color="#047857" />
+            </linearGradient>
+            <linearGradient id="gradStudent" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0ea5e9" />
+              <stop offset="100%" stop-color="#0369a1" />
+            </linearGradient>
+            <linearGradient id="gradParent" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#f59e0b" />
+              <stop offset="100%" stop-color="#b45309" />
+            </linearGradient>
+
+            <!-- Arrow Markers -->
+            <marker id="arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#c084fc"/>
+            </marker>
+            <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399"/>
+            </marker>
+            <marker id="arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#38bdf8"/>
+            </marker>
+            <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#fbbf24"/>
+            </marker>
+          </defs>
+
+          <!-- ============================================== -->
+          <!-- CONNECTING FLOW LINES & LABELS (8 LUỒNG CHÍNH) -->
+          <!-- ============================================== -->
+
+          <!-- LUỒNG 1: Admin -> Teacher (Cấp TK & Impersonate) -->
+          <g id="flow-admin-teacher" class="flow-group">
+            <path class="flow-line" d="M 400 130 Q 690 90 980 130" stroke="#c084fc" stroke-width="3" fill="none" marker-end="url(#arr-purple)"/>
+            <rect class="flow-badge-bg" x="550" y="85" width="280" height="30" rx="8" fill="#1e1838" stroke="#a855f7" stroke-width="1.2" onclick="showFlowInfo('f1')"/>
+            <text x="690" y="105" fill="#e9d5ff" font-size="12" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ Duyệt Lead, Cấp TK dùng thử 2-3 ngày & Impersonate
+            </text>
+          </g>
+
+          <!-- LUỒNG 2: Teacher -> Admin (Báo cáo active & Yêu cầu gia hạn) -->
+          <g id="flow-teacher-admin" class="flow-group">
+            <path class="flow-line" d="M 980 190 Q 690 230 400 190" stroke="#34d399" stroke-width="2.5" fill="none" marker-end="url(#arr-green)"/>
+            <rect class="flow-badge-bg" x="560" y="200" width="260" height="28" rx="8" fill="#132724" stroke="#10b981" stroke-width="1.2" onclick="showFlowInfo('f2')"/>
+            <text x="690" y="219" fill="#a7f3d0" font-size="11.5" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ Thống kê lớp học (Active users) & Yêu cầu gia hạn
+            </text>
+          </g>
+
+          <!-- LUỒNG 3: Teacher -> Student (Giao bài, Cấp TK, Cây lá, Trần XP) -->
+          <g id="flow-teacher-student" class="flow-group">
+            <path class="flow-line" d="M 1260 380 Q 1280 450 1260 510" stroke="#34d399" stroke-width="3.2" fill="none" marker-end="url(#arr-green)"/>
+            <rect class="flow-badge-bg" x="1050" y="425" width="290" height="30" rx="8" fill="#132724" stroke="#10b981" stroke-width="1.2" onclick="showFlowInfo('f3')"/>
+            <text x="1195" y="445" fill="#6ee7b7" font-size="11.5" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ Cấp TK HS, Giao BTVN, Nuôi Cây lá, Cấu hình XP
+            </text>
+          </g>
+
+          <!-- LUỒNG 4: Student -> Teacher (Nộp bài tự luận, Duyệt rương) -->
+          <g id="flow-student-teacher" class="flow-group">
+            <path class="flow-line" d="M 1120 510 Q 1100 450 1120 380" stroke="#38bdf8" stroke-width="2.8" fill="none" marker-end="url(#arr-blue)"/>
+            <rect class="flow-badge-bg" x="970" y="465" width="250" height="28" rx="8" fill="#102538" stroke="#0284c7" stroke-width="1.2" onclick="showFlowInfo('f4')"/>
+            <text x="1095" y="484" fill="#7dd3fc" font-size="11.5" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ Nộp bài văn (Hàng đợi chấm), Mở rương quà
+            </text>
+          </g>
+
+          <!-- LUỒNG 5: Teacher -> Parent (Phiếu TK, Bảng điểm, Lời phê cô) -->
+          <g id="flow-teacher-parent" class="flow-group">
+            <path class="flow-line" d="M 980 320 C 720 380, 560 430, 400 540" stroke="#34d399" stroke-width="2.6" fill="none" marker-end="url(#arr-green)"/>
+            <rect class="flow-badge-bg" x="550" y="375" width="280" height="30" rx="8" fill="#132724" stroke="#10b981" stroke-width="1.2" onclick="showFlowInfo('f5')"/>
+            <text x="690" y="395" fill="#a7f3d0" font-size="11.5" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ In phiếu TK, Báo cáo điểm số & Lời phê bài văn
+            </text>
+          </g>
+
+          <!-- LUỒNG 6: Student -> Parent (Số phút thực học, Streak, Màu lá) -->
+          <g id="flow-student-parent" class="flow-group">
+            <path class="flow-line" d="M 980 620 Q 690 575 400 620" stroke="#38bdf8" stroke-width="3" fill="none" marker-end="url(#arr-blue)"/>
+            <rect class="flow-badge-bg" x="550" y="585" width="280" height="30" rx="8" fill="#102538" stroke="#0284c7" stroke-width="1.2" onclick="showFlowInfo('f6')"/>
+            <text x="690" y="605" fill="#bae6fd" font-size="11.5" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ Đồng bộ số phút thực học, Cây tri thức & Rương quà
+            </text>
+          </g>
+
+          <!-- LUỒNG 7: Parent -> Student (Động viên, Tặng quà đời thực) -->
+          <g id="flow-parent-student" class="flow-group">
+            <path class="flow-line" d="M 400 690 Q 690 735 980 690" stroke="#fbbf24" stroke-width="2.6" fill="none" marker-end="url(#arr-amber)"/>
+            <rect class="flow-badge-bg" x="560" y="700" width="260" height="28" rx="8" fill="#322212" stroke="#f59e0b" stroke-width="1.2" onclick="showFlowInfo('f7')"/>
+            <text x="690" y="719" fill="#fde68a" font-size="11.5" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ Động viên tự học, Chuẩn bị quà thực tế khi mở rương
+            </text>
+          </g>
+
+          <!-- LUỒNG 8: Parent -> Admin (Gia hạn gói khi con tiến bộ) -->
+          <g id="flow-parent-admin" class="flow-group">
+            <path class="flow-line" d="M 120 510 Q 95 445 120 380" stroke="#fbbf24" stroke-width="2.8" fill="none" marker-end="url(#arr-amber)"/>
+            <rect class="flow-badge-bg" x="30" y="430" width="230" height="28" rx="8" fill="#322212" stroke="#f59e0b" stroke-width="1.2" onclick="showFlowInfo('f8')"/>
+            <text x="145" y="449" fill="#fde68a" font-size="11" font-weight="700" text-anchor="middle" pointer-events="none">
+              ➜ Gia hạn gói cước, Đánh giá dịch vụ
+            </text>
+          </g>
+
+          <!-- ============================================== -->
+          <!-- 4 VAI TRÒ CHÍNH (NODE BLOCKS SIÊU CHI TIẾT)   -->
+          <!-- ============================================== -->
+
+          <!-- 1. KHỐI ADMIN HỆ THỐNG (Top-Left) -->
+          <g id="node-admin" class="node-group" onclick="selectRole('admin')">
+            <rect x="50" y="50" width="350" height="330" rx="18" fill="url(#gradAdmin)" stroke="#c084fc" stroke-width="2"/>
+            
+            <!-- Header -->
+            <rect x="50" y="50" width="350" height="60" rx="18" fill="rgba(0,0,0,0.2)"/>
+            <text x="75" y="88" fill="#ffffff" font-size="24">🛡️</text>
+            <text x="115" y="78" fill="#ffffff" font-size="16" font-weight="800">ADMIN HỆ THỐNG</text>
+            <text x="115" y="98" fill="#ddd6fe" font-size="12">Cổng quản trị & Duyệt cấp GV độc lập</text>
+
+            <!-- Chi tiết 4 hành động cốt lõi -->
+            <g transform="translate(68, 125)">
+              <circle cx="10" cy="10" r="4" fill="#c084fc"/>
+              <text x="24" y="14" fill="#ffffff" font-size="12.5" font-weight="700">1. Tiếp nhận Form Lead (SĐT, Email)</text>
+              <text x="24" y="30" fill="#e9d5ff" font-size="11">Nhận data từ nút GV ở màn login, gọi tư vấn</text>
+
+              <circle cx="10" cy="55" r="4" fill="#c084fc"/>
+              <text x="24" y="59" fill="#ffffff" font-size="12.5" font-weight="700">2. Cấp tài khoản dùng thử 2-3 ngày</text>
+              <text x="24" y="75" fill="#e9d5ff" font-size="11">Tạo TK full tính năng, tự chạy timer 48-72h</text>
+
+              <circle cx="10" cy="100" r="4" fill="#c084fc"/>
+              <text x="24" y="104" fill="#ffffff" font-size="12.5" font-weight="700">3. Kích hoạt gói / Khóa / Xóa tài khoản</text>
+              <text x="24" y="120" fill="#e9d5ff" font-size="11">Hết hạn: GV đóng phí thì giữ, không thì xóa</text>
+
+              <circle cx="10" cy="145" r="4" fill="#c084fc"/>
+              <text x="24" y="149" fill="#ffffff" font-size="12.5" font-weight="700">4. Đăng nhập dưới quyền (Impersonate)</text>
+              <text x="24" y="165" fill="#e9d5ff" font-size="11">Vào xem trực tiếp lớp học để hỗ trợ kỹ thuật</text>
+
+              <circle cx="10" cy="190" r="4" fill="#c084fc"/>
+              <text x="24" y="194" fill="#ffffff" font-size="12.5" font-weight="700">5. Không tạo TK Học sinh / Phụ huynh</text>
+              <text x="24" y="210" fill="#e9d5ff" font-size="11">Giao toàn quyền cho GV để tránh cồng kềnh</text>
+            </g>
+          </g>
+
+          <!-- 2. KHỐI GIÁO VIÊN (TRUNG TÂM) (Top-Right) -->
+          <g id="node-teacher" class="node-group" onclick="selectRole('teacher')">
+            <rect x="980" y="50" width="410" height="330" rx="18" fill="url(#gradTeacher)" stroke="#34d399" stroke-width="2"/>
+            
+            <!-- Header -->
+            <rect x="980" y="50" width="410" height="60" rx="18" fill="rgba(0,0,0,0.2)"/>
+            <text x="1005" y="88" fill="#ffffff" font-size="24">👨‍🏫</text>
+            <text x="1045" y="78" fill="#ffffff" font-size="16" font-weight="800">GIÁO VIÊN (TRUNG TÂM)</text>
+            <text x="1045" y="98" fill="#a7f3d0" font-size="12">Quản lý lớp, Học liệu & Chấm bài tự luận</text>
+
+            <!-- Chi tiết 5 hành động cốt lõi -->
+            <g transform="translate(998, 125)">
+              <circle cx="10" cy="10" r="4" fill="#34d399"/>
+              <text x="24" y="14" fill="#ffffff" font-size="12.5" font-weight="700">1. Tạo lớp & Cấp tài khoản Học sinh</text>
+              <text x="24" y="30" fill="#d1fae5" font-size="11">Nhập tay / Excel $\rightarrow$ In phiếu cắt phát hoặc gửi Zalo</text>
+
+              <circle cx="10" cy="55" r="4" fill="#34d399"/>
+              <text x="24" y="59" fill="#ffffff" font-size="12.5" font-weight="700">2. Ngân hàng câu hỏi & Gộp luồng học</text>
+              <text x="24" y="75" fill="#d1fae5" font-size="11">CRUD học liệu tập trung; gộp Video + Lý thuyết kèm bộ lọc</text>
+
+              <circle cx="10" cy="100" r="4" fill="#34d399"/>
+              <text x="24" y="104" fill="#ffffff" font-size="12.5" font-weight="700">3. Chấm văn theo 4 tiêu chí Rubric cố định (10đ)</text>
+              <text x="24" y="120" fill="#d1fae5" font-size="11">Nội dung (4đ), Bố cục (2đ), Dùng từ (2đ), Sáng tạo (2đ) + AI gợi ý</text>
+
+              <circle cx="10" cy="145" r="4" fill="#34d399"/>
+              <text x="24" y="149" fill="#ffffff" font-size="12.5" font-weight="700">4. Cấu hình trần XP & 4 Mốc Rương bí mật</text>
+              <text x="24" y="165" fill="#d1fae5" font-size="11">Trần ngày 130-150 XP, tuần 900 XP; chọn quà rương Hạt, Lá, Hoa, Vàng</text>
+
+              <circle cx="10" cy="190" r="4" fill="#34d399"/>
+              <text x="24" y="194" fill="#ffffff" font-size="12.5" font-weight="700">5. Duyệt mở rương quà tuần cho học sinh</text>
+              <text x="24" y="210" fill="#d1fae5" font-size="11">Kiểm tra đủ điều kiện tuần và bấm duyệt trao quà</text>
+            </g>
+          </g>
+
+          <!-- 3. KHỐI HỌC SINH (NGƯỜI HỌC) (Bottom-Right) -->
+          <g id="node-student" class="node-group" onclick="selectRole('student')">
+            <rect x="980" y="510" width="410" height="330" rx="18" fill="url(#gradStudent)" stroke="#38bdf8" stroke-width="2"/>
+            
+            <!-- Header -->
+            <rect x="980" y="510" width="410" height="60" rx="18" fill="rgba(0,0,0,0.2)"/>
+            <text x="1005" y="548" fill="#ffffff" font-size="24">🎒</text>
+            <text x="1045" y="538" fill="#ffffff" font-size="16" font-weight="800">HỌC SINH (NGƯỜI HỌC)</text>
+            <text x="1045" y="558" fill="#bae6fd" font-size="12">Học tập, Tích XP & Nuôi Cây Tri Thức</text>
+
+            <!-- Chi tiết 5 hành động cốt lõi -->
+            <g transform="translate(998, 585)">
+              <circle cx="10" cy="10" r="4" fill="#38bdf8"/>
+              <text x="24" y="14" fill="#ffffff" font-size="12.5" font-weight="700">1. Đăng nhập bằng phiếu (Không tự đổi MK)</text>
+              <text x="24" y="30" fill="#e0f2fe" font-size="11">Vào cổng học sinh học theo bài cô giao</text>
+
+              <circle cx="10" cy="55" r="4" fill="#38bdf8"/>
+              <text x="24" y="59" fill="#ffffff" font-size="12.5" font-weight="700">2. Học Video (80%), Đọc lý thuyết, Làm bài</text>
+              <text x="24" y="75" fill="#e0f2fe" font-size="11">Tự ghi chép, không có chatbot AI tự do (chống spam key)</text>
+
+              <circle cx="10" cy="100" r="4" fill="#38bdf8"/>
+              <text x="24" y="104" fill="#ffffff" font-size="12.5" font-weight="700">3. Nuôi Cây Tri Thức (Vườn Văn Mầm Mực)</text>
+              <text x="24" y="120" fill="#e0f2fe" font-size="11">Mỗi chủ đề = 1 lá; lá đổi 4 màu theo Mastery (Xám $\rightarrow$ Cam $\rightarrow$ Lam $\rightarrow$ Xanh)</text>
+
+              <circle cx="10" cy="145" r="4" fill="#38bdf8"/>
+              <text x="24" y="149" fill="#ffffff" font-size="12.5" font-weight="700">4. Tích lũy XP chuẩn (Chặn trần ngày/tuần)</text>
+              <text x="24" y="165" fill="#e0f2fe" font-size="11">Làm lần đầu được cộng XP. Làm lại thỏa thích nhưng 0 cộng điểm</text>
+
+              <circle cx="10" cy="190" r="4" fill="#38bdf8"/>
+              <text x="24" y="194" fill="#ffffff" font-size="12.5" font-weight="700">5. Mở Rương Quà Bí Mật Cuối Tuần</text>
+              <text x="24" y="210" fill="#e0f2fe" font-size="11">Bấm mở rương, nổ pháo hoa Confetti khi được cô duyệt</text>
+            </g>
+          </g>
+
+          <!-- 4. KHỐI PHỤ HUYNH (Bottom-Left) -->
+          <g id="node-parent" class="node-group" onclick="selectRole('parent')">
+            <rect x="50" y="510" width="350" height="330" rx="18" fill="url(#gradParent)" stroke="#fbbf24" stroke-width="2"/>
+            
+            <!-- Header -->
+            <rect x="50" y="510" width="350" height="60" rx="18" fill="rgba(0,0,0,0.2)"/>
+            <text x="75" y="548" fill="#ffffff" font-size="24">👨‍👩‍👧</text>
+            <text x="115" y="538" fill="#ffffff" font-size="16" font-weight="800">PHỤ HUYNH</text>
+            <text x="115" y="558" fill="#fef3c7" font-size="12">Theo dõi, Giám sát & Đồng hành cùng con</text>
+
+            <!-- Chi tiết 4 hành động cốt lõi -->
+            <g transform="translate(68, 585)">
+              <circle cx="10" cy="10" r="4" fill="#fbbf24"/>
+              <text x="24" y="14" fill="#ffffff" font-size="12.5" font-weight="700">1. Đăng nhập mã liên kết của con</text>
+              <text x="24" y="30" fill="#fef3c7" font-size="11">Nhận tài khoản từ cô giáo để vào cổng giám sát</text>
+
+              <circle cx="10" cy="55" r="4" fill="#fbbf24"/>
+              <text x="24" y="59" fill="#ffffff" font-size="12.5" font-weight="700">2. Giám sát số phút thực học & Streak</text>
+              <text x="24" y="75" fill="#fef3c7" font-size="11">Biết chính xác thời gian học thật (loại trừ treo máy)</text>
+
+              <circle cx="10" cy="100" r="4" fill="#fbbf24"/>
+              <text x="24" y="104" fill="#ffffff" font-size="12.5" font-weight="700">3. Đọc bài văn con viết & Lời phê của cô</text>
+              <text x="24" y="120" fill="#fef3c7" font-size="11">Xem điểm 4 tiêu chí rubric, thấu hiểu năng lực con</text>
+
+              <circle cx="10" cy="145" r="4" fill="#fbbf24"/>
+              <text x="24" y="149" fill="#ffffff" font-size="12.5" font-weight="700">4. Thấy Cây Tri Thức lớn dần từng ngày</text>
+              <text x="24" y="165" fill="#fef3c7" font-size="11">Lá xanh = vững, lá vàng = cần hỗ trợ thêm</text>
+
+              <circle cx="10" cy="190" r="4" fill="#fbbf24"/>
+              <text x="24" y="194" fill="#ffffff" font-size="12.5" font-weight="700">5. Khen thưởng đời thực & Gia hạn gói</text>
+              <text x="24" y="210" fill="#fef3c7" font-size="11">Trao quà khi con mở rương, yên tâm đóng tiền duy trì</text>
+            </g>
+          </g>
+
+          <!-- KHỐI TRUNG TÂM (CORE ENGINE EMBLEM) -->
+          <g transform="translate(620, 410)">
+            <circle cx="70" cy="40" r="48" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+            <text x="70" y="35" fill="#38bdf8" font-size="20" text-anchor="middle">🌱</text>
+            <text x="70" y="54" fill="#ffffff" font-size="11" font-weight="800" text-anchor="middle">MẦM VĂN 7</text>
+            <text x="70" y="68" fill="#94a3b8" font-size="9" text-anchor="middle">Core Engine</text>
+          </g>
+
+        </svg>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- PANEL BÓC TÁCH CHI TIẾT TỪNG VAI TRÒ ĐANG CHỌN           -->
+    <!-- ======================================================== -->
+    <div class="role-detail-panel" id="roleDetailSection">
+      <div class="role-detail-head">
+        <div class="role-detail-title" id="selectedRoleTitle">
+          <span>👨‍🏫</span> Bóc Tách Chi Tiết: GIÁO VIÊN (TRUNG TÂM SƯ PHẠM)
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted);" id="selectedRoleBadge">
+          Bấm vào khối vai trò trên sơ đồ để chuyển góc nhìn
+        </div>
+      </div>
+
+      <div class="actions-grid" id="selectedRoleActions">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- BẢNG MA TRẬN TÁC ĐỘNG CHÉO (CROSS-IMPACT MATRIX)          -->
+    <!-- ======================================================== -->
+    <div class="matrix-panel" id="matrixSection">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="font-size: 18px; font-weight: 700;">
+          <span>📊</span> Bảng Ma Trận Tác Động Chéo Đa Chiều (Cross-Impact Matrix)
+        </div>
+        <div style="font-size: 12.5px; color: var(--text-muted);">
+          Đối chiếu: Ai làm việc gì $\rightarrow$ Dẫn đến biến đổi gì ở 3 vai trò còn lại
+        </div>
+      </div>
+
+      <table class="matrix-table">
+        <thead>
+          <tr>
+            <th style="width: 17%;">Chủ Thể Thực Hiện</th>
+            <th style="width: 20%;">Ảnh Hưởng Đến ADMIN</th>
+            <th style="width: 21%;">Ảnh Hưởng Đến GIÁO VIÊN</th>
+            <th style="width: 21%;">Ảnh Hưởng Đến HỌC SINH</th>
+            <th style="width: 21%;">Ảnh Hưởng Đến PHỤ HUYNH</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Admin -->
+          <tr>
+            <td>
+              <div class="role-col-title-cell" style="color: var(--admin-light);">
+                <span>🛡️</span> ADMIN
+              </div>
+            </td>
+            <td>
+              <span class="impact-pill pill-admin">Nội bộ</span>
+              <ul class="bullet-items">
+                <li>Lưu log cấp quyền, kích hoạt timer 48-72h.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-teacher">Trực tiếp</span>
+              <ul class="bullet-items">
+                <li>Được cấp quyền vào tạo lớp, trải nghiệm full.</li>
+                <li>Hỗ trợ kỹ thuật qua tính năng Impersonate.</li>
+                <li>Nếu bị khóa: Mất quyền truy cập.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-student">Dây chuyền</span>
+              <ul class="bullet-items">
+                <li>Lớp học của GV bị khóa nếu Admin xóa tài khoản GV.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-parent">Dây chuyền</span>
+              <ul class="bullet-items">
+                <li>Tài khoản phụ huynh theo lớp bị tạm dừng nếu GV hết hạn.</li>
+              </ul>
+            </td>
+          </tr>
+
+          <!-- Teacher -->
+          <tr>
+            <td>
+              <div class="role-col-title-cell" style="color: var(--teacher-light);">
+                <span>👨‍🏫</span> GIÁO VIÊN
+              </div>
+            </td>
+            <td>
+              <span class="impact-pill pill-admin">Báo cáo</span>
+              <ul class="bullet-items">
+                <li>Admin thấy dữ liệu học sinh active để đánh giá bán gói.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-teacher">Chủ quyền</span>
+              <ul class="bullet-items">
+                <li>Làm chủ ngân hàng câu hỏi, video, bài đọc lý thuyết.</li>
+                <li>Tích hợp Gemini API key cá nhân để gợi ý chấm văn.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-student">Sư phạm</span>
+              <ul class="bullet-items">
+                <li>Học sinh nhận phiếu tài khoản in cắt phát.</li>
+                <li>Cây Tri Thức mọc thêm lá ứng với bài mới.</li>
+                <li>Nhận điểm & nhận xét 4 tiêu chí rubric.</li>
+                <li>Được duyệt mở rương bí mật khi đủ XP.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-parent">Trực tiếp</span>
+              <ul class="bullet-items">
+                <li>Phụ huynh nhận phiếu tài khoản liên kết con.</li>
+                <li>Xem bài văn con viết và lời phê chi tiết của cô.</li>
+              </ul>
+            </td>
+          </tr>
+
+          <!-- Student -->
+          <tr>
+            <td>
+              <div class="role-col-title-cell" style="color: var(--student-light);">
+                <span>🎒</span> HỌC SINH
+              </div>
+            </td>
+            <td>
+              <span class="impact-pill pill-admin">Hệ thống</span>
+              <ul class="bullet-items">
+                <li>Server ghi nhận lịch sử học, tính toán tải video.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-teacher">Tác vụ chấm</span>
+              <ul class="bullet-items">
+                <li>Bài văn bay vào "Hàng đợi chấm bài" của cô.</li>
+                <li>Cập nhật chỉ số năng lực Mastery trên dashboard lớp.</li>
+                <li>Gửi yêu cầu duyệt rương quà tuần.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-student">Tiến bộ</span>
+              <ul class="bullet-items">
+                <li>Tích XP (chặn trần 150/ngày, làm lại 0 cộng điểm).</li>
+                <li>Lá cây đổi 4 màu theo mức Mastery.</li>
+                <li>Giữ ngọn lửa chuỗi ngày học Streak Flame.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-parent">Minh bạch</span>
+              <ul class="bullet-items">
+                <li>Phụ huynh thấy chính xác số phút con thực học và mầm cây lớn lên.</li>
+              </ul>
+            </td>
+          </tr>
+
+          <!-- Parent -->
+          <tr>
+            <td>
+              <div class="role-col-title-cell" style="color: var(--parent-light);">
+                <span>👨‍👩‍👧</span> PHỤ HUYNH
+              </div>
+            </td>
+            <td>
+              <span class="impact-pill pill-admin">Thương mại</span>
+              <ul class="bullet-items">
+                <li>Chuyển đổi mua gói tháng khi thấy con tiến bộ rõ rệt.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-teacher">Đồng hành</span>
+              <ul class="bullet-items">
+                <li>Giảm áp lực nhắn tin đôn đốc cho cô giáo.</li>
+                <li>Phụ huynh cùng cô đôn đốc con nộp bài đúng hạn.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-student">Khích lệ</span>
+              <ul class="bullet-items">
+                <li>Con được khen ngợi, nhận quà thực tế khi mở được rương.</li>
+              </ul>
+            </td>
+            <td>
+              <span class="impact-pill pill-parent">An tâm</span>
+              <ul class="bullet-items">
+                <li>Yên tâm về ý thức tự giác học Văn của con.</li>
+              </ul>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <div>Hệ Thống Bản Đồ Nghiệp Vụ Mầm Văn 7 • Phiên bản đồng bộ kỹ thuật 2026</div>
+      <div style="margin-top: 6px; font-size: 12px; color: #475569;">
+        Kiến trúc: <strong>Vũ Xuân Toàn</strong> & <strong>Thành Dương</strong>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Modal Chi Tiết Luồng Mũi Tên -->
+  <div class="flow-modal-overlay" id="flowModal" onclick="closeFlowModal()">
+    <div class="flow-modal" onclick="event.stopPropagation()">
+      <button class="flow-modal-close" onclick="closeFlowModal()">✕</button>
+      <div id="flowModalBadge" style="font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;">LUỒNG DỮ LIỆU</div>
+      <h3 id="flowModalTitle" style="font-size: 18px; margin-bottom: 12px; color: #fff;">Tiêu Đề Luồng</h3>
+      <p id="flowModalDesc" style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;"></p>
+      <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; font-size: 13px; border-left: 3px solid #38bdf8;">
+        <strong style="color: #38bdf8;">Ý nghĩa kỹ thuật & sư phạm:</strong>
+        <div id="flowModalNote" style="color: #cbd5e1; margin-top: 4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Detailed Role Actions Data
+    const roleData = {
+      admin: {
+        title: "🛡️ Bóc Tách Chi Tiết: ADMIN HỆ THỐNG",
+        badge: "Quản trị tối cao • Cổng quản trị riêng biệt",
+        color: "var(--admin-light)",
+        actions: [
+          {
+            code: "ADM-01",
+            title: "Tiếp Nhận Form Lead (SĐT, Email)",
+            body: "Khi giáo viên bấm nút Giáo viên ở trang login, form hiện lên lấy SĐT và Email gửi về mục Chờ duyệt của Admin. Anh Dương gọi tư vấn.",
+            impact: "Admin liên hệ xác nhận; giáo viên nhận thông báo chờ cấp tài khoản."
+          },
+          {
+            code: "ADM-02",
+            title: "Cấp Tài Khoản Dùng Thử 2-3 Ngày",
+            body: "Admin bấm Cấp tài khoản trực tiếp trên portal: tạo username, mật khẩu tạm thời, mở toàn bộ tính năng và tự động đếm lùi 48h-72h.",
+            impact: "Giáo viên đăng nhập vào hệ thống bắt đầu trải nghiệm tạo lớp học."
+          },
+          {
+            code: "ADM-03",
+            title: "Quản Trị Vòng Đời: Kích Hoạt / Xóa",
+            body: "Sau 2-3 ngày: nếu giáo viên chốt mua gói thì giữ lại tài khoản; nếu không ưng ý thì Admin bấm xóa tài khoản giáo viên.",
+            impact: "Nếu xóa, giáo viên và học sinh thuộc lớp của giáo viên đó sẽ bị thu hồi quyền truy cập."
+          },
+          {
+            code: "ADM-04",
+            title: "Đăng Nhập Dưới Quyền (Impersonate)",
+            body: "Admin có nút 'Truy cập với tư cách GV' để vào thẳng giao diện của giáo viên đó kiểm tra xem học liệu, lớp học có bị lỗi hay không.",
+            impact: "Hỗ trợ kỹ thuật nhanh chóng cho giáo viên mà không cần hỏi xin mật khẩu."
+          }
+        ]
+      },
+      teacher: {
+        title: "👨‍🏫 Bóc Tách Chi Tiết: GIÁO VIÊN (TRUNG TÂM SƯ PHẠM)",
+        badge: "Quản lý lớp học • Học liệu • Chấm bài • Gamification",
+        color: "var(--teacher-light)",
+        actions: [
+          {
+            code: "TEA-01",
+            title: "Tạo Lớp & Cấp Tài Khoản Học Sinh Tự Động",
+            body: "Giáo viên tạo lớp, nhập học sinh bằng tay hoặc upload file Excel. Hệ thống tự sinh mã HS (HS7A2-01), username, mật khẩu. Có popup In phiếu cắt phát và Tải Excel.",
+            impact: "Học sinh và phụ huynh nhận thông tin đăng nhập; học sinh không được tự đổi mật khẩu."
+          },
+          {
+            code: "TEA-02",
+            title: "Ngân Hàng Câu Hỏi & Gộp Luồng Học",
+            body: "Quản lý kho học liệu tập trung (CRUD câu hỏi, video, bài đọc lý thuyết). Gộp Video + Lý thuyết vào 1 màn hình có bộ lọc trực quan (tránh người học không tìm thấy lý thuyết).",
+            impact: "Học sinh thấy bài học mới; Cây Tri Thức tự động sinh các lá chủ đề tương ứng."
+          },
+          {
+            code: "TEA-03",
+            title: "Chấm Đoạn Văn 4 Tiêu Chí Rubric (Tổng 10đ)",
+            body: "Trắc nghiệm tự động chấm. Cô chỉ cần vào hàng đợi chấm bài viết đoạn văn theo 4 tiêu chí cố định: Nội dung (4đ), Bố cục (2đ), Dùng từ (2đ), Sáng tạo (2đ) kèm AI gợi ý.",
+            impact: "Học sinh nhận điểm và nâng chỉ số Mastery; phụ huynh xem được nguyên văn bài viết và lời phê."
+          },
+          {
+            code: "TEA-04",
+            title: "Cấu Hình Trần XP & Mốc 4 Rương Bí Mật",
+            body: "Cài đặt trần ngày: <45p là 130 XP, 45-90p là 150 XP; trần tuần 900 XP. Cấu hình mốc điểm nhận 4 cấp rương quà bí mật: Hạt (<=300 XP), Lá (301-500 XP), Hoa (501-700 XP), Vàng (>700 XP).",
+            impact: "Kiểm soát nhịp độ học sinh; phụ huynh nắm được mốc rương tuần của con."
+          },
+          {
+            code: "TEA-05",
+            title: "Duyệt Mở Rương Quà Tuần Cho Học Sinh",
+            body: "Cuối tuần cô vào danh sách rương quà, kiểm tra các học sinh đạt đủ mốc XP tuần và bấm Duyệt mở rương kèm bật mí món quà thực tế.",
+            impact: "Kích hoạt hiệu ứng pháo hoa chúc mừng trên giao diện học sinh."
+          }
+        ]
+      },
+      student: {
+        title: "🎒 Bóc Tách Chi Tiết: HỌC SINH (NGƯỜI HỌC)",
+        badge: "Rèn luyện học tập • Tích lũy XP • Nuôi Cây Tri Thức",
+        color: "var(--student-light)",
+        actions: [
+          {
+            code: "STU-01",
+            title: "Đăng Nhập Bằng Phiếu Được Phát",
+            body: "Học sinh nhận phiếu từ cô giáo, đăng nhập vào cổng Học sinh. Không được tự đổi mật khẩu để cô dễ quản lý danh sách lớp.",
+            impact: "Khởi tạo hồ sơ học tập và đồng bộ trạng thái online trên lớp."
+          },
+          {
+            code: "STU-02",
+            title: "Học Video (80%), Đọc Lý Thuyết & Tự Ghi Chép",
+            body: "Xem video đạt 80% thời lượng (+5 XP), đọc lý thuyết (+10 XP). Học sinh tự ghi chép, tạm thời không mở chatbot AI tự do (tiết kiệm API key và chống spam).",
+            impact: "Hoàn thành tiến trình học tập; đẩy bài viết vào hàng đợi chấm của cô."
+          },
+          {
+            code: "STU-03",
+            title: "Nuôi Cây Tri Thức (Vườn Văn Mầm Mực)",
+            body: "Số lượng lá = số lượng chủ đề học. Khi hoàn thành bài, lá đổi màu theo % Mastery: 🟢 Vững (>=80%), 🔵 Đang tiến bộ (50-79%), 🟡 Cần ôn lại (<50%), ⚪ Chưa học.",
+            impact: "Trực quan hóa thành quả học tập; phụ huynh và cô giáo nhìn vào cây là biết mức độ nắm bài."
+          },
+          {
+            code: "STU-04",
+            title: "Tích Lũy XP Chuẩn Sư Phạm",
+            body: "Mỗi hoạt động mang lại XP tương ứng. Làm lần đầu được cộng XP. Làm lại thỏa thích để ôn tập nhưng không cộng thêm XP.",
+            impact: "Tránh cày cuốc điểm ảo; bảo vệ sức khỏe học sinh với mức trần tối đa 150 XP/ngày."
+          },
+          {
+            code: "STU-05",
+            title: "Mở Rương Quà Bí Mật & Nổ Pháo Hoa",
+            body: "Khi tích lũy đủ XP tuần và được cô duyệt, học sinh bấm Mở rương ngay, màn hình nổ pháo hoa Confetti và khám phá phần thưởng bí mật.",
+            impact: "Tạo động lực thi đua học tập cho tuần tiếp theo."
+          }
+        ]
+      },
+      parent: {
+        title: "👨‍👩‍👧 Bóc Tách Chi Tiết: PHỤ HUYNH",
+        badge: "Giám sát minh bạch • Đồng hành • Khen thưởng đời thực",
+        color: "var(--parent-light)",
+        actions: [
+          {
+            code: "PAR-01",
+            title: "Đăng Nhập Bằng Mã Liên Kết Của Con",
+            body: "Phụ huynh dùng tài khoản nhận từ phiếu cô giáo phát để đăng nhập vào cổng Phụ huynh. Hệ thống tự động liên kết với hồ sơ của con.",
+            impact: "Thiết lập kênh kết nối giám sát trực tiếp giữa nhà trường và gia đình."
+          },
+          {
+            code: "PAR-02",
+            title: "Giám Sát Số Phút Thực Học & Streak",
+            body: "Xem chính xác số phút con học tích cực mỗi ngày (chỉ tính khi xem video hoặc làm bài, không tính treo máy) và số ngày duy trì chuỗi ngọn lửa Streak.",
+            impact: "Nắm được mức độ chuyên cần của con mà không phải kè kè giám sát."
+          },
+          {
+            code: "PAR-03",
+            title: "Đọc Bài Văn Con Viết & Lời Phê Của Cô",
+            body: "Mở ứng dụng xem nguyên văn bài cảm nghĩ của con, số điểm 4 tiêu chí rubric và lời nhận xét chân thực từ cô giáo.",
+            impact: "Thấu hiểu năng lực diễn đạt của con; phụ huynh tin tưởng vào tâm huyết của cô giáo."
+          },
+          {
+            code: "PAR-04",
+            title: "Quan Sát Sức Khỏe Cây Tri Thức Của Con",
+            body: "Nhìn vào tán cây của con: lá nào xanh là con học tốt, lá nào vàng là con đang hổng kiến thức cần bố mẹ động viên ôn tập.",
+            impact: "Đồng hành chất lượng, hỗ trợ con đúng trọng tâm."
+          },
+          {
+            code: "PAR-05",
+            title: "Khen Thưởng Đời Thực & Gia Hạn Gói Học",
+            body: "Chuẩn bị phần quà thực tế khi con mở được rương quà tuần. Thấy con tiến bộ rõ rệt, phụ huynh sẵn sàng đóng tiền gia hạn dịch vụ cùng nhà trường.",
+            impact: "Mang lại nguồn thu thương mại bền vững cho Admin và nền tảng."
+          }
+        ]
+      }
+    };
+
+    // Flow Descriptions
+    const flowDescriptions = {
+      f1: {
+        title: "Luồng [1]: Admin ➜ Giáo viên",
+        desc: "Admin tiếp nhận form SĐT/Email của giáo viên từ trang login, gọi tư vấn và bấm Cấp tài khoản dùng thử 2-3 ngày với đầy đủ chức năng. Admin có quyền Impersonate để hỗ trợ kỹ thuật.",
+        note: "Admin chỉ quản lý tài khoản Giáo viên, không tạo tài khoản học sinh để tránh cồng kềnh."
+      },
+      f2: {
+        title: "Luồng [2]: Giáo viên ➜ Admin",
+        desc: "Dữ liệu lớp học của giáo viên (số lượng học sinh, mức độ hoạt động) đồng bộ về dashboard của Admin để Admin theo dõi và tư vấn gia hạn hợp đồng sau thời gian thử nghiệm.",
+        note: "Là căn cứ để Admin quyết định duy trì hay xóa tài khoản giáo viên khi hết hạn 2-3 ngày."
+      },
+      f3: {
+        title: "Luồng [3]: Giáo viên ➜ Học sinh",
+        desc: "Giáo viên cấp danh sách tài khoản học sinh (In phiếu cắt phát), biên soạn bài giảng trong Ngân hàng câu hỏi, giao BTVN, thiết lập trần XP và kích hoạt các lá chủ đề trên Cây Tri Thức.",
+        note: "Học sinh không được tự đổi mật khẩu. Số lượng lá trên cây tự động khớp với số chủ đề cô giao."
+      },
+      f4: {
+        title: "Luồng [4]: Học sinh ➜ Giáo viên",
+        desc: "Học sinh hoàn thành bài viết cảm nghĩ, dữ liệu tự động đẩy vào 'Hàng đợi chấm bài' của cô. Học sinh đủ XP tuần sẽ gửi thông báo để cô bấm duyệt mở rương quà bí mật.",
+        note: "Trắc nghiệm tự chấm, cô chỉ cần chấm đoạn văn theo 4 tiêu chí rubric cố định."
+      },
+      f5: {
+        title: "Luồng [5]: Giáo viên ➜ Phụ huynh",
+        desc: "Giáo viên gửi phiếu tài khoản liên kết cho phụ huynh (qua in giấy hoặc Zalo lớp); kết quả chấm bài văn và lời phê của cô được đồng bộ trực tiếp sang ứng dụng phụ huynh.",
+        note: "Minh bạch hóa kết quả học tập, phụ huynh đọc được nguyên văn bài viết và lời nhận xét chi tiết của cô."
+      },
+      f6: {
+        title: "Luồng [6]: Học sinh ➜ Phụ huynh",
+        desc: "Học sinh học bao nhiêu phút thực tế (Active Learning Time), tích lũy bao nhiêu XP, duy trì ngọn lửa Streak bao nhiêu ngày và Cây Tri Thức đổi sang màu gì đều hiển thị tức thì cho phụ huynh.",
+        note: "Phụ huynh nắm bắt tiến độ thực tế của con mà con không thể báo cáo khống."
+      },
+      f7: {
+        title: "Luồng [7]: Phụ huynh ➜ Học sinh",
+        desc: "Phụ huynh động viên con duy trì chuỗi học, nhắc nhở con ôn lại các chủ đề có lá vàng, và phối hợp chuẩn bị phần quà đời thực khi con mở được rương quà bí mật cuối tuần.",
+        note: "Tạo động lực tinh thần và gắn kết tình cảm gia đình thông qua việc học Văn."
+      },
+      f8: {
+        title: "Luồng [8]: Phụ huynh ➜ Admin",
+        desc: "Khi phụ huynh thấy con tự giác học tập, yêu thích môn Văn và tiến bộ rõ rệt, phụ huynh sẽ nhiệt tình ủng hộ nhà trường và sẵn sàng trả phí gia hạn gói dịch vụ với Admin.",
+        note: "Hoàn thiện vòng lặp kinh doanh: Trải nghiệm tốt $\rightarrow$ Học sinh tiến bộ $\rightarrow$ Phụ huynh đồng ý trả phí."
+      }
+    };
+
+    // Render Role Actions
+    function renderRoleDetails(roleKey) {
+      const data = roleData[roleKey] || roleData.teacher;
+      const titleEl = document.getElementById('selectedRoleTitle');
+      const badgeEl = document.getElementById('selectedRoleBadge');
+      const containerEl = document.getElementById('selectedRoleActions');
+
+      titleEl.innerHTML = data.title;
+      titleEl.style.color = data.color;
+      badgeEl.textContent = data.badge;
+
+      containerEl.innerHTML = data.actions.map(act => `
+        <div class="action-card">
+          <div class="action-card-top">
+            <span class="action-card-title">${act.title}</span>
+            <span class="action-card-code">${act.code}</span>
+          </div>
+          <div class="action-card-body">${act.body}</div>
+          <div class="action-impact-box" style="border-left-color: ${data.color}">
+            <div class="action-impact-title">⚡ Tác động đến hệ thống</div>
+            <div>${act.impact}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Role Selection
+    function selectRole(role) {
+      // Button states
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-role') === role);
+      });
+
+      const nodes = {
+        admin: document.getElementById('node-admin'),
+        teacher: document.getElementById('node-teacher'),
+        student: document.getElementById('node-student'),
+        parent: document.getElementById('node-parent')
+      };
+
+      const flowGroups = document.querySelectorAll('.flow-group');
+
+      if (role === 'all') {
+        Object.values(nodes).forEach(n => {
+          n.style.opacity = '1';
+          n.style.transform = 'scale(1)';
+        });
+        flowGroups.forEach(f => f.style.opacity = '1');
+        renderRoleDetails('teacher');
+      } else {
+        Object.keys(nodes).forEach(k => {
+          if (k === role) {
+            nodes[k].style.opacity = '1';
+            nodes[k].style.transform = 'scale(1.02)';
+          } else {
+            nodes[k].style.opacity = '0.35';
+            nodes[k].style.transform = 'scale(0.98)';
+          }
+        });
+
+        // Filter flows related to selected role
+        flowGroups.forEach(f => {
+          const id = f.id;
+          if (id.includes(role)) {
+            f.style.opacity = '1';
+          } else {
+            f.style.opacity = '0.15';
+          }
+        });
+
+        renderRoleDetails(role);
+      }
+    }
+
+    // Show Flow Modal Info
+    function showFlowInfo(flowKey) {
+      const data = flowDescriptions[flowKey];
+      if (!data) return;
+
+      document.getElementById('flowModalTitle').textContent = data.title;
+      document.getElementById('flowModalDesc').textContent = data.desc;
+      document.getElementById('flowModalNote').textContent = data.note;
+
+      const modal = document.getElementById('flowModal');
+      modal.style.display = 'flex';
+    }
+
+    function closeFlowModal() {
+      document.getElementById('flowModal').style.display = 'none';
+    }
+
+    function resetZoom() {
+      selectRole('all');
+    }
+
+    function scrollToMatrix() {
+      document.getElementById('matrixSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      renderRoleDetails('teacher');
+    });
+  </script>
+</body>
+</html>
