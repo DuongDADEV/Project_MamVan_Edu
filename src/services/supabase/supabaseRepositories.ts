@@ -925,7 +925,7 @@ export class SupabaseEssayRepository implements EssayRepository {
       let query = supabase
         .from('essay_submissions')
         .select('*, students(name), classes(name)')
-        .order('submitted_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (filter?.studentId && isUUID(filter.studentId)) query = query.eq('student_id', filter.studentId);
       if (filter?.classId && filter.classId !== 'all') {
@@ -941,11 +941,12 @@ export class SupabaseEssayRepository implements EssayRepository {
       }
 
       const { data, error } = await query;
-      if (error || !data) {
+      if (error) {
+        console.warn('[SupabaseEssay] Lỗi getSubmissions, dùng fallback:', error.message);
         return mockEssayRepo.getSubmissions(filter);
       }
 
-      return data.map((e: any) => ({
+      return (data || []).map((e: any) => ({
         id: e.id,
         questionId: e.question_id || 'q_essay_01',
         quizId: e.question_id || 'q_essay_01',
@@ -956,13 +957,13 @@ export class SupabaseEssayRepository implements EssayRepository {
         prompt: 'Bài tập làm văn',
         content: e.content,
         wordCount: e.word_count || 0,
-        submittedAt: new Date(e.submitted_at).getTime(),
+        submittedAt: new Date(e.created_at || Date.now()).getTime(),
         status: e.status,
         teacherFeedback: e.teacher_feedback || undefined,
         rubricScores: Array.isArray(e.rubric_scores) ? e.rubric_scores : undefined,
         totalScore: e.total_score ? Number(e.total_score) : undefined,
         finalRatio: e.final_ratio ? Number(e.final_ratio) : undefined,
-        hoursWaiting: Math.max(0, Math.floor((Date.now() - new Date(e.submitted_at).getTime()) / 3600000)),
+        hoursWaiting: Math.max(0, Math.floor((Date.now() - new Date(e.created_at || Date.now()).getTime()) / 3600000)),
       }));
     } catch {
       return mockEssayRepo.getSubmissions(filter);
@@ -1006,7 +1007,7 @@ export class SupabaseEssayRepository implements EssayRepository {
       return {
         ...submission,
         id: created.id,
-        submittedAt: new Date(created.submitted_at).getTime(),
+        submittedAt: new Date(created.created_at).getTime(),
         status: created.status,
         hoursWaiting: 0,
       };
