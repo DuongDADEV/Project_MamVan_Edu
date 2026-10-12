@@ -75,6 +75,7 @@ export class GeminiAIService implements AIService {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
           },
           body: JSON.stringify(body),
         });
@@ -171,15 +172,6 @@ export class GeminiAIService implements AIService {
       };
     }
 
-    // Cảnh báo nếu API Key không bắt đầu bằng AIzaSy
-    if (!cleanKey.startsWith('AIzaSy')) {
-      return {
-        success: false,
-        message: `Khóa API không đúng định dạng của Google AI Studio (API key chuẩn của Google luôn bắt đầu bằng 'AIzaSy...'). Khóa bạn đang nhập bắt đầu bằng '${cleanKey.slice(0, 3)}...' không thể xác thực với Google Gemini. Vui lòng bấm vào 'Lấy API Key miễn phí tại Google AI Studio' để sao chép đúng API Key.`,
-        latencyMs: 15,
-      };
-    }
-
     const modelsToTry = [
       preferredModel,
       'gemini-2.5-flash',
@@ -197,7 +189,10 @@ export class GeminiAIService implements AIService {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`;
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': cleanKey,
+          },
           body: JSON.stringify({
             contents: [
               {
