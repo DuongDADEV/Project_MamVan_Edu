@@ -277,9 +277,40 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         });
         showToast('🎉 Đã lưu bài giảng video & ý trọng tâm vào Ngân hàng học liệu!');
       } else if (payload.type === 'theory') {
+        const blocks = payload.data.blocks || [];
+        let sections = payload.data.sections || [];
+
+        // Nếu có blocks mà thiếu sections, tự động convert blocks thành sections
+        if ((!sections || sections.length === 0) && blocks.length > 0) {
+          let currentSec: any = null;
+          for (const b of blocks) {
+            if (b.type === 'heading' || !currentSec) {
+              if (currentSec) sections.push(currentSec);
+              currentSec = {
+                id: 'sec_' + (b.id || Date.now() + Math.random().toString(36).substring(2, 5)),
+                title: b.content || 'Nội dung bài học',
+                body: [],
+                takeaway: '',
+              };
+            } else if (b.type === 'paragraph' && b.content) {
+              currentSec.body.push(b.content);
+            } else if (b.type === 'takeaway' && (b.takeawayText || b.content)) {
+              currentSec.takeaway = b.takeawayText || b.content;
+            } else if (b.type === 'example') {
+              currentSec.example = {
+                text: b.exampleText || b.content || '',
+                analysis: b.exampleAnalysis || '',
+              };
+            }
+          }
+          if (currentSec) sections.push(currentSec);
+        }
+
         await contentService.saveTheoryLesson({
           ...payload.data,
           topicId: formTopicId,
+          sections,
+          blocks,
           status: 'draft',
         });
         showToast('🎉 Đã lưu khối lý thuyết chuyên sâu vào Ngân hàng học liệu!');
@@ -979,18 +1010,61 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-[#E6DCC8]">
-                    {(t.sections || []).map((sec, sIdx) => (
-                      <div key={sIdx} className="p-3 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] space-y-1">
-                        <span className="text-xs font-bold text-[#2F3E6B]">{sec.title}</span>
-                        <p className="text-[11px] text-[#4B5563] leading-relaxed line-clamp-2">
-                          {sec.body.join(' ')}
-                        </p>
-                        {sec.takeaway && (
-                          <p className="text-[10px] text-teal-700 font-medium">Ghi nhớ: {sec.takeaway}</p>
-                        )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-[#E6DCC8]">
+                    {t.blocks && t.blocks.length > 0 ? (
+                      t.blocks.map((blk, bIdx) => (
+                        <div key={bIdx} className="p-3 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] space-y-1.5">
+                          {blk.type === 'heading' && (
+                            <span className="text-xs font-bold text-[#2F3E6B] flex items-center gap-1.5">
+                              📌 {blk.content}
+                            </span>
+                          )}
+                          {blk.type === 'paragraph' && (
+                            <p className="text-[11px] text-[#4B5563] leading-relaxed">
+                              {blk.content}
+                            </p>
+                          )}
+                          {blk.type === 'example' && (
+                            <div className="text-[11px] bg-white/80 p-2 rounded-lg border border-amber-200/60">
+                              <span className="font-bold text-amber-800 block text-[10px]">
+                                Ví dụ: {blk.exampleText || blk.content}
+                              </span>
+                              {blk.exampleAnalysis && (
+                                <span className="text-[10px] text-slate-600 block mt-0.5">{blk.exampleAnalysis}</span>
+                              )}
+                            </div>
+                          )}
+                          {blk.type === 'takeaway' && (
+                            <p className="text-[10px] text-teal-800 font-bold bg-teal-50/80 p-1.5 rounded-lg border border-teal-200/50">
+                              💡 Ghi nhớ: {blk.takeawayText || blk.content}
+                            </p>
+                          )}
+                          {blk.type === 'list' && blk.items && (
+                            <ul className="text-[11px] text-slate-600 list-disc list-inside space-y-0.5">
+                              {blk.items.map((it, iIdx) => (
+                                <li key={iIdx}>{it}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))
+                    ) : (t.sections && t.sections.length > 0) ? (
+                      t.sections.map((sec, sIdx) => (
+                        <div key={sIdx} className="p-3 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] space-y-1">
+                          <span className="text-xs font-bold text-[#2F3E6B]">{sec.title}</span>
+                          <p className="text-[11px] text-[#4B5563] leading-relaxed line-clamp-3">
+                            {Array.isArray(sec.body) ? sec.body.join(' ') : sec.body}
+                          </p>
+                          {sec.takeaway && (
+                            <p className="text-[10px] text-teal-700 font-medium">Ghi nhớ: {sec.takeaway}</p>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-2 p-3 text-center text-xs text-slate-400 italic">
+                        Khối lý thuyết chuyên sâu đang được chuẩn hóa...
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               ))}
