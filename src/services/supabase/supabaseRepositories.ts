@@ -40,6 +40,13 @@ import { createFreshStudentState } from '../mock/seedData.ts';
 import { syncEventBus } from '../mock/eventBus.ts';
 
 const SESSION_STORAGE_KEY = 'mam_van_auth_session';
+const DEFAULT_TEACHER_UUID = '00000000-0000-0000-0000-000000000001';
+const DEFAULT_CLASS_UUID = '00000000-0000-0000-0000-000000000010';
+
+function isUUID(str?: string | null): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
 
 // ==============================================================================
 // 1. SUPABASE AUTH REPOSITORY
@@ -102,8 +109,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         const { data: classRows } = await supabase
           .from('classes')
           .select('id')
-          .eq('teacher_id', teacher.id)
-          .is('deleted_at', null);
+          .eq('teacher_id', teacher.id);
 
         const classIds = classRows?.map((c) => c.id) || [];
 
@@ -116,7 +122,7 @@ export class SupabaseAuthRepository implements AuthRepository {
             email: teacher.email || undefined,
             subject: teacher.subject || 'Ngữ văn 7',
             school: teacher.school || 'THCS Giấy & Mực',
-            classIds: classIds.length > 0 ? classIds : ['00000000-0000-0000-0000-000000000010'],
+            classIds: classIds.length > 0 ? classIds : [DEFAULT_CLASS_UUID],
             phone: teacher.phone || undefined,
           },
           role: 'teacher',
@@ -136,7 +142,6 @@ export class SupabaseAuthRepository implements AuthRepository {
           .from('students')
           .select('*, classes(name, grade, school_year)')
           .ilike('username', uClean)
-          .is('deleted_at', null)
           .maybeSingle();
 
         if (error) {
@@ -236,12 +241,15 @@ export class SupabaseClassRepository implements ClassRepository {
     try {
       let query = supabase
         .from('classes')
-        .select('*, students(id, last_active_at, deleted_at)')
-        .is('deleted_at', null)
+        .select('*, students(id, last_active_at)')
         .order('name', { ascending: true });
 
-      if (teacherId) {
-        query = query.eq('teacher_id', teacherId);
+      let targetTeacherId = teacherId;
+      if (targetTeacherId === 'gv001') {
+        targetTeacherId = DEFAULT_TEACHER_UUID;
+      }
+      if (targetTeacherId && isUUID(targetTeacherId)) {
+        query = query.eq('teacher_id', targetTeacherId);
       }
 
       const { data, error } = await query;
@@ -254,8 +262,7 @@ export class SupabaseClassRepository implements ClassRepository {
       const sevenDaysAgo = now - 7 * 86400000;
 
       return data.map((c: any) => {
-        const rawStudents: any[] = Array.isArray(c.students) ? c.students : [];
-        const validStudents = rawStudents.filter((s) => !s.deleted_at);
+        const validStudents: any[] = Array.isArray(c.students) ? c.students : [];
         const active7DaysCount = validStudents.filter((s) => {
           if (!s.last_active_at) return false;
           const t = new Date(s.last_active_at).getTime();
@@ -274,7 +281,7 @@ export class SupabaseClassRepository implements ClassRepository {
           status: (c.status as 'active' | 'archived') || 'active',
           created_at: c.created_at || new Date().toISOString(),
           updated_at: c.updated_at || new Date().toISOString(),
-          deleted_at: c.deleted_at || null,
+          deleted_at: null,
         };
       });
     } catch (err) {
@@ -300,7 +307,7 @@ export class SupabaseClassRepository implements ClassRepository {
         name: data.name,
         grade: data.grade || 'Lớp 7',
         school_year: data.schoolYear || '2026-2027',
-        teacher_id: data.teacherId || '00000000-0000-0000-0000-000000000001',
+        teacher_id: isUUID(data.teacherId) ? data.teacherId : DEFAULT_TEACHER_UUID,
         description: data.description || null,
         status: data.status || 'active',
       };
@@ -389,7 +396,7 @@ export class SupabaseClassRepository implements ClassRepository {
         status: updated.status,
         created_at: updated.created_at,
         updated_at: updated.updated_at,
-        deleted_at: updated.deleted_at,
+        deleted_at: null,
       };
     } catch (err) {
       console.error('[SupabaseClass] Ngoại lệ updateClass:', err);
@@ -421,11 +428,13 @@ export class SupabaseStudentRepository implements StudentRepository {
       let query = supabase
         .from('students')
         .select('*')
-        .is('deleted_at', null)
         .order('name', { ascending: true });
 
       if (filter?.classId && filter.classId !== 'all') {
-        query = query.eq('class_id', filter.classId);
+        const cId = filter.classId === 'class_7a2' ? DEFAULT_CLASS_UUID : filter.classId;
+        if (isUUID(cId)) {
+          query = query.eq('class_id', cId);
+        }
       }
 
       if (filter?.status && filter.status !== 'all') {
@@ -451,7 +460,7 @@ export class SupabaseStudentRepository implements StudentRepository {
         last_active_at: s.last_active_at ? new Date(s.last_active_at).getTime() : null,
         created_at: s.created_at,
         updated_at: s.updated_at,
-        deleted_at: s.deleted_at || null,
+        deleted_at: null,
       }));
 
       if (filter?.search) {
@@ -476,13 +485,14 @@ export class SupabaseStudentRepository implements StudentRepository {
       return mockStudentRepo.getStudentById(id);
     }
     try {
-      const { data, error } = await supabase
-        .from('students')
-        .select('*')
-        .eq('id', id)
-        .is('deleted_at', null)
-        .maybeSingle();
+      let query = supabase.from('students').select('*');
+      if (isUUID(id)) {
+        query = query.eq('id', id);
+      } else {
+        query = query.eq('username', id);
+      }
 
+      const { data, error } = await query.maybeSingle();
       if (error || !data) {
         return mockStudentRepo.getStudentById(id);
       }
@@ -500,7 +510,7 @@ export class SupabaseStudentRepository implements StudentRepository {
         last_active_at: data.last_active_at ? new Date(data.last_active_at).getTime() : null,
         created_at: data.created_at,
         updated_at: data.updated_at,
-        deleted_at: data.deleted_at || null,
+        deleted_at: null,
       };
     } catch {
       return mockStudentRepo.getStudentById(id);
@@ -521,12 +531,13 @@ export class SupabaseStudentRepository implements StudentRepository {
         data.custom_username?.trim().toLowerCase() ||
         'hs_' + Math.random().toString(36).substring(2, 8);
       const initialPassword = data.custom_password?.trim() || '123456';
+      const cleanClassId = isUUID(data.class_id) ? data.class_id : DEFAULT_CLASS_UUID;
 
       const payload = {
         name: cleanName,
         username: generatedUsername,
         password_hash: initialPassword,
-        class_id: data.class_id,
+        class_id: cleanClassId,
         student_code: data.student_code?.trim() || null,
         dob: data.dob || null,
         status: 'active',
@@ -544,7 +555,6 @@ export class SupabaseStudentRepository implements StudentRepository {
         return mockStudentRepo.createStudent(data, teacherActorId);
       }
 
-      // Khởi tạo bản ghi student_states ban đầu trên DB
       await supabase.from('student_states').upsert({
         student_id: created.id,
         xp_today: 0,
@@ -629,7 +639,7 @@ export class SupabaseStudentRepository implements StudentRepository {
       if (data.name !== undefined) payload.name = data.name;
       if (data.student_code !== undefined) payload.student_code = data.student_code;
       if (data.dob !== undefined) payload.dob = data.dob;
-      if (data.class_id !== undefined) payload.class_id = data.class_id;
+      if (data.class_id !== undefined && isUUID(data.class_id)) payload.class_id = data.class_id;
       if (data.status !== undefined) payload.status = data.status;
 
       const { data: updated, error } = await supabase
@@ -657,7 +667,7 @@ export class SupabaseStudentRepository implements StudentRepository {
         last_active_at: updated.last_active_at ? new Date(updated.last_active_at).getTime() : null,
         created_at: updated.created_at,
         updated_at: updated.updated_at,
-        deleted_at: updated.deleted_at || null,
+        deleted_at: null,
       };
     } catch {
       return mockStudentRepo.updateStudent(id, data, teacherActorId);
@@ -669,10 +679,7 @@ export class SupabaseStudentRepository implements StudentRepository {
       return mockStudentRepo.deleteStudent(id, teacherActorId);
     }
     try {
-      await supabase
-        .from('students')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+      await supabase.from('students').delete().eq('id', id);
       syncEventBus.emit('student');
     } catch {
       return mockStudentRepo.deleteStudent(id, teacherActorId);
@@ -738,15 +745,18 @@ export class SupabaseAttemptRepository implements AttemptRepository {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('student_states')
-        .select('*')
-        .eq('student_id', studentId)
-        .maybeSingle();
+      let query = supabase.from('student_states').select('*');
+      if (isUUID(studentId)) {
+        query = query.eq('student_id', studentId);
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error || !data) {
         const fallback = await mockAttemptRepo.getStudentState(studentId);
-        await this.saveStudentState(studentId, fallback);
+        if (isUUID(studentId)) {
+          await this.saveStudentState(studentId, fallback);
+        }
         return fallback;
       }
 
@@ -757,7 +767,7 @@ export class SupabaseAttemptRepository implements AttemptRepository {
           id: studentId,
           name: 'Học sinh',
           username: studentId,
-          class_id: '00000000-0000-0000-0000-000000000010',
+          class_id: DEFAULT_CLASS_UUID,
           status: 'active',
           has_logged_in: true,
           created_at: new Date().toISOString(),
@@ -788,7 +798,7 @@ export class SupabaseAttemptRepository implements AttemptRepository {
   }
 
   async saveStudentState(studentId: string, state: StudentState, sourceId?: string): Promise<void> {
-    if (!isSupabaseReady()) {
+    if (!isSupabaseReady() || !isUUID(studentId)) {
       return mockAttemptRepo.saveStudentState(studentId, state, sourceId);
     }
 
@@ -863,7 +873,7 @@ export class SupabaseAttemptRepository implements AttemptRepository {
             id: row.student_id,
             name: 'Học sinh',
             username: row.student_id,
-            class_id: '00000000-0000-0000-0000-000000000010',
+            class_id: DEFAULT_CLASS_UUID,
             status: 'active',
             has_logged_in: true,
             created_at: new Date().toISOString(),
@@ -917,8 +927,11 @@ export class SupabaseEssayRepository implements EssayRepository {
         .select('*, students(name), classes(name)')
         .order('submitted_at', { ascending: false });
 
-      if (filter?.studentId) query = query.eq('student_id', filter.studentId);
-      if (filter?.classId && filter.classId !== 'all') query = query.eq('class_id', filter.classId);
+      if (filter?.studentId && isUUID(filter.studentId)) query = query.eq('student_id', filter.studentId);
+      if (filter?.classId && filter.classId !== 'all') {
+        const cId = filter.classId === 'class_7a2' ? DEFAULT_CLASS_UUID : filter.classId;
+        if (isUUID(cId)) query = query.eq('class_id', cId);
+      }
       if (filter?.status && filter.status !== 'ALL') {
         if (filter.status === 'PENDING_TEACHER') {
           query = query.in('status', ['PENDING_TEACHER', 'AI_SUGGESTED']);
@@ -971,8 +984,8 @@ export class SupabaseEssayRepository implements EssayRepository {
     try {
       const payload = {
         question_id: submission.questionId || submission.quizId || 'q_essay_01',
-        student_id: submission.studentId,
-        class_id: submission.classId || '00000000-0000-0000-0000-000000000010',
+        student_id: isUUID(submission.studentId) ? submission.studentId : '00000000-0000-0000-0000-000000000101',
+        class_id: isUUID(submission.classId) ? submission.classId : DEFAULT_CLASS_UUID,
         content: submission.content,
         word_count: submission.wordCount || submission.content.trim().split(/\s+/).length,
         status: submission.status || 'PENDING_TEACHER',
@@ -1009,7 +1022,7 @@ export class SupabaseEssayRepository implements EssayRepository {
       teacherFeedback?: string;
     }
   ): Promise<EssaySubmission> {
-    if (!isSupabaseReady()) {
+    if (!isSupabaseReady() || !isUUID(id)) {
       return mockEssayRepo.saveSubmissionDraft(id, draft);
     }
 
@@ -1038,7 +1051,7 @@ export class SupabaseEssayRepository implements EssayRepository {
     },
     teacherActorId: string
   ): Promise<EssaySubmission> {
-    if (!isSupabaseReady()) {
+    if (!isSupabaseReady() || !isUUID(id)) {
       return mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
     }
 
@@ -1049,7 +1062,7 @@ export class SupabaseEssayRepository implements EssayRepository {
         rubric_scores: grading.rubricScores,
         total_score: grading.totalScore,
         final_ratio: grading.finalRatio,
-        graded_by: teacherActorId.includes('-') ? teacherActorId : null,
+        graded_by: isUUID(teacherActorId) ? teacherActorId : DEFAULT_TEACHER_UUID,
       };
 
       const { error } = await supabase.from('essay_submissions').update(payload).eq('id', id);
