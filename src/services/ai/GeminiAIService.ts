@@ -41,10 +41,9 @@ export class GeminiAIService implements AIService {
       'gemini-2.0-flash',
       'gemini-1.5-flash-latest',
       'gemini-1.5-flash',
-      'gemini-2.0-flash-lite',
-      'gemini-1.5-flash-8b',
-      'gemini-2.0-flash-thinking-exp-01-21',
+      'gemini-2.5-pro',
       'gemini-1.5-pro-latest',
+      'gemini-1.5-pro',
     ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
 
     let lastError: Error | null = null;
@@ -172,13 +171,23 @@ export class GeminiAIService implements AIService {
       };
     }
 
+    // Cảnh báo nếu API Key không bắt đầu bằng AIzaSy
+    if (!cleanKey.startsWith('AIzaSy')) {
+      return {
+        success: false,
+        message: `Khóa API không đúng định dạng của Google AI Studio (API key chuẩn của Google luôn bắt đầu bằng 'AIzaSy...'). Khóa bạn đang nhập bắt đầu bằng '${cleanKey.slice(0, 3)}...' không thể xác thực với Google Gemini. Vui lòng bấm vào 'Lấy API Key miễn phí tại Google AI Studio' để sao chép đúng API Key.`,
+        latencyMs: 15,
+      };
+    }
+
     const modelsToTry = [
       preferredModel,
       'gemini-2.5-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash-latest',
       'gemini-1.5-flash',
-      'gemini-2.0-flash-lite',
+      'gemini-2.5-pro',
+      'gemini-1.5-pro',
     ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
 
     let lastError = '';
@@ -217,10 +226,19 @@ export class GeminiAIService implements AIService {
         } else {
           const errJson = await res.json().catch(() => null);
           lastError = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-          if (res.status === 400 || res.status === 403 || lastError.includes('API_KEY_INVALID')) {
+
+          // Nếu lỗi xác thực API Key (401, 403, 400 hoặc API_KEY_INVALID), dừng ngay không thử model khác
+          if (
+            res.status === 401 ||
+            res.status === 403 ||
+            res.status === 400 ||
+            lastError.includes('API_KEY') ||
+            lastError.includes('UNAUTHENTICATED') ||
+            lastError.includes('invalid authentication credentials')
+          ) {
             return {
               success: false,
-              message: `Khóa API không hợp lệ: ${lastError}`,
+              message: `Khóa API không hợp lệ hoặc chưa được kích hoạt trên Google Cloud: ${lastError}`,
               latencyMs,
             };
           }
