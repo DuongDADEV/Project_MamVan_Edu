@@ -113,6 +113,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   const [selectedLevel, setSelectedLevel] = useState<'all' | SkillLevel>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'all' | Difficulty>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [newlyCreatedQuestionIds, setNewlyCreatedQuestionIds] = useState<string[]>([]);
 
   // 4. TOAST THÔNG BÁO
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -251,16 +252,23 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     try {
       if (payload.type === 'quiz') {
         const generatedQuestions: Question[] = payload.data.questions || [];
+        const savedIds: string[] = [];
         for (const q of generatedQuestions) {
+          const qId = q.id || 'q_ai_' + Date.now() + Math.random().toString(36).substring(2, 6);
           await quizService.saveQuestion({
             ...q,
-            id: q.id || 'q_ai_' + Date.now() + Math.random().toString(36).substring(2, 6),
+            id: qId,
             topicId: payload.data.topicId || formTopicId,
             isAiGenerated: true,
-            isTeacherReviewed: false,
+            isTeacherReviewed: true,
           });
+          savedIds.push(qId);
         }
-        showToast(`🎉 Đã lưu ${generatedQuestions.length} câu hỏi AI vào Ngân hàng câu hỏi!`);
+        setNewlyCreatedQuestionIds(savedIds);
+        if (payload.data.topicId) {
+          setSelectedTopicId(payload.data.topicId);
+        }
+        showToast(`🎉 Đã lưu ${generatedQuestions.length} câu hỏi AI vừa chọn vào Ngân hàng! Các câu mới được làm nổi bật trên đầu.`);
       } else if (payload.type === 'video') {
         await contentService.saveVideoLesson({
           ...payload.data,
@@ -310,8 +318,14 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         if (!matchPrompt && !matchPassage && !matchExplanation) return false;
       }
       return true;
+    }).sort((a, b) => {
+      const aIsNew = newlyCreatedQuestionIds.includes(a.id);
+      const bIsNew = newlyCreatedQuestionIds.includes(b.id);
+      if (aIsNew && !bIsNew) return -1;
+      if (!aIsNew && bIsNew) return 1;
+      return 0;
     });
-  }, [questionsList, selectedTopicId, selectedContentType, selectedLevel, selectedDifficulty, searchQuery]);
+  }, [questionsList, selectedTopicId, selectedContentType, selectedLevel, selectedDifficulty, searchQuery, newlyCreatedQuestionIds]);
 
   const filteredVideos = useMemo(() => {
     if (['single', 'multi', 'fill', 'essay', 'theory'].includes(selectedContentType)) return [];
@@ -734,7 +748,13 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-[#FAF5EB] text-[#8C7E6A]">
                         Chủ đề: {topicName}
                       </span>
-                      {q.isAiGenerated && (
+                      {newlyCreatedQuestionIds.includes(q.id) && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 animate-pulse">
+                          <Sparkles className="w-3 h-3 text-amber-600" />
+                          Vừa tạo mới
+                        </span>
+                      )}
+                      {q.isAiGenerated && !newlyCreatedQuestionIds.includes(q.id) && (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-purple-500" />
                           NotebookLM AI

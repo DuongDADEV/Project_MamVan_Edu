@@ -18,6 +18,7 @@ import {
   AIEssayGradingOptions,
   AIEssayGradingResult,
   AIChatResponse,
+  AIExtractedSource,
 } from './AIService.ts';
 import { Question, KeyPoint, TheoryBlock } from '../../types.ts';
 
@@ -53,6 +54,7 @@ export class GeminiAIService implements AIService {
           ],
           generationConfig: {
             temperature: 0.3,
+            maxOutputTokens: 8192,
           },
         };
 
@@ -300,12 +302,17 @@ QUY TẮC RAG GROUNDING BẮT BUỘC:
     const difficulty = options?.difficulty || 'TB';
     const topic = options?.topicTitle || activeSources[0]?.title || 'Ngữ văn 7';
 
-    const prompt = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018.
+    const prompt = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Google NotebookLM.
 Dựa vào ngữ liệu sau:
 ${sourcesText}
 
 Chủ đề: "${topic}"
-Yêu cầu: Hãy tạo đúng ${count} câu hỏi bám sát 100% ngữ liệu được cung cấp ở trên.
+
+YÊU CẦU ĐẶC BIỆT QUAN TRỌNG VỀ SỐ LƯỢNG (BẮT BUỘC):
+- Bạn PHẢI tạo CHÍNH XÁC đúng ${count} câu hỏi riêng biệt trong mảng JSON (BẮT BUỘC có đủ ${count} phần tử).
+- TUYỆT ĐỐI KHÔNG ĐƯỢC sinh ít hơn ${count} câu (ví dụ người dùng chọn ${count} câu thì phải đủ ${count} câu, không được chỉ trả về 5 câu).
+- Khai thác phong phú mọi chi tiết, từ ngữ, câu văn/thơ trong ngữ liệu để mỗi câu hỏi là một khía cạnh riêng biệt.
+
 Phân bổ theo ma trận 4 mức độ năng lực:
 - NHAN_BIET: Nhận biết dấu hiệu thể loại, chi tiết, từ ngữ trong văn bản
 - THONG_HIEU: Hiểu ý nghĩa hình ảnh, biện pháp tu từ, tâm trạng nhân vật
@@ -320,7 +327,7 @@ Quy tắc dạng câu hỏi (type):
 3. "fill": Điền vào chỗ trống. answer: từ hoặc cụm từ cần điền.
 4. "essay": Tự luận / Viết đoạn văn ngắn. rubric: mảng các tiêu chí chấm điểm (name, maxScore, description).
 
-Định dạng trả về: DUY NHẤT một mảng JSON thuần túy theo cấu trúc Question[]:
+Định dạng trả về: DUY NHẤT một mảng JSON thuần túy có đúng ${count} phần tử theo cấu trúc Question[]:
 [
   {
     "id": "q_ai_1",
@@ -473,5 +480,94 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
 
     const raw = await this.callGemini(prompt);
     return this.parseJsonFromText<AIEssayGradingResult>(raw);
+  }
+
+  /**
+   * Trích xuất lời thoại, phụ đề, nội dung bài giảng từ YouTube hoặc bất kỳ trang web nào
+   * Tương tự cơ chế nạp URL của Google NotebookLM
+   */
+  async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
+    const cleanUrl = url.trim();
+    if (!cleanUrl) {
+      throw new Error('Vui lòng cung cấp đường dẫn URL video hoặc bài viết hợp lệ.');
+    }
+
+    const isYouTube = /(?:youtube\.com|youtu\.be)/i.test(cleanUrl);
+    let title = isYouTube ? 'Video bài giảng YouTube' : 'Tài liệu liên kết';
+    let rawText = '';
+
+    // 1. Thử lấy tiêu đề từ YouTube qua noembed
+    if (isYouTube) {
+      try {
+        const oembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(cleanUrl)}`);
+        if (oembedRes.ok) {
+          const oembedData = await oembedRes.json();
+          if (oembedData?.title) {
+            title = oembedData.title;
+          }
+        }
+      } catch {
+        // bỏ qua nếu oembed gặp hạn chế mạng
+      }
+    }
+
+    // 2. Thử lấy nội dung/transcript qua Jina Reader API
+    try {
+      const jinaRes = await fetch(`https://r.jina.ai/${cleanUrl}`, {
+        headers: { Accept: 'text/plain' },
+      });
+      if (jinaRes.ok) {
+        const text = await jinaRes.text();
+        if (text && text.length > 80) {
+          rawText = text;
+        }
+      }
+    } catch {
+      // bỏ qua nếu jina gặp hạn chế
+    }
+
+    // 3. Phân tích và chuẩn hóa bằng Gemini AI
+    const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Google NotebookLM môn Ngữ văn 7.
+Nhiệm vụ: Phân tích liên kết video/bài viết sau đây và trích xuất TOÀN BỘ nội dung bài giảng, lời thoại, kiến thức hoặc văn bản nguồn:
+- URL: ${cleanUrl}
+- Loại nguồn: ${isYouTube ? 'Video YouTube' : 'Trang web'}
+${title ? `- Tiêu đề nhận diện: "${title}"` : ''}
+${rawText ? `- Nội dung thô thu thập được:\n"""\n${rawText.slice(0, 4500)}\n"""` : ''}
+
+YÊU CẦU:
+1. Tạo văn bản bóc tách (transcript/bài giảng) chi tiết, đầy đủ các luận điểm, ví dụ, phân tích nghệ thuật và câu từ trong văn bản để làm ngữ liệu sư phạm dạy học và ra đề thi.
+2. Định dạng trả về: DUY NHẤT một chuỗi JSON thuần túy:
+{
+  "title": "Tiêu đề bài giảng/video chính xác, chuẩn mực",
+  "content": "Toàn bộ nội dung bóc tách chi tiết (được định dạng thành các đoạn văn mạch lạc, phân tích cụ thể)...",
+  "summary": "Tóm tắt ngắn gọn 2 câu về nội dung"
+}`;
+
+    try {
+      const aiRaw = await this.callGemini(prompt);
+      const parsed = this.parseJsonFromText<{ title: string; content: string }>(aiRaw);
+      const finalTitle = parsed.title || title;
+      const finalContent = parsed.content || rawText || `Nội dung bóc tách từ ${cleanUrl}`;
+      const wordCount = finalContent.split(/\s+/).filter(Boolean).length;
+
+      return {
+        title: finalTitle,
+        content: finalContent,
+        wordCount,
+        type: isYouTube ? 'video' : 'website',
+        url: cleanUrl,
+      };
+    } catch (err: any) {
+      if (rawText && rawText.length > 50) {
+        return {
+          title,
+          content: rawText,
+          wordCount: rawText.split(/\s+/).filter(Boolean).length,
+          type: isYouTube ? 'video' : 'website',
+          url: cleanUrl,
+        };
+      }
+      throw new Error(`Không thể bóc tách nội dung từ link này: ${err.message || 'Lỗi phân tích mạng'}`);
+    }
   }
 }

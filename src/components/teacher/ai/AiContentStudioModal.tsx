@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   X,
@@ -24,6 +24,8 @@ import {
   Zap,
   ExternalLink,
   Lightbulb,
+  RotateCcw,
+  Link2,
 } from 'lucide-react';
 import { AISource, aiService } from '../../../services/index.ts';
 import {
@@ -34,7 +36,7 @@ import {
   testGeminiApiKey,
 } from '../../../services/ai/index.ts';
 import { MamMuc } from '../../MamMuc.tsx';
-import { SkillLevel, Difficulty, QuestionType } from '../../../types.ts';
+import { SkillLevel, Difficulty, QuestionType, Question } from '../../../types.ts';
 
 interface AiContentStudioModalProps {
   isOpen: boolean;
@@ -121,19 +123,46 @@ Vì tiếng gà cục tác
   const [activeTabSourceInput, setActiveTabSourceInput] = useState<'paste' | 'file' | 'video'>('paste');
   const [newSourceTitle, setNewSourceTitle] = useState('');
   const [newSourceContent, setNewSourceContent] = useState('');
+  const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [isExtractingUrl, setIsExtractingUrl] = useState(false);
+  const [extractedNotice, setExtractedNotice] = useState<string | null>(null);
   const [showAddSourceForm, setShowAddSourceForm] = useState(false);
   const [unsupportedFileNotice, setUnsupportedFileNotice] = useState<string | null>(null);
   const [previewingSource, setPreviewingSource] = useState<AISource | null>(null);
 
-  // 3. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA)
+  // 3. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA) - LƯU LOCALSTORAGE THEO CHỦ ĐỀ
+  const chatStorageKey = `mamvan_ai_chat_history_${topicId}`;
   const [chatMessages, setChatMessages] = useState<
     { role: 'user' | 'assistant'; text: string; citations?: { sourceTitle: string; snippet: string }[] }[]
-  >([
-    {
-      role: 'assistant',
-      text: 'Xin chào thầy/cô! Tôi là trợ lý AI NotebookLM Mầm Văn. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
-    },
-  ]);
+  >(() => {
+    try {
+      const saved = localStorage.getItem(`mamvan_ai_chat_history_${topicId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi đọc lịch sử chat:', e);
+    }
+    return [
+      {
+        role: 'assistant',
+        text: 'Xin chào thầy/cô! Tôi là trợ lý AI NotebookLM Mầm Văn. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
+      },
+    ];
+  });
+
+  // Tự động lưu lịch sử trò chuyện khi thay đổi
+  useEffect(() => {
+    try {
+      localStorage.setItem(chatStorageKey, JSON.stringify(chatMessages));
+    } catch (e) {
+      console.warn('Lỗi ghi lịch sử chat:', e);
+    }
+  }, [chatMessages, chatStorageKey]);
+
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
@@ -149,6 +178,10 @@ Vì tiếng gà cục tác
   const [outputType, setOutputType] = useState<'video' | 'theory' | 'quiz'>(targetTypeInitial);
   const [totalQuestions, setTotalQuestions] = useState(5);
   const [targetQuizKind, setTargetQuizKind] = useState<'quick' | 'mastery' | 'practice'>('quick');
+
+  // STATE XEM TRƯỚC VÀ PHÊ DUYỆT BỘ CÂU HỎI AI VỪA TẠO
+  const [reviewDraftQuestions, setReviewDraftQuestions] = useState<Question[] | null>(null);
+  const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
 
   const [typeCounts, setTypeCounts] = useState<{
     single: number;
@@ -216,6 +249,94 @@ Vì tiếng gà cục tác
     } else {
       setUnsupportedFileNotice(`Định dạng "${file.name}" sắp được hỗ trợ. Hiện tại vui lòng dùng file .txt hoặc dán nội dung trực tiếp.`);
     }
+  };
+
+  // Bóc tách transcript và nội dung từ link YouTube / Video web
+  const handleExtractUrl = async () => {
+    if (!videoUrlInput.trim()) {
+      alert('Vui lòng dán liên kết video YouTube hoặc bài viết web.');
+      return;
+    }
+    setIsExtractingUrl(true);
+    setExtractedNotice(null);
+    try {
+      const res = await aiService.extractContentFromUrl(videoUrlInput.trim());
+      setNewSourceTitle(res.title);
+      setNewSourceContent(res.content);
+      setExtractedNotice(
+        `✅ Đã bóc tách thành công: "${res.title}" (${res.wordCount} từ). Thầy/cô có thể kiểm tra nội dung và bấm "Lưu nguồn" bên dưới.`
+      );
+    } catch (err: any) {
+      alert(`Không thể trích xuất nội dung từ liên kết: ${err.message || 'Lỗi mạng hoặc phân tích'}`);
+    } finally {
+      setIsExtractingUrl(false);
+    }
+  };
+
+  // Xoá lịch sử trò chuyện của chủ đề hiện tại
+  const handleClearChatHistory = () => {
+    if (window.confirm('Thầy/cô có muốn xoá toàn bộ lịch sử trò chuyện của chủ đề này để làm mới cuộc hội thoại không?')) {
+      const initialChat = [
+        {
+          role: 'assistant' as const,
+          text: 'Xin chào thầy/cô! Tôi là trợ lý AI NotebookLM Mầm Văn. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
+        },
+      ];
+      setChatMessages(initialChat);
+      try {
+        localStorage.setItem(chatStorageKey, JSON.stringify(initialChat));
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+  };
+
+  // Phê duyệt và lưu bộ câu hỏi vào Ngân hàng
+  const handleSaveReviewedQuestions = () => {
+    if (!reviewDraftQuestions) return;
+    const questionsToSave = reviewDraftQuestions.filter((q) => selectedDraftIds.includes(q.id));
+    if (questionsToSave.length === 0) {
+      alert('Vui lòng tích chọn ít nhất 1 câu hỏi để lưu vào Ngân hàng câu hỏi.');
+      return;
+    }
+
+    onApplyDraft({
+      type: 'quiz',
+      data: {
+        title: `${targetQuizKind === 'quick' ? 'Kiểm tra nhanh' : targetQuizKind === 'mastery' ? 'Mastery Check' : 'Luyện tập'}: ${topicTitle} (Sinh bởi Gemini AI)`,
+        kind: targetQuizKind,
+        topicId,
+        timeLimitMinutes: targetQuizKind === 'quick' ? 7 : 15,
+        xp: targetQuizKind === 'quick' ? 25 : 50,
+        questions: questionsToSave,
+        isAiGenerated: true,
+        isTeacherReviewed: true,
+      },
+    });
+
+    setReviewDraftQuestions(null);
+    onClose();
+  };
+
+  const handleToggleSelectAllDrafts = () => {
+    if (!reviewDraftQuestions) return;
+    if (selectedDraftIds.length === reviewDraftQuestions.length) {
+      setSelectedDraftIds([]);
+    } else {
+      setSelectedDraftIds(reviewDraftQuestions.map((q) => q.id));
+    }
+  };
+
+  const handleToggleDraftId = (id: string) => {
+    setSelectedDraftIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteDraftQuestion = (id: string) => {
+    if (!reviewDraftQuestions) return;
+    setReviewDraftQuestions((prev) => (prev ? prev.filter((q) => q.id !== id) : null));
+    setSelectedDraftIds((prev) => prev.filter((item) => item !== id));
   };
 
   // Trò chuyện với nguồn (Gửi tin nhắn)
@@ -368,24 +489,12 @@ Vì tiếng gà cục tác
           aiSourceSnippet: q.aiSourceSnippet || activeSources[0].content.slice(0, 100),
         }));
 
-        setGenerationStep('Hoàn tất! Đang lưu vào Ngân hàng câu hỏi...');
+        setGenerationStep('Hoàn tất! Đang mở bản xem trước...');
         setTimeout(() => {
           setIsGenerating(false);
-          onApplyDraft({
-            type: 'quiz',
-            data: {
-              title: `${targetQuizKind === 'quick' ? 'Kiểm tra nhanh' : targetQuizKind === 'mastery' ? 'Mastery Check' : 'Luyện tập'}: ${topicTitle} (Sinh bởi Gemini AI)`,
-              kind: targetQuizKind,
-              topicId,
-              timeLimitMinutes: targetQuizKind === 'quick' ? 7 : 15,
-              xp: targetQuizKind === 'quick' ? 25 : 50,
-              questions: processedQuestions,
-              isAiGenerated: true,
-              isTeacherReviewed: false,
-            },
-          });
-          onClose();
-        }, 600);
+          setReviewDraftQuestions(processedQuestions);
+          setSelectedDraftIds(processedQuestions.map((q) => q.id));
+        }, 400);
       }
     } catch (e: any) {
       console.error('Lỗi sinh bản nháp AI:', e);
@@ -469,8 +578,203 @@ Vì tiếng gà cục tác
         </div>
       </div>
 
-      {/* NỘI DUNG 3 VÙNG CHUẨN NOTEBOOKLM */}
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-[#E6DCC8]">
+      {/* NỘI DUNG 3 VÙNG CHUẨN NOTEBOOKLM HOẶC MÀN HÌNH DUYỆT BẢN NHÁP CÂU HỎI */}
+      {reviewDraftQuestions ? (
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#FAF5EB]/30">
+          {/* Thanh công cụ xem trước */}
+          <div className="px-6 py-3.5 bg-white border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setReviewDraftQuestions(null)}
+                className="px-3 py-1.5 rounded-xl bg-[#FAF5EB] hover:bg-[#E6DCC8]/50 text-xs font-bold text-[#2F3E6B] border border-[#E6DCC8] flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4 rotate-180" />
+                <span>Quay lại xưởng</span>
+              </button>
+              <div>
+                <h3 className="text-sm font-bold text-[#2F3E6B] flex items-center gap-2">
+                  <span>Duyệt bộ câu hỏi AI vừa tạo</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#E2704A]/10 text-[#E2704A] border border-[#E2704A]/20">
+                    {reviewDraftQuestions.length} câu hỏi
+                  </span>
+                </h3>
+                <p className="text-[11px] text-[#8C7E6A]">
+                  Kiểm tra nội dung các câu hỏi vừa tạo, tích chọn những câu ưng ý để lưu vào Ngân hàng.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleToggleSelectAllDrafts}
+                className="px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-[#FAF5EB] text-xs font-bold text-[#2F3E6B] transition-colors cursor-pointer"
+              >
+                {selectedDraftIds.length === reviewDraftQuestions.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveReviewedQuestions}
+                disabled={selectedDraftIds.length === 0}
+                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#E2704A] to-[#D45E36] hover:from-[#D45E36] hover:to-[#C34F28] disabled:opacity-40 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Lưu {selectedDraftIds.length} câu đã chọn vào Ngân hàng</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Danh sách các câu hỏi mới tạo */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {reviewDraftQuestions.map((q, idx) => {
+              const isSelected = selectedDraftIds.includes(q.id);
+              return (
+                <div
+                  key={q.id || idx}
+                  className={`p-4 rounded-2xl border transition-all ${
+                    isSelected
+                      ? 'bg-white border-[#E2704A]/50 shadow-xs ring-1 ring-[#E2704A]/20'
+                      : 'bg-white/60 border-[#E6DCC8] opacity-60'
+                  }`}
+                >
+                  {/* Tiêu đề & tag câu */}
+                  <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#E6DCC8]">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleDraftId(q.id)}
+                          className="w-4 h-4 accent-[#E2704A] rounded cursor-pointer"
+                        />
+                        <span className="font-bold text-xs text-[#2F3E6B]">Câu {idx + 1}</span>
+                      </label>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FAF5EB] text-[#2F3E6B] border border-[#E6DCC8]">
+                        {q.type === 'single'
+                          ? 'Trắc nghiệm 1 đáp án'
+                          : q.type === 'multi'
+                          ? 'Chọn nhiều đáp án'
+                          : q.type === 'fill'
+                          ? 'Điền từ'
+                          : 'Tự luận'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#0D9488]/10 text-[#0D9488]">
+                        {q.level === 'NHAN_BIET'
+                          ? 'Nhận biết'
+                          : q.level === 'THONG_HIEU'
+                          ? 'Thông hiểu'
+                          : q.level === 'PHAN_TICH'
+                          ? 'Phân tích'
+                          : 'Vận dụng'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        {q.difficulty === 'DE' ? 'Dễ' : q.difficulty === 'TB' ? 'Trung bình' : 'Khó'}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDraftQuestion(q.id)}
+                      className="p-1 rounded-lg text-[#8C7E6A] hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      title="Xóa câu này khỏi danh sách"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Đề bài */}
+                  <p className="text-xs font-bold text-[#2F3E6B] leading-relaxed mb-2.5">{q.prompt}</p>
+
+                  {/* Đoạn ngữ liệu trích dẫn */}
+                  {(q.passage || q.aiSourceSnippet) && (
+                    <div className="p-2.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-[11px] text-[#8C7E6A] italic mb-3">
+                      <span className="font-bold text-[#E2704A] not-italic mr-1">Ngữ liệu căn cứ:</span>
+                      "{q.passage || q.aiSourceSnippet}"
+                    </div>
+                  )}
+
+                  {/* Phương án trắc nghiệm */}
+                  {q.options && q.options.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                      {q.options.map((opt, oIdx) => {
+                        const optLetter = String.fromCharCode(65 + oIdx);
+                        const isCorrect = Array.isArray(q.answer)
+                          ? q.answer.includes(optLetter)
+                          : q.answer === optLetter;
+                        return (
+                          <div
+                            key={oIdx}
+                            className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 transition-all ${
+                              isCorrect
+                                ? 'bg-emerald-50 border-emerald-400 text-emerald-900 font-bold'
+                                : 'bg-[#FFFDF8] border-[#E6DCC8] text-[#2F3E6B]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                  isCorrect ? 'bg-emerald-600 text-white' : 'bg-[#FAF5EB] text-[#8C7E6A]'
+                                }`}
+                              >
+                                {optLetter}
+                              </span>
+                              <span className="truncate">{opt}</span>
+                            </div>
+                            {isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Đáp án điền từ */}
+                  {q.type === 'fill' && (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-900 font-bold mb-3 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Đáp án cần điền: {Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}</span>
+                    </div>
+                  )}
+
+                  {/* Lời giải thích */}
+                  {q.explanation && (
+                    <div className="p-2.5 rounded-xl bg-[#0D9488]/5 border border-[#0D9488]/20 text-[11px] text-[#2F3E6B]">
+                      <span className="font-bold text-[#0D9488] mr-1">💡 Lời giải thích:</span>
+                      {q.explanation}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Thanh chân trang chốt lưu */}
+          <div className="p-4 bg-white border-t border-[#E6DCC8] flex items-center justify-between shrink-0">
+            <button
+              type="button"
+              onClick={() => setReviewDraftQuestions(null)}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-[#8C7E6A] hover:bg-black/5"
+            >
+              Hủy bỏ & Tạo lại
+            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[#8C7E6A]">
+                Đã chọn: <strong className="text-[#E2704A]">{selectedDraftIds.length}</strong> / {reviewDraftQuestions.length} câu
+              </span>
+              <button
+                type="button"
+                onClick={handleSaveReviewedQuestions}
+                disabled={selectedDraftIds.length === 0}
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-[#E2704A] to-[#D45E36] hover:from-[#D45E36] hover:to-[#C34F28] disabled:opacity-40 text-white font-bold text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Xác nhận lưu {selectedDraftIds.length} câu vào Ngân hàng câu hỏi</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-[#E6DCC8]">
         {/* ========================================================= */}
         {/* VÙNG 1: NGUỒN TÀI LIỆU (BÊN TRÁI ~ 330px) */}
         {/* ========================================================= */}
@@ -555,17 +859,63 @@ Vì tiếng gà cục tác
                   )}
                 </div>
               ) : (
-                <textarea
-                  rows={4}
-                  placeholder={
-                    activeTabSourceInput === 'video'
-                      ? 'Dán nội dung bản ghi lời giảng (Transcript video)...'
-                      : 'Dán đoạn trích bài thơ, văn bản tác phẩm hoặc ghi chú bài dạy...'
-                  }
-                  value={newSourceContent}
-                  onChange={(e) => setNewSourceContent(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
-                />
+                <div className="space-y-2">
+                  {activeTabSourceInput === 'video' && (
+                    <div className="p-2.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] space-y-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#2F3E6B]">
+                        <Link2 className="w-3.5 h-3.5 text-[#E2704A]" />
+                        <span>Bóc tách từ link YouTube hoặc URL bài giảng:</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          placeholder="Dán link YouTube (vd: https://youtube.com/watch?v=...)"
+                          value={videoUrlInput}
+                          onChange={(e) => setVideoUrlInput(e.target.value)}
+                          className="flex-1 px-2.5 py-1.5 rounded-lg bg-white border border-[#E6DCC8] text-[11px] text-[#2F3E6B] outline-none focus:border-[#E2704A]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleExtractUrl}
+                          disabled={isExtractingUrl || !videoUrlInput.trim()}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#2F3E6B] hover:bg-[#1E293B] disabled:opacity-40 text-white text-[11px] font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          {isExtractingUrl ? (
+                            <>
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              <span>Đang lọc text...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Zap className="w-3 h-3 text-amber-400" />
+                              <span>Lọc text AI</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {extractedNotice && (
+                        <p className="text-[10px] text-emerald-800 bg-emerald-50 p-1.5 rounded-lg border border-emerald-200">
+                          {extractedNotice}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-[#8C7E6A] italic">
+                        💡 Tự động bóc tách phụ đề, lời thoại và tổng hợp kiến thức từ video chuẩn Google NotebookLM.
+                      </p>
+                    </div>
+                  )}
+
+                  <textarea
+                    rows={4}
+                    placeholder={
+                      activeTabSourceInput === 'video'
+                        ? 'Nội dung bóc tách lời giảng (Transcript video) sẽ hiển thị ở đây hoặc dán trực tiếp...'
+                        : 'Dán đoạn trích bài thơ, văn bản tác phẩm hoặc ghi chú bài dạy...'
+                    }
+                    value={newSourceContent}
+                    onChange={(e) => setNewSourceContent(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
+                  />
+                </div>
               )}
 
               <div className="flex justify-end gap-2 pt-1">
@@ -660,9 +1010,20 @@ Vì tiếng gà cục tác
                 2. Trò chuyện & Tra cứu tài liệu (RAG Grounding)
               </h3>
             </div>
-            <span className="text-[10px] text-[#8C7E6A] italic">
-              AI chỉ trả lời dựa trên các nguồn đã bật bên trái
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-[#8C7E6A] italic hidden sm:inline">
+                AI trả lời từ nguồn đã bật
+              </span>
+              <button
+                type="button"
+                onClick={handleClearChatHistory}
+                className="px-2 py-1 rounded-lg text-[#8C7E6A] hover:text-rose-600 hover:bg-rose-50 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                title="Xoá lịch sử trò chuyện để bắt đầu lại"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Làm mới chat</span>
+              </button>
+            </div>
           </div>
 
           {/* Danh sách tin nhắn chat */}
@@ -886,12 +1247,13 @@ Vì tiếng gà cục tác
                 )}
               </button>
               <p className="text-[10px] text-center text-[#8C7E6A]">
-                AI sẽ trích xuất trực tiếp từ các nguồn đã bật và lưu thẳng vào Ngân hàng.
+                AI sẽ trích xuất từ các nguồn đã bật và hiển thị bản xem trước để thầy/cô kiểm tra từng câu hỏi.
               </p>
             </div>
           </div>
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
       {/* MODAL NHẬP QUICK API KEY TRỰC TIẾP TRÊN XƯỞNG AI        */}

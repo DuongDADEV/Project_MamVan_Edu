@@ -154,9 +154,22 @@ class SmartAIService implements AIService {
       citations: [],
     };
   }
+
+  async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
+    const gemini = this.getGeminiService();
+    if (gemini) {
+      try {
+        return await gemini.extractContentFromUrl(url);
+      } catch (err: any) {
+        console.error('Gemini extractContentFromUrl error:', err);
+      }
+    }
+    return this.mock.extractContentFromUrl(url);
+  }
 }
 
 export const aiService: AIService = new SmartAIService();
 
 export { MockAIService, GeminiAIService };
 export * from './AIService.ts';
+
