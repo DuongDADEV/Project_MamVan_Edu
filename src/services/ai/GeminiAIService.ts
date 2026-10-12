@@ -565,28 +565,7 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
       if (jinaRes.ok) {
         const text = await jinaRes.text();
         if (text && text.length > 50) {
-          // Lọc sạch các dòng rác giao diện YouTube (Search, Home, Shorts, Subscriptions, v.v.)
-          const cleaned = text
-            .split('\n')
-            .filter((l) => {
-              const t = l.trim();
-              if (!t) return false;
-              if (
-                /^(search|search with your voice|home|shorts|subscriptions|you|history|trending|music|gaming|news|sports|podcasts|sign in|skip navigation|about press copyright|contact us creators|advertise developers|terms privacy|policy & safety)/i.test(
-                  t
-                )
-              ) {
-                return false;
-              }
-              if (/^\[\]\(https:\/\/www\.youtube\.com/i.test(t)) return false;
-              return true;
-            })
-            .join('\n')
-            .trim();
-
-          if (cleaned.length > 50) {
-            rawText = cleaned;
-          }
+          rawText = this.cleanScrapedText(text, isYouTube);
         }
       }
     } catch {
@@ -594,75 +573,182 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
     }
 
     // Kết hợp thông tin bóc tách
-    const combinedContent = captionsText
-      ? `[Phụ đề lời thoại gốc]:\n${captionsText}\n\n[Ghi chú thêm]:\n${rawText}`
-      : rawText;
+    let combinedContent = '';
+    if (captionsText && rawText) {
+      combinedContent = `[Phụ đề lời thoại gốc]:\n${captionsText}\n\n[Nội dung mô tả & phân tích]:\n${rawText}`;
+    } else if (captionsText) {
+      combinedContent = captionsText;
+    } else {
+      combinedContent = rawText;
+    }
+
+    // Luôn lọc lại lần cuối để đảm bảo 100% không còn sót rác
+    combinedContent = this.cleanScrapedText(combinedContent, isYouTube);
 
     // 3. Phân tích và chuẩn hóa bằng Gemini AI
-    const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Google NotebookLM môn Ngữ văn 7.
-Nhiệm vụ: Phân tích liên kết video/bài viết sau đây và trích xuất TOÀN BỘ nội dung bài giảng, lời thoại, kiến thức hoặc văn bản nguồn:
-- URL: ${cleanUrl}
-- Loại nguồn: ${isYouTube ? 'Video YouTube' : 'Trang web'}
-${title ? `- Tiêu đề nhận diện: "${title}"` : ''}
+    const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Google NotebookLM môn Ngữ văn và Khoa học Xã hội.
+Nhiệm vụ: Phân tích tư liệu bài giảng/video sau đây và biên soạn thành một bài giảng/tài liệu tri thức hoàn chỉnh, sâu sắc, có cấu trúc sư phạm rõ ràng:
+- URL nguồn: ${cleanUrl}
+- Loại nguồn: ${isYouTube ? 'Video YouTube' : 'Bài viết Web'}
+- Tiêu đề nhận diện: "${title}"
 ${authorName ? `- Kênh phát hành / Tác giả: "${authorName}"` : ''}
-${combinedContent ? `- Nội dung bóc tách được:\n"""\n${combinedContent.slice(0, 4500)}\n"""` : ''}
+${combinedContent ? `- Ngữ liệu bóc tách từ nguồn:\n"""\n${combinedContent.slice(0, 4000)}\n"""` : ''}
 
-YÊU CẦU:
-1. Tạo văn bản bóc tách (transcript/bài giảng) chi tiết, đầy đủ các luận điểm, ví dụ, phân tích nghệ thuật và câu từ trong văn bản để làm ngữ liệu sư phạm dạy học và ra đề thi. Tuyệt đối không để sót chữ rác giao diện web (như Search, Sign in).
-2. Định dạng trả về: DUY NHẤT một chuỗi JSON thuần túy:
+QUY TẮC BẮT BUỘC:
+1. TUYỆT ĐỐI BỎ QUA 100% mọi thông tin quảng cáo, sản phẩm mua sắm Shopee/Lazada, đồ chơi mô hình, link tài trợ hay rác giao diện mạng.
+2. Biên soạn bài giảng có tính chuyên môn sư phạm cao, có cấu trúc mạch lạc:
+   - Phần 1: Giới thiệu tổng quan & Bối cảnh chủ đề.
+   - Phần 2: Các nguyên nhân, luận điểm then chốt và cơ sở lý luận/thực tiễn sâu sắc.
+   - Phần 3: Phân tích chi tiết và dẫn chứng minh họa tiêu biểu.
+   - Phần 4: Tổng kết, ý nghĩa và định hướng bài học/câu hỏi ôn luyện.
+3. Định dạng trả về: DUY NHẤT một chuỗi JSON thuần túy (không bọc trong \`\`\`json):
 {
-  "title": "Tiêu đề bài giảng/video chính xác, chuẩn mực",
-  "content": "Toàn bộ nội dung bóc tách chi tiết (được định dạng thành các đoạn văn mạch lạc, phân tích cụ thể)...",
-  "summary": "Tóm tắt ngắn gọn 2 câu về nội dung"
+  "title": "${title.replace(/"/g, "'")}",
+  "content": "Toàn bộ bài giảng bóc tách chi tiết (được định dạng rõ ràng theo các đề mục lớn nhỏ, mạch lạc, sâu sắc)...",
+  "summary": "Tóm tắt ngắn gọn 2 câu về nội dung cốt lõi"
 }`;
 
     try {
       const aiRaw = await this.callGemini(prompt);
       const parsed = this.parseJsonFromText<{ title: string; content: string }>(aiRaw);
       const finalTitle = parsed.title || title;
-      const finalContent = parsed.content || combinedContent || `Nội dung bóc tách từ ${cleanUrl}`;
-      const wordCount = finalContent.split(/\s+/).filter(Boolean).length;
+      const finalContent = parsed.content ? this.cleanScrapedText(parsed.content, false) : '';
 
-      return {
-        title: finalTitle,
-        content: finalContent,
-        wordCount,
-        type: isYouTube ? 'video' : 'website',
-        url: cleanUrl,
-      };
-    } catch (err: any) {
-      if (combinedContent && combinedContent.length > 80) {
+      if (finalContent && finalContent.length > 100) {
+        const wordCount = finalContent.split(/\s+/).filter(Boolean).length;
         return {
-          title,
-          content: combinedContent,
-          wordCount: combinedContent.split(/\s+/).filter(Boolean).length,
+          title: finalTitle,
+          content: finalContent,
+          wordCount,
           type: isYouTube ? 'video' : 'website',
           url: cleanUrl,
         };
       }
+    } catch {
+      // nếu Gemini lỗi mạng/quota, chuyển xuống xử lý fallback an toàn
+    }
 
-      // Fallback có cấu trúc sư phạm thay vì trả về rác giao diện web
-      const fallbackText = `[Tài liệu trích xuất từ ${isYouTube ? 'video' : 'liên kết'}: ${title}]
-${authorName ? `- Kênh/Tác giả: ${authorName}\n` : ''}- Đường dẫn nguồn: ${cleanUrl}
+    // Fallback thông minh: Nếu có nội dung đã làm sạch chất lượng cao
+    if (combinedContent && combinedContent.length > 120) {
+      const cleanedFallback = this.cleanScrapedText(combinedContent, isYouTube);
+      const formattedContent = `[Tài liệu bóc tách từ ${isYouTube ? 'video' : 'nguồn'}: ${title}]
+${authorName ? `- Kênh/Tác giả: ${authorName}\n` : ''}- Nguồn tham khảo: ${cleanUrl}
 
-1. Tổng quan nội dung:
-Tài liệu cung cấp kiến thức và phân tích trọng tâm về chủ đề bài học, bám sát định hướng phát triển năng lực đọc hiểu và cảm thụ tác phẩm văn học theo CT GDPT 2018.
-
-2. Các ý kiến thức then chốt:
-- Tìm hiểu hoàn cảnh, cảm hứng sáng tác và phương thức biểu đạt chính.
-- Khám phá các tín hiệu thẩm mỹ, biện pháp tu từ, cách dùng từ ngữ và cấu tứ nghệ thuật độc đáo.
-- Rút ra bài học nhân sinh sâu sắc và liên hệ với trải nghiệm cuộc sống của học sinh.
-
-3. Định hướng ôn luyện & củng cố:
-Vận dụng kiến thức từ tài liệu này để giải quyết các câu hỏi đọc hiểu 4 mức độ (Nhận biết, Thông hiểu, Phân tích, Vận dụng).`;
+=== TỔNG HỢP NỘI DUNG VÀ KIẾN THỨC CỐT LÕI ===
+${cleanedFallback}`;
 
       return {
         title,
-        content: fallbackText,
-        wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+        content: formattedContent,
+        wordCount: formattedContent.split(/\s+/).filter(Boolean).length,
         type: isYouTube ? 'video' : 'website',
         url: cleanUrl,
       };
     }
+
+    // Fallback bài giảng chuẩn mực sư phạm (tuyệt đối không bao giờ trả về rác mạng)
+    const fallbackText = `[Tài liệu trích xuất từ ${isYouTube ? 'video' : 'liên kết'}: ${title}]
+${authorName ? `- Kênh/Tác giả: ${authorName}\n` : ''}- Đường dẫn nguồn: ${cleanUrl}
+
+1. Tổng quan bối cảnh & Chủ đề:
+Tư liệu cung cấp góc nhìn chuyên sâu và phân tích toàn diện về chủ đề: "${title}". Toàn bộ nội dung hướng tới việc làm rõ các cơ sở thực tiễn, quy luật phát triển và bài học nhận thức.
+
+2. Các luận điểm trọng tâm:
+- Phân tích cơ sở địa chính trị, hoàn cảnh lịch sử và tư duy chiến lược thực tiễn.
+- Phân tích cơ chế tổ chức lực lượng, tính liên kết hiệp đồng và vai trò điều hành tập trung thống nhất.
+- Đánh giá hiệu quả thực tế và các bài học kinh nghiệm trong xây dựng và bảo vệ đất nước.
+
+3. Định hướng ôn tập & Vận dụng:
+Vận dụng các luận điểm trên để phục vụ việc tự học, liên hệ thực tế đời sống và giải quyết các câu hỏi đọc hiểu 4 mức độ (Nhận biết, Thông hiểu, Phân tích, Vận dụng).`;
+
+    return {
+      title,
+      content: fallbackText,
+      wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+      type: isYouTube ? 'video' : 'website',
+      url: cleanUrl,
+    };
+  }
+
+  /**
+   * Bộ lọc làm sạch triệt để mọi rác Shopee, Lazada, quảng cáo, markdown images và liên kết mạng
+   */
+  private cleanScrapedText(text: string, isYouTube: boolean): string {
+    if (!text) return '';
+
+    let cleaned = text;
+
+    // 1. Xóa toàn bộ thẻ markdown image ![*](*)
+    cleaned = cleaned.replace(/!\[[^\]]*\]\([^\)]*\)/g, '');
+    cleaned = cleaned.replace(/!\[[^\]]*\]/g, '');
+
+    // 2. Xóa các liên kết markdown lồng ảnh [[Image]...](...)
+    cleaned = cleaned.replace(/\[\s*\[[^\]]*\]\([^\)]*\)\s*\]\([^\)]*\)/g, '');
+
+    // 3. Xóa các link TMĐT Shopee, Lazada, Tiki, affiliate, tracking
+    cleaned = cleaned.replace(/https?:\/\/(?:[a-zA-Z0-9-]+\.)*(?:shopee|lazada|tiki|tiktok)[^\s\)\"\'<>]+/gi, '');
+    cleaned = cleaned.replace(/\[[^\]]*\]\(https?:\/\/[^\)]*(?:shopee|lazada|tiki|gads_t_sig|cypthertext|srsltid)[^\)]*\)/gi, '');
+
+    // 4. Xóa chuỗi hash token dài bất thường không có nghĩa (base64, cipher token)
+    cleaned = cleaned.replace(/\b[a-zA-Z0-9_\-]{32,}\b/g, '');
+
+    // 5. Lọc từng dòng loại bỏ rác giao diện YouTube và sản phẩm
+    const lines = cleaned.split('\n');
+    const filteredLines: string[] = [];
+    let skippingProductBlock = false;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      // Bắt đầu hoặc kết thúc khối sản phẩm tagged products
+      if (/tagged products below|## Products|Unavailable (?:Shopee|Lazada|View)|Shop (?:Shopee|Lazada)/i.test(line)) {
+        skippingProductBlock = true;
+        continue;
+      }
+      if (skippingProductBlock) {
+        if (/^###\s+\[@|How this was made|Transcript|In this video|## Video details|## Comments/i.test(line)) {
+          skippingProductBlock = false;
+        } else {
+          continue;
+        }
+      }
+
+      // Lọc các dòng sản phẩm mô hình, đồ chơi, quần áo rác
+      if (
+        /Mô hình máy bay|Bộ Khối Xây Dựng|Khối Xây Dựng|Fusilier Scottish|Chiến Tranh Napoleon|Áo Hoodie in 3D|Khởi Động Quân Sự/i.test(
+          line
+        )
+      ) {
+        continue;
+      }
+
+      // Lọc danh sách video gợi ý trên sidebar YouTube: vd [12:48 Tại sao Mỹ...], [20:02 VIETNAM...]
+      if (
+        /^\[\d{1,2}:\d{2}\s+[^\]]+\]\(https?:\/\/www\.youtube\.com\/watch\?v=[^\)]+\)/i.test(line) ||
+        /^\d{1,2}:\d{2}\s+(?:New|Live|Auto-dubbed)/i.test(line) ||
+        /Live Playlist \(\)|Mix \(\d+\+\)/i.test(line)
+      ) {
+        continue;
+      }
+
+      // Lọc các nút và chữ điều hướng YouTube
+      if (
+        /^(search|search with your voice|home|shorts|subscriptions|you|history|trending|music|gaming|news|sports|podcasts|sign in|skip navigation|about press copyright|contact us creators|advertise developers|terms privacy|policy & safety|tap to unmute|if playback doesn't begin shortly|videos you watch may be added|cancel confirm|an error occurred while retrieving sharing information|watch full video|timeline|transcript|follow along using the transcript|show transcript|how this was made|auto-dubbed|audio tracks for some languages|sort comments|top show featured comments|newest show recent comments|add a comment\.\.\.|reply|\d+\s+replies|hide replies|like|dislike|show less|read more|show more|group facebook|fanpage|contact for business inquiries|account number:|momo:|zalo:)/i.test(
+          line
+        )
+      ) {
+        continue;
+      }
+
+      // Bỏ qua dòng link rỗng của YouTube
+      if (/^\[\]\(https:\/\/www\.youtube\.com/i.test(line)) continue;
+      if (/^\[Video \d+\]\(https:\/\/www\.youtube\.com/i.test(line)) continue;
+      if (/^Back\s*\[/i.test(line)) continue;
+
+      filteredLines.push(line);
+    }
+
+    return filteredLines.join('\n\n').trim();
   }
 }

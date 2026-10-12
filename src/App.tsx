@@ -556,6 +556,7 @@ export default function App() {
             {currentTab === 'tree' && (
               <TreeScreen
                 state={studentState}
+                onCheckIn={handleAttendanceCheckIn}
                 onSelectTopic={(tId) => {
                   const t = VIDEOS['video_' + tId] ? 'video_' + tId : 'video_tho_1';
                   setActiveFlow({ type: 'video', videoId: t });

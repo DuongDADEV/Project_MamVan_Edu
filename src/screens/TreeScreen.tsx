@@ -5,16 +5,30 @@ import { TREE_STAGES_CONFIG } from '../config.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
 import { GrowthTree, TopicLeafData } from '../components/GrowthTree.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
-import { Award, Sprout, BarChart3, ArrowRight, CheckCircle2, Lock, Sparkles, Layers } from 'lucide-react';
+import { Award, Sprout, BarChart3, ArrowRight, CheckCircle2, Lock, Sparkles, Layers, Droplets } from 'lucide-react';
 
 interface TreeScreenProps {
   state: StudentState;
   onSelectTopic: (topicId: string) => void;
+  onCheckIn?: () => void;
 }
 
-export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic }) => {
+export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic, onCheckIn }) => {
   const [activeTab, setActiveTab] = useState<'tree' | 'mastery' | 'badges'>('tree');
   const [selectedLeafTopicId, setSelectedLeafTopicId] = useState<string | null>(null);
+  const [isWatering, setIsWatering] = useState(false);
+  const [wateringFeedback, setWateringFeedback] = useState<string | null>(null);
+
+  const handleWaterTree = () => {
+    setIsWatering(true);
+    if (onCheckIn) {
+      onCheckIn();
+    }
+    setWateringFeedback('💧 Bạn đã tưới nước cho Cây Mầm Mực! Hạt mầm văn chương đang lớn lên từng ngày 🌱✨');
+    setTimeout(() => {
+      setWateringFeedback(null);
+    }, 3500);
+  };
 
   // Dữ liệu lá trên cây
   const topicLeavesData: TopicLeafData[] = TOPICS.map((t) => {
@@ -175,12 +189,50 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic }) 
             <GrowthTree
               completedStepsCount={state.completedSteps.length}
               topicLeaves={topicLeavesData}
+              isWatering={isWatering}
+              onWaterComplete={() => setIsWatering(false)}
               onLeafClick={(tId) => setSelectedLeafTopicId(tId)}
               className="my-4"
             />
 
+            {/* THANH TƯƠNG TÁC TƯỚI NƯỚC CHO MẦM MỰC */}
+            <div className="w-full mt-2 mb-4 p-4 bg-gradient-to-r from-indigo-50/80 via-purple-50/60 to-emerald-50/80 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="w-10 h-10 rounded-2xl bg-white shadow-xs border border-indigo-100 flex items-center justify-center text-xl shrink-0">
+                  💧
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#1E1B4B] flex items-center gap-1.5">
+                    <span>Nước tưới Mầm Mực</span>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                      Sẵn sàng
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Tưới nước mỗi ngày để kích thích mầm cây vươn chồi và trổ lá tri thức!
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleWaterTree}
+                disabled={isWatering}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] hover:from-[#4338CA] hover:to-[#6D28D9] disabled:opacity-60 text-white font-extrabold text-xs shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <Droplets className={`w-4 h-4 text-cyan-200 ${isWatering ? 'animate-bounce' : ''}`} />
+                <span>{isWatering ? 'Đang tưới nước...' : 'Tưới nước cho cây (+XP)'}</span>
+              </button>
+            </div>
+
+            {wateringFeedback && (
+              <div className="mb-4 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-4 py-2.5 rounded-xl text-center animate-[fadeIn_0.3s_ease] w-full shadow-xs">
+                {wateringFeedback}
+              </div>
+            )}
+
             {/* Chú giải trạng thái lá */}
-            <div className="mt-4 pt-4 border-t border-slate-100 w-full flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-600">
+            <div className="mt-2 pt-4 border-t border-slate-100 w-full flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-600">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-[#10B981]" /> Vững (≥80%)
               </span>
