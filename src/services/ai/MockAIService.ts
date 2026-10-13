@@ -408,6 +408,22 @@ export class MockAIService implements AIService {
     const strictness = options?.strictness || 3; // 1..5
     const tone = options?.tone || 'encouraging';
 
+    // Nếu bài viết hoàn toàn rỗng (0 từ)
+    if (wordCount === 0) {
+      return {
+        rubricScores: rubric.map((crit) => ({
+          criterionId: crit.id,
+          criterionName: crit.name,
+          suggestedScore: 0,
+          maxScore: crit.maxScore || (crit.weight ? (crit.weight / 100) * 10 : 2.5),
+          reason: 'Học sinh chưa điền nội dung câu trả lời.',
+          comment: 'Chưa có nội dung bài làm.',
+        })),
+        totalScore: 0,
+        overallComment: 'Học sinh nộp bài trắng (chưa nhập nội dung bài viết). Cần nhắc nhở học sinh hoàn thành đoạn văn đầy đủ.',
+      };
+    }
+
     // Đánh giá sơ bộ về nội dung
     const hasGoodLength = wordCount >= 70 && wordCount <= 220;
     const hasEmotionWords = /cảm xúc|xúc động|rung cảm|thiết tha|sâu sắc|yêu thương|bồi hồi|ý nghĩa/i.test(essayText);

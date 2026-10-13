@@ -254,7 +254,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-extrabold text-[#1E1B4B] text-base">
-                {submission.studentName || 'Học sinh'} · Lớp {submission.className || '7A2'}
+                {submission.studentName || 'Học sinh'} · {submission.className ? (submission.className.toLowerCase().startsWith('lớp') ? submission.className : `Lớp ${submission.className}`) : 'Lớp 7A2'}
               </h2>
               {/* Badge mức năng lực ảnh hưởng Mastery */}
               <span
@@ -368,9 +368,16 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                 <span>Bài làm học sinh</span>
                 <span>{submission.studentName}</span>
               </div>
-              <p className="font-serif text-base text-[#1E1B4B] leading-relaxed whitespace-pre-wrap select-text">
-                {submission.content}
-              </p>
+              {submission.content && submission.content.trim().length > 0 ? (
+                <p className="font-serif text-base text-[#1E1B4B] leading-relaxed whitespace-pre-wrap select-text">
+                  {submission.content}
+                </p>
+              ) : (
+                <div className="py-12 px-6 text-center bg-amber-50/60 rounded-xl border border-dashed border-amber-300">
+                  <p className="font-sans font-bold text-amber-900 text-sm">Học sinh nộp bài trắng (chưa nhập nội dung bài viết)</p>
+                  <p className="font-sans text-xs text-amber-700 mt-1">Học sinh đã nộp đề kiểm tra nhưng không điền nội dung câu tự luận này.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
