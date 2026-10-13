@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Sparkles,
   ShieldCheck,
+  Shield,
   AlertCircle,
 } from 'lucide-react';
 
@@ -33,7 +34,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setSelectedRole(role);
     setErrorMsg('');
     setShowComingSoon(false);
-    if (role === 'teacher') {
+    if (role === 'admin') {
+      setUsername('admin');
+      setPassword('123456');
+    } else if (role === 'teacher') {
       setUsername('gv001');
       setPassword('123456');
     } else if (role === 'student') {
@@ -131,24 +135,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </div>
         ) : (
           <div className="relative z-10">
-            {/* 3 THẺ CHỌN VAI TRÒ */}
+            {/* 4 THẺ CHỌN VAI TRÒ */}
             <div className="mb-6">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2.5">
                 Chọn vai trò của bạn:
               </label>
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {/* 1. Học sinh */}
                 <button
                   type="button"
                   onClick={() => handleRoleSelect('student')}
-                  className={`p-3 rounded-2xl border text-center transition-all ${
+                  className={`p-2.5 rounded-2xl border text-center transition-all ${
                     selectedRole === 'student'
                       ? 'border-[#4F46E5] bg-gradient-to-b from-indigo-50 to-white text-[#4F46E5] font-bold shadow-sm shadow-indigo-500/10'
                       : 'border-slate-200 bg-slate-50/70 text-slate-600 hover:bg-slate-100 hover:text-[#1E1B4B]'
                   }`}
                 >
                   <BookOpen
-                    className={`w-5 h-5 mx-auto mb-1.5 ${
+                    className={`w-4 h-4 mx-auto mb-1 ${
                       selectedRole === 'student' ? 'text-[#4F46E5]' : 'text-slate-500'
                     }`}
                   />
@@ -159,14 +163,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={() => handleRoleSelect('teacher')}
-                  className={`p-3 rounded-2xl border text-center transition-all ${
+                  className={`p-2.5 rounded-2xl border text-center transition-all ${
                     selectedRole === 'teacher'
                       ? 'border-[#8B5CF6] bg-gradient-to-b from-purple-50 to-white text-[#8B5CF6] font-bold shadow-sm shadow-purple-500/10'
                       : 'border-slate-200 bg-slate-50/70 text-slate-600 hover:bg-slate-100 hover:text-[#1E1B4B]'
                   }`}
                 >
                   <GraduationCap
-                    className={`w-5 h-5 mx-auto mb-1.5 ${
+                    className={`w-4 h-4 mx-auto mb-1 ${
                       selectedRole === 'teacher' ? 'text-[#8B5CF6]' : 'text-slate-500'
                     }`}
                   />
@@ -177,18 +181,36 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={() => handleRoleSelect('parent')}
-                  className={`p-3 rounded-2xl border text-center transition-all ${
+                  className={`p-2.5 rounded-2xl border text-center transition-all ${
                     selectedRole === 'parent'
                       ? 'border-[#22D3EE] bg-gradient-to-b from-cyan-50 to-white text-cyan-700 font-bold shadow-sm shadow-cyan-500/10'
                       : 'border-slate-200 bg-slate-50/70 text-slate-600 hover:bg-slate-100 hover:text-[#1E1B4B]'
                   }`}
                 >
                   <Users
-                    className={`w-5 h-5 mx-auto mb-1.5 ${
+                    className={`w-4 h-4 mx-auto mb-1 ${
                       selectedRole === 'parent' ? 'text-cyan-600' : 'text-slate-500'
                     }`}
                   />
                   <span className="text-xs block">Phụ huynh</span>
+                </button>
+
+                {/* 4. Quản trị viên (Admin) */}
+                <button
+                  type="button"
+                  onClick={() => handleRoleSelect('admin')}
+                  className={`p-2.5 rounded-2xl border text-center transition-all ${
+                    selectedRole === 'admin'
+                      ? 'border-[#7C3AED] bg-gradient-to-b from-purple-50 to-white text-[#7C3AED] font-bold shadow-sm shadow-purple-500/10'
+                      : 'border-slate-200 bg-slate-50/70 text-slate-600 hover:bg-slate-100 hover:text-[#1E1B4B]'
+                  }`}
+                >
+                  <Shield
+                    className={`w-4 h-4 mx-auto mb-1 ${
+                      selectedRole === 'admin' ? 'text-[#7C3AED]' : 'text-slate-500'
+                    }`}
+                  />
+                  <span className="text-xs block">Admin</span>
                 </button>
               </div>
             </div>
@@ -197,7 +219,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  {selectedRole === 'teacher' ? 'Tài khoản giáo viên' : 'Tài khoản học sinh'}
+                  {selectedRole === 'admin'
+                    ? 'Tài khoản Quản trị viên'
+                    : selectedRole === 'teacher'
+                    ? 'Tài khoản giáo viên'
+                    : 'Tài khoản học sinh'}
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -206,7 +232,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={selectedRole === 'teacher' ? 'Ví dụ: gv001' : 'Ví dụ: hs001 hoặc anhnm27'}
+                    placeholder={
+                      selectedRole === 'admin'
+                        ? 'Ví dụ: admin'
+                        : selectedRole === 'teacher'
+                        ? 'Ví dụ: gv001'
+                        : 'Ví dụ: hs001 hoặc anhnm27'
+                    }
                     className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-indigo-100 outline-none text-sm text-[#1E1B4B] font-medium transition-all"
                   />
                 </div>
@@ -246,6 +278,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <span>
                   {isLoading
                     ? 'Đang xác thực...'
+                    : selectedRole === 'admin'
+                    ? 'Vào Cổng Quản Trị Hệ Thống'
                     : selectedRole === 'teacher'
                     ? 'Vào không gian giáo viên'
                     : 'Vào không gian học tập'}
@@ -261,7 +295,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <span>Tài khoản demo sẵn có (Bấm để điền nhanh):</span>
               </div>
 
-              {selectedRole === 'teacher' ? (
+              {selectedRole === 'admin' ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => fillDemoAccount('admin', '123456', 'admin')}
+                    className="w-full p-3 rounded-2xl border border-[#7C3AED] bg-purple-50/60 shadow-xs text-left transition-all text-xs"
+                  >
+                    <p className="font-bold text-[#1E1B4B] flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Shield className="w-3.5 h-3.5 text-[#7C3AED]" />
+                        <span>admin</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-[#7C3AED] font-semibold">
+                        Quản trị viên Hệ thống
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      Quản lý tài khoản giáo viên toàn hệ thống (MK: 123456)
+                    </p>
+                  </button>
+                </div>
+              ) : selectedRole === 'teacher' ? (
                 <div className="space-y-2">
                   <button
                     type="button"
@@ -326,6 +381,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     <p className="text-[11px] text-slate-500 mt-1 truncate">
                       Trần Gia Bảo
                     </p>
+                  </button>
+                </div>
+              )}
+
+              {/* Lối tắt Admin khi đang ở tab học sinh/giáo viên */}
+              {selectedRole !== 'admin' && (
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-100">
+                  <span>Cổng Quản trị viên:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRoleSelect('admin')}
+                    className="font-bold text-[#7C3AED] hover:underline flex items-center gap-1"
+                  >
+                    <Shield className="w-3.5 h-3.5 text-[#7C3AED]" />
+                    <span>Đăng nhập Admin (admin/123456)</span>
                   </button>
                 </div>
               )}

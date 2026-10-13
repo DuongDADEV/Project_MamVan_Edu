@@ -306,11 +306,38 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   // Thêm câu hỏi từ ngân hàng
   const handleImportFromBank = (imported: QuestionWithMeta[]) => {
     // Tạo bản sao độc lập cho từng câu được chọn
-    const copies = imported.map((q) => ({
-      ...q,
-      id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-      topicId,
-    }));
+    const copies = (imported || []).filter(Boolean).map((q) => {
+      let finalOptions = q.options;
+      let finalAnswer: any = q.answer;
+
+      if (q.type === 'single' || q.type === 'multi') {
+        if (!Array.isArray(finalOptions) || finalOptions.length === 0) {
+          finalOptions = ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'];
+        }
+        // Chuẩn hóa nếu answer là dạng index chữ cái 'A', 'B', 'C', 'D'
+        if (q.type === 'single' && typeof finalAnswer === 'string') {
+          const letterIdx = ['A', 'B', 'C', 'D'].indexOf(finalAnswer.toUpperCase());
+          if (letterIdx >= 0 && finalOptions[letterIdx]) {
+            finalAnswer = finalOptions[letterIdx];
+          }
+        } else if (q.type === 'multi' && Array.isArray(finalAnswer)) {
+          finalAnswer = finalAnswer.map((a) => {
+            const letterIdx = ['A', 'B', 'C', 'D'].indexOf(String(a).toUpperCase());
+            return letterIdx >= 0 && finalOptions && finalOptions[letterIdx]
+              ? finalOptions[letterIdx]
+              : a;
+          });
+        }
+      }
+
+      return {
+        ...q,
+        id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        topicId: topicId || q.topicId,
+        options: finalOptions,
+        answer: finalAnswer,
+      };
+    });
     setQuestions((prev) => [...prev, ...copies]);
     isDirtyRef.current = true;
   };
@@ -472,7 +499,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
     // Kiểm tra từng câu hỏi
     questions.forEach((q, idx) => {
       const qNum = idx + 1;
-      if (!q.prompt.trim()) {
+      if (!String(q.prompt || '').trim()) {
         criticalErrors.push(`Câu ${qNum}: Đề bài đang để trống.`);
       }
 
@@ -482,13 +509,13 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           criticalErrors.push(`Câu ${qNum} (Trắc nghiệm): Chưa chọn đáp án đúng.`);
         }
       } else if (q.type === 'multi') {
-        const ans = q.answer as string[];
-        if (!ans || ans.length === 0) {
+        const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
+        if (ans.length === 0) {
           criticalErrors.push(`Câu ${qNum} (Chọn nhiều): Chưa đánh dấu đáp án đúng.`);
         }
       } else if (q.type === 'fill') {
-        const ans = q.answer as string[];
-        if (!ans || ans.length === 0 || ans.every((a) => !a.trim())) {
+        const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
+        if (ans.length === 0 || ans.every((a) => !String(a || '').trim())) {
           criticalErrors.push(`Câu ${qNum} (Điền từ): Ô trống chưa cấu hình đáp án chấp nhận.`);
         }
       }
@@ -525,7 +552,11 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   const { criticalErrors, lightWarnings } = runQualityCheck();
   const isPublishBlocked = criticalErrors.length > 0;
 
-  const handlePublishClick = () => {
+  const handlePublishClick = async () => {
+    // Lưu bản đang soạn vào database trước khi xuất bản để không mất dữ liệu
+    if (!isPublishBlocked) {
+      await performSave();
+    }
     onPublish([...criticalErrors, ...lightWarnings], isPublishBlocked);
   };
 
@@ -1123,7 +1154,8 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                           Chọn đáp án đúng bằng nút tròn:
                         </span>
                         {(q.options || []).map((opt, optIdx) => {
-                          const isCorrect = q.answer === opt;
+                          const letterKey = String.fromCharCode(65 + optIdx);
+                          const isCorrect = q.answer === opt || q.answer === letterKey;
                           return (
                             <div key={optIdx} className="flex items-center gap-2">
                               <button
@@ -1204,7 +1236,8 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
 
                         {(q.options || []).map((opt, optIdx) => {
                           const currentAnswers = Array.isArray(q.answer) ? q.answer : [];
-                          const isCorrect = currentAnswers.includes(opt);
+                          const letterKey = String.fromCharCode(65 + optIdx);
+                          const isCorrect = currentAnswers.includes(opt) || currentAnswers.includes(letterKey);
 
                           return (
                             <div key={optIdx} className="flex items-center gap-2">
@@ -1557,8 +1590,8 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
       <QuestionBankModal
         isOpen={isBankOpen}
         onClose={() => setIsBankOpen(false)}
-        questions={Object.values(allQuestions)}
-        topics={topics}
+        questions={Object.values(allQuestions || {})}
+        topics={topics || []}
         onImportQuestions={handleImportFromBank}
       />
     </div>

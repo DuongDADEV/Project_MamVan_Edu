@@ -2,7 +2,7 @@
  * Mô hình dữ liệu TypeScript cho Nền tảng học Ngữ văn 7 "Vở Mực"
  */
 
-export type Role = 'student' | 'teacher' | 'parent';
+export type Role = 'student' | 'teacher' | 'parent' | 'admin';
 
 export type SkillLevel = 'NHAN_BIET' | 'THONG_HIEU' | 'PHAN_TICH' | 'VAN_DUNG';
 

@@ -23,40 +23,46 @@ export function computeScoreDistribution(
   filter: AnalyticsFilter
 ): ScoreDistributionBucket[] {
   const students = filterStudents(allStudents, filter);
-  const studentIds = new Set(students.map((s) => s.id));
-  const states = filterStudentStates(allStates, studentIds);
   const dateRange = getFilterDateRange(filter);
 
   let b1 = 0; // 0 - 4.9
   let b2 = 0; // 5.0 - 6.4
   let b3 = 0; // 6.5 - 7.9
   let b4 = 0; // 8.0 - 10
-  let total = 0;
+  let totalWithScores = 0;
 
-  Object.values(states).forEach((st) => {
-    const qList = filterQuestionResults(st.questionResults || [], filter, dateRange);
-    qList.forEach((q) => {
-      const score = q.scoreRatio * 10;
-      total++;
-      if (score < 5.0) b1++;
-      else if (score < 6.5) b2++;
-      else if (score < 8.0) b3++;
+  students.forEach((s) => {
+    const st = allStates[s.id];
+    let totalScore = 0;
+    let attemptCount = 0;
+
+    if (st) {
+      const qList = filterQuestionResults(st.questionResults || [], filter, dateRange);
+      qList.forEach((q) => {
+        totalScore += q.scoreRatio * 10;
+        attemptCount++;
+      });
+
+      // Thêm điểm bài viết tự luận nếu có
+      (st.essaySubmissions || []).forEach((e) => {
+        if (e.status === 'GRADED' && e.finalScore !== undefined) {
+          totalScore += e.finalScore;
+          attemptCount++;
+        }
+      });
+    }
+
+    if (attemptCount > 0) {
+      totalWithScores++;
+      const avgScore = Math.round((totalScore / attemptCount) * 10) / 10;
+      if (avgScore < 5.0) b1++;
+      else if (avgScore < 6.5) b2++;
+      else if (avgScore < 8.0) b3++;
       else b4++;
-    });
-
-    // Thêm điểm bài viết tự luận nếu có
-    (st.essaySubmissions || []).forEach((e) => {
-      if (e.status === 'GRADED' && e.finalScore !== undefined) {
-        total++;
-        if (e.finalScore < 5.0) b1++;
-        else if (e.finalScore < 6.5) b2++;
-        else if (e.finalScore < 8.0) b3++;
-        else b4++;
-      }
-    });
+    }
   });
 
-  if (total === 0) {
+  if (totalWithScores === 0) {
     return [
       { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: 0, percentage: 0, color: '#E2704A' },
       { rangeLabel: '5.0 – 6.4 (Trung bình)', count: 0, percentage: 0, color: '#F59E0B' },
@@ -66,10 +72,10 @@ export function computeScoreDistribution(
   }
 
   return [
-    { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: b1, percentage: Math.round((b1 / total) * 100), color: '#E2704A' },
-    { rangeLabel: '5.0 – 6.4 (Trung bình)', count: b2, percentage: Math.round((b2 / total) * 100), color: '#F59E0B' },
-    { rangeLabel: '6.5 – 7.9 (Khá)', count: b3, percentage: Math.round((b3 / total) * 100), color: '#3B82F6' },
-    { rangeLabel: '8.0 – 10 (Giỏi)', count: b4, percentage: Math.round((b4 / total) * 100), color: '#10B981' },
+    { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: b1, percentage: Math.round((b1 / totalWithScores) * 100), color: '#E2704A' },
+    { rangeLabel: '5.0 – 6.4 (Trung bình)', count: b2, percentage: Math.round((b2 / totalWithScores) * 100), color: '#F59E0B' },
+    { rangeLabel: '6.5 – 7.9 (Khá)', count: b3, percentage: Math.round((b3 / totalWithScores) * 100), color: '#3B82F6' },
+    { rangeLabel: '8.0 – 10 (Giỏi)', count: b4, percentage: Math.round((b4 / totalWithScores) * 100), color: '#10B981' },
   ];
 }
 
@@ -98,8 +104,8 @@ export function computeAvgScoreByTopic(
       });
     });
 
-    const averageScore = count === 0 ? 7.2 : Math.round((sumScore / count) * 10) / 10;
-    const passRate = count === 0 ? 80 : Math.round((passCount / count) * 100);
+    const averageScore = count === 0 ? 0 : Math.round((sumScore / count) * 10) / 10;
+    const passRate = count === 0 ? 0 : Math.round((passCount / count) * 100);
 
     result.push({
       topicId: t.id,
@@ -120,12 +126,39 @@ export function computeAvgScoreByType(
   allStates: Record<string, StudentState>,
   filter: AnalyticsFilter
 ): TypeScoreComparison[] {
+  let practiceSum = 0, practiceCount = 0;
+  let quickSum = 0, quickCount = 0;
+  let masterySum = 0, masteryCount = 0;
+  let essaySum = 0, essayCount = 0;
+
+  Object.values(allStates).forEach((st) => {
+    (st.questionResults || []).forEach((q) => {
+      const score = q.scoreRatio * 10;
+      if (q.questionId?.includes('practice')) {
+        practiceSum += score;
+        practiceCount++;
+      } else if (q.questionId?.includes('mastery')) {
+        masterySum += score;
+        masteryCount++;
+      } else {
+        quickSum += score;
+        quickCount++;
+      }
+    });
+    (st.essaySubmissions || []).forEach((e) => {
+      if (e.status === 'GRADED' && e.finalScore !== undefined) {
+        essaySum += e.finalScore;
+        essayCount++;
+      }
+    });
+  });
+
   return [
-    { typeKey: 'practice', typeName: 'Luyện tập sau lý thuyết', averageScore: 8.2, totalAttempts: 142 },
-    { typeKey: 'quiz_quick', typeName: 'Kiểm tra nhanh 7 phút', averageScore: 7.6, totalAttempts: 186 },
-    { typeKey: 'mastery_check', typeName: 'Mastery Check năng lực', averageScore: 6.9, totalAttempts: 124 },
-    { typeKey: 'homework', typeName: 'Bài tập về nhà', averageScore: 8.4, totalAttempts: 98 },
-    { typeKey: 'essay', typeName: 'Viết đoạn văn tự luận', averageScore: 7.8, totalAttempts: 45 },
+    { typeKey: 'practice', typeName: 'Luyện tập sau lý thuyết', averageScore: practiceCount > 0 ? Math.round((practiceSum / practiceCount) * 10) / 10 : 0, totalAttempts: practiceCount },
+    { typeKey: 'quiz_quick', typeName: 'Kiểm tra nhanh 7 phút', averageScore: quickCount > 0 ? Math.round((quickSum / quickCount) * 10) / 10 : 0, totalAttempts: quickCount },
+    { typeKey: 'mastery_check', typeName: 'Mastery Check năng lực', averageScore: masteryCount > 0 ? Math.round((masterySum / masteryCount) * 10) / 10 : 0, totalAttempts: masteryCount },
+    { typeKey: 'homework', typeName: 'Bài tập về nhà', averageScore: 0, totalAttempts: 0 },
+    { typeKey: 'essay', typeName: 'Viết đoạn văn tự luận', averageScore: essayCount > 0 ? Math.round((essaySum / essayCount) * 10) / 10 : 0, totalAttempts: essayCount },
   ];
 }
 
@@ -165,15 +198,16 @@ export function computeWeeklyScoreTrends(
       });
     });
 
-    const avg7A2 = count7A2 === 0 ? 7.4 : Math.round((sum7A2 / count7A2) * 10) / 10;
-    const avg7A3 = count7A3 === 0 ? 6.9 : Math.round((sum7A3 / count7A3) * 10) / 10;
-    const overallAvg = Math.round(((avg7A2 + avg7A3) / 2) * 10) / 10;
+    const avg7A2 = count7A2 === 0 ? 0 : Math.round((sum7A2 / count7A2) * 10) / 10;
+    const avg7A3 = count7A3 === 0 ? 0 : Math.round((sum7A3 / count7A3) * 10) / 10;
+    const totalCount = count7A2 + count7A3;
+    const overallAvg = totalCount === 0 ? 0 : Math.round(((sum7A2 + sum7A3) / totalCount) * 10) / 10;
 
     trends.push({
       weekLabel,
       weekTimestamp: weekStart,
       averageScore: overallAvg,
-      attemptCount: count7A2 + count7A3,
+      attemptCount: totalCount,
       class7A2Score: avg7A2,
       class7A3Score: avg7A3,
     });

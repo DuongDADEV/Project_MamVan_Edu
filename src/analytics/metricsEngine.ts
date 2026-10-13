@@ -55,7 +55,7 @@ export function computeOverviewMetrics(
   });
 
   const completionRatePercent = totalStepsCount === 0 ? 0 : Math.min(100, Math.round((completedStepsCount / totalStepsCount) * 100));
-  const completionRateDiffPercent = 8.5; // +8.5% so với tuần trước
+  const completionRateDiffPercent = 0;
 
   // 3. Điểm trung bình bài kiểm tra
   let totalScoreRatio = 0;
@@ -70,8 +70,8 @@ export function computeOverviewMetrics(
     });
   });
 
-  const averageScore = totalScoreAttempts === 0 ? 7.6 : Math.round((totalScoreRatio / totalScoreAttempts) * 10 * 10) / 10;
-  const averageScoreDiff = 0.4; // +0.4 điểm
+  const averageScore = totalScoreAttempts === 0 ? 0 : Math.round((totalScoreRatio / totalScoreAttempts) * 10 * 10) / 10;
+  const averageScoreDiff = 0;
 
   // 4. Thời gian học tích cực trung bình/tuần
   let totalActiveMinutes = 0;
@@ -86,7 +86,7 @@ export function computeOverviewMetrics(
     ? 0
     : Math.round(totalActiveMinutes / stateValues.length / 6); // Chia trung bình 6 tuần
 
-  const avgActiveMinutesDiff = 18; // +18 phút
+  const avgActiveMinutesDiff = 0;
 
   // 5. Số bài viết chờ chấm
   let pendingGradingCount = 0;

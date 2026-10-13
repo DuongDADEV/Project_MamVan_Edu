@@ -29,259 +29,36 @@ import {
   AIGradingConfig,
 } from '../../types.ts';
 
-export const SEED_TEACHERS: TeacherProfile[] = [
-  {
-    id: 'gv001',
-    name: 'Thầy Nguyễn Văn An',
-    username: 'gv001',
-    role: 'teacher',
-    email: 'nguyenvanan.van7@mamvan.edu.vn',
-    subject: 'Ngữ văn 7',
-    school: 'THCS Giấy & Mực',
-    classIds: ['class_7a2', 'class_7a3'],
-    avatarUrl: '',
-    phone: '0912 345 678',
-  },
-];
-
-export const SEED_CLASSES: ClassItem[] = [
-  {
-    id: 'class_7a2',
-    name: '7A2',
-    grade: 'Lớp 7',
-    schoolYear: '2026-2027',
-    teacherId: 'gv001',
-    description: 'Lớp chọn văn học - Buổi sáng',
-    studentCount: 2,
-    active7DaysCount: 2,
-    status: 'active',
-    created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'class_7a3',
-    name: '7A3',
-    grade: 'Lớp 7',
-    schoolYear: '2026-2027',
-    teacherId: 'gv001',
-    description: 'Lớp Ngữ văn cơ bản - Buổi chiều',
-    studentCount: 0,
-    active7DaysCount: 0,
-    status: 'active',
-    created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
-
-export const SEED_STUDENTS: StudentAccount[] = [
-  {
-    id: 'hs001',
-    name: 'Nguyễn Minh Anh',
-    username: 'hs001',
-    // KHÔNG lưu mật khẩu thô ở production. Trong mock để demo đăng nhập.
-    password_hash: '123456',
-    class_id: 'class_7a2',
-    student_code: 'HS7A2-01',
-    dob: '2013-05-15',
-    status: 'active',
-    has_logged_in: true,
-    last_active_at: Date.now() - 3600000,
-    created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'hs002',
-    name: 'Trần Gia Bảo',
-    username: 'hs002',
-    // KHÔNG lưu mật khẩu thô ở production. Trong mock để demo đăng nhập.
-    password_hash: '123456',
-    class_id: 'class_7a2',
-    student_code: 'HS7A2-02',
-    dob: '2013-08-20',
-    status: 'active',
-    has_logged_in: false,
-    last_active_at: null,
-    created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
+export const SEED_TEACHERS: TeacherProfile[] = [];
+export const SEED_CLASSES: ClassItem[] = [];
+export const SEED_STUDENTS: StudentAccount[] = [];
 
 export function getSeedTopics(): TopicWithMeta[] {
-  const now = new Date().toISOString();
-  return TOPICS.map((t) => ({
-    ...t,
-    created_at: now,
-    updated_at: now,
-    status: 'published',
-    class_ids: ['all', 'class_7a2'],
-    version: 1,
-    has_unpublished_edits: false,
-  }));
+  return [];
 }
 
 export function getSeedVideos(): VideoLessonWithMeta[] {
-  const now = new Date().toISOString();
-  const publishedVideos: VideoLessonWithMeta[] = Object.values(VIDEOS).map((v) => ({
-    ...v,
-    created_at: now,
-    updated_at: now,
-    status: 'published',
-    class_ids: ['all', 'class_7a2'],
-    version: 1,
-    has_unpublished_edits: false,
-  }));
-
-  // Thêm video Bản nháp để thử nghiệm quy trình Xuất bản
-  const draftVideo: VideoLessonWithMeta = {
-    id: 'video_tho_draft',
-    topicId: 'topic_tho_bon_nam',
-    title: 'Bài 3 (Dự thảo): Phân tích nhạc điệu và cách hiệp vần độc đáo',
-    durationSec: 540,
-    sampleUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    subtopics: ['Vần trắc vần bằng', 'Nhịp 1/3 phá cách'],
-    summaryPoints: [
-      {
-        title: 'Quy luật nhạc điệu',
-        content: 'Nhịp điệu trong thơ bốn chữ tạo nên giọng điệu vui tươi, hồn nhiên hoặc lắng đọng tâm tư.',
-        example: '"Chú bé loắt choắt / Cái xắc xinh xinh" (nhịp 2/2 vui tươi)',
-      },
-    ],
-    practiceQuizId: 'quiz_tho1_practice',
-    quickTestId: 'quiz_tho1_quick',
-    masteryCheckId: 'quiz_tho1_mastery',
-    created_at: now,
-    updated_at: now,
-    status: 'draft',
-    class_ids: ['class_7a2'],
-    version: 1,
-    has_unpublished_edits: false,
-  };
-
-  return [...publishedVideos, draftVideo];
+  return [];
 }
 
 export function getSeedTheories(): TheoryLessonWithMeta[] {
-  const now = new Date().toISOString();
-  const publishedTheories: TheoryLessonWithMeta[] = Object.values(THEORIES).map((t) => ({
-    ...t,
-    created_at: now,
-    updated_at: now,
-    status: 'published',
-    class_ids: ['all', 'class_7a2'],
-    version: 1,
-    has_unpublished_edits: false,
-  }));
-
-  // Thêm lý thuyết Bản nháp để thử nghiệm xuất bản
-  const draftTheory: TheoryLessonWithMeta = {
-    id: 'theory_draft_nang_cao',
-    topicId: 'topic_tu_lay_so_sanh',
-    title: 'Cẩm nang mở rộng: Biện pháp tu từ ẩn dụ và hoán dụ trong thơ 7',
-    minReadSeconds: 30,
-    kind: 'general_topic',
-    sections: [
-      {
-        id: 'sec_draft_01',
-        title: '1. Khái niệm và nhận diện',
-        body: ['Ẩn dụ là gọi tên sự vật, hiện tượng này bằng tên sự vật, hiện tượng khác có nét tương đồng.'],
-        takeaway: 'Ghi nhớ: Ẩn dụ bản chất là so sánh ngầm.',
-      },
-    ],
-    blocks: [
-      {
-        id: 'b1',
-        type: 'heading',
-        level: 2,
-        content: '1. Khái niệm và nhận diện biện pháp ẩn dụ',
-      },
-      {
-        id: 'b2',
-        type: 'paragraph',
-        content: 'Ẩn dụ là cách gọi tên sự vật, hiện tượng này bằng tên sự vật, hiện tượng khác có nét tương đồng với nó nhằm tăng sức gợi hình, gợi cảm.',
-      },
-      {
-        id: 'b3',
-        type: 'example',
-        exampleText: 'Người Cha mái tóc bạc / Đốt lửa cho anh nằm',
-        exampleAnalysis: 'Hình ảnh "Người Cha" ẩn dụ chỉ Bác Hồ kính yêu với tấm lòng bao la ấm áp.',
-      },
-      {
-        id: 'b4',
-        type: 'takeaway',
-        takeawayText: 'Ghi nhớ trọng tâm: Ẩn dụ là so sánh ngầm không có từ so sánh (như, là).',
-      },
-    ],
-    practiceQuizId: 'quiz_lay_practice',
-    testQuizId: 'quiz_lay_quick',
-    created_at: now,
-    updated_at: now,
-    status: 'draft',
-    class_ids: ['class_7a2'],
-    version: 1,
-    has_unpublished_edits: false,
-  };
-
-  return [...publishedTheories, draftTheory];
+  return [];
 }
 
 export function getSeedQuizzes(): QuizWithMeta[] {
-  const now = new Date().toISOString();
-  const publishedQuizzes: QuizWithMeta[] = Object.values(QUIZZES).map((q) => ({
-    ...q,
-    created_at: now,
-    updated_at: now,
-    status: 'published',
-    class_ids: ['all', 'class_7a2'],
-    version: 1,
-    has_unpublished_edits: false,
-  }));
-
-  // Thêm bài kiểm tra Bản nháp
-  const draftQuiz: QuizWithMeta = {
-    id: 'quiz_draft_kt_nhanh',
-    title: 'Kiểm tra nhanh dự thảo: Phép so sánh và từ láy',
-    kind: 'quick',
-    topicId: 'topic_tu_lay_so_sanh',
-    timeLimitMinutes: 7,
-    questionIds: ['q_lay_01', 'q_lay_02', 'q_lay_03', 'q_lay_04', 'q_lay_05'],
-    xp: 15,
-    created_at: now,
-    updated_at: now,
-    status: 'draft',
-    class_ids: ['class_7a2'],
-    version: 1,
-    has_unpublished_edits: false,
-  };
-
-  return [...publishedQuizzes, draftQuiz];
+  return [];
 }
 
 export function getSeedQuestions(): Record<string, QuestionWithMeta> {
-  const now = new Date().toISOString();
-  const res: Record<string, QuestionWithMeta> = {};
-  for (const [k, q] of Object.entries(QUESTIONS_BANK)) {
-    res[k] = {
-      ...q,
-      created_at: now,
-      updated_at: now,
-      status: 'published',
-      class_ids: ['all', 'class_7a2'],
-      version: 1,
-      has_unpublished_edits: false,
-    };
-  }
-  return res;
+  return {};
 }
 
 export function getSeedRewards(): RewardItem[] {
-  return [...REWARDS_CATALOG];
+  return [];
 }
 
 export function getSeedStudentStates(): Record<string, StudentState> {
-  return {
-    hs001: createInitialStateHs001(),
-    hs002: createInitialStateHs002(),
-  };
+  return {};
 }
 
 export function createFreshStudentState(account: StudentAccount, className = 'Lớp 7A2'): StudentState {

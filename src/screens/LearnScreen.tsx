@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { StudentState, Topic, VideoLesson, TheoryLesson } from '../types.ts';
-import { TOPICS, VIDEOS, THEORIES } from '../data/mockData.ts';
+import React, { useState, useMemo } from 'react';
+import { StudentState, Topic, VideoLesson, TheoryLesson, Quiz } from '../types.ts';
 import { calculateAllMastery, isTopicSolid } from '../logic/mastery.ts';
 import { VideoCard, VideoCardSkeleton } from '../components/VideoCard.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { Video, BookOpen, CheckCircle, Clock, ArrowRight, Filter, Sparkles, Layers } from 'lucide-react';
-import { useLiveQuery, contentService, VideoLessonWithMeta, TheoryLessonWithMeta } from '../services/index.ts';
+import { useLiveQuery, contentService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
+import { QUIZZES } from '../data/mockData.ts';
 
 interface LearnScreenProps {
   state: StudentState;
@@ -24,9 +24,9 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'video' | 'theory'>('video');
   const [filter, setFilter] = useState<'all' | 'unlearned' | 'needs_review'>('all');
-  const activeTopics = topics && topics.length > 0 ? topics : TOPICS;
+  const activeTopics = topics ?? [];
 
-  // Lắng nghe video và lý thuyết đã xuất bản từ kho chung
+  // Lắng nghe video, lý thuyết và bài tập đã xuất bản từ kho chung
   const { data: liveVideos } = useLiveQuery<VideoLessonWithMeta[]>(
     () => contentService.getVideoLessons(undefined, true),
     ['content']
@@ -35,16 +35,23 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
     () => contentService.getTheoryLessons(undefined, true),
     ['content']
   );
+  const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
+    () => contentService.getQuizzes(undefined, true),
+    ['content']
+  );
 
-  const videosMap: Record<string, VideoLesson> = {
-    ...VIDEOS,
-    ...(liveVideos ? Object.fromEntries(liveVideos.map((v) => [v.id, v])) : {}),
-  };
+  const allQuizzes: Quiz[] = useMemo(() => [
+    ...Object.values(QUIZZES),
+    ...(liveQuizzes || []),
+  ], [liveQuizzes]);
 
-  const theoriesMap: Record<string, TheoryLesson> = {
-    ...THEORIES,
-    ...(liveTheories ? Object.fromEntries(liveTheories.map((t) => [t.id, t])) : {}),
-  };
+  const videosMap: Record<string, VideoLesson> = liveVideos
+    ? Object.fromEntries(liveVideos.map((v) => [v.id, v]))
+    : {};
+
+  const theoriesMap: Record<string, TheoryLesson> = liveTheories
+    ? Object.fromEntries(liveTheories.map((t) => [t.id, t]))
+    : {};
 
   // Tính trạng thái của từng topic
   const getTopicProgress = (topic: Topic) => {
@@ -248,6 +255,7 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                               topic={topic}
                               index={idx}
                               state={state}
+                              quizzes={allQuizzes}
                               onClick={() => onSelectVideo(vId)}
                             />
                           );
@@ -264,7 +272,13 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                       const th =
                         theoriesMap[topic.theoryId] ||
                         Object.values(theoriesMap).find((item) => item.topicId === topic.id);
-                      if (!th) return null;
+                      if (!th) {
+                        return (
+                          <div className="p-4 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs text-center font-medium bg-slate-50/50">
+                            Chủ đề này chưa có bài lý thuyết đọc. Em hãy học qua tab <strong>Xem video</strong> nhé!
+                          </div>
+                        );
+                      }
                       const isUnderstood = state.completedSteps.includes(
                         `theory_understood:${th.id}`
                       );

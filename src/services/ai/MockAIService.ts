@@ -15,6 +15,7 @@ import {
   AIEssayGradingResult,
   AIChatResponse,
   AIChatCitation,
+  AIExtractedSource,
 } from './AIService.ts';
 import { Question, KeyPoint, TheoryBlock, QuestionType, SkillLevel, Difficulty } from '../../types.ts';
 
@@ -298,6 +299,98 @@ export class MockAIService implements AIService {
       });
     }
 
+    // Nếu người dùng yêu cầu nhiều hơn 5 câu (ví dụ 10 câu, 15 câu), tự động sinh thêm các câu hỏi chất lượng cao
+    const extraPrompts = [
+      {
+        prompt: `Trong văn bản "${sourceTitle}", nét đặc sắc nhất về cách gieo vần và ngắt nhịp là gì?`,
+        type: 'single' as const,
+        level: 'THONG_HIEU' as const,
+        options: [
+          'Ngắt nhịp linh hoạt 2/3 hoặc 3/2, vần chân giàu sức gợi',
+          'Chỉ dùng vần lưng và không ngắt nhịp',
+          'Ngắt nhịp đều đặn 4/4 như thơ tám chữ',
+          'Không tuân theo quy luật vần nhịp nào',
+        ],
+        answer: 'A',
+        explanation: 'Cách ngắt nhịp biến hóa kết hợp vần chân giúp tạo nên âm hưởng tha thiết, gần gũi.',
+      },
+      {
+        prompt: `Từ ngữ nào trong ngữ liệu thể hiện trực tiếp trạng thái cảm xúc của tác giả/nhân vật trữ tình?`,
+        type: 'single' as const,
+        level: 'NHAN_BIET' as const,
+        options: [
+          'Các từ ngữ miêu tả xúc động, bồi hồi, tha thiết',
+          'Các thuật ngữ khoa học chính xác',
+          'Các khẩu hiệu kêu gọi hành động',
+          'Các từ ngữ trừu tượng khó hiểu',
+        ],
+        answer: 'A',
+        explanation: 'Hệ thống từ ngữ cảm thán và từ láy tượng hình trực tiếp bộc lộ thế giới nội tâm nhân vật.',
+      },
+      {
+        prompt: `Xác định tác dụng của chi tiết nghệ thuật đắt giá trong đoạn trích đối với việc thể hiện tư tưởng chủ đề:`,
+        type: 'single' as const,
+        level: 'PHAN_TICH' as const,
+        options: [
+          'Gợi mở chiều sâu tư tưởng và làm nổi bật chủ đề tình cảm gia đình, quê hương',
+          'Làm cho văn bản thêm dài dòng, phức tạp',
+          'Khiến người đọc phân tâm khỏi chủ đề chính',
+          'Chỉ có tác dụng trang trí hình thức cho câu văn',
+        ],
+        answer: 'A',
+        explanation: 'Chi tiết nghệ thuật đóng vai trò là điểm sáng thẩm mỹ, kết nối mạch cảm xúc toàn bài.',
+      },
+      {
+        prompt: `Đánh giá thông điệp nhân văn mà tác giả gửi gắm qua ngữ liệu "${sourceTitle}":`,
+        type: 'multi' as const,
+        level: 'VAN_DUNG' as const,
+        options: [
+          'Trân trọng những giá trị bình dị, thân thương trong cuộc sống',
+          'Lòng biết ơn sâu sắc đối với những người đã nuôi dưỡng, chở che ta khôn lớn',
+          'Ý thức trách nhiệm của mỗi cá nhân đối với gia đình và xã hội',
+          'Chỉ theo đuổi ước mơ cá nhân mà quên đi cội nguồn',
+        ],
+        answer: ['A', 'B', 'C'],
+        explanation: 'Ba phương án A, B, C phản ánh trọn vẹn giá trị giáo dục nhân cách cao đẹp của tác phẩm.',
+      },
+      {
+        prompt: `Từ ngữ liệu trên, em rút ra được bài học gì về cách quan sát và miêu tả thế giới xung quanh?`,
+        type: 'single' as const,
+        level: 'VAN_DUNG' as const,
+        options: [
+          'Cần quan sát bằng cả tấm lòng yêu thương và sự rung động tinh tế',
+          'Chỉ cần sao chép máy móc những gì nhìn thấy',
+          'Không cần quan sát thực tế, chỉ cần tưởng tượng',
+          'Chỉ chú ý đến những sự việc to lớn, vĩ mô',
+        ],
+        answer: 'A',
+        explanation: 'Văn học đòi hỏi người viết phải quan sát tinh tế bằng trái tim để phát hiện vẻ đẹp ẩn sâu.',
+      },
+    ];
+
+    let extraIndex = 0;
+    while (questions.length < total) {
+      const template = extraPrompts[extraIndex % extraPrompts.length];
+      const snippet = sentences[extraIndex % sentences.length] || sampleSnippet1;
+      questions.push({
+        id: generateId('q_ai'),
+        topicId: 'topic_tho_bon_nam',
+        type: template.type,
+        level: template.level,
+        difficulty: options?.difficulty || 'TB',
+        points: 2,
+        prompt: template.prompt,
+        passage: snippet,
+        options: template.options,
+        answer: template.answer,
+        explanation: template.explanation,
+        aiSourceSnippet: snippet.slice(0, 120),
+        isAiGenerated: true,
+        isTeacherReviewed: false,
+      });
+      extraIndex++;
+    }
+
     return questions.slice(0, total);
   }
 
@@ -314,6 +407,22 @@ export class MockAIService implements AIService {
     const wordCount = essayText.trim().split(/\s+/).filter(Boolean).length;
     const strictness = options?.strictness || 3; // 1..5
     const tone = options?.tone || 'encouraging';
+
+    // Nếu bài viết hoàn toàn rỗng (0 từ)
+    if (wordCount === 0) {
+      return {
+        rubricScores: rubric.map((crit) => ({
+          criterionId: crit.id,
+          criterionName: crit.name,
+          suggestedScore: 0,
+          maxScore: crit.maxScore || (crit.weight ? (crit.weight / 100) * 10 : 2.5),
+          reason: 'Học sinh chưa điền nội dung câu trả lời.',
+          comment: 'Chưa có nội dung bài làm.',
+        })),
+        totalScore: 0,
+        overallComment: 'Học sinh nộp bài trắng (chưa nhập nội dung bài viết). Cần nhắc nhở học sinh hoàn thành đoạn văn đầy đủ.',
+      };
+    }
 
     // Đánh giá sơ bộ về nội dung
     const hasGoodLength = wordCount >= 70 && wordCount <= 220;
@@ -432,6 +541,47 @@ export class MockAIService implements AIService {
     return {
       reply,
       citations,
+    };
+  }
+
+  /**
+   * Trích xuất nội dung từ liên kết video/trang web (Mock)
+   */
+  async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
+    await delay(1500);
+    const cleanUrl = url.trim();
+    const isYouTube = /(?:youtube\.com|youtu\.be)/i.test(cleanUrl);
+
+    if (isYouTube) {
+      const content = `[Lời thoại & Phụ đề bài giảng YouTube: Phân tích văn bản Ngữ văn 7]
+1. Đặt vấn đề và giới thiệu chung về tác giả, hoàn cảnh sáng tác bài thơ/tác phẩm.
+2. Phân tích chi tiết:
+- Khổ 1 và khổ 2: Không gian làng quê êm đềm, âm thanh thân quen của tiếng gà nhảy ổ gợi nhắc ký ức tuổi thơ.
+- Khổ 3 và khổ 4: Tình cảm bà cháu thiêng liêng, hình ảnh người bà tần tảo chắt chiu từng quả trứng hồng cho cháu.
+- Khổ kết: Mục đích chiến đấu và lý tưởng cao đẹp của người lính trẻ bắt nguồn từ tình yêu bà, yêu xóm làng quê hương.
+3. Tổng kết nghệ thuật: Thể thơ năm chữ tự nhiên, nhịp thơ linh hoạt, điệp từ "nghe" tạo ấn tượng cảm xúc dạt dào.
+4. Bài học liên hệ: Lòng biết ơn gia đình, cội nguồn nâng bước con người trên mọi nẻo đường đời.`;
+
+      return {
+        title: 'Video bài giảng: Phân tích vẻ đẹp hình tượng và nghệ thuật thơ',
+        content,
+        wordCount: content.split(/\s+/).filter(Boolean).length,
+        type: 'video',
+        url: cleanUrl,
+      };
+    }
+
+    const content = `[Tài liệu trích xuất từ trang web: Kiến thức Ngữ văn 7 chuẩn GDPT 2018]
+- Thể loại: Thơ trữ tình / Văn bản thông tin.
+- Đặc trưng thi pháp: Số chữ trong dòng, cách gieo vần, ngắt nhịp và hình ảnh biểu tượng.
+- Hệ thống câu hỏi đọc hiểu rèn luyện 4 mức độ: Nhận biết chi tiết nghệ thuật, thông hiểu tâm trạng nhân vật trữ tình, phân tích tác dụng biện pháp tu từ, và vận dụng liên hệ bài học cuộc sống.`;
+
+    return {
+      title: 'Tài liệu hướng dẫn đọc hiểu và ngữ liệu chuyên sâu',
+      content,
+      wordCount: content.split(/\s+/).filter(Boolean).length,
+      type: 'website',
+      url: cleanUrl,
     };
   }
 }

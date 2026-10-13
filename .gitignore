@@ -32,3 +32,8 @@ Thumbs.db
 *.key
 *.cert
 *.pfx
+
+# Local chat attachments
+anhzalo/
+
+.vercel

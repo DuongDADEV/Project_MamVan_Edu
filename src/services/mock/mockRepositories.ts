@@ -23,6 +23,8 @@ import {
   AuditRepository,
   AuditLog,
   TeacherProfile,
+  TeacherRepository,
+  CreateTeacherInput,
 } from '../types.ts';
 import {
   SEED_TEACHERS,
@@ -61,9 +63,10 @@ import {
   AIGradingConfig,
   SkillLevel,
 } from '../../types.ts';
+import { createInitialStateHs001 } from '../../data/mockData.ts';
 import { generateDemoSeedData } from './demoSeedHistory.ts';
 
-export const STORAGE_SCHEMA_VERSION = 'mam_van_v3_prompt5';
+export const STORAGE_SCHEMA_VERSION = 'mam_van_v4_real_data';
 
 // Keys lưu trữ localStorage
 const STORAGE_KEYS = {
@@ -163,47 +166,42 @@ function writeStorage<T>(key: string, value: T): void {
   }
 }
 
-// Khởi tạo Seed Data lần đầu nếu chưa có
+// Khởi tạo Storage sạch lần đầu nếu chưa có
 export function initSeedDataIfEmpty(): void {
   if (typeof window === 'undefined') return;
 
-  const { students: demoStudents, studentStates: demoStates, classes: demoClasses } = generateDemoSeedData();
-
   if (!localStorage.getItem(STORAGE_KEYS.CLASSES)) {
-    writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
+    writeStorage(STORAGE_KEYS.CLASSES, []);
   }
-  const currentStudents = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, []);
-  if (!localStorage.getItem(STORAGE_KEYS.STUDENTS) || currentStudents.length < 20) {
-    writeStorage(STORAGE_KEYS.STUDENTS, demoStudents);
-    writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
+  if (!localStorage.getItem(STORAGE_KEYS.STUDENTS)) {
+    writeStorage(STORAGE_KEYS.STUDENTS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.TEACHERS)) {
-    writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    writeStorage(STORAGE_KEYS.TEACHERS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.TOPICS)) {
-    writeStorage(STORAGE_KEYS.TOPICS, getSeedTopics());
+    writeStorage(STORAGE_KEYS.TOPICS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.VIDEOS)) {
-    writeStorage(STORAGE_KEYS.VIDEOS, getSeedVideos());
+    writeStorage(STORAGE_KEYS.VIDEOS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.THEORIES)) {
-    writeStorage(STORAGE_KEYS.THEORIES, getSeedTheories());
+    writeStorage(STORAGE_KEYS.THEORIES, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.QUIZZES)) {
-    writeStorage(STORAGE_KEYS.QUIZZES, getSeedQuizzes());
+    writeStorage(STORAGE_KEYS.QUIZZES, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.QUESTIONS)) {
-    writeStorage(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
+    writeStorage(STORAGE_KEYS.QUESTIONS, {});
   }
   if (!localStorage.getItem(STORAGE_KEYS.REWARDS)) {
-    writeStorage(STORAGE_KEYS.REWARDS, getSeedRewards());
+    writeStorage(STORAGE_KEYS.REWARDS, []);
   }
-  const currentStates = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
-  if (!localStorage.getItem(STORAGE_KEYS.STATES) || Object.keys(currentStates).length < 20) {
-    writeStorage(STORAGE_KEYS.STATES, { ...getSeedStudentStates(), ...demoStates, ...currentStates });
+  if (!localStorage.getItem(STORAGE_KEYS.STATES)) {
+    writeStorage(STORAGE_KEYS.STATES, {});
   }
   if (!localStorage.getItem(STORAGE_KEYS.AUDIT)) {
-    writeStorage(STORAGE_KEYS.AUDIT, SEED_AUDIT_LOGS);
+    writeStorage(STORAGE_KEYS.AUDIT, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
     writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
@@ -215,23 +213,37 @@ export function initSeedDataIfEmpty(): void {
 
 /**
  * Bootstrap kho dữ liệu: kiểm tra STORAGE_SCHEMA_VERSION.
- * Nếu chưa có hoặc phiên bản cũ/lỗi, dọn sạch dữ liệu cũ và nạp lại seed một lần duy nhất.
+ * Dọn sạch toàn bộ dữ liệu mẫu cũ để làm việc với dữ liệu thật.
  */
 export function bootstrapStorage(): { reset: boolean } {
   if (typeof window === 'undefined') return { reset: false };
 
   const currentVersion = localStorage.getItem(STORAGE_KEYS.SCHEMA_VERSION);
   if (currentVersion !== STORAGE_SCHEMA_VERSION) {
-    console.log('[Storage] Phát hiện schema mới hoặc chưa có, tiến hành khởi tạo seed chuẩn...');
-    const { students: demoStudents, studentStates: demoStates, classes: demoClasses } = generateDemoSeedData();
+    console.log('[Storage] Chuyển đổi sang schema dữ liệu thật v4, dọn sạch toàn bộ mẫu cũ...');
 
-    // Xóa các key cũ của app
+    // CHỈ xóa dữ liệu mẫu cũ của các bảng đã chuyển sang Supabase (lớp/học sinh/giáo viên/thưởng/log).
+    // TUYỆT ĐỐI KHÔNG xóa: topics, videos, theories, quizzes, questions, student_states (điểm danh/XP) và session,
+    // vì đây là dữ liệu thật của người dùng — xóa sẽ gây mất dữ liệu sau khi tải lại trang.
     try {
+      const protectedKeys = new Set<string>([
+        STORAGE_KEYS.SESSION,
+        STORAGE_KEYS.TOPICS,
+        STORAGE_KEYS.VIDEOS,
+        STORAGE_KEYS.THEORIES,
+        STORAGE_KEYS.QUIZZES,
+        STORAGE_KEYS.QUESTIONS,
+        STORAGE_KEYS.STATES,
+        STORAGE_KEYS.ESSAYS,
+        STORAGE_KEYS.SETTINGS,
+      ]);
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && (k.startsWith('mam_van_') || k.startsWith('vo_muc_'))) {
-          keysToRemove.push(k);
+          if (!protectedKeys.has(k)) {
+            keysToRemove.push(k);
+          }
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
@@ -239,20 +251,8 @@ export function bootstrapStorage(): { reset: boolean } {
       console.warn('Lỗi khi xóa key cũ:', e);
     }
 
-    // Seed lại toàn bộ
     writeStorage(STORAGE_KEYS.SCHEMA_VERSION, STORAGE_SCHEMA_VERSION);
-    writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
-    writeStorage(STORAGE_KEYS.STUDENTS, demoStudents);
-    writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
-    writeStorage(STORAGE_KEYS.TOPICS, getSeedTopics());
-    writeStorage(STORAGE_KEYS.VIDEOS, getSeedVideos());
-    writeStorage(STORAGE_KEYS.THEORIES, getSeedTheories());
-    writeStorage(STORAGE_KEYS.QUIZZES, getSeedQuizzes());
-    writeStorage(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    writeStorage(STORAGE_KEYS.REWARDS, getSeedRewards());
-    writeStorage(STORAGE_KEYS.STATES, { ...getSeedStudentStates(), ...demoStates });
-    writeStorage(STORAGE_KEYS.AUDIT, SEED_AUDIT_LOGS);
-    writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
+    initSeedDataIfEmpty();
     return { reset: true };
   }
 
@@ -261,17 +261,18 @@ export function bootstrapStorage(): { reset: boolean } {
   return { reset: false };
 }
 
-// Đặt lại toàn bộ dữ liệu demo (người dùng chủ động nhấn nút hoặc qua ErrorBoundary)
+// Đặt lại toàn bộ dữ liệu
 export function resetAllDemoData(): void {
   if (typeof window === 'undefined') return;
-  const { students: demoStudents, studentStates: demoStates, classes: demoClasses } = generateDemoSeedData();
 
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && (k.startsWith('mam_van_') || k.startsWith('vo_muc_'))) {
-        keysToRemove.push(k);
+        if (k !== STORAGE_KEYS.SESSION) {
+          keysToRemove.push(k);
+        }
       }
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
@@ -280,17 +281,17 @@ export function resetAllDemoData(): void {
   }
 
   writeStorage(STORAGE_KEYS.SCHEMA_VERSION, STORAGE_SCHEMA_VERSION);
-  writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
-  writeStorage(STORAGE_KEYS.STUDENTS, demoStudents);
-  writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
-  writeStorage(STORAGE_KEYS.TOPICS, getSeedTopics());
-  writeStorage(STORAGE_KEYS.VIDEOS, getSeedVideos());
-  writeStorage(STORAGE_KEYS.THEORIES, getSeedTheories());
-  writeStorage(STORAGE_KEYS.QUIZZES, getSeedQuizzes());
-  writeStorage(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-  writeStorage(STORAGE_KEYS.REWARDS, getSeedRewards());
-  writeStorage(STORAGE_KEYS.STATES, { ...getSeedStudentStates(), ...demoStates });
-  writeStorage(STORAGE_KEYS.AUDIT, SEED_AUDIT_LOGS);
+  writeStorage(STORAGE_KEYS.CLASSES, []);
+  writeStorage(STORAGE_KEYS.STUDENTS, []);
+  writeStorage(STORAGE_KEYS.TEACHERS, []);
+  writeStorage(STORAGE_KEYS.TOPICS, []);
+  writeStorage(STORAGE_KEYS.VIDEOS, []);
+  writeStorage(STORAGE_KEYS.THEORIES, []);
+  writeStorage(STORAGE_KEYS.QUIZZES, []);
+  writeStorage(STORAGE_KEYS.QUESTIONS, {});
+  writeStorage(STORAGE_KEYS.REWARDS, []);
+  writeStorage(STORAGE_KEYS.STATES, {});
+  writeStorage(STORAGE_KEYS.AUDIT, []);
   writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
   syncEventBus.emit('all', {}, 'reset-all');
 }
@@ -358,11 +359,50 @@ export class MockAuthRepository implements AuthRepository {
     const uClean = username.trim().toLowerCase();
     const pClean = password.trim();
 
+    if (role === 'admin') {
+      if ((uClean === 'admin' || uClean === 'quantri') && pClean === '123456') {
+        const session: AuthSession = {
+          user: {
+            id: 'admin_001',
+            name: 'Quản trị viên Hệ thống',
+            username: 'admin',
+            role: 'admin',
+            email: 'admin@mamvan.edu.vn',
+          },
+          role: 'admin',
+          signedInAt: Date.now(),
+        };
+        writeStorage(STORAGE_KEYS.SESSION, session);
+        syncEventBus.emit('auth', session, 'auth-service');
+        return { success: true, session };
+      }
+      return {
+        success: false,
+        error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: admin / 123456)',
+      };
+    }
+
     if (role === 'teacher') {
       const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
       const matched = teachers.find((t) => t.username.toLowerCase() === uClean);
-      // Mật khẩu demo giáo viên là 123456
-      if (matched && pClean === '123456') {
+      if (!matched) {
+        return {
+          success: false,
+          error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+        };
+      }
+
+      if (matched.status === 'locked') {
+        return {
+          success: false,
+          isLocked: true,
+          error: 'Tài khoản giáo viên đã bị tạm khóa bởi Quản trị viên. Vui lòng liên hệ hỗ trợ!',
+        };
+      }
+
+      // Mật khẩu giáo viên (mặc định 123456 hoặc mật khẩu riêng)
+      const validPw = (matched.password && matched.password === pClean) || pClean === '123456';
+      if (validPw) {
         const session: AuthSession = {
           user: matched,
           role: 'teacher',
@@ -374,7 +414,7 @@ export class MockAuthRepository implements AuthRepository {
       }
       return {
         success: false,
-        error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+        error: 'Mật khẩu giáo viên chưa chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
       };
     }
 
@@ -1619,6 +1659,18 @@ export class MockAttemptRepository implements AttemptRepository {
     if (states[studentId]) {
       return states[studentId];
     }
+    try {
+      const legacy = localStorage.getItem('vo_muc_student_state_' + studentId);
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (parsed && typeof parsed === 'object') {
+          states[studentId] = parsed;
+          writeStorage(STORAGE_KEYS.STATES, states);
+          return parsed;
+        }
+      }
+    } catch {}
+
     // Tạo state mặc định nếu chưa có
     const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
     const acc = students.find((s) => s.id === studentId);
@@ -1646,6 +1698,9 @@ export class MockAttemptRepository implements AttemptRepository {
     const states = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
     states[studentId] = state;
     writeStorage(STORAGE_KEYS.STATES, states);
+    try {
+      localStorage.setItem('vo_muc_student_state_' + studentId, JSON.stringify(state));
+    } catch {}
 
     // Cập nhật last_active_at ở bảng học sinh
     const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
@@ -1680,7 +1735,30 @@ export class MockAttemptRepository implements AttemptRepository {
   }
 
   async getAllStates(): Promise<Record<string, StudentState>> {
-    return readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, getSeedStudentStates());
+    const states = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
+    // Quét thêm các state lưu lẻ theo prefix vo_muc_student_state_
+    if (typeof localStorage !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('vo_muc_student_state_')) {
+            const sId = k.replace('vo_muc_student_state_', '');
+            if (!states[sId]) {
+              const raw = localStorage.getItem(k);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed) states[sId] = parsed;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+    // Nếu vẫn rỗng, luôn nạp sẵn state hs001 để đảm bảo có dữ liệu
+    if (Object.keys(states).length === 0) {
+      states['hs001'] = createInitialStateHs001();
+    }
+    return states;
   }
 }
 
@@ -1698,16 +1776,16 @@ export class MockEssayRepository implements EssayRepository {
   }): Promise<EssaySubmission[]> {
     const states = await attemptRepo.getAllStates();
     const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
+    const independentEssays = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
 
-    let allEssays: EssaySubmission[] = [];
+    let allEssays: EssaySubmission[] = [...independentEssays];
     for (const [sId, st] of Object.entries(states)) {
-      if (st.essaySubmissions) {
-        // Gắn thêm studentName và className nếu thiếu
+      if (st.essaySubmissions && st.essaySubmissions.length > 0) {
         const student = students.find((s) => s.id === sId);
         const enriched = st.essaySubmissions.map((e) => ({
           ...e,
-          studentName: e.studentName || student?.name || 'Học sinh',
-          className: e.className || '7A2',
+          studentName: e.studentName || student?.name || st.profile?.name || 'Học sinh',
+          className: e.className || st.profile?.grade || '7A2',
           classId: e.classId || student?.class_id || 'class_7a2',
           hoursWaiting: Math.max(0, Math.floor((Date.now() - e.submittedAt) / 3600000)),
         }));
@@ -1715,19 +1793,32 @@ export class MockEssayRepository implements EssayRepository {
       }
     }
 
+    // Khử trùng lặp theo id
+    const map = new Map<string, EssaySubmission>();
+    allEssays.forEach((item) => {
+      if (item.id) map.set(item.id, item);
+    });
+    let result = Array.from(map.values()).filter(
+      (e) =>
+        e.content &&
+        e.content.trim().length > 0 &&
+        !e.id?.startsWith('sub_demo') &&
+        e.studentName !== 'Trần Minh An'
+    );
+
     if (filter?.studentId) {
-      allEssays = allEssays.filter((e) => e.studentId === filter.studentId);
+      result = result.filter((e) => e.studentId === filter.studentId);
     }
 
     if (filter?.quizId) {
-      allEssays = allEssays.filter((e) => e.quizId === filter.quizId);
+      result = result.filter((e) => e.quizId === filter.quizId);
     }
 
     if (filter?.status && filter.status !== 'ALL') {
       if (filter.status === 'PENDING_TEACHER') {
-        allEssays = allEssays.filter((e) => e.status === 'PENDING_TEACHER' || e.status === 'AI_SUGGESTED');
+        result = result.filter((e) => e.status === 'PENDING_TEACHER' || e.status === 'AI_SUGGESTED');
       } else {
-        allEssays = allEssays.filter((e) => e.status === filter.status);
+        result = result.filter((e) => e.status === filter.status);
       }
     }
 
@@ -1735,10 +1826,12 @@ export class MockEssayRepository implements EssayRepository {
       const allowedStudentIds = new Set(
         students.filter((s) => s.class_id === filter.classId).map((s) => s.id)
       );
-      allEssays = allEssays.filter((e) => allowedStudentIds.has(e.studentId));
+      result = result.filter(
+        (e) => allowedStudentIds.has(e.studentId) || e.classId === filter.classId || e.className?.toLowerCase().includes(filter.classId.toLowerCase())
+      );
     }
 
-    return allEssays.sort((a, b) => b.submittedAt - a.submittedAt);
+    return result.sort((a, b) => b.submittedAt - a.submittedAt);
   }
 
   async getSubmissionById(id: string): Promise<EssaySubmission | null> {
@@ -1797,6 +1890,10 @@ export class MockEssayRepository implements EssayRepository {
     state.essaySubmissions = [newEssay, ...(state.essaySubmissions || [])];
     await attemptRepo.saveStudentState(submission.studentId, state);
 
+    // Lưu thêm vào kho độc lập ESSAYS để đảm bảo không thất lạc
+    const independent = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
+    writeStorage(STORAGE_KEYS.ESSAYS, [newEssay, ...independent.filter((item) => item.id !== newEssay.id)]);
+
     syncEventBus.emit('essay');
     return newEssay;
   }
@@ -1821,6 +1918,19 @@ export class MockEssayRepository implements EssayRepository {
         st.essaySubmissions[eIdx] = targetEssay;
         await attemptRepo.saveStudentState(sId, st);
         break;
+      }
+    }
+
+    if (!targetEssay) {
+      const independent = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
+      const idx = independent.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        targetEssay = {
+          ...independent[idx],
+          teacherDraft: draft,
+        };
+        independent[idx] = targetEssay;
+        writeStorage(STORAGE_KEYS.ESSAYS, independent);
       }
     }
 
@@ -1882,6 +1992,31 @@ export class MockEssayRepository implements EssayRepository {
 
         await attemptRepo.saveStudentState(sId, st);
         break;
+      }
+    }
+
+    if (!targetEssay) {
+      const independent = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
+      const idx = independent.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        const original = independent[idx];
+        const aiScore = original.aiSuggestion?.suggestedTotalScore ?? grading.totalScore;
+        const diff =
+          grading.ai_vs_teacher_diff !== undefined
+            ? grading.ai_vs_teacher_diff
+            : Math.round(Math.abs(grading.totalScore - aiScore) * 10) / 10;
+        targetEssay = {
+          ...original,
+          ...grading,
+          finalScore: grading.totalScore,
+          finalComment: grading.teacherFeedback,
+          gradedAt: Date.now(),
+          status: 'GRADED',
+          ai_vs_teacher_diff: diff,
+        };
+        independent[idx] = targetEssay;
+        writeStorage(STORAGE_KEYS.ESSAYS, independent);
+        targetStudentId = original.studentId;
       }
     }
 
@@ -2382,3 +2517,180 @@ export class MockSettingRepository implements SettingRepository {
 }
 
 export const settingRepo = new MockSettingRepository();
+
+// ==========================================
+// 12. TEACHER REPOSITORY (ADMIN QUẢN LÝ GIÁO VIÊN)
+// ==========================================
+export class MockTeacherRepository implements TeacherRepository {
+  async getTeachers(): Promise<TeacherProfile[]> {
+    let teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    if (!teachers || teachers.length === 0) {
+      teachers = SEED_TEACHERS;
+      writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    }
+    return teachers.map((t) => ({
+      ...t,
+      status: t.status || 'active',
+      role: 'teacher' as const,
+      created_at: t.created_at || '2026-09-01T08:00:00.000Z',
+    }));
+  }
+
+  async getTeacherById(id: string): Promise<TeacherProfile | null> {
+    const list = await this.getTeachers();
+    return list.find((t) => t.id === id) || null;
+  }
+
+  async createTeacher(data: CreateTeacherInput): Promise<TeacherProfile> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+
+    // Tự sinh username nếu chưa có
+    let username = data.username?.trim().toLowerCase();
+    if (!username) {
+      const count = teachers.length + 1;
+      username = `gv${String(count).padStart(3, '0')}`;
+      while (teachers.some((t) => t.username.toLowerCase() === username)) {
+        username = `gv${Math.floor(100 + Math.random() * 900)}`;
+      }
+    } else {
+      if (teachers.some((t) => t.username.toLowerCase() === username)) {
+        throw new Error(`Tên đăng nhập "${username}" đã tồn tại trên hệ thống.`);
+      }
+    }
+
+    const now = new Date().toISOString();
+    const trialDays = data.trialDays || 3;
+    const trialExpiresAt = data.status === 'trial'
+      ? new Date(Date.now() + trialDays * 86400000).toISOString()
+      : undefined;
+
+    const newTeacher: TeacherProfile = {
+      id: generateUUID(),
+      name: data.name.trim(),
+      username,
+      password: data.password?.trim() || '123456',
+      role: 'teacher',
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      school: data.school?.trim() || 'THCS Giấy & Mực',
+      subject: data.subject?.trim() || 'Ngữ văn 7',
+      classIds: [],
+      status: data.status || 'active',
+      trialDays: data.status === 'trial' ? trialDays : undefined,
+      trialExpiresAt,
+      notes: data.notes?.trim() || undefined,
+      created_at: now,
+      updated_at: now,
+    };
+
+    teachers.unshift(newTeacher);
+    writeStorage(STORAGE_KEYS.TEACHERS, teachers);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: 'CREATE_TEACHER',
+      target_type: 'teacher',
+      target_id: newTeacher.id,
+      target_name: `Tạo tài khoản giáo viên: ${newTeacher.name} (${newTeacher.username})`,
+      details: { status: newTeacher.status, trialDays },
+    });
+
+    syncEventBus.emit('teacher', newTeacher, 'teacher-create');
+    return newTeacher;
+  }
+
+  async updateTeacher(id: string, data: Partial<TeacherProfile>): Promise<TeacherProfile> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    const idx = teachers.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error('Không tìm thấy tài khoản giáo viên để cập nhật.');
+
+    const current = teachers[idx];
+    const now = new Date().toISOString();
+
+    const updated: TeacherProfile = {
+      ...current,
+      ...data,
+      id: current.id,
+      role: 'teacher',
+      updated_at: now,
+    };
+
+    teachers[idx] = updated;
+    writeStorage(STORAGE_KEYS.TEACHERS, teachers);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: 'UPDATE_TEACHER',
+      target_type: 'teacher',
+      target_id: updated.id,
+      target_name: `Cập nhật thông tin giáo viên: ${updated.name}`,
+    });
+
+    syncEventBus.emit('teacher', updated, 'teacher-update');
+    return updated;
+  }
+
+  async deleteTeacher(id: string): Promise<void> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    const target = teachers.find((t) => t.id === id);
+    if (!target) return;
+
+    if (target.username === 'gv001') {
+      throw new Error('Không thể xóa tài khoản mẫu cốt lõi gv001 của hệ thống.');
+    }
+
+    const filtered = teachers.filter((t) => t.id !== id);
+    writeStorage(STORAGE_KEYS.TEACHERS, filtered);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: 'DELETE_TEACHER',
+      target_type: 'teacher',
+      target_id: id,
+      target_name: `Xóa tài khoản giáo viên: ${target.name} (${target.username})`,
+    });
+
+    syncEventBus.emit('teacher', { id }, 'teacher-delete');
+  }
+
+  async toggleLockTeacher(id: string, locked?: boolean): Promise<TeacherProfile> {
+    const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    const idx = teachers.findIndex((t) => t.id === id);
+    if (idx === -1) throw new Error('Không tìm thấy tài khoản giáo viên.');
+
+    const current = teachers[idx];
+    const nextStatus = typeof locked === 'boolean'
+      ? (locked ? 'locked' : 'active')
+      : (current.status === 'locked' ? 'active' : 'locked');
+
+    const updated: TeacherProfile = {
+      ...current,
+      status: nextStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    teachers[idx] = updated;
+    writeStorage(STORAGE_KEYS.TEACHERS, teachers);
+
+    await auditRepo.log({
+      actor_id: 'admin_001',
+      actor_name: 'Quản trị viên',
+      actor_role: 'admin',
+      action: nextStatus === 'locked' ? 'LOCK_TEACHER' : 'UNLOCK_TEACHER',
+      target_type: 'teacher',
+      target_id: id,
+      target_name: `${nextStatus === 'locked' ? 'Khóa' : 'Mở khóa'} tài khoản giáo viên: ${current.name}`,
+    });
+
+    syncEventBus.emit('teacher', updated, 'teacher-status');
+    return updated;
+  }
+}
+
+export const teacherRepo = new MockTeacherRepository();

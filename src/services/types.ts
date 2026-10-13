@@ -66,9 +66,25 @@ export interface TeacherProfile {
   classIds: string[];
   avatarUrl?: string;
   phone?: string;
+  password?: string;
+  status?: 'active' | 'locked' | 'trial';
+  trialDays?: number;
+  trialExpiresAt?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export type UserProfile = StudentProfile | TeacherProfile;
+export interface AdminProfile {
+  id: string;
+  name: string;
+  username: string;
+  role: 'admin';
+  email?: string;
+  avatarUrl?: string;
+}
+
+export type UserProfile = StudentProfile | TeacherProfile | AdminProfile;
 
 export interface AuthSession {
   user: UserProfile;
@@ -86,6 +102,28 @@ export interface AuthRepository {
   }>;
   signOut(): Promise<void>;
   getSession(): Promise<AuthSession | null>;
+}
+
+export interface CreateTeacherInput {
+  name: string;
+  username?: string;
+  password?: string;
+  email?: string;
+  phone?: string;
+  school?: string;
+  subject?: string;
+  status?: 'active' | 'locked' | 'trial';
+  trialDays?: number;
+  notes?: string;
+}
+
+export interface TeacherRepository {
+  getTeachers(): Promise<TeacherProfile[]>;
+  getTeacherById(id: string): Promise<TeacherProfile | null>;
+  createTeacher(data: CreateTeacherInput): Promise<TeacherProfile>;
+  updateTeacher(id: string, data: Partial<TeacherProfile>): Promise<TeacherProfile>;
+  deleteTeacher(id: string): Promise<void>;
+  toggleLockTeacher(id: string, locked?: boolean): Promise<TeacherProfile>;
 }
 
 // ========================
@@ -402,7 +440,7 @@ export interface AuditLog {
   actor_name: string;
   actor_role: Role;
   action: string; // VD: CREATE_STUDENT, RESET_PASSWORD, LOCK_STUDENT, PUBLISH_CONTENT, GRADE_ESSAY, REWARD_APPROVED, UPDATE_SETTINGS
-  target_type: 'student' | 'class' | 'content' | 'quiz' | 'essay' | 'reward' | 'setting';
+  target_type: 'student' | 'class' | 'content' | 'quiz' | 'essay' | 'reward' | 'setting' | 'teacher';
   target_id: string;
   target_name: string;
   details?: Record<string, any>;

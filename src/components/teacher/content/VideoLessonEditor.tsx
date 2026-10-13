@@ -26,6 +26,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
+import { uploadLessonMedia } from '../../../services/supabase/storage.ts';
 
 interface VideoLessonEditorProps {
   video: VideoLessonWithMeta;
@@ -95,50 +96,66 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     setUploadProgress(0);
   }, [video.id]);
 
-  // Giả lập upload file video
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Tải file video lên Supabase Storage (lưu vĩnh viễn, không mất khi tải lại trang)
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
-    const blobUrl = URL.createObjectURL(file);
+    setUploadError(null);
     setIsUploading(true);
     setUploadProgress(10);
 
-    // Tự đọc thời lượng qua probe video
+    // Tự đọc thời lượng qua probe video (dùng blob tạm, chỉ để đo thời lượng)
+    const probeUrl = URL.createObjectURL(file);
     const tempVideo = document.createElement('video');
     tempVideo.preload = 'metadata';
-    tempVideo.src = blobUrl;
+    tempVideo.src = probeUrl;
     tempVideo.onloadedmetadata = () => {
       if (tempVideo.duration && !isNaN(tempVideo.duration)) {
         setDurationSec(Math.round(tempVideo.duration));
       }
+      URL.revokeObjectURL(probeUrl);
     };
 
-    let p = 15;
+    // Thanh tiến độ ước lượng trong lúc tải
     const interval = setInterval(() => {
-      p += 25;
-      if (p >= 100) {
-        clearInterval(interval);
-        setUploadProgress(100);
-        setTimeout(() => {
-          setIsUploading(false);
-          setSampleUrl(blobUrl);
-          if (!title) {
-            setTitle(file.name.replace(/\.[^/.]+$/, ''));
-          }
-        }, 400);
-      } else {
-        setUploadProgress(p);
+      setUploadProgress((p) => (p < 90 ? p + 5 : p));
+    }, 400);
+
+    try {
+      const publicUrl = await uploadLessonMedia(file, 'videos');
+      setUploadProgress(100);
+      setSampleUrl(publicUrl);
+      if (!title) {
+        setTitle(file.name.replace(/\.[^/.]+$/, ''));
       }
-    }, 200);
+    } catch (err: any) {
+      console.error('Lỗi tải video lên Supabase:', err);
+      setUploadError(
+        (err?.message || 'Không tải được video lên.') +
+          ' (Gói miễn phí Supabase giới hạn ~50MB/file. Có thể dán đường dẫn video thay thế.)'
+      );
+    } finally {
+      clearInterval(interval);
+      setTimeout(() => setIsUploading(false), 300);
+    }
   };
 
-  // Chọn ảnh bìa
-  const handleThumbSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Chọn ảnh bìa (tải lên Supabase Storage)
+  const handleThumbSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    const blobUrl = URL.createObjectURL(file);
-    setThumbnailUrl(blobUrl);
+    try {
+      const publicUrl = await uploadLessonMedia(file, 'thumbnails');
+      setThumbnailUrl(publicUrl);
+    } catch (err: any) {
+      console.error('Lỗi tải ảnh bìa lên Supabase:', err);
+      setUploadError(err?.message || 'Không tải được ảnh bìa lên.');
+    }
   };
 
   // Thêm / sửa / xóa / đổi thứ tự ý trọng tâm
@@ -271,7 +288,12 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
           <button
             type="button"
-            onClick={onPublish}
+            onClick={async () => {
+              // Tự động lưu bản đang soạn trước khi xuất bản để không mất dữ liệu
+              await handleSaveDraft();
+              onPublish();
+            }}
+            disabled={isSaving || isUploading}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
           >
             <UploadCloud className="w-3.5 h-3.5" />
@@ -325,7 +347,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                 Bấm để chọn file video từ máy tính
               </p>
               <p className="text-[10px] text-[#8C7E6A]">
-                Hỗ trợ định dạng MP4, WebM (Mô phỏng nạp tức thì)
+                Hỗ trợ định dạng MP4, WebM — video được lưu vĩnh viễn trên máy chủ
               </p>
             </div>
 
@@ -358,6 +380,12 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
+                </div>
+              )}
+
+              {uploadError && (
+                <div className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  {uploadError}
                 </div>
               )}
 

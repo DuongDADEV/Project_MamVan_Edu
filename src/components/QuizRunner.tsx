@@ -23,11 +23,17 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   onComplete,
   onExit,
 }) => {
+  let localStoredQuestions: Record<string, Question> = {};
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('mam_van_questions') : null;
+    if (raw) localStoredQuestions = JSON.parse(raw);
+  } catch {}
+
   const questions: Question[] =
     customQuestions && customQuestions.length > 0
       ? customQuestions
-      : quiz.questionIds
-          .map((id) => QUESTIONS_BANK[id])
+      : (quiz.questionIds || [])
+          .map((id) => localStoredQuestions[id] || QUESTIONS_BANK[id])
           .filter(Boolean);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -42,7 +48,19 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   const [timeLeft, setTimeLeft] = useState(initialSeconds);
   const timerRef = useRef<any>(null);
 
-  const currentQ = questions[currentIndex];
+  // Khi chuyển sang bài quiz khác, reset ngay lập tức toàn bộ trạng thái về câu số 1
+  useEffect(() => {
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setEssayDrafts({});
+    setPracticeChecked({});
+    setIsSubmitModalOpen(false);
+    setTimeLeft(quiz.timeLimitMinutes ? quiz.timeLimitMinutes * 60 : 0);
+  }, [quiz.id]);
+
+  // Đảm bảo chỉ số câu hỏi luôn an toàn, không bao giờ vượt quá chiều dài mảng câu hỏi
+  const safeIndex = questions.length > 0 ? Math.min(currentIndex, questions.length - 1) : 0;
+  const currentQ = questions[safeIndex];
 
   useEffect(() => {
     if (!isPractice && initialSeconds > 0) {
@@ -123,27 +141,40 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'essay') {
-        // Câu tự luận: Gửi chờ giáo viên chấm, tạm tính tạm 0.8 điểm
-        const text = essayDrafts[q.id] || '';
-        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-        totalScore += 0.8;
-        results.push({
-          questionId: q.id,
-          level: q.level,
-          isCorrect: true,
-          scoreRatio: 0.8,
-          timestamp: Date.now(),
-          topicId: q.topicId,
-        });
-        essaySubs.push({
-          id: 'sub_' + Date.now() + '_' + q.id,
-          questionId: q.id,
-          studentId: 'hs001',
-          content: text,
-          wordCount: words,
-          submittedAt: Date.now(),
-          status: 'PENDING_TEACHER',
-        });
+        const text = (essayDrafts[q.id] || '').trim();
+        const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+        if (words > 0) {
+          totalScore += 0.8;
+          results.push({
+            questionId: q.id,
+            level: q.level,
+            isCorrect: true,
+            scoreRatio: 0.8,
+            timestamp: Date.now(),
+            topicId: q.topicId,
+          });
+          essaySubs.push({
+            id: 'sub_' + Date.now() + '_' + q.id,
+            questionId: q.id,
+            studentId: 'hs001',
+            promptTitle: q.prompt || 'Viết đoạn văn theo yêu cầu',
+            quizTitle: quiz.title,
+            content: text,
+            wordCount: words,
+            submittedAt: Date.now(),
+            status: 'PENDING_TEACHER',
+          });
+        } else {
+          // Bỏ trống câu tự luận: không tạo bài nộp rỗng gửi giáo viên
+          results.push({
+            questionId: q.id,
+            level: q.level,
+            isCorrect: false,
+            scoreRatio: 0,
+            timestamp: Date.now(),
+            topicId: q.topicId,
+          });
+        }
       }
     });
 
@@ -207,7 +238,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               {skillInfo?.displayName || 'Nhận thức'}
             </span>
             <span className="text-xs text-slate-400 font-mono">
-              Câu {currentIndex + 1}/{questions.length}
+              Câu {safeIndex + 1}/{questions.length}
             </span>
           </div>
           <h3 className="text-sm font-extrabold text-[#1E1B4B] mt-0.5">{quiz.title}</h3>

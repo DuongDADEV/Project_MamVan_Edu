@@ -7,6 +7,7 @@ import { TeacherTopbar } from '../components/teacher/TeacherTopbar.tsx';
 import { TeacherOverviewScreen } from './teacher/TeacherOverviewScreen.tsx';
 import { ClassesAndStudentsScreen } from './teacher/ClassesAndStudentsScreen.tsx';
 import { TeacherContentScreen } from './teacher/TeacherContentScreen.tsx';
+import { TeacherQuestionBankScreen } from './teacher/TeacherQuestionBankScreen.tsx';
 import { TeacherGradingScreen } from './teacher/TeacherGradingScreen.tsx';
 import { TeacherRewardsScreen } from './teacher/TeacherRewardsScreen.tsx';
 import { TeacherAnalyticsScreen, AnalyticsTabKey } from './teacher/TeacherAnalyticsScreen.tsx';
@@ -189,8 +190,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
 
   // 3. GIAO DIỆN CHÍNH
   return (
-    <div className="min-h-screen bg-[#FAF5EB] text-[#2F3E6B] flex flex-col font-sans antialiased">
-      <div className="flex-1 flex overflow-hidden">
+    <div className="h-screen bg-[#FAF5EB] text-[#2F3E6B] flex flex-col font-sans antialiased overflow-hidden">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* SIDEBAR BÊN TRÁI */}
         <TeacherSidebar
           currentTab={currentTab}
@@ -204,7 +205,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         />
 
         {/* NỘI DUNG CHÍNH + THANH TRÊN CÙNG */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <TeacherTopbar
             teacher={teacher}
             classes={classes || []}
@@ -258,6 +259,15 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
 
               {currentTab === 'content' && (
                 <TeacherContentScreen
+                  teacher={teacher}
+                  classes={classes || []}
+                  selectedClassId={selectedClassId}
+                  onRefreshData={refreshPortalData}
+                />
+              )}
+
+              {currentTab === 'question_bank' && (
+                <TeacherQuestionBankScreen
                   teacher={teacher}
                   classes={classes || []}
                   selectedClassId={selectedClassId}
