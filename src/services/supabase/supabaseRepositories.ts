@@ -1239,23 +1239,35 @@ export class SupabaseEssayRepository implements EssayRepository {
       teacherFeedback?: string;
     }
   ): Promise<EssaySubmission> {
-    const localResult = await mockEssayRepo.saveSubmissionDraft(id, draft);
+    if (isSupabaseReady() && isUUID(id)) {
+      try {
+        const payload: Record<string, any> = {};
+        if (draft.rubricScores) payload.rubric_scores = draft.rubricScores;
+        if (draft.teacherFeedback !== undefined) payload.teacher_feedback = draft.teacherFeedback;
 
-    if (!isSupabaseReady() || !isUUID(id)) {
-      return localResult;
+        const { data: updated } = await supabase
+          .from('essay_submissions')
+          .update(payload)
+          .eq('id', id)
+          .select('*, students(name), classes(name)')
+          .maybeSingle();
+
+        if (updated) {
+          syncEventBus.emit('essay');
+          const item = await this.getSubmissionById(id);
+          if (item) return item;
+        }
+      } catch (e) {
+        console.warn('[SupabaseEssay] Lỗi lưu nháp Supabase:', e);
+      }
     }
 
     try {
-      const payload: Record<string, any> = {};
-      if (draft.rubricScores) payload.rubric_scores = draft.rubricScores;
-      if (draft.teacherFeedback !== undefined) payload.teacher_feedback = draft.teacherFeedback;
-
-      await supabase.from('essay_submissions').update(payload).eq('id', id);
-      syncEventBus.emit('essay');
-      const item = await this.getSubmissionById(id);
-      return item || localResult;
+      return await mockEssayRepo.saveSubmissionDraft(id, draft);
     } catch {
-      return localResult;
+      const item = await this.getSubmissionById(id);
+      if (item) return item;
+      throw new Error('Không tìm thấy bài viết');
     }
   }
 
@@ -1270,29 +1282,96 @@ export class SupabaseEssayRepository implements EssayRepository {
     },
     teacherActorId: string
   ): Promise<EssaySubmission> {
-    const localResult = await mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
+    if (isSupabaseReady() && isUUID(id)) {
+      try {
+        const payload = {
+          status: 'GRADED',
+          teacher_feedback: grading.teacherFeedback,
+          rubric_scores: grading.rubricScores,
+          total_score: grading.totalScore,
+          graded_at: new Date().toISOString(),
+        };
 
-    if (!isSupabaseReady() || !isUUID(id)) {
-      return localResult;
+        const { data: updated, error } = await supabase
+          .from('essay_submissions')
+          .update(payload)
+          .eq('id', id)
+          .select('*, students(name), classes(name)')
+          .maybeSingle();
+
+        if (error) {
+          console.error('[SupabaseEssay] Lỗi chốt điểm Supabase:', error.message);
+          throw new Error(error.message);
+        }
+
+        if (updated) {
+          syncEventBus.emit('essay');
+
+          // Cập nhật Mastery của học sinh nếu có bản ghi student_states
+          if (updated.student_id) {
+            try {
+              const { data: stRow } = await supabase
+                .from('student_states')
+                .select('*')
+                .eq('student_id', updated.student_id)
+                .maybeSingle();
+
+              if (stRow) {
+                const currentQResults = Array.isArray(stRow.question_results) ? stRow.question_results : [];
+                const isPassed = grading.totalScore >= 5;
+                const newQResult = {
+                  questionId: updated.question_id || id,
+                  level: 'VAN_DUNG',
+                  isCorrect: isPassed,
+                  scoreRatio: grading.finalRatio || (grading.totalScore / 10),
+                  timestamp: Date.now(),
+                  topicId: 'topic_tho_bon_nam',
+                };
+                await supabase
+                  .from('student_states')
+                  .update({
+                    question_results: [...currentQResults, newQResult],
+                  })
+                  .eq('student_id', updated.student_id);
+              }
+            } catch (e) {
+              console.warn('[SupabaseEssay] Không cập nhật được mastery học sinh:', e);
+            }
+          }
+
+          const item = await this.getSubmissionById(id);
+          if (item) return item;
+
+          const qInfo = (QUESTIONS_BANK as any)[updated.question_id];
+          return {
+            id: updated.id,
+            questionId: updated.question_id || 'q_essay_01',
+            quizId: updated.question_id || 'q_essay_01',
+            studentId: updated.student_id,
+            studentName: updated.students?.name || 'Học sinh',
+            classId: updated.class_id,
+            className: updated.classes?.name || '7A1',
+            promptTitle: qInfo?.prompt || 'Cảm nghĩ về bài thơ / văn bản',
+            quizTitle: 'Bài tập làm văn',
+            prompt: qInfo?.prompt || 'Viết đoạn văn theo yêu cầu',
+            content: updated.content,
+            wordCount: updated.word_count || 0,
+            submittedAt: new Date(updated.created_at || Date.now()).getTime(),
+            status: 'GRADED',
+            teacherFeedback: updated.teacher_feedback || undefined,
+            rubricScores: Array.isArray(updated.rubric_scores) ? updated.rubric_scores : undefined,
+            totalScore: updated.total_score != null ? Number(updated.total_score) : undefined,
+            finalRatio: updated.total_score != null ? Number(updated.total_score) / 10 : undefined,
+            hoursWaiting: 0,
+          };
+        }
+      } catch (err: any) {
+        console.error('[SupabaseEssay] Lỗi gradeSubmission:', err?.message || err);
+        throw err;
+      }
     }
 
-    try {
-      const payload = {
-        status: 'GRADED',
-        teacher_feedback: grading.teacherFeedback,
-        rubric_scores: grading.rubricScores,
-        total_score: grading.totalScore,
-        graded_at: new Date().toISOString(),
-      };
-
-      await supabase.from('essay_submissions').update(payload).eq('id', id);
-      syncEventBus.emit('essay');
-      const item = await this.getSubmissionById(id);
-      return item || localResult;
-    } catch (err: any) {
-      console.error('[SupabaseEssay] Lỗi gradeSubmission Supabase:', err?.message || err);
-      return localResult;
-    }
+    return mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
   }
 
   // Huấn luyện & Cấu hình AI (ủy quyền an toàn qua Mock)
