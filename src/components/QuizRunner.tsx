@@ -141,27 +141,40 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'essay') {
-        // Câu tự luận: Gửi chờ giáo viên chấm, tạm tính tạm 0.8 điểm
-        const text = essayDrafts[q.id] || '';
-        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-        totalScore += 0.8;
-        results.push({
-          questionId: q.id,
-          level: q.level,
-          isCorrect: true,
-          scoreRatio: 0.8,
-          timestamp: Date.now(),
-          topicId: q.topicId,
-        });
-        essaySubs.push({
-          id: 'sub_' + Date.now() + '_' + q.id,
-          questionId: q.id,
-          studentId: 'hs001',
-          content: text,
-          wordCount: words,
-          submittedAt: Date.now(),
-          status: 'PENDING_TEACHER',
-        });
+        const text = (essayDrafts[q.id] || '').trim();
+        const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+        if (words > 0) {
+          totalScore += 0.8;
+          results.push({
+            questionId: q.id,
+            level: q.level,
+            isCorrect: true,
+            scoreRatio: 0.8,
+            timestamp: Date.now(),
+            topicId: q.topicId,
+          });
+          essaySubs.push({
+            id: 'sub_' + Date.now() + '_' + q.id,
+            questionId: q.id,
+            studentId: 'hs001',
+            promptTitle: q.prompt || 'Viết đoạn văn theo yêu cầu',
+            quizTitle: quiz.title,
+            content: text,
+            wordCount: words,
+            submittedAt: Date.now(),
+            status: 'PENDING_TEACHER',
+          });
+        } else {
+          // Bỏ trống câu tự luận: không tạo bài nộp rỗng gửi giáo viên
+          results.push({
+            questionId: q.id,
+            level: q.level,
+            isCorrect: false,
+            scoreRatio: 0,
+            timestamp: Date.now(),
+            topicId: q.topicId,
+          });
+        }
       }
     });
 

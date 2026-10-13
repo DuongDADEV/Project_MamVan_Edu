@@ -1798,7 +1798,15 @@ export class MockEssayRepository implements EssayRepository {
     allEssays.forEach((item) => {
       if (item.id) map.set(item.id, item);
     });
-    let result = Array.from(map.values());
+    let result = Array.from(map.values()).filter((e) => e.content && e.content.trim().length > 0);
+
+    // Nếu không có bài nộp nào có nội dung, nạp bài nộp mẫu của em Trần Minh An
+    if (result.length === 0) {
+      const demoState = createInitialStateHs001();
+      if (demoState.essaySubmissions && demoState.essaySubmissions.length > 0) {
+        result = [...demoState.essaySubmissions];
+      }
+    }
 
     if (filter?.studentId) {
       result = result.filter((e) => e.studentId === filter.studentId);
