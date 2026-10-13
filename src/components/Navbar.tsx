@@ -11,6 +11,7 @@ interface NavbarProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   state: StudentState;
+  topicsCount?: number;
   onOpenDevPanel?: () => void;
   onOpenThemeSelector?: () => void;
 }
@@ -19,11 +20,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
   onTabChange,
   state,
+  topicsCount,
   onOpenThemeSelector,
 }) => {
   const navItems = [
     { key: 'home' as NavTab, label: 'Trang chủ', icon: Home, badge: null },
-    { key: 'learn' as NavTab, label: 'Học bài', icon: BookOpen, badge: '4 chủ đề' },
+    {
+      key: 'learn' as NavTab,
+      label: 'Học bài',
+      icon: BookOpen,
+      badge: topicsCount !== undefined ? (topicsCount > 0 ? `${topicsCount} chủ đề` : null) : null,
+    },
     { key: 'tree' as NavTab, label: 'Cây tri thức', icon: Sprout, badge: null },
     { key: 'rewards' as NavTab, label: 'Đổi quà', icon: Gift, badge: 'Mới' },
     { key: 'profile' as NavTab, label: 'Hồ sơ', icon: User, badge: null },
@@ -97,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   key={item.key}
                   onClick={() => onTabChange(item.key)}
-                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-semibold transition-all group ${
+                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-semibold transition-all group focus:outline-none focus:ring-0 outline-none select-none ${
                     isActive
                       ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-[#4F46E5] border border-indigo-200/60 shadow-xs'
                       : 'text-slate-600 hover:text-[#1E1B4B] hover:bg-slate-50/80'
@@ -189,7 +196,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               key={item.key}
               onClick={() => onTabChange(item.key)}
-              className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 px-2 rounded-2xl transition-all ${
+              className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 px-2 rounded-2xl transition-all focus:outline-none focus:ring-0 outline-none select-none ${
                 isActive ? 'text-[#4F46E5]' : 'text-slate-500 hover:text-[#1E1B4B]'
               }`}
             >

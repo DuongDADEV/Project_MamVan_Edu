@@ -201,80 +201,95 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     type: 'video' | 'theory' | 'practice' | 'quick' | 'mastery' | 'reading' | 'final' | 'homework'
   ) => {
     setIsCreateDropdownOpen(false);
-    const targetTopicId = topics[0]?.id || 'topic_tho_bon_nam';
+    if (topics.length === 0) {
+      alert('Thầy/Cô vui lòng tạo Chủ đề trước khi tạo bài giảng hoặc câu hỏi nhé!');
+      setIsTopicModalOpen(true);
+      return;
+    }
+    // Ưu tiên topic đang được chọn, nếu không thì lấy topic đầu tiên
+    const targetTopicId =
+      selectedItem?.type === 'topic' ? selectedItem.id : topics[0]?.id || '';
 
-    if (type === 'video') {
-      const newVid = await contentService.saveVideoLesson({
-        topicId: targetTopicId,
-        title: 'Bài giảng Video mới',
-        durationSec: 600,
-        subtopics: [],
-        summaryPoints: [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
-        practiceQuizId: '',
-        quickTestId: '',
-        masteryCheckId: '',
-        status: 'draft',
-        class_ids: ['all', 'class_7a2'],
-      });
-      // Tự động gắn vào topic
-      const topic = topics.find((t) => t.id === targetTopicId);
-      if (topic) {
-        await contentService.saveTopic({
-          id: topic.id,
-          videoIds: [...topic.videoIds, newVid.id],
+    try {
+      if (type === 'video') {
+        const newVid = await contentService.saveVideoLesson({
+          topicId: targetTopicId,
+          title: 'Bài giảng Video mới',
+          durationSec: 600,
+          subtopics: [],
+          summaryPoints: [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
+          practiceQuizId: '',
+          quickTestId: '',
+          masteryCheckId: '',
+          status: 'draft',
+          class_ids: ['all', 'class_7a2'],
         });
-      }
-      setSelectedItem({ type: 'video', id: newVid.id });
-    } else if (type === 'theory') {
-      const newTheory = await contentService.saveTheoryLesson({
-        topicId: targetTopicId,
-        title: 'Bài Lý thuyết mới',
-        minReadSeconds: 25,
-        kind: 'general_topic',
-        sections: [],
-        blocks: [
-          { id: 'b_1', type: 'heading', level: 2, content: '1. Khái niệm và nhận diện' },
-          { id: 'b_2', type: 'paragraph', content: 'Gõ nội dung lý thuyết tại đây...' },
-        ],
-        practiceQuizId: '',
-        testQuizId: '',
-        status: 'draft',
-        class_ids: ['all', 'class_7a2'],
-      });
-      setSelectedItem({ type: 'theory', id: newTheory.id });
-    } else {
-      // Quiz
-      const newQ = await quizService.saveQuestion({
-        type: 'single',
-        level: 'THONG_HIEU',
-        difficulty: 'TB',
-        prompt: 'Đề bài câu hỏi số 1...',
-        topicId: targetTopicId,
-        options: ['Lựa chọn A', 'Lựa chọn B', 'Lựa chọn C', 'Lựa chọn D'],
-        answer: 'Lựa chọn A',
-        explanation: '',
-        status: 'draft',
-        class_ids: ['all', 'class_7a2'],
-      });
+        // Tự động gắn vào topic một cách an toàn
+        const topic = topics.find((t) => t.id === targetTopicId);
+        if (topic) {
+          const currentVideoIds = Array.isArray(topic.videoIds) ? topic.videoIds : [];
+          if (!currentVideoIds.includes(newVid.id)) {
+            await contentService.saveTopic({
+              ...topic,
+              videoIds: [...currentVideoIds, newVid.id],
+            });
+          }
+        }
+        setSelectedItem({ type: 'video', id: newVid.id });
+      } else if (type === 'theory') {
+        const newTheory = await contentService.saveTheoryLesson({
+          topicId: targetTopicId,
+          title: 'Bài Lý thuyết mới',
+          minReadSeconds: 25,
+          kind: 'general_topic',
+          sections: [],
+          blocks: [
+            { id: 'b_1', type: 'heading', level: 2, content: '1. Khái niệm và nhận diện' },
+            { id: 'b_2', type: 'paragraph', content: 'Gõ nội dung lý thuyết tại đây...' },
+          ],
+          practiceQuizId: '',
+          testQuizId: '',
+          status: 'draft',
+          class_ids: ['all', 'class_7a2'],
+        });
+        setSelectedItem({ type: 'theory', id: newTheory.id });
+      } else {
+        // Quiz
+        const newQ = await quizService.saveQuestion({
+          type: 'single',
+          level: 'THONG_HIEU',
+          difficulty: 'TB',
+          prompt: 'Đề bài câu hỏi số 1...',
+          topicId: targetTopicId,
+          options: ['Lựa chọn A', 'Lựa chọn B', 'Lựa chọn C', 'Lựa chọn D'],
+          answer: 'Lựa chọn A',
+          explanation: '',
+          status: 'draft',
+          class_ids: ['all', 'class_7a2'],
+        });
 
-      const newQuiz = await quizService.saveQuiz({
-        title:
-          type === 'homework'
-            ? 'Bài tập về nhà mới (+20 XP)'
-            : type === 'quick'
-            ? 'Kiểm tra nhanh mới (5 câu / 7 phút)'
-            : type === 'mastery'
-            ? 'Mastery Check mới (10 câu / 15 phút)'
-            : 'Bài luyện tập mới',
-        kind: type as any,
-        topicId: targetTopicId,
-        timeLimitMinutes: type === 'quick' ? 7 : type === 'mastery' ? 15 : 20,
-        xp: type === 'homework' ? 20 : 15,
-        questionIds: [newQ.id],
-        status: 'draft',
-        class_ids: ['all', 'class_7a2'],
-      });
-      setSelectedItem({ type: 'quiz', id: newQuiz.id });
+        const newQuiz = await quizService.saveQuiz({
+          title:
+            type === 'homework'
+              ? 'Bài tập về nhà mới (+20 XP)'
+              : type === 'quick'
+              ? 'Kiểm tra nhanh mới (5 câu / 7 phút)'
+              : type === 'mastery'
+              ? 'Mastery Check mới (10 câu / 15 phút)'
+              : 'Bài luyện tập mới',
+          kind: type as any,
+          topicId: targetTopicId,
+          timeLimitMinutes: type === 'quick' ? 7 : type === 'mastery' ? 15 : 20,
+          xp: type === 'homework' ? 20 : 15,
+          questionIds: [newQ.id],
+          status: 'draft',
+          class_ids: ['all', 'class_7a2'],
+        });
+        setSelectedItem({ type: 'quiz', id: newQuiz.id });
+      }
+    } catch (err) {
+      console.error('Lỗi khi tạo mới nội dung:', err);
+      alert('Không thể tạo nội dung mới lúc này. Vui lòng thử lại!');
     }
   };
 

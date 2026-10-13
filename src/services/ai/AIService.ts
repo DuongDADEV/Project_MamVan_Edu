@@ -99,6 +99,14 @@ export interface AIChatResponse {
   citations: AIChatCitation[];
 }
 
+export interface AIExtractedSource {
+  title: string;
+  content: string;
+  wordCount: number;
+  type: 'video' | 'website' | 'document';
+  url: string;
+}
+
 export interface AIService {
   /** Tóm tắt kiến thức trọng tâm sau video/văn bản */
   generateKeySummary(sources: AISource[], options?: AIKeySummaryOptions): Promise<KeyPoint[]>;
@@ -123,4 +131,8 @@ export interface AIService {
     message: string,
     history?: { role: 'user' | 'assistant'; text: string }[]
   ): Promise<AIChatResponse>;
+
+  /** Trích xuất nội dung, phụ đề, bài giảng từ link video YouTube hoặc website */
+  extractContentFromUrl(url: string): Promise<AIExtractedSource>;
 }
+

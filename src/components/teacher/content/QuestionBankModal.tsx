@@ -43,13 +43,14 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
   if (!isOpen) return null;
 
   // Lọc danh sách câu hỏi
-  const filteredQuestions = questions.filter((q) => {
+  const filteredQuestions = (questions || []).filter((q) => {
+    if (!q) return false;
     if (selectedTopicId !== 'all' && q.topicId !== selectedTopicId) return false;
     if (selectedType !== 'all' && q.type !== selectedType) return false;
     if (selectedLevel !== 'all' && q.level !== selectedLevel) return false;
     if (selectedDifficulty !== 'all' && q.difficulty !== selectedDifficulty) return false;
     if (searchQuery.trim()) {
-      const text = (q.prompt + ' ' + (q.explanation || '')).toLowerCase();
+      const text = ((q.prompt || '') + ' ' + (q.explanation || '')).toLowerCase();
       if (!text.includes(searchQuery.toLowerCase())) return false;
     }
     return true;
@@ -76,7 +77,7 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
   };
 
   const handleImport = () => {
-    const selected = questions.filter((q) => checkedQuestionIds.has(q.id));
+    const selected = (questions || []).filter((q) => q && checkedQuestionIds.has(q.id));
     onImportQuestions(selected);
     onClose();
   };
@@ -260,7 +261,7 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
                       {q.prompt}
                     </p>
 
-                    {q.options && q.options.length > 0 && (
+                    {Array.isArray(q.options) && q.options.length > 0 && (
                       <div className="grid grid-cols-2 gap-1 text-[11px] text-[#8C7E6A]">
                         {q.options.slice(0, 4).map((opt, idx) => (
                           <div key={idx} className="truncate">

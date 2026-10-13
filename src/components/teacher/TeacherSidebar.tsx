@@ -12,6 +12,7 @@ import {
   LogOut,
   GraduationCap,
   Sparkles,
+  HelpCircle,
 } from 'lucide-react';
 import { BrandWordmark } from '../MamVanLogo.tsx';
 
@@ -19,6 +20,7 @@ export type TeacherNavTab =
   | 'overview'
   | 'classes_students'
   | 'content'
+  | 'question_bank'
   | 'grading'
   | 'rewards'
   | 'analytics'
@@ -62,6 +64,11 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
       icon: BookOpenCheck,
     },
     {
+      id: 'question_bank' as TeacherNavTab,
+      label: 'Ngân hàng câu hỏi',
+      icon: HelpCircle,
+    },
+    {
       id: 'grading' as TeacherNavTab,
       label: 'Chấm bài',
       icon: PenTool,
@@ -87,13 +94,13 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
 
   return (
     <aside
-      className={`bg-[#FFFDF8] border-r border-[#E6DCC8] flex flex-col justify-between transition-all duration-200 z-30 shrink-0 select-none ${
+      className={`bg-[#FFFDF8] border-r border-[#E6DCC8] flex flex-col justify-between transition-all duration-200 z-30 shrink-0 select-none h-screen sticky top-0 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      {/* PHẦN ĐẦU: LOGO & BRAND */}
-      <div>
-        <div className="p-4 border-b border-[#E6DCC8]/70 flex items-center justify-between">
+      {/* PHẦN ĐẦU: LOGO & BRAND + MENU (CUỘN NỘI BỘ NẾU MÀN HÌNH NHỎ) */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="p-4 border-b border-[#E6DCC8]/70 flex items-center justify-between shrink-0">
           {!isCollapsed ? (
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
@@ -123,7 +130,7 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
         </div>
 
         {/* DANH SÁCH MENU ĐIỀU HƯỚNG */}
-        <nav className="p-3 space-y-1">
+        <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -160,8 +167,8 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
         </nav>
       </div>
 
-      {/* PHẦN ĐÁY: CHUYỂN GÓC HỌC SINH & ĐĂNG XUẤT */}
-      <div className="p-3 border-t border-[#E6DCC8]/70 space-y-1">
+      {/* PHẦN ĐÁY: CHUYỂN GÓC HỌC SINH & ĐĂNG XUẤT (CỐ ĐỊNH Ở ĐÁY) */}
+      <div className="p-3 border-t border-[#E6DCC8]/70 space-y-1 shrink-0 bg-[#FFFDF8]">
         {/* Nút xem thử góc học sinh */}
         <button
           onClick={onSwitchToStudentView}

@@ -13,6 +13,7 @@ import {
   createInitialStateHs002,
   VIDEOS,
   QUIZZES,
+  QUESTIONS_BANK,
 } from './data/mockData.ts';
 import { XP_CONFIG, ATTENDANCE_CONFIG, TIME_CONFIG } from './config.ts';
 import { awardXP } from './logic/xpEngine.ts';
@@ -30,10 +31,15 @@ import {
   authService,
   attemptService,
   contentService,
+  quizService,
+  essayRepository,
+  QuizWithMeta,
+  QuestionWithMeta,
   syncEventBus,
   useLiveQuery,
   AuthSession,
   TeacherProfile,
+  AdminProfile,
 } from './services/index.ts';
 
 // Screens
@@ -46,18 +52,23 @@ import { ProfileScreen } from './screens/ProfileScreen.tsx';
 import { VideoLessonScreen } from './screens/VideoLessonScreen.tsx';
 import { TheoryLessonScreen } from './screens/TheoryLessonScreen.tsx';
 import { TeacherPortal } from './screens/TeacherPortal.tsx';
+import { AdminPortal } from './screens/admin/AdminPortal.tsx';
 
 const USER_STORAGE_KEY = 'vo_muc_active_user';
 const STATE_STORAGE_PREFIX = 'vo_muc_student_state_';
 
 export default function App() {
-  // 1. Quản lý Phiên đăng nhập (Session) - BỎ FALLBACK TỰ GÁN HS001
+  // 1. Quản lý Phiên đăng nhập (Session) - Hỗ trợ student, teacher, admin
   const [currentSession, setCurrentSession] = useState<AuthSession | null>(() => {
     try {
       const saved = localStorage.getItem('mam_van_auth_session');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.user && (parsed.role === 'student' || parsed.role === 'teacher')) {
+        if (
+          parsed &&
+          parsed.user &&
+          (parsed.role === 'student' || parsed.role === 'teacher' || parsed.role === 'admin')
+        ) {
           return parsed;
         }
       }
@@ -67,11 +78,15 @@ export default function App() {
     }
   });
 
-  // 1b. Quản lý Route URL (/teacher hoặc /)
+  // State lưu thông tin admin khi đang impersonate giáo viên
+  const [impersonatingFromAdmin, setImpersonatingFromAdmin] = useState<AdminProfile | null>(null);
+
+  // 1b. Quản lý Route URL (/admin, /teacher hoặc /)
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
       const h = window.location.hash;
+      if (p === '/admin' || h === '#/admin' || h === '#admin') return '/admin';
       if (p === '/teacher' || h === '#/teacher' || h === '#teacher') return '/teacher';
     }
     return '/';
@@ -80,7 +95,7 @@ export default function App() {
   const navigateTo = useCallback((path: string) => {
     setCurrentPath(path);
     if (typeof window !== 'undefined') {
-      const target = path === '/teacher' ? '/teacher' : '/';
+      const target = path === '/admin' ? '/admin' : path === '/teacher' ? '/teacher' : '/';
       if (window.location.pathname !== target) {
         window.history.pushState(null, '', target);
       }
@@ -92,7 +107,9 @@ export default function App() {
     const handlePopState = () => {
       const p = window.location.pathname;
       const h = window.location.hash;
-      if (p === '/teacher' || h === '#/teacher' || h === '#teacher') {
+      if (p === '/admin' || h === '#/admin' || h === '#admin') {
+        setCurrentPath('/admin');
+      } else if (p === '/teacher' || h === '#/teacher' || h === '#teacher') {
         setCurrentPath('/teacher');
       } else {
         setCurrentPath('/');
@@ -105,16 +122,20 @@ export default function App() {
   // Route Guard hai chiều & đồng bộ URL
   useEffect(() => {
     if (!currentSession) {
-      if (currentPath === '/teacher') {
+      if (currentPath === '/teacher' || currentPath === '/admin') {
         navigateTo('/');
+      }
+    } else if (currentSession.role === 'admin') {
+      if (currentPath !== '/admin') {
+        navigateTo('/admin');
       }
     } else if (currentSession.role === 'teacher') {
       if (currentPath !== '/teacher') {
         navigateTo('/teacher');
       }
     } else if (currentSession.role === 'student') {
-      // Học sinh không vào được khu giáo viên
-      if (currentPath === '/teacher') {
+      // Học sinh không vào được khu giáo viên hay admin
+      if (currentPath === '/teacher' || currentPath === '/admin') {
         navigateTo('/');
       }
     }
@@ -159,9 +180,9 @@ export default function App() {
     }
   }, [currentSession?.user?.id, currentSession?.role]);
 
-  // Lưu state vào repository & localStorage khi học sinh thao tác (Debounce 500ms + so sánh JSON)
+  // Lưu state vào repository & localStorage khi học sinh thao tác
   useEffect(() => {
-    if (currentSession?.role === 'student' && studentState) {
+    if (studentState) {
       const stateJson = JSON.stringify(studentState);
       // Nếu trạng thái chưa hề thay đổi so với bản đã lưu -> bỏ qua hoàn toàn!
       if (stateJson === lastSavedStateJsonRef.current) {
@@ -174,16 +195,19 @@ export default function App() {
 
       saveTimeoutRef.current = setTimeout(() => {
         lastSavedStateJsonRef.current = stateJson;
-        attemptService.saveStudentState(currentSession.user.id, studentState, appSourceId);
+        attemptService.saveStudentState(currentStudentId, studentState, appSourceId);
         try {
           localStorage.setItem(
-            STATE_STORAGE_PREFIX + currentSession.user.id,
+            STATE_STORAGE_PREFIX + currentStudentId,
             stateJson
           );
+          const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
+          allStates[currentStudentId] = studentState;
+          localStorage.setItem('mam_van_student_states', JSON.stringify(allStates));
         } catch (e) {
           console.error('Lỗi khi lưu localStorage:', e);
         }
-      }, 500);
+      }, 300);
     }
 
     return () => {
@@ -191,7 +215,7 @@ export default function App() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [currentSession?.role, currentSession?.user?.id, studentState, appSourceId]);
+  }, [currentStudentId, studentState, appSourceId]);
 
   // Lắng nghe đồng bộ đa tab (Multi-tab Live Sync)
   useEffect(() => {
@@ -226,7 +250,9 @@ export default function App() {
         const nextJson = JSON.stringify(session);
         if (currentJson !== nextJson) {
           setCurrentSession(session);
-          if (session?.role === 'teacher') {
+          if (session?.role === 'admin') {
+            navigateTo('/admin');
+          } else if (session?.role === 'teacher') {
             navigateTo('/teacher');
           } else if (session?.role === 'student') {
             navigateTo('/');
@@ -249,6 +275,16 @@ export default function App() {
   );
   const publishedTopics = rawTopics ?? [];
 
+  // Nạp danh sách bài kiểm tra & câu hỏi từ Kho chung
+  const { data: rawQuizzes } = useLiveQuery<QuizWithMeta[]>(
+    () => quizService.getQuizzes(studentState.profile.grade, true),
+    ['quizzes', 'content']
+  );
+  const { data: rawQuestions } = useLiveQuery<Record<string, QuestionWithMeta>>(
+    () => quizService.getQuestions(),
+    ['questions', 'content']
+  );
+
   // Đồng bộ Cỡ chữ hiển thị lên toàn bộ giao diện thông qua thẻ html gốc
   useEffect(() => {
     const pref = studentState.fontSizePreference || 'normal';
@@ -268,7 +304,7 @@ export default function App() {
     | null
     | { type: 'video'; videoId: string }
     | { type: 'theory'; theoryId: string }
-    | { type: 'homework' }
+    | { type: 'homework'; homeworkQuizId?: string }
   >(null);
 
   // 4. Quản lý Popup nhắc nghỉ & Modal chọn Theme
@@ -307,7 +343,12 @@ export default function App() {
   // 7. Xử lý Đăng nhập & Đổi người dùng
   const handleLoginSuccess = (session: AuthSession) => {
     setCurrentSession(session);
-    if (session.role === 'teacher') {
+    try {
+      sessionStorage.removeItem('mam_van_watered_session_' + session.user.id);
+    } catch {}
+    if (session.role === 'admin') {
+      navigateTo('/admin');
+    } else if (session.role === 'teacher') {
       navigateTo('/teacher');
     } else if (session.role === 'student') {
       navigateTo('/');
@@ -333,6 +374,9 @@ export default function App() {
     const res = await authService.signIn('student', 'hs001', '123456');
     if (res.session) {
       setCurrentSession(res.session);
+      try {
+        sessionStorage.removeItem('mam_van_watered_session_hs001');
+      } catch {}
       const st = await attemptService.getStudentState('hs001');
       lastSavedStateJsonRef.current = JSON.stringify(st);
       setStudentState(st);
@@ -360,41 +404,57 @@ export default function App() {
       return;
     }
 
-    setStudentState((prev) => {
-      const xpRes = awardXP(
-        prev,
-        `attendance:${todayStr}`,
-        XP_CONFIG.ATTENDANCE_DAILY_XP,
-        'Điểm danh hằng ngày',
-        true
-      );
+    const xpRes = awardXP(
+      studentState,
+      `attendance:${todayStr}`,
+      XP_CONFIG.ATTENDANCE_DAILY_XP,
+      'Điểm danh hằng ngày',
+      true
+    );
 
-      const nextDays = prev.attendanceDaysThisWeek + 1;
-      let newBadges = [...prev.unlockedBadgeIds];
-      if (nextDays >= 3 && !newBadges.includes('badge_streak_3')) {
-        newBadges.push('badge_streak_3');
-        showToast('🎉 Nhận được huy hiệu: Chăm chỉ 3 ngày!');
-      }
-      if (nextDays >= 5 && !newBadges.includes('badge_streak_full')) {
-        newBadges.push('badge_streak_full');
-        showToast('🌟 Nhận được huy hiệu: Tuần trọn vẹn!');
-      }
+    const nextDays = (studentState.attendanceDaysThisWeek || 0) + 1;
+    let newBadges = [...(studentState.unlockedBadgeIds || [])];
+    if (nextDays >= 3 && !newBadges.includes('badge_streak_3')) {
+      newBadges.push('badge_streak_3');
+      showToast('🎉 Nhận được huy hiệu: Chăm chỉ 3 ngày!');
+    }
+    if (nextDays >= 5 && !newBadges.includes('badge_streak_full')) {
+      newBadges.push('badge_streak_full');
+      showToast('🌟 Nhận được huy hiệu: Tuần trọn vẹn!');
+    }
 
-      return {
-        ...prev,
-        ...xpRes.updatedState,
-        lastAttendanceDate: todayStr,
-        attendanceDaysThisWeek: nextDays,
-        attendanceHistory: [todayStr, ...prev.attendanceHistory],
-        unlockedBadgeIds: newBadges,
-      };
-    });
+    const updatedState: StudentState = {
+      ...studentState,
+      ...xpRes.updatedState,
+      lastAttendanceDate: todayStr,
+      attendanceDaysThisWeek: nextDays,
+      attendanceHistory: [todayStr, ...(studentState.attendanceHistory || [])],
+      unlockedBadgeIds: newBadges,
+    };
+
+    lastSavedStateJsonRef.current = JSON.stringify(updatedState);
+    setStudentState(updatedState);
+
+    // Lưu bền vững tức thời vào Repository & LocalStorage (không sợ reload trang)
+    try {
+      attemptService.saveStudentState(currentStudentId, updatedState, appSourceId);
+      localStorage.setItem(STATE_STORAGE_PREFIX + currentStudentId, JSON.stringify(updatedState));
+      const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
+      allStates[currentStudentId] = updatedState;
+      localStorage.setItem('mam_van_student_states', JSON.stringify(allStates));
+    } catch (e) {
+      console.error('Lỗi lưu điểm danh vào storage:', e);
+    }
 
     showToast('🌱 Điểm danh thành công: +2 XP & Tưới cây!');
   };
 
   // 10. Tiếp tục học dở (Nút Học tiếp)
-  const handleResumeLearning = () => {
+  const handleResumeLearning = (targetVideoId?: string) => {
+    if (targetVideoId) {
+      setActiveFlow({ type: 'video', videoId: targetVideoId });
+      return;
+    }
     if (studentState.currentProgress) {
       if (studentState.currentProgress.type === 'video') {
         setActiveFlow({
@@ -411,8 +471,9 @@ export default function App() {
         return;
       }
     }
-    // Mặc định video đầu tiên
-    setActiveFlow({ type: 'video', videoId: 'video_tho_1' });
+    // Mặc định video đầu tiên từ chủ đề xuất bản
+    const firstVidId = publishedTopics[0]?.videoIds?.[0] || 'video_tho_1';
+    setActiveFlow({ type: 'video', videoId: firstVidId });
   };
 
   // 11. Xin nhận quà (mở rương)
@@ -454,14 +515,62 @@ export default function App() {
     return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // Vai trò ADMIN -> Cổng Quản Trị Hệ Thống
+  if (currentSession.role === 'admin') {
+    return (
+      <AdminPortal
+        admin={currentSession.user as AdminProfile}
+        onLogout={handleLogout}
+        onImpersonateTeacher={(teacher) => {
+          setImpersonatingFromAdmin(currentSession.user as AdminProfile);
+          handleLoginSuccess({
+            user: teacher,
+            role: 'teacher',
+            signedInAt: Date.now(),
+          });
+        }}
+        onSwitchToStudentView={handleSwitchToStudentView}
+      />
+    );
+  }
+
   // Vai trò GIÁO VIÊN -> Không gian Giáo viên (Giấy & Mực)
   if (currentSession.role === 'teacher') {
     return (
-      <TeacherPortal
-        teacher={currentSession.user as TeacherProfile}
-        onLogout={handleLogout}
-        onSwitchToStudentView={handleSwitchToStudentView}
-      />
+      <div className="flex flex-col min-h-screen">
+        {impersonatingFromAdmin && (
+          <div className="bg-[#7C3AED] text-white px-4 sm:px-8 py-2.5 text-xs font-bold flex items-center justify-between sticky top-0 z-50 shadow-md">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2 py-0.5 rounded-full bg-white/20 uppercase tracking-wider text-[10px]">
+                🛡️ Xem dưới quyền GV
+              </span>
+              <span>
+                Đang truy cập với tư cách: {(currentSession.user as TeacherProfile).name} (
+                <span className="font-mono">{(currentSession.user as TeacherProfile).username}</span>)
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const adminProfile = impersonatingFromAdmin;
+                setImpersonatingFromAdmin(null);
+                handleLoginSuccess({
+                  user: adminProfile,
+                  role: 'admin',
+                  signedInAt: Date.now(),
+                });
+              }}
+              className="px-3 py-1 bg-white text-[#7C3AED] hover:bg-white/90 rounded-xl text-xs font-extrabold transition-all shadow-xs flex items-center gap-1 active:scale-[0.98]"
+            >
+              <span>← Quay lại trang Admin</span>
+            </button>
+          </div>
+        )}
+        <TeacherPortal
+          teacher={currentSession.user as TeacherProfile}
+          onLogout={handleLogout}
+          onSwitchToStudentView={handleSwitchToStudentView}
+        />
+      </div>
     );
   }
 
@@ -480,6 +589,7 @@ export default function App() {
           setCurrentTab(tab);
         }}
         state={studentState}
+        topicsCount={publishedTopics.length}
         onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
       />
 
@@ -501,37 +611,74 @@ export default function App() {
             onBackToList={() => setActiveFlow(null)}
           />
         ) : activeFlow?.type === 'homework' ? (
-          /* Luồng làm BTVN cô giao (+20 XP) */
-          <div className="w-full max-w-2xl mx-auto py-6 px-4">
-            <QuizRunner
-              quiz={QUIZZES.quiz_homework_special}
-              onComplete={(results, essays, earned, max) => {
-                setStudentState((prev) => {
-                  const xpRes = awardXP(
-                    prev,
-                    'quiz_completed:quiz_homework_special',
-                    XP_CONFIG.HOMEWORK_COMPLETED_XP,
-                    'BTVN Tuần 4: Ôn tập tổng hợp Thơ và Tu từ'
-                  );
-                  return {
-                    ...prev,
-                    ...xpRes.updatedState,
-                    questionResults: [...results, ...prev.questionResults],
-                  };
-                });
-                showToast('🎉 Xuất sắc! Em đã hoàn thành BTVN và nhận +20 XP!');
-                setActiveFlow(null);
-              }}
-              onExit={() => setActiveFlow(null)}
-            />
-          </div>
+          /* Luồng làm BTVN cô giao */
+          (() => {
+            const targetQuiz =
+              (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId) ||
+              QUIZZES[activeFlow.homeworkQuizId || 'quiz_homework_special'] ||
+              QUIZZES.quiz_homework_special;
+
+            const qList = (targetQuiz.questionIds || [])
+              .map((id) => (rawQuestions ? rawQuestions[id] : null) || (QUESTIONS_BANK as any)[id])
+              .filter(Boolean);
+
+            const xpEarned = targetQuiz.xp || XP_CONFIG.HOMEWORK_COMPLETED_XP || 20;
+
+            return (
+              <div className="w-full max-w-2xl mx-auto py-6 px-4">
+                <QuizRunner
+                  quiz={targetQuiz}
+                  questions={qList.length > 0 ? qList : undefined}
+                  onComplete={(results, essays, earned, max) => {
+                    if (essays && essays.length > 0) {
+                      essays.forEach((e) => {
+                        essayRepository.createSubmission({
+                          studentId: currentStudentId,
+                          studentName: studentState.profile?.name || 'Học sinh',
+                          classId: (studentState.profile as any)?.classId || 'class_7a2',
+                          className: studentState.profile?.grade || '7A2',
+                          questionId: e.questionId,
+                          quizId: targetQuiz.id,
+                          content: e.content,
+                          wordCount: e.wordCount,
+                          status: 'PENDING_TEACHER',
+                          promptTitle: e.promptTitle || targetQuiz.title || 'Bài tập làm văn',
+                          quizTitle: `BTVN: ${targetQuiz.title}`,
+                          skillLevel: 'VAN_DUNG',
+                        }).catch((err: any) => console.error('Lỗi lưu bài tự luận BTVN:', err));
+                      });
+                    }
+
+                    setStudentState((prev) => {
+                      const xpRes = awardXP(
+                        prev,
+                        `quiz_completed:${targetQuiz.id}`,
+                        xpEarned,
+                        `BTVN: ${targetQuiz.title}`
+                      );
+                      return {
+                        ...prev,
+                        ...xpRes.updatedState,
+                        completedSteps: [...(prev.completedSteps || []), `quiz_completed:${targetQuiz.id}`],
+                        questionResults: [...results, ...(prev.questionResults || [])],
+                        essaySubmissions: [...(essays || []), ...(prev.essaySubmissions || [])],
+                      };
+                    });
+                    showToast(`🎉 Xuất sắc! Em đã hoàn thành BTVN và nhận +${xpEarned} XP!`);
+                    setActiveFlow(null);
+                  }}
+                  onExit={() => setActiveFlow(null)}
+                />
+              </div>
+            );
+          })()
         ) : (
           /* CÁC TAB CHÍNH */
           <>
             {currentTab === 'home' && (
               <HomeScreen
                 state={studentState}
-                topics={publishedTopics.length > 0 ? publishedTopics : undefined}
+                topics={publishedTopics}
                 onCheckIn={handleAttendanceCheckIn}
                 onResumeLearning={handleResumeLearning}
                 onSelectTopic={(tId) => {
@@ -539,7 +686,7 @@ export default function App() {
                 }}
                 onSelectVideo={(vId) => setActiveFlow({ type: 'video', videoId: vId })}
                 onSelectTheory={(thId) => setActiveFlow({ type: 'theory', theoryId: thId })}
-                onSelectHomework={() => setActiveFlow({ type: 'homework' })}
+                onSelectHomework={(hwId) => setActiveFlow({ type: 'homework', homeworkQuizId: hwId })}
                 onNavigateTab={(tab) => setCurrentTab(tab)}
               />
             )}
@@ -547,7 +694,7 @@ export default function App() {
             {currentTab === 'learn' && (
               <LearnScreen
                 state={studentState}
-                topics={publishedTopics.length > 0 ? publishedTopics : undefined}
+                topics={publishedTopics}
                 onSelectVideo={(vId) => setActiveFlow({ type: 'video', videoId: vId })}
                 onSelectTheory={(thId) => setActiveFlow({ type: 'theory', theoryId: thId })}
               />
@@ -556,9 +703,10 @@ export default function App() {
             {currentTab === 'tree' && (
               <TreeScreen
                 state={studentState}
+                topics={publishedTopics}
+                onCheckIn={handleAttendanceCheckIn}
                 onSelectTopic={(tId) => {
-                  const t = VIDEOS['video_' + tId] ? 'video_' + tId : 'video_tho_1';
-                  setActiveFlow({ type: 'video', videoId: t });
+                  setCurrentTab('learn');
                 }}
               />
             )}

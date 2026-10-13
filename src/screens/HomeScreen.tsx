@@ -25,17 +25,23 @@ import {
   Feather,
   Bell,
 } from 'lucide-react';
-import { useLiveQuery } from '../services/index.ts';
+import {
+  useLiveQuery,
+  contentService,
+  quizService,
+  VideoLessonWithMeta,
+  QuizWithMeta,
+} from '../services/index.ts';
 
 interface HomeScreenProps {
   state: StudentState;
   topics?: Topic[];
   onCheckIn: () => void;
-  onResumeLearning: () => void;
+  onResumeLearning: (targetVideoId?: string) => void;
   onSelectTopic: (topicId: string) => void;
   onSelectVideo: (videoId: string) => void;
   onSelectTheory: (theoryId: string) => void;
-  onSelectHomework: () => void;
+  onSelectHomework: (homeworkQuizId?: string) => void;
   onNavigateTab: (tab: 'learn' | 'tree' | 'rewards' | 'profile') => void;
 }
 
@@ -51,7 +57,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateTab,
 }) => {
   const [wateringTrigger, setWateringTrigger] = useState(false);
-  const activeTopics = topics && topics.length > 0 ? topics : TOPICS;
+  const activeTopics = topics ?? [];
+
+  // Lắng nghe video và quizzes từ kho nội dung
+  const { data: liveVideos } = useLiveQuery<VideoLessonWithMeta[]>(
+    () => contentService.getVideoLessons(undefined, true),
+    ['content']
+  );
+  const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
+    () => quizService.getQuizzes(state.profile.grade || undefined, true),
+    ['quizzes', 'content']
+  );
+
+  // Xác định bài học tiếp tục / bắt đầu
+  const currentVideo = state.currentProgress
+    ? ((liveVideos || []).find((v) => v.id === state.currentProgress?.itemId) || VIDEOS[state.currentProgress?.itemId])
+    : null;
+
+  const firstAvailableVideo = React.useMemo(() => {
+    if (liveVideos && liveVideos.length > 0) {
+      for (const t of activeTopics) {
+        if (t.videoIds && t.videoIds.length > 0) {
+          const match = liveVideos.find((lv) => t.videoIds.includes(lv.id));
+          if (match) return match;
+        }
+      }
+      return liveVideos[0];
+    }
+    return null;
+  }, [liveVideos, activeTopics]);
+
+  const activeLesson = currentVideo || firstAvailableVideo;
+  const isResuming = !!currentVideo;
+
+  // Lấy danh sách BTVN từ kho quizzes (loại homework)
+  const homeworkQuizzes = (liveQuizzes || []).filter((q) => q.kind === 'homework');
+
+  const isQuizCompleted = (qId: string) =>
+    (state.completedSteps || []).includes(`quiz_completed:${qId}`);
+
+  // Ưu tiên bài tập chưa làm
+  const pendingHomework = homeworkQuizzes.find((hw) => !isQuizCompleted(hw.id));
+  const completedHomework = homeworkQuizzes.find((hw) => isQuizCompleted(hw.id));
+  const activeHomework = pendingHomework || completedHomework;
+  const isHomeworkCompleted = !pendingHomework && !!completedHomework;
 
   // Lời chào theo giờ
   const currentHour = new Date().getHours();
@@ -96,24 +145,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   activeTopics.forEach((t) => {
     const isFlagged = state.flaggedNeedReviewTopicIds.includes(t.id);
-    if (isFlagged && weakItems.length < 3) {
+    const tMastery = calculateAllMastery(state.questionResults, t.id);
+    const hasLowSkill = Object.values(tMastery).some((m) => m.status === 'NEEDS_REVIEW');
+    if ((isFlagged || hasLowSkill) && weakItems.length < 3) {
       weakItems.push({
         id: t.id,
         title: t.title,
-        reason: 'Bạn đã đánh dấu "Chưa hiểu" ở bài lý thuyết',
-        videoId: t.videoIds[0],
+        reason: isFlagged
+          ? 'Bạn đã đánh dấu "Chưa hiểu" ở bài lý thuyết'
+          : 'Cần củng cố thêm một số câu hỏi trắc nghiệm',
+        videoId: t.videoIds && t.videoIds.length > 0 ? t.videoIds[0] : undefined,
       });
     }
   });
-
-  if (allMastery.NHAN_BIET.status === 'NEEDS_REVIEW' && weakItems.length < 3) {
-    weakItems.push({
-      id: 'topic_tu_lay_so_sanh',
-      title: 'Từ láy và biện pháp tu từ so sánh',
-      reason: 'Phần Nhận biết từ láy còn một vài nhầm lẫn',
-      videoId: 'video_tulay_1',
-    });
-  }
 
   // Dữ liệu lá cho cây
   const topicLeavesData = activeTopics.map((t) => {
@@ -287,48 +331,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {TOPICS.map((topic, idx) => {
-            const visual = topicVisuals[idx % topicVisuals.length];
-            const Icon = visual.icon;
+        {activeTopics.length === 0 ? (
+          <div className="p-8 text-center bg-white/70 border border-slate-200/80 rounded-3xl">
+            <MamMuc mood="waiting" size="sm" className="mx-auto mb-2" />
+            <p className="text-xs font-semibold text-slate-500">
+              Chưa có chủ đề nào được xuất bản. Thầy/Cô sẽ sớm cập nhật các bài học mới nhé!
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {activeTopics.map((topic, idx) => {
+              const visual = topicVisuals[idx % topicVisuals.length];
+              const Icon = visual.icon;
 
-            return (
-              <div
-                key={topic.id}
-                onClick={() => onSelectTopic(topic.id)}
-                className={`relative overflow-hidden rounded-3xl p-5 text-white bg-gradient-to-br ${visual.gradient} shadow-md shadow-indigo-950/10 cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:shadow-xl group`}
-              >
-                {/* Light reflection glow */}
-                <div className="absolute top-0 right-0 w-24 h-24 bg-white/15 rounded-full blur-xl pointer-events-none -mr-8 -mt-8 group-hover:scale-125 transition-transform" />
+              return (
+                <div
+                  key={topic.id}
+                  onClick={() => onSelectTopic(topic.id)}
+                  className={`relative overflow-hidden rounded-3xl p-5 text-white bg-gradient-to-br ${visual.gradient} shadow-md shadow-indigo-950/10 cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:shadow-xl group`}
+                >
+                  {/* Light reflection glow */}
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-white/15 rounded-full blur-xl pointer-events-none -mr-8 -mt-8 group-hover:scale-125 transition-transform" />
 
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md border border-white/25">
-                    {visual.badge}
-                  </span>
-                  <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
-                    <Icon className="w-4 h-4" />
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md border border-white/25">
+                      {visual.badge}
+                    </span>
+                    <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  <h4 className="font-extrabold text-base mb-1.5 leading-snug line-clamp-2">
+                    {topic.title}
+                  </h4>
+
+                  <p className="text-[11px] text-white/80 line-clamp-2 leading-relaxed mb-4">
+                    {topic.shortDesc}
+                  </p>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs font-semibold">
+                    <span>{(topic.videoIds || []).length} bài giảng</span>
+                    <div className="flex items-center gap-1 text-white group-hover:translate-x-1 transition-transform">
+                      <span>Vào học</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </div>
                   </div>
                 </div>
-
-                <h4 className="font-extrabold text-base mb-1.5 leading-snug line-clamp-2">
-                  {topic.title}
-                </h4>
-
-                <p className="text-[11px] text-white/80 line-clamp-2 leading-relaxed mb-4">
-                  {topic.shortDesc}
-                </p>
-
-                <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs font-semibold">
-                  <span>{topic.videoIds.length} bài giảng</span>
-                  <div className="flex items-center gap-1 text-white group-hover:translate-x-1 transition-transform">
-                    <span>Vào học</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ================= 3. HÀNG 2 CỘT: ĐIỂM DANH & HỌC TIẾP ================= */}
@@ -400,35 +453,64 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#4F46E5] bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">
-                Tiếp tục bài học
+                {isResuming ? 'Tiếp tục bài học' : 'Bài học đề xuất'}
               </span>
-              <span className="text-xs text-slate-500 font-medium">Đang dở</span>
+              <span
+                className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                  isResuming
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                }`}
+              >
+                {isResuming ? 'Đang dở' : 'Bài học mới'}
+              </span>
             </div>
 
             <h3 className="font-extrabold text-lg text-[#1E1B4B] mb-2 leading-snug">
-              {state.currentProgress
-                ? VIDEOS[state.currentProgress.itemId]?.title || 'Thơ bốn chữ, năm chữ'
-                : 'Thơ bốn chữ, năm chữ: Đặc điểm hình thức'}
+              {activeLesson ? activeLesson.title : 'Khám phá bài học mới'}
             </h3>
 
             <p className="text-xs text-slate-600 leading-relaxed mb-5">
-              Bước hiện tại:{' '}
-              <strong className="text-[#4F46E5]">
-                {state.currentProgress?.stepIndex === 3
-                  ? 'Luyện tập sau video'
-                  : state.currentProgress?.stepIndex === 4
-                  ? 'Kiểm tra 1 (7 phút)'
-                  : 'Xem bài giảng & Tóm tắt'}
-              </strong>
+              {isResuming ? (
+                <>
+                  Bước hiện tại:{' '}
+                  <strong className="text-[#4F46E5]">
+                    {state.currentProgress?.stepIndex === 3
+                      ? 'Luyện tập sau video'
+                      : state.currentProgress?.stepIndex === 4
+                      ? 'Kiểm tra 1 (7 phút)'
+                      : 'Xem bài giảng & Tóm tắt'}
+                  </strong>
+                </>
+              ) : activeLesson ? (
+                <>
+                  Bắt đầu học cùng bạn đồng hành Mầm Mực · Thời lượng:{' '}
+                  <strong className="text-[#4F46E5]">{Math.round((activeLesson.durationSec || 600) / 60)} phút</strong>
+                </>
+              ) : (
+                'Khám phá kho bài giảng phong phú cùng bạn đồng hành Mầm Mực!'
+              )}
             </p>
           </div>
 
           <button
-            onClick={onResumeLearning}
-            className="w-full py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm hover:brightness-105 active:scale-[0.99] transition-all shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2"
+            onClick={() => {
+              if (activeLesson) {
+                onSelectVideo(activeLesson.id);
+              } else {
+                onNavigateTab('learn');
+              }
+            }}
+            className="w-full py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm hover:brightness-105 active:scale-[0.99] transition-all shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer"
           >
             <Play className="w-4 h-4 fill-current" />
-            <span>Học tiếp ngay</span>
+            <span>
+              {isResuming
+                ? 'Học tiếp ngay'
+                : activeLesson
+                ? 'Bắt đầu học ngay'
+                : 'Khám phá bài học'}
+            </span>
           </button>
         </div>
       </div>
@@ -503,33 +585,76 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           />
         </div>
 
-        {/* Bài tập về nhà đặc biệt (BTVN +20 XP) */}
+        {/* Bài tập về nhà đặc biệt (BTVN từ giáo viên) */}
         <div className="edtech-card rounded-3xl p-6 border-indigo-100 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-purple-100 text-[#8B5CF6]">
-                Nhiệm vụ tuần 4
+              <span
+                className={`text-xs font-extrabold px-3 py-1 rounded-full ${
+                  isHomeworkCompleted
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-purple-100 text-[#8B5CF6]'
+                }`}
+              >
+                {isHomeworkCompleted
+                  ? 'Đã hoàn thành ✓'
+                  : activeHomework?.dueDate
+                  ? `Hạn nộp: ${activeHomework.dueDate}`
+                  : 'Nhiệm vụ tuần'}
               </span>
-              <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                +20 XP
+              <span
+                className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${
+                  isHomeworkCompleted
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                }`}
+              >
+                +{activeHomework?.xp || 20} XP
               </span>
             </div>
 
             <h3 className="font-extrabold text-base text-[#1E1B4B] mb-2">
-              BTVN: Ôn tập tổng hợp Thơ và Tu từ
+              {activeHomework
+                ? activeHomework.title
+                : 'Chưa có bài tập về nhà mới'}
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed mb-5">
-              Bài tập 4 câu gồm nhận biết thể thơ, phân tích hình ảnh thơ và tìm từ láy gợi cảm do cô giáo giao riêng!
+              {isHomeworkCompleted
+                ? 'Em đã hoàn thành xuất sắc bài tập này! Em có thể làm lại để nâng cao kết quả và củng cố tư duy.'
+                : activeHomework
+                ? (activeHomework as any).description ||
+                  'Bài tập rèn luyện do cô giáo giao riêng! Làm bài để tích lũy XP và rèn luyện kỹ năng nhé.'
+                : 'Thầy/cô chưa giao thêm bài tập về nhà mới cho lớp. Bạn hãy luyện tập các bài học trong kho tri thức nhé!'}
             </p>
           </div>
 
-          <button
-            onClick={onSelectHomework}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-bold text-sm hover:brightness-105 active:scale-[0.99] transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2"
-          >
-            <FileCheck className="w-4 h-4" />
-            <span>Làm bài BTVN ngay (+20 XP)</span>
-          </button>
+          {activeHomework ? (
+            isHomeworkCompleted ? (
+              <button
+                onClick={() => onSelectHomework(activeHomework.id)}
+                className="w-full py-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm border border-emerald-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span>Xem lại / Làm lại bài (+XP)</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onSelectHomework(activeHomework.id)}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-bold text-sm hover:brightness-105 active:scale-[0.99] transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <FileCheck className="w-4 h-4" />
+                <span>Làm bài BTVN ngay (+{activeHomework?.xp || 20} XP)</span>
+              </button>
+            )
+          ) : (
+            <button
+              onClick={() => onNavigateTab('learn')}
+              className="w-full py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-[#4F46E5] font-bold text-sm border border-indigo-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4 text-[#4F46E5]" />
+              <span>Đến kho bài học rèn luyện</span>
+            </button>
+          )}
         </div>
       </div>
 

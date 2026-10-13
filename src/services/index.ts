@@ -17,6 +17,7 @@ import {
   RewardRepository,
   AuditRepository,
   SettingRepository,
+  TeacherRepository,
 } from './types.ts';
 import {
   authRepo,
@@ -29,6 +30,7 @@ import {
   rewardRepo,
   auditRepo,
   settingRepo,
+  teacherRepo,
   resetAllDemoData,
   bootstrapStorage,
   STORAGE_SCHEMA_VERSION,
@@ -40,26 +42,32 @@ import {
   supabaseStudentRepo,
   supabaseAttemptRepo,
   supabaseEssayRepo,
+  supabaseRewardRepo,
+  supabaseTeacherRepo,
+  supabaseQuizRepo,
+  supabaseContentRepo,
 } from './supabase/supabaseRepositories.ts';
 import { syncEventBus } from './mock/eventBus.ts';
 
 // Xuất các repository instances (Kết nối Supabase trực tiếp)
 export const authService: AuthRepository = supabaseAuthRepo;
 export const authRepository: AuthRepository = supabaseAuthRepo;
+export const teacherService: TeacherRepository = supabaseTeacherRepo;
+export const teacherRepository: TeacherRepository = supabaseTeacherRepo;
 export const classService: ClassRepository = supabaseClassRepo;
 export const classRepository: ClassRepository = supabaseClassRepo;
 export const studentService: StudentRepository = supabaseStudentRepo;
 export const studentRepository: StudentRepository = supabaseStudentRepo;
-export const contentService: ContentRepository = contentRepo;
-export const contentRepository: ContentRepository = contentRepo;
-export const quizService: QuizRepository = quizRepo;
-export const quizRepository: QuizRepository = quizRepo;
+export const contentService: ContentRepository = supabaseContentRepo;
+export const contentRepository: ContentRepository = supabaseContentRepo;
+export const quizService: QuizRepository = supabaseQuizRepo;
+export const quizRepository: QuizRepository = supabaseQuizRepo;
 export const attemptService: AttemptRepository = supabaseAttemptRepo;
 export const attemptRepository: AttemptRepository = supabaseAttemptRepo;
 export const essayService: EssayRepository = supabaseEssayRepo;
 export const essayRepository: EssayRepository = supabaseEssayRepo;
-export const rewardService: RewardRepository = rewardRepo;
-export const rewardRepository: RewardRepository = rewardRepo;
+export const rewardService: RewardRepository = supabaseRewardRepo;
+export const rewardRepository: RewardRepository = supabaseRewardRepo;
 export const auditService: AuditRepository = auditRepo;
 export const auditRepository: AuditRepository = auditRepo;
 export const settingService: SettingRepository = settingRepo;

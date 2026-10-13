@@ -108,6 +108,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Loại bỏ viền đen/outline mặc định khó chịu của trình duyệt khi click chuyển tab */
+button:focus {
+  outline: none;
+}
+button:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Modern Creative EdTech Dot-Grid Background */
 .edtech-dot-bg {
   background-color: #F8FAFF;
