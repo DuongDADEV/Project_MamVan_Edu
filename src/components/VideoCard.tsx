@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { VideoLesson, Topic, StudentState } from '../types.ts';
-import { TOTAL_VIDEO_XP } from '../config.ts';
+import { VideoLesson, Topic, StudentState, Quiz } from '../types.ts';
+import { XP_CONFIG, TOTAL_VIDEO_XP } from '../config.ts';
+import { useLiveQuery, contentService, QuizWithMeta } from '../services/index.ts';
+import { QUIZZES } from '../data/mockData.ts';
 import {
   Clock,
   Play,
@@ -18,6 +20,7 @@ export interface VideoCardProps {
   topic: Topic;
   index: number;
   state: StudentState;
+  quizzes?: Quiz[];
   onClick: () => void;
 }
 
@@ -66,36 +69,72 @@ export type VideoLearningStatus = 'Chưa học' | 'Đang học' | 'Đã hoàn th
 export function getVideoCardStatus(
   video: VideoLesson,
   topic: Topic,
-  state: StudentState
+  state: StudentState,
+  quizzes?: Quiz[]
 ): {
   status: VideoLearningStatus;
   completedStepsCount: number;
+  totalStepsCount: number;
+  maxXP: number;
   isFlowCompleted: boolean;
   isInProgress: boolean;
 } {
-  // 6 bước học của video:
-  // 1. Xem video
-  // 2. Tóm tắt kiến thức trọng tâm
-  // 3. Luyện tập trắc nghiệm
-  // 4. Kiểm tra nhanh 7 phút (KT1)
-  // 5. Kiểm tra năng lực Mastery Check (KT2)
-  // 6. Hoàn thành trọn vẹn luồng học
-  const stepKeys = [
-    `video_watch:${video.id}`,
-    `summary_read:${video.id}`,
-    `quiz_completed:${video.practiceQuizId}`,
-    `quiz_completed:${video.quickTestId}`,
-    `quiz_completed:${video.masteryCheckId}`,
-    `video_flow_completed:${video.id}`,
-  ];
+  // Xây dựng danh sách bước thực tế của video này (khớp chính xác với VideoLessonScreen)
+  const stepKeys = [`video_watch:${video.id}`];
+  let maxXP = XP_CONFIG.VIDEO_WATCH_80_PERCENT_XP;
 
+  if (video.summaryPoints && video.summaryPoints.length > 0) {
+    stepKeys.push(`summary_read:${video.id}`);
+    maxXP += XP_CONFIG.VIDEO_SUMMARY_READ_XP;
+  }
+
+  // Khám phá quiz theo topic tương tự VideoLessonScreen
+  const allQuizzes = quizzes || [];
+  const topicQuizzes = allQuizzes.filter(
+    (q) => q && (q.topicId === topic.id || q.topicId === video.topicId)
+  );
+
+  const practiceQuiz =
+    (video.practiceQuizId && allQuizzes.find((q) => q.id === video.practiceQuizId)) ||
+    topicQuizzes.find((q) => q.kind === 'practice');
+
+  const quickTestQuiz =
+    (video.quickTestId && allQuizzes.find((q) => q.id === video.quickTestId)) ||
+    topicQuizzes.find((q) => q.kind === 'quick' && q.id !== practiceQuiz?.id);
+
+  const masteryQuiz =
+    (video.masteryCheckId && allQuizzes.find((q) => q.id === video.masteryCheckId)) ||
+    topicQuizzes.find(
+      (q) =>
+        (q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') &&
+        q.id !== practiceQuiz?.id &&
+        q.id !== quickTestQuiz?.id
+    );
+
+  if (practiceQuiz) {
+    stepKeys.push(`quiz_completed:${practiceQuiz.id}`);
+    maxXP += XP_CONFIG.VIDEO_PRACTICE_COMPLETED_XP;
+  }
+  if (quickTestQuiz) {
+    stepKeys.push(`quiz_completed:${quickTestQuiz.id}`);
+    maxXP += XP_CONFIG.VIDEO_QUICK_TEST_XP;
+  }
+  if (masteryQuiz) {
+    stepKeys.push(`quiz_completed:${masteryQuiz.id}`);
+    maxXP += XP_CONFIG.VIDEO_MASTERY_CHECK_XP;
+  }
+
+  stepKeys.push(`video_flow_completed:${video.id}`);
+  maxXP += XP_CONFIG.VIDEO_FULL_COMPLETION_XP;
+
+  const totalStepsCount = stepKeys.length;
   const completedStepsCount = stepKeys.filter((k) =>
     state.completedSteps.includes(k)
   ).length;
 
   const isFlowCompleted =
     state.completedSteps.includes(`video_flow_completed:${video.id}`) ||
-    completedStepsCount === 6;
+    (totalStepsCount > 0 && completedStepsCount >= totalStepsCount);
 
   const isDirectlyActive = state.currentProgress?.itemId === video.id;
   const isInProgress = isDirectlyActive || (completedStepsCount > 0 && !isFlowCompleted);
@@ -120,7 +159,7 @@ export function getVideoCardStatus(
     status = 'Chưa học';
   }
 
-  return { status, completedStepsCount, isFlowCompleted, isInProgress };
+  return { status, completedStepsCount, totalStepsCount, maxXP, isFlowCompleted, isInProgress };
 }
 
 export const VideoCard: React.FC<VideoCardProps> = ({
@@ -128,12 +167,24 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   topic,
   index,
   state,
+  quizzes,
   onClick,
 }) => {
   const [imgError, setImgError] = useState(false);
 
-  const { status, completedStepsCount, isFlowCompleted, isInProgress } =
-    getVideoCardStatus(video, topic, state);
+  // Lắng nghe realtime quizzes nếu component chưa được truyền quizzes
+  const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
+    () => contentService.getQuizzes(undefined, true),
+    ['content']
+  );
+
+  const effectiveQuizzes = quizzes || [
+    ...Object.values(QUIZZES),
+    ...(liveQuizzes || []),
+  ];
+
+  const { status, completedStepsCount, totalStepsCount, maxXP, isFlowCompleted, isInProgress } =
+    getVideoCardStatus(video, topic, state, effectiveQuizzes);
 
   // Tách số thứ tự bài học từ tiêu đề (ví dụ: "Bài 1: Đặc điểm..." -> "Bài 1")
   const match = video.title.match(/^(Bài\s*\d+)/i);
@@ -188,7 +239,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     }
   };
 
-  const progressPercent = Math.min(100, Math.round((completedStepsCount / 6) * 100));
+  const progressPercent = totalStepsCount > 0 ? Math.min(100, Math.round((completedStepsCount / totalStepsCount) * 100)) : 0;
 
   return (
     <div
@@ -336,7 +387,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             <div className="flex items-center justify-between text-[11px] text-[#718096] mb-1.5 font-medium">
               <span>Tiến độ bài</span>
               <span className="font-semibold text-[#2F3E6B]">
-                {completedStepsCount}/6 bước
+                {completedStepsCount}/{totalStepsCount} bước
               </span>
             </div>
             <div className="w-full h-1.5 bg-[#EAE2D5] rounded-full overflow-hidden">
@@ -347,15 +398,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             </div>
           </div>
 
-          {/* Nhãn XP nhỏ màu vàng mật (lấy động từ TOTAL_VIDEO_XP config) */}
+          {/* Nhãn XP nhỏ màu vàng mật (lấy động theo số bước thực tế của bài) */}
           <div className="flex items-center justify-between pt-0.5">
             <span className="text-[11px] text-[#8C7A65]">Phần thưởng</span>
             <span
-              title="Tổng XP có thể nhận được khi hoàn thành toàn bộ 6 bước học"
+              title="Tổng XP có thể nhận được khi hoàn thành toàn bộ các bước học"
               className="inline-flex items-center gap-1 text-[11px] font-bold text-[#92400E] bg-[#FEF3C7] border border-[#FDE68A] px-2 py-0.5 rounded-full shadow-2xs"
             >
               <Sparkles className="w-3 h-3 text-[#D97706]" />
-              <span>Tối đa {TOTAL_VIDEO_XP} XP</span>
+              <span>Tối đa {maxXP} XP</span>
             </span>
           </div>
         </div>

@@ -296,7 +296,11 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
 
           <button
             type="button"
-            onClick={onPublish}
+            disabled={isSaving}
+            onClick={async () => {
+              await handleSaveDraft();
+              onPublish();
+            }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
           >
             <UploadCloud className="w-3.5 h-3.5" />

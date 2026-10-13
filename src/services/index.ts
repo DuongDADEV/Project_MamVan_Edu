@@ -44,6 +44,8 @@ import {
   supabaseEssayRepo,
   supabaseRewardRepo,
   supabaseTeacherRepo,
+  supabaseQuizRepo,
+  supabaseContentRepo,
 } from './supabase/supabaseRepositories.ts';
 import { syncEventBus } from './mock/eventBus.ts';
 
@@ -56,10 +58,10 @@ export const classService: ClassRepository = supabaseClassRepo;
 export const classRepository: ClassRepository = supabaseClassRepo;
 export const studentService: StudentRepository = supabaseStudentRepo;
 export const studentRepository: StudentRepository = supabaseStudentRepo;
-export const contentService: ContentRepository = contentRepo;
-export const contentRepository: ContentRepository = contentRepo;
-export const quizService: QuizRepository = quizRepo;
-export const quizRepository: QuizRepository = quizRepo;
+export const contentService: ContentRepository = supabaseContentRepo;
+export const contentRepository: ContentRepository = supabaseContentRepo;
+export const quizService: QuizRepository = supabaseQuizRepo;
+export const quizRepository: QuizRepository = supabaseQuizRepo;
 export const attemptService: AttemptRepository = supabaseAttemptRepo;
 export const attemptRepository: AttemptRepository = supabaseAttemptRepo;
 export const essayService: EssayRepository = supabaseEssayRepo;

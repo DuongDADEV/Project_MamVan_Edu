@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { StudentState } from '../types.ts';
-import { TOPICS, BADGES_CATALOG } from '../data/mockData.ts';
+import { StudentState, Topic } from '../types.ts';
+import { BADGES_CATALOG, TOPICS } from '../data/mockData.ts';
 import { TREE_STAGES_CONFIG } from '../config.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
 import { GrowthTree, TopicLeafData } from '../components/GrowthTree.tsx';
@@ -9,30 +9,57 @@ import { Award, Sprout, BarChart3, ArrowRight, CheckCircle2, Lock, Sparkles, Lay
 
 interface TreeScreenProps {
   state: StudentState;
+  topics?: Topic[];
   onSelectTopic: (topicId: string) => void;
   onCheckIn?: () => void;
 }
 
-export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic, onCheckIn }) => {
+export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectTopic, onCheckIn }) => {
   const [activeTab, setActiveTab] = useState<'tree' | 'mastery' | 'badges'>('tree');
   const [selectedLeafTopicId, setSelectedLeafTopicId] = useState<string | null>(null);
   const [isWatering, setIsWatering] = useState(false);
   const [wateringFeedback, setWateringFeedback] = useState<string | null>(null);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [hasWateredThisSession, setHasWateredThisSession] = useState<boolean>(() => {
+    try {
+      const studentKey = state.profile?.id || 'hs001';
+      return (
+        sessionStorage.getItem('mam_van_watered_session_' + studentKey) === 'true' ||
+        state.lastAttendanceDate === todayStr
+      );
+    } catch {
+      return state.lastAttendanceDate === todayStr;
+    }
+  });
+
   const handleWaterTree = () => {
+    if (hasWateredThisSession || isWatering) {
+      return;
+    }
     setIsWatering(true);
+    setHasWateredThisSession(true);
+    try {
+      const studentKey = state.profile?.id || 'hs001';
+      sessionStorage.setItem('mam_van_watered_session_' + studentKey, 'true');
+    } catch {}
+
     if (onCheckIn) {
       onCheckIn();
     }
     setWateringFeedback('💧 Bạn đã tưới nước cho Cây Mầm Mực! Hạt mầm văn chương đang lớn lên từng ngày 🌱✨');
     setTimeout(() => {
+      setIsWatering(false);
+    }, 1800);
+    setTimeout(() => {
       setWateringFeedback(null);
     }, 3500);
   };
 
-  // Dữ liệu lá trên cây
-  const topicLeavesData: TopicLeafData[] = TOPICS.map((t) => {
-    const tMastery = calculateAllMastery(state.questionResults, t.id);
+  // Dữ liệu lá trên cây lấy từ danh sách chủ đề thực tế (chỉ hiện chủ đề giáo viên đã xuất bản)
+  const activeTopics = topics || [];
+  const topicLeavesData: TopicLeafData[] = activeTopics.map((t) => {
+    const tMastery = calculateAllMastery(state.questionResults || [], t.id);
     const avg = Math.round(
       (tMastery.NHAN_BIET.percentage +
         tMastery.THONG_HIEU.percentage +
@@ -104,7 +131,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic, on
     }
   };
 
-  const selectedTopic = TOPICS.find((t) => t.id === selectedLeafTopicId);
+  const selectedTopic = activeTopics.find((t) => t.id === selectedLeafTopicId);
 
   return (
     <div className="w-full max-w-4xl mx-auto py-6 px-4 sm:px-8 space-y-6 text-[#1E1B4B]">
@@ -195,21 +222,36 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic, on
               className="my-4"
             />
 
+            {/* Thông báo nếu giáo viên chưa xuất bản chủ đề nào */}
+            {activeTopics.length === 0 && (
+              <div className="w-full text-center py-3 px-4 my-2 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-800 font-medium">
+                🌱 Thầy/Cô chưa công bố chủ đề nào cho lớp. Các chồi lá tri thức sẽ trổ sinh ngay khi có bài học mới được xuất bản!
+              </div>
+            )}
+
             {/* THANH TƯƠNG TÁC TƯỚI NƯỚC CHO MẦM MỰC */}
             <div className="w-full mt-2 mb-4 p-4 bg-gradient-to-r from-indigo-50/80 via-purple-50/60 to-emerald-50/80 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <div className="w-10 h-10 rounded-2xl bg-white shadow-xs border border-indigo-100 flex items-center justify-center text-xl shrink-0">
-                  💧
+                  {hasWateredThisSession ? '🌱' : '💧'}
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-[#1E1B4B] flex items-center gap-1.5">
                     <span>Nước tưới Mầm Mực</span>
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                      Sẵn sàng
-                    </span>
+                    {hasWateredThisSession ? (
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        Đã tưới nước ✓
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        Sẵn sàng
+                      </span>
+                    )}
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Tưới nước mỗi ngày để kích thích mầm cây vươn chồi và trổ lá tri thức!
+                    {hasWateredThisSession
+                      ? 'Cây Mầm Mực đã nhận đủ dưỡng chất! Hãy quay lại tưới nước ở lần đăng nhập tiếp theo nhé.'
+                      : 'Tưới nước mỗi ngày để kích thích mầm cây vươn chồi và trổ lá tri thức!'}
                   </p>
                 </div>
               </div>
@@ -217,11 +259,24 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic, on
               <button
                 type="button"
                 onClick={handleWaterTree}
-                disabled={isWatering}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] hover:from-[#4338CA] hover:to-[#6D28D9] disabled:opacity-60 text-white font-extrabold text-xs shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                disabled={isWatering || hasWateredThisSession}
+                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  hasWateredThisSession
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 opacity-90 cursor-not-allowed shadow-none'
+                    : 'bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] hover:from-[#4338CA] hover:to-[#6D28D9] disabled:opacity-60 text-white shadow-md shadow-indigo-500/20 active:scale-95 cursor-pointer'
+                }`}
               >
-                <Droplets className={`w-4 h-4 text-cyan-200 ${isWatering ? 'animate-bounce' : ''}`} />
-                <span>{isWatering ? 'Đang tưới nước...' : 'Tưới nước cho cây (+XP)'}</span>
+                {hasWateredThisSession ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Đã tưới nước xong ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <Droplets className={`w-4 h-4 text-cyan-200 ${isWatering ? 'animate-bounce' : ''}`} />
+                    <span>{isWatering ? 'Đang tưới nước...' : 'Tưới nước cho cây (+XP)'}</span>
+                  </>
+                )}
               </button>
             </div>
 
@@ -477,7 +532,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, onSelectTopic, on
                 Nội dung trong chủ đề này:
               </span>
               <ul className="text-xs text-slate-600 space-y-1 list-disc pl-4">
-                <li>Gồm {selectedTopic.videoIds.length} bài giảng video của thầy/cô</li>
+                <li>Gồm {(selectedTopic.videoIds || []).length} bài giảng video của thầy/cô</li>
                 <li>1 chuyên đề lý thuyết tổng hợp chi tiết</li>
                 <li>Hệ thống bài tập kiểm tra 4 mức độ năng lực</li>
               </ul>

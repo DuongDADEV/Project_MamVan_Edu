@@ -126,25 +126,27 @@ export function computeTopicProgressList(
   const students = filterStudents(allStudents, filter);
   const studentIds = new Set(students.map((s) => s.id));
   const states = filterStudentStates(allStates, studentIds);
-  const total = Math.max(1, students.length);
+  const total = students.length;
 
   return topics.map((t) => {
     let completedCount = 0;
-    students.forEach((s) => {
-      const st = states[s.id];
-      if (st && st.completedSteps && st.completedSteps.length > 2) {
-        completedCount++;
-      }
-    });
+    if (total > 0) {
+      students.forEach((s) => {
+        const st = states[s.id];
+        if (st && st.completedSteps && st.completedSteps.length > 2) {
+          completedCount++;
+        }
+      });
+    }
 
-    const rate = Math.round((completedCount / total) * 100);
+    const rate = total > 0 ? Math.round((completedCount / total) * 100) : 0;
     const shortTitle = t.title.length > 18 ? t.title.slice(0, 16) + '...' : t.title;
 
     return {
       topicId: t.id,
       topicTitle: t.title,
       shortTitle,
-      completionRate: Math.max(25, rate),
+      completionRate: rate,
       completedStudentsCount: completedCount,
     };
   });

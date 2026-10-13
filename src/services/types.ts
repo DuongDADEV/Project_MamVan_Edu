@@ -440,7 +440,7 @@ export interface AuditLog {
   actor_name: string;
   actor_role: Role;
   action: string; // VD: CREATE_STUDENT, RESET_PASSWORD, LOCK_STUDENT, PUBLISH_CONTENT, GRADE_ESSAY, REWARD_APPROVED, UPDATE_SETTINGS
-  target_type: 'student' | 'class' | 'content' | 'quiz' | 'essay' | 'reward' | 'setting';
+  target_type: 'student' | 'class' | 'content' | 'quiz' | 'essay' | 'reward' | 'setting' | 'teacher';
   target_id: string;
   target_name: string;
   details?: Record<string, any>;

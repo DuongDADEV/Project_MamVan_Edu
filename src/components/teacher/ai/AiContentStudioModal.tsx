@@ -74,51 +74,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   } | null>(null);
 
   // 2. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI)
-  const [sources, setSources] = useState<AISource[]>([
-    {
-      id: 'src_demo_01',
-      title: 'Văn bản "Tiếng gà trưa" - Xuân Quỳnh',
-      type: 'text',
-      content: `Trên đường hành quân xa
-Dừng chân bên xóm nhỏ
-Tiếng gà ai nhảy ổ:
-"Cục... cục tác cục ta"
-Nghe xao động nắng trưa
-Nghe bàn chân đỡ mỏi
-Nghe gọi về tuổi thơ.
-
-Tiếng gà trưa
-Ổ rơm hồng những trứng
-Này con gà mái mơ
-Khắp mình hoa đốm trắng
-Này con gà mái vàng
-Lông óng như màu nắng.
-
-Tiếng gà trưa
-Mang bao nhiêu hạnh phúc
-Đêm cháu về nằm mơ
-Giấc ngủ hồng sắc trứng.
-
-Cháu chiến đấu hôm nay
-Vì lòng yêu Tổ quốc
-Vì xóm làng thân thuộc
-Bà ơi, cũng vì bà
-Vì tiếng gà cục tác
-Ổ trứng hồng tuổi thơ.`,
-      wordCount: 96,
-      isEnabled: true,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'src_demo_02',
-      title: 'Ghi chú bài giảng: Đặc trưng thể thơ 5 chữ',
-      type: 'transcript',
-      content: `Thể thơ năm chữ (ngũ ngôn) mỗi dòng có 5 tiếng, nhịp thơ linh hoạt thường là 3/2 hoặc 2/3. Thơ năm chữ thích hợp để vừa kể chuyện vừa bộc lộ cảm xúc tâm tình tha thiết, gần gũi như lời tâm sự chân thành. Vần thơ có thể là vần liền hoặc vần cách, giàu tính nhạc.`,
-      wordCount: 62,
-      isEnabled: true,
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+  const [sources, setSources] = useState<AISource[]>([]);
 
   const [activeTabSourceInput, setActiveTabSourceInput] = useState<'paste' | 'file' | 'video'>('paste');
   const [newSourceTitle, setNewSourceTitle] = useState('');

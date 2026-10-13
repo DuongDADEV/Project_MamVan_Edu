@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
 import { THEORIES, QUIZZES, QUESTIONS_BANK } from '../data/mockData.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
@@ -27,6 +27,13 @@ import {
   QuizWithMeta,
   QuestionWithMeta,
 } from '../services/index.ts';
+
+interface FlowStep {
+  key: 'theory' | 'practice' | 'test' | 'complete';
+  label: string;
+  quiz?: Quiz;
+  xpBonus: number;
+}
 
 interface TheoryLessonScreenProps {
   theoryId: string;
@@ -57,20 +64,10 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     ['quiz']
   );
 
-  const quizzesMap: Record<string, Quiz> = {
-    ...QUIZZES,
-    ...(liveQuizzes ? Object.fromEntries(liveQuizzes.map((q) => [q.id, q])) : {}),
-  };
-
-  const questionsMap: Record<string, Question> = {
-    ...QUESTIONS_BANK,
-    ...(liveQuestions || {}),
-  };
-
-  const [currentStep, setCurrentStep] = useState<number>(1); // 1: Đọc lý thuyết, 2: Luyện tập, 3: KT, 4: Hoàn thành
-
   // Đếm ngược thời gian đọc tối thiểu (25s) trước khi nút "Đã hiểu" bật
   const [secondsLeft, setSecondsLeft] = useState<number>(TIME_CONFIG.MIN_THEORY_READ_SECONDS);
+  const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+
   const isUnderstoodAlready = state.completedSteps.includes(`theory_understood:${theoryId}`);
 
   useEffect(() => {
@@ -81,6 +78,72 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       return () => clearTimeout(timer);
     }
   }, [secondsLeft, isUnderstoodAlready]);
+
+  const quizzesMap: Record<string, Quiz> = useMemo(() => ({
+    ...QUIZZES,
+    ...(liveQuizzes ? Object.fromEntries(liveQuizzes.map((q) => [q.id, q])) : {}),
+  }), [liveQuizzes]);
+
+  const questionsMap: Record<string, Question> = useMemo(() => {
+    let localStored: Record<string, Question> = {};
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('mam_van_questions') : null;
+      if (raw) localStored = JSON.parse(raw);
+    } catch {}
+    return {
+      ...QUESTIONS_BANK,
+      ...localStored,
+      ...(liveQuestions || {}),
+    };
+  }, [liveQuestions]);
+
+  // Tìm các bài tập đã xuất bản thuộc cùng chủ đề
+  const topicQuizzes: Quiz[] = useMemo(() => {
+    return Object.values(quizzesMap).filter(
+      (q: Quiz) => q && q.topicId && theory && q.topicId === theory.topicId
+    );
+  }, [quizzesMap, theory]);
+
+  // 1. Bài Luyện tập lý thuyết
+  const practiceQuiz: Quiz | undefined = useMemo(() => {
+    return (theory?.practiceQuizId && quizzesMap[theory.practiceQuizId]) ||
+      topicQuizzes.find((q: Quiz) => q.kind === 'practice');
+  }, [theory?.practiceQuizId, quizzesMap, topicQuizzes]);
+
+  // 2. Bài Kiểm tra lý thuyết
+  const testQuiz: Quiz | undefined = useMemo(() => {
+    return (theory?.testQuizId && quizzesMap[theory.testQuizId]) ||
+      topicQuizzes.find((q: Quiz) => (q.kind === 'quick' || q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') && q.id !== practiceQuiz?.id);
+  }, [theory?.testQuizId, quizzesMap, topicQuizzes, practiceQuiz]);
+
+  const dynamicSteps = useMemo<FlowStep[]>(() => {
+    const steps: FlowStep[] = [
+      { key: 'theory', label: 'Đọc lý thuyết', xpBonus: 10 },
+    ];
+
+    if (practiceQuiz) {
+      steps.push({
+        key: 'practice',
+        label: 'Luyện tập',
+        quiz: practiceQuiz,
+        xpBonus: 8,
+      });
+    }
+
+    if (testQuiz) {
+      steps.push({
+        key: 'test',
+        label: 'Kiểm tra',
+        quiz: testQuiz,
+        xpBonus: 10,
+      });
+    }
+
+    steps.push({ key: 'complete', label: 'Hoàn thành', xpBonus: 20 });
+    return steps;
+  }, [practiceQuiz, testQuiz]);
+
+  const currentStep = dynamicSteps[currentStepIndex] || dynamicSteps[0];
 
   if (!theory) {
     return (
@@ -93,7 +156,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     );
   }
 
-  // 1. Bấm "Đã hiểu" -> Cộng +10 XP -> Sang Bước 2 (Luyện tập)
+  // 1. Bấm "Đã hiểu" -> Cộng +10 XP -> Sang Bước tiếp theo
   const handleUnderstood = () => {
     onUpdateState((prev) => {
       const xpRes = awardXP(
@@ -102,7 +165,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
         XP_CONFIG.THEORY_READ_UNDERSTOOD_XP,
         `Đọc lý thuyết và Đã hiểu: ${theory.title}`
       );
-      // Xóa khỏi danh sách chưa hiểu nếu có
       const updatedFlagged = prev.flaggedNeedReviewTopicIds.filter((t) => t !== theory.topicId);
 
       return {
@@ -113,11 +175,11 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
           type: 'theory',
           topicId: theory.topicId,
           itemId: theoryId,
-          stepIndex: 2,
+          stepIndex: currentStepIndex + 1,
         },
       };
     });
-    setCurrentStep(2);
+    setCurrentStepIndex((prev) => Math.min(prev + 1, dynamicSteps.length - 1));
   };
 
   // 2. Bấm "Chưa hiểu" -> Đánh dấu vào "Cần xem lại"
@@ -131,67 +193,62 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
           : [...prev.flaggedNeedReviewTopicIds, theory.topicId],
       };
     });
-    // Vẫn cho học sinh sang luyện tập hoặc ở lại đọc
-    setCurrentStep(2);
+    setCurrentStepIndex((prev) => Math.min(prev + 1, dynamicSteps.length - 1));
   };
 
-  // 3. Hoàn thành Luyện tập -> Sang KT
-  const handleCompletePractice = (results: QuestionResult[]) => {
-    onUpdateState((prev) => {
-      const xpRes = awardXP(
-        prev,
-        `quiz_completed:${theory.practiceQuizId}`,
-        XP_CONFIG.THEORY_PRACTICE_COMPLETED_XP,
-        `Hoàn thành luyện tập lý thuyết: ${theory.title}`
-      );
-      return {
-        ...prev,
-        ...xpRes.updatedState,
-        questionResults: [...results, ...prev.questionResults],
-        currentProgress: {
-          type: 'theory',
-          topicId: theory.topicId,
-          itemId: theoryId,
-          stepIndex: 3,
-        },
-      };
-    });
-    setCurrentStep(3);
-  };
+  // 3. Hoàn thành một bài tập Quiz trong luồng lý thuyết
+  const handleCompleteTheoryQuiz = (
+    step: FlowStep,
+    results: QuestionResult[],
+    essays?: EssaySubmission[]
+  ) => {
+    if (!step.quiz) return;
+    const qId = step.quiz.id;
 
-  // 4. Hoàn thành KT -> Sang Bước 4 (Hoàn thành)
-  const handleCompleteTest = (results: QuestionResult[], essays: EssaySubmission[]) => {
     if (essays && essays.length > 0) {
       essays.forEach((e) => {
         essayRepository.createSubmission({
-          studentId: 'hs001',
+          studentId: state.profile?.id || 'hs001',
+          studentName: state.profile?.name || 'Học sinh',
+          className: state.profile?.grade || '7A2',
           questionId: e.questionId,
           content: e.content,
           wordCount: e.wordCount,
           status: 'PENDING_TEACHER',
           promptTitle: e.promptTitle || 'Viết đoạn văn theo yêu cầu',
-          quizTitle: theory.title,
+          quizTitle: `${step.label}: ${theory.title}`,
           skillLevel: 'VAN_DUNG',
         }).catch((err: any) => console.error('Lỗi gửi bài tự luận:', err));
       });
     }
 
+    const isNextComplete = currentStepIndex + 2 >= dynamicSteps.length;
+
     onUpdateState((prev) => {
       const xpRes = awardXP(
         prev,
-        `quiz_completed:${theory.testQuizId}`,
-        XP_CONFIG.THEORY_TEST_XP,
-        `Kiểm tra lý thuyết: ${theory.title}`
+        `quiz_completed:${qId}`,
+        step.xpBonus,
+        `${step.label}: ${theory.title}`
       );
+
       return {
         ...prev,
         ...xpRes.updatedState,
         questionResults: [...results, ...prev.questionResults],
-        essaySubmissions: [...essays, ...(prev.essaySubmissions || [])],
-        currentProgress: undefined,
+        essaySubmissions: essays ? [...essays, ...(prev.essaySubmissions || [])] : prev.essaySubmissions,
+        currentProgress: isNextComplete
+          ? undefined
+          : {
+              type: 'theory',
+              topicId: theory.topicId,
+              itemId: theoryId,
+              stepIndex: currentStepIndex + 1,
+            },
       };
     });
-    setCurrentStep(4);
+
+    setCurrentStepIndex((prev) => Math.min(prev + 1, dynamicSteps.length - 1));
   };
 
   // Render SVG Diagram trực quan cho từng chủ đề
@@ -316,12 +373,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     return null;
   };
 
-  const steps = [
-    { num: 1, label: 'Đọc lý thuyết' },
-    { num: 2, label: 'Luyện tập' },
-    { num: 3, label: 'Kiểm tra' },
-    { num: 4, label: 'Hoàn thành' },
-  ];
+
 
   return (
     <div className="w-full max-w-4xl mx-auto py-6 px-4 sm:px-8 space-y-6 text-[#1E1B4B]">
@@ -343,16 +395,16 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       {/* STEPPER LUỒNG LÝ THUYẾT */}
       <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between">
-          {steps.map((st, idx) => {
-            const isDone = currentStep > st.num;
-            const isCurrent = currentStep === st.num;
+          {dynamicSteps.map((st: FlowStep, idx: number) => {
+            const isDone = currentStepIndex > idx;
+            const isCurrent = currentStepIndex === idx;
 
             return (
-              <div key={st.num} className="flex-1 flex flex-col items-center relative">
+              <div key={st.key} className="flex-1 flex flex-col items-center relative">
                 {idx > 0 && (
                   <div
                     className={`absolute top-4 right-1/2 left-[-50%] h-0.5 -z-0 transition-colors ${
-                      currentStep >= st.num ? 'bg-purple-500' : 'bg-slate-100'
+                      currentStepIndex >= idx ? 'bg-purple-500' : 'bg-slate-100'
                     }`}
                   />
                 )}
@@ -366,7 +418,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                       : 'bg-slate-100 text-slate-400 border border-slate-200/80'
                   }`}
                 >
-                  {isDone ? '✓' : st.num}
+                  {isDone ? '✓' : idx + 1}
                 </div>
 
                 <span
@@ -382,8 +434,8 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
         </div>
       </div>
 
-      {/* ================= BƯỚC 1: ĐỌC LÝ THUYẾT ================= */}
-      {currentStep === 1 && (
+      {/* ================= BƯỚC: ĐỌC LÝ THUYẾT ================= */}
+      {currentStep.key === 'theory' && (
         <div className="space-y-6 animate-[fadeIn_0.3s_ease]">
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -539,7 +591,9 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                 <span>
                   {secondsLeft > 0 && !isUnderstoodAlready
                     ? `Đọc kỹ thêm (${secondsLeft}s) để xác nhận`
-                    : 'Đã hiểu bài (+10 XP)'}
+                    : dynamicSteps[currentStepIndex + 1]?.label
+                    ? `Đã hiểu bài · Sang ${dynamicSteps[currentStepIndex + 1].label}`
+                    : 'Đã hiểu bài · Hoàn thành (+10 XP)'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -548,60 +602,71 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
         </div>
       )}
 
-      {/* ================= BƯỚC 2: LUYỆN TẬP LÝ THUYẾT ================= */}
-      {currentStep === 2 && (
+      {/* ================= CÁC BƯỚC BÀI TẬP LÝ THUYẾT (LUYỆN TẬP / KIỂM TRA) ================= */}
+      {(currentStep.key === 'practice' || currentStep.key === 'test') && (
         (() => {
-          const q = quizzesMap[theory.practiceQuizId] || QUIZZES[theory.practiceQuizId];
+          const q = currentStep.quiz;
           if (!q) {
             return (
-              <div className="p-8 text-center bg-white rounded-3xl border border-slate-100 space-y-3">
-                <p className="font-bold text-slate-700">Chưa có bài luyện tập cho phần này.</p>
-                <button onClick={() => setCurrentStep(1)} className="text-xs text-[#8B5CF6] font-bold">
-                  Quay lại lý thuyết
-                </button>
+              <div className="p-8 text-center bg-white rounded-3xl border border-slate-100 space-y-4">
+                <p className="font-bold text-slate-700">Chưa có bài tập cho phần này.</p>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => setCurrentStepIndex((p) => Math.max(0, p - 1))}
+                    className="text-xs text-slate-500 font-bold px-4 py-2 border rounded-xl"
+                  >
+                    Quay lại lý thuyết
+                  </button>
+                  <button
+                    onClick={() => setCurrentStepIndex((p) => Math.min(p + 1, dynamicSteps.length - 1))}
+                    className="text-xs gradient-primary text-white font-bold px-4 py-2 rounded-xl"
+                  >
+                    Tiếp tục bước kế tiếp ➔
+                  </button>
+                </div>
               </div>
             );
           }
-          const qList = q.questionIds.map((id) => questionsMap[id]).filter(Boolean);
+
+          const qList = (q.questionIds || []).map((id: string) => questionsMap[id]).filter(Boolean);
+          if (qList.length === 0) {
+            return (
+              <div className="p-8 text-center bg-white rounded-3xl border border-slate-100 space-y-4">
+                <p className="font-bold text-slate-700">
+                  Bài tập "{q.title}" đang được chuẩn bị câu hỏi.
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => setCurrentStepIndex((p) => Math.max(0, p - 1))}
+                    className="text-xs text-slate-500 font-bold px-4 py-2 border rounded-xl"
+                  >
+                    Quay lại
+                  </button>
+                  <button
+                    onClick={() => setCurrentStepIndex((p) => Math.min(p + 1, dynamicSteps.length - 1))}
+                    className="text-xs gradient-primary text-white font-bold px-4 py-2 rounded-xl"
+                  >
+                    Bỏ qua & Sang bước kế tiếp ➔
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
           return (
             <QuizRunner
+              key={q.id}
               quiz={q}
               questions={qList}
-              onComplete={(res) => handleCompletePractice(res)}
-              onExit={() => setCurrentStep(1)}
+              onComplete={(res, essays) => handleCompleteTheoryQuiz(currentStep, res, essays)}
+              onExit={() => setCurrentStepIndex((p) => Math.max(0, p - 1))}
             />
           );
         })()
       )}
 
-      {/* ================= BƯỚC 3: KIỂM TRA LÝ THUYẾT ================= */}
-      {currentStep === 3 && (
-        (() => {
-          const q = quizzesMap[theory.testQuizId] || QUIZZES[theory.testQuizId];
-          if (!q) {
-            return (
-              <div className="p-8 text-center bg-white rounded-3xl border border-slate-100 space-y-3">
-                <p className="font-bold text-slate-700">Chưa có bài kiểm tra cho phần này.</p>
-                <button onClick={() => setCurrentStep(2)} className="text-xs text-[#8B5CF6] font-bold">
-                  Quay lại luyện tập
-                </button>
-              </div>
-            );
-          }
-          const qList = q.questionIds.map((id) => questionsMap[id]).filter(Boolean);
-          return (
-            <QuizRunner
-              quiz={q}
-              questions={qList}
-              onComplete={handleCompleteTest}
-              onExit={() => setCurrentStep(2)}
-            />
-          );
-        })()
-      )}
-
-      {/* ================= BƯỚC 4: TỔNG KẾT HOÀN THÀNH ================= */}
-      {currentStep === 4 && (
+      {/* ================= BƯỚC CUỐI: TỔNG KẾT HOÀN THÀNH ================= */}
+      {currentStep.key === 'complete' && (
         <div className="space-y-6 animate-[fadeIn_0.4s_ease]">
           <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-xl shadow-indigo-950/5 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-60 h-60 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
@@ -616,7 +681,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                 {theory.title}
               </h2>
               <p className="text-sm text-slate-600 max-w-md mx-auto mb-6">
-                Em đã đọc kỹ lý thuyết, rèn luyện bài tập và vượt qua bài kiểm tra năng lực!
+                Em đã đọc kỹ lý thuyết và vượt qua các yêu cầu của bài học!
               </p>
 
               {/* Bảng tổng kết XP */}
@@ -625,10 +690,10 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                   Tổng XP nhận trọn vẹn chuyên đề
                 </span>
                 <span className="text-4xl font-black text-[#8B5CF6] font-mono tabular-nums">
-                  +28 XP
+                  +{dynamicSteps.reduce((acc: number, s: FlowStep) => acc + (s.xpBonus || 0), 0)} XP
                 </span>
                 <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
-                  (Đã hiểu: +10 · Luyện tập: +8 · Kiểm tra: +10)
+                  Hoàn thành {dynamicSteps.length - 1} nội dung xuất sắc!
                 </p>
               </div>
 

@@ -63,9 +63,10 @@ import {
   AIGradingConfig,
   SkillLevel,
 } from '../../types.ts';
+import { createInitialStateHs001 } from '../../data/mockData.ts';
 import { generateDemoSeedData } from './demoSeedHistory.ts';
 
-export const STORAGE_SCHEMA_VERSION = 'mam_van_v3_prompt5';
+export const STORAGE_SCHEMA_VERSION = 'mam_van_v4_real_data';
 
 // Keys lưu trữ localStorage
 const STORAGE_KEYS = {
@@ -165,47 +166,42 @@ function writeStorage<T>(key: string, value: T): void {
   }
 }
 
-// Khởi tạo Seed Data lần đầu nếu chưa có
+// Khởi tạo Storage sạch lần đầu nếu chưa có
 export function initSeedDataIfEmpty(): void {
   if (typeof window === 'undefined') return;
 
-  const { students: demoStudents, studentStates: demoStates, classes: demoClasses } = generateDemoSeedData();
-
   if (!localStorage.getItem(STORAGE_KEYS.CLASSES)) {
-    writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
+    writeStorage(STORAGE_KEYS.CLASSES, []);
   }
-  const currentStudents = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, []);
-  if (!localStorage.getItem(STORAGE_KEYS.STUDENTS) || currentStudents.length < 20) {
-    writeStorage(STORAGE_KEYS.STUDENTS, demoStudents);
-    writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
+  if (!localStorage.getItem(STORAGE_KEYS.STUDENTS)) {
+    writeStorage(STORAGE_KEYS.STUDENTS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.TEACHERS)) {
-    writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+    writeStorage(STORAGE_KEYS.TEACHERS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.TOPICS)) {
-    writeStorage(STORAGE_KEYS.TOPICS, getSeedTopics());
+    writeStorage(STORAGE_KEYS.TOPICS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.VIDEOS)) {
-    writeStorage(STORAGE_KEYS.VIDEOS, getSeedVideos());
+    writeStorage(STORAGE_KEYS.VIDEOS, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.THEORIES)) {
-    writeStorage(STORAGE_KEYS.THEORIES, getSeedTheories());
+    writeStorage(STORAGE_KEYS.THEORIES, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.QUIZZES)) {
-    writeStorage(STORAGE_KEYS.QUIZZES, getSeedQuizzes());
+    writeStorage(STORAGE_KEYS.QUIZZES, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.QUESTIONS)) {
-    writeStorage(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
+    writeStorage(STORAGE_KEYS.QUESTIONS, {});
   }
   if (!localStorage.getItem(STORAGE_KEYS.REWARDS)) {
-    writeStorage(STORAGE_KEYS.REWARDS, getSeedRewards());
+    writeStorage(STORAGE_KEYS.REWARDS, []);
   }
-  const currentStates = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
-  if (!localStorage.getItem(STORAGE_KEYS.STATES) || Object.keys(currentStates).length < 20) {
-    writeStorage(STORAGE_KEYS.STATES, { ...getSeedStudentStates(), ...demoStates, ...currentStates });
+  if (!localStorage.getItem(STORAGE_KEYS.STATES)) {
+    writeStorage(STORAGE_KEYS.STATES, {});
   }
   if (!localStorage.getItem(STORAGE_KEYS.AUDIT)) {
-    writeStorage(STORAGE_KEYS.AUDIT, SEED_AUDIT_LOGS);
+    writeStorage(STORAGE_KEYS.AUDIT, []);
   }
   if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
     writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
@@ -217,23 +213,37 @@ export function initSeedDataIfEmpty(): void {
 
 /**
  * Bootstrap kho dữ liệu: kiểm tra STORAGE_SCHEMA_VERSION.
- * Nếu chưa có hoặc phiên bản cũ/lỗi, dọn sạch dữ liệu cũ và nạp lại seed một lần duy nhất.
+ * Dọn sạch toàn bộ dữ liệu mẫu cũ để làm việc với dữ liệu thật.
  */
 export function bootstrapStorage(): { reset: boolean } {
   if (typeof window === 'undefined') return { reset: false };
 
   const currentVersion = localStorage.getItem(STORAGE_KEYS.SCHEMA_VERSION);
   if (currentVersion !== STORAGE_SCHEMA_VERSION) {
-    console.log('[Storage] Phát hiện schema mới hoặc chưa có, tiến hành khởi tạo seed chuẩn...');
-    const { students: demoStudents, studentStates: demoStates, classes: demoClasses } = generateDemoSeedData();
+    console.log('[Storage] Chuyển đổi sang schema dữ liệu thật v4, dọn sạch toàn bộ mẫu cũ...');
 
-    // Xóa các key cũ của app
+    // CHỈ xóa dữ liệu mẫu cũ của các bảng đã chuyển sang Supabase (lớp/học sinh/giáo viên/thưởng/log).
+    // TUYỆT ĐỐI KHÔNG xóa: topics, videos, theories, quizzes, questions, student_states (điểm danh/XP) và session,
+    // vì đây là dữ liệu thật của người dùng — xóa sẽ gây mất dữ liệu sau khi tải lại trang.
     try {
+      const protectedKeys = new Set<string>([
+        STORAGE_KEYS.SESSION,
+        STORAGE_KEYS.TOPICS,
+        STORAGE_KEYS.VIDEOS,
+        STORAGE_KEYS.THEORIES,
+        STORAGE_KEYS.QUIZZES,
+        STORAGE_KEYS.QUESTIONS,
+        STORAGE_KEYS.STATES,
+        STORAGE_KEYS.ESSAYS,
+        STORAGE_KEYS.SETTINGS,
+      ]);
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && (k.startsWith('mam_van_') || k.startsWith('vo_muc_'))) {
-          keysToRemove.push(k);
+          if (!protectedKeys.has(k)) {
+            keysToRemove.push(k);
+          }
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
@@ -241,20 +251,8 @@ export function bootstrapStorage(): { reset: boolean } {
       console.warn('Lỗi khi xóa key cũ:', e);
     }
 
-    // Seed lại toàn bộ
     writeStorage(STORAGE_KEYS.SCHEMA_VERSION, STORAGE_SCHEMA_VERSION);
-    writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
-    writeStorage(STORAGE_KEYS.STUDENTS, demoStudents);
-    writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
-    writeStorage(STORAGE_KEYS.TOPICS, getSeedTopics());
-    writeStorage(STORAGE_KEYS.VIDEOS, getSeedVideos());
-    writeStorage(STORAGE_KEYS.THEORIES, getSeedTheories());
-    writeStorage(STORAGE_KEYS.QUIZZES, getSeedQuizzes());
-    writeStorage(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    writeStorage(STORAGE_KEYS.REWARDS, getSeedRewards());
-    writeStorage(STORAGE_KEYS.STATES, { ...getSeedStudentStates(), ...demoStates });
-    writeStorage(STORAGE_KEYS.AUDIT, SEED_AUDIT_LOGS);
-    writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
+    initSeedDataIfEmpty();
     return { reset: true };
   }
 
@@ -263,17 +261,18 @@ export function bootstrapStorage(): { reset: boolean } {
   return { reset: false };
 }
 
-// Đặt lại toàn bộ dữ liệu demo (người dùng chủ động nhấn nút hoặc qua ErrorBoundary)
+// Đặt lại toàn bộ dữ liệu
 export function resetAllDemoData(): void {
   if (typeof window === 'undefined') return;
-  const { students: demoStudents, studentStates: demoStates, classes: demoClasses } = generateDemoSeedData();
 
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && (k.startsWith('mam_van_') || k.startsWith('vo_muc_'))) {
-        keysToRemove.push(k);
+        if (k !== STORAGE_KEYS.SESSION) {
+          keysToRemove.push(k);
+        }
       }
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
@@ -282,17 +281,17 @@ export function resetAllDemoData(): void {
   }
 
   writeStorage(STORAGE_KEYS.SCHEMA_VERSION, STORAGE_SCHEMA_VERSION);
-  writeStorage(STORAGE_KEYS.CLASSES, demoClasses);
-  writeStorage(STORAGE_KEYS.STUDENTS, demoStudents);
-  writeStorage(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
-  writeStorage(STORAGE_KEYS.TOPICS, getSeedTopics());
-  writeStorage(STORAGE_KEYS.VIDEOS, getSeedVideos());
-  writeStorage(STORAGE_KEYS.THEORIES, getSeedTheories());
-  writeStorage(STORAGE_KEYS.QUIZZES, getSeedQuizzes());
-  writeStorage(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-  writeStorage(STORAGE_KEYS.REWARDS, getSeedRewards());
-  writeStorage(STORAGE_KEYS.STATES, { ...getSeedStudentStates(), ...demoStates });
-  writeStorage(STORAGE_KEYS.AUDIT, SEED_AUDIT_LOGS);
+  writeStorage(STORAGE_KEYS.CLASSES, []);
+  writeStorage(STORAGE_KEYS.STUDENTS, []);
+  writeStorage(STORAGE_KEYS.TEACHERS, []);
+  writeStorage(STORAGE_KEYS.TOPICS, []);
+  writeStorage(STORAGE_KEYS.VIDEOS, []);
+  writeStorage(STORAGE_KEYS.THEORIES, []);
+  writeStorage(STORAGE_KEYS.QUIZZES, []);
+  writeStorage(STORAGE_KEYS.QUESTIONS, {});
+  writeStorage(STORAGE_KEYS.REWARDS, []);
+  writeStorage(STORAGE_KEYS.STATES, {});
+  writeStorage(STORAGE_KEYS.AUDIT, []);
   writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
   syncEventBus.emit('all', {}, 'reset-all');
 }
@@ -1660,6 +1659,18 @@ export class MockAttemptRepository implements AttemptRepository {
     if (states[studentId]) {
       return states[studentId];
     }
+    try {
+      const legacy = localStorage.getItem('vo_muc_student_state_' + studentId);
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (parsed && typeof parsed === 'object') {
+          states[studentId] = parsed;
+          writeStorage(STORAGE_KEYS.STATES, states);
+          return parsed;
+        }
+      }
+    } catch {}
+
     // Tạo state mặc định nếu chưa có
     const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
     const acc = students.find((s) => s.id === studentId);
@@ -1687,6 +1698,9 @@ export class MockAttemptRepository implements AttemptRepository {
     const states = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
     states[studentId] = state;
     writeStorage(STORAGE_KEYS.STATES, states);
+    try {
+      localStorage.setItem('vo_muc_student_state_' + studentId, JSON.stringify(state));
+    } catch {}
 
     // Cập nhật last_active_at ở bảng học sinh
     const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
@@ -1721,7 +1735,30 @@ export class MockAttemptRepository implements AttemptRepository {
   }
 
   async getAllStates(): Promise<Record<string, StudentState>> {
-    return readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, getSeedStudentStates());
+    const states = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
+    // Quét thêm các state lưu lẻ theo prefix vo_muc_student_state_
+    if (typeof localStorage !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('vo_muc_student_state_')) {
+            const sId = k.replace('vo_muc_student_state_', '');
+            if (!states[sId]) {
+              const raw = localStorage.getItem(k);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed) states[sId] = parsed;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+    // Nếu vẫn rỗng, luôn nạp sẵn state hs001 để đảm bảo có dữ liệu
+    if (Object.keys(states).length === 0) {
+      states['hs001'] = createInitialStateHs001();
+    }
+    return states;
   }
 }
 
@@ -1739,16 +1776,16 @@ export class MockEssayRepository implements EssayRepository {
   }): Promise<EssaySubmission[]> {
     const states = await attemptRepo.getAllStates();
     const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
+    const independentEssays = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
 
-    let allEssays: EssaySubmission[] = [];
+    let allEssays: EssaySubmission[] = [...independentEssays];
     for (const [sId, st] of Object.entries(states)) {
-      if (st.essaySubmissions) {
-        // Gắn thêm studentName và className nếu thiếu
+      if (st.essaySubmissions && st.essaySubmissions.length > 0) {
         const student = students.find((s) => s.id === sId);
         const enriched = st.essaySubmissions.map((e) => ({
           ...e,
-          studentName: e.studentName || student?.name || 'Học sinh',
-          className: e.className || '7A2',
+          studentName: e.studentName || student?.name || st.profile?.name || 'Học sinh',
+          className: e.className || st.profile?.grade || '7A2',
           classId: e.classId || student?.class_id || 'class_7a2',
           hoursWaiting: Math.max(0, Math.floor((Date.now() - e.submittedAt) / 3600000)),
         }));
@@ -1756,19 +1793,26 @@ export class MockEssayRepository implements EssayRepository {
       }
     }
 
+    // Khử trùng lặp theo id
+    const map = new Map<string, EssaySubmission>();
+    allEssays.forEach((item) => {
+      if (item.id) map.set(item.id, item);
+    });
+    let result = Array.from(map.values());
+
     if (filter?.studentId) {
-      allEssays = allEssays.filter((e) => e.studentId === filter.studentId);
+      result = result.filter((e) => e.studentId === filter.studentId);
     }
 
     if (filter?.quizId) {
-      allEssays = allEssays.filter((e) => e.quizId === filter.quizId);
+      result = result.filter((e) => e.quizId === filter.quizId);
     }
 
     if (filter?.status && filter.status !== 'ALL') {
       if (filter.status === 'PENDING_TEACHER') {
-        allEssays = allEssays.filter((e) => e.status === 'PENDING_TEACHER' || e.status === 'AI_SUGGESTED');
+        result = result.filter((e) => e.status === 'PENDING_TEACHER' || e.status === 'AI_SUGGESTED');
       } else {
-        allEssays = allEssays.filter((e) => e.status === filter.status);
+        result = result.filter((e) => e.status === filter.status);
       }
     }
 
@@ -1776,10 +1820,12 @@ export class MockEssayRepository implements EssayRepository {
       const allowedStudentIds = new Set(
         students.filter((s) => s.class_id === filter.classId).map((s) => s.id)
       );
-      allEssays = allEssays.filter((e) => allowedStudentIds.has(e.studentId));
+      result = result.filter(
+        (e) => allowedStudentIds.has(e.studentId) || e.classId === filter.classId || e.className?.toLowerCase().includes(filter.classId.toLowerCase())
+      );
     }
 
-    return allEssays.sort((a, b) => b.submittedAt - a.submittedAt);
+    return result.sort((a, b) => b.submittedAt - a.submittedAt);
   }
 
   async getSubmissionById(id: string): Promise<EssaySubmission | null> {
@@ -1837,6 +1883,10 @@ export class MockEssayRepository implements EssayRepository {
     const state = await attemptRepo.getStudentState(submission.studentId);
     state.essaySubmissions = [newEssay, ...(state.essaySubmissions || [])];
     await attemptRepo.saveStudentState(submission.studentId, state);
+
+    // Lưu thêm vào kho độc lập ESSAYS để đảm bảo không thất lạc
+    const independent = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
+    writeStorage(STORAGE_KEYS.ESSAYS, [newEssay, ...independent.filter((item) => item.id !== newEssay.id)]);
 
     syncEventBus.emit('essay');
     return newEssay;

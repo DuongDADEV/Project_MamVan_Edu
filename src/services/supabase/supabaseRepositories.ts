@@ -35,6 +35,13 @@ import {
   TeacherRepository,
   TeacherProfile,
   CreateTeacherInput,
+  QuizRepository,
+  QuizWithMeta,
+  QuestionWithMeta,
+  ContentRepository,
+  TopicWithMeta,
+  VideoLessonWithMeta,
+  TheoryLessonWithMeta,
 } from '../types.ts';
 import {
   authRepo as mockAuthRepo,
@@ -44,10 +51,28 @@ import {
   essayRepo as mockEssayRepo,
   rewardRepo as mockRewardRepo,
   teacherRepo as mockTeacherRepo,
+  quizRepo as mockQuizRepo,
+  contentRepo as mockContentRepo,
   auditRepo,
 } from '../mock/mockRepositories.ts';
 import { createFreshStudentState } from '../mock/seedData.ts';
 import { syncEventBus } from '../mock/eventBus.ts';
+import { QuestionType } from '../../types.ts';
+import { QUESTIONS_BANK } from '../../data/mockData.ts';
+import {
+  PayloadItem,
+  readLocalList,
+  writeLocalList,
+  pushPayloadItem,
+  pushLocalById,
+  syncPayloadCollection,
+  filterContentItems,
+} from './payloadStore.ts';
+
+const TOPIC_CACHE_KEY = 'mam_van_topics';
+const VIDEO_CACHE_KEY = 'mam_van_videos';
+const THEORY_CACHE_KEY = 'mam_van_theories';
+const QUIZ_CACHE_KEY = 'mam_van_quizzes';
 
 const SESSION_STORAGE_KEY = 'mam_van_auth_session';
 const DEFAULT_TEACHER_UUID = '00000000-0000-0000-0000-000000000001';
@@ -776,24 +801,20 @@ export const supabaseStudentRepo = new SupabaseStudentRepository();
 // ==============================================================================
 export class SupabaseAttemptRepository implements AttemptRepository {
   async getStudentState(studentId: string): Promise<StudentState> {
-    if (!isSupabaseReady()) {
-      return mockAttemptRepo.getStudentState(studentId);
+    const localFallback = await mockAttemptRepo.getStudentState(studentId);
+    if (!isSupabaseReady() || !isUUID(studentId)) {
+      return localFallback;
     }
 
     try {
-      let query = supabase.from('student_states').select('*');
-      if (isUUID(studentId)) {
-        query = query.eq('student_id', studentId);
-      }
-
-      const { data, error } = await query.maybeSingle();
+      const { data, error } = await supabase
+        .from('student_states')
+        .select('*')
+        .eq('student_id', studentId)
+        .maybeSingle();
 
       if (error || !data) {
-        const fallback = await mockAttemptRepo.getStudentState(studentId);
-        if (isUUID(studentId)) {
-          await this.saveStudentState(studentId, fallback);
-        }
-        return fallback;
+        return localFallback;
       }
 
       const students = await supabaseStudentRepo.getStudents();
@@ -811,25 +832,49 @@ export class SupabaseAttemptRepository implements AttemptRepository {
         }
       );
 
+      const todayStr = new Date().toISOString().split('T')[0];
+      const effectiveAttendanceDate =
+        localFallback.lastAttendanceDate === todayStr
+          ? todayStr
+          : (data.last_attendance_date || localFallback.lastAttendanceDate || fresh.lastAttendanceDate);
+
+      const effectiveAttendanceDays =
+        localFallback.lastAttendanceDate === todayStr && (localFallback.attendanceDaysThisWeek || 0) > (data.attendance_days_this_week || 0)
+          ? localFallback.attendanceDaysThisWeek
+          : (data.attendance_days_this_week ?? localFallback.attendanceDaysThisWeek ?? fresh.attendanceDaysThisWeek);
+
       return {
         ...fresh,
-        xpToday: data.xp_today ?? fresh.xpToday,
-        xpWeek: data.xp_week ?? fresh.xpWeek,
-        totalXp: data.total_xp ?? fresh.totalXp,
-        activeSecondsToday: data.active_seconds_today ?? fresh.activeSecondsToday,
-        lastAttendanceDate: data.last_attendance_date || fresh.lastAttendanceDate,
-        attendanceDaysThisWeek: data.attendance_days_this_week ?? fresh.attendanceDaysThisWeek,
-        attendanceHistory: Array.isArray(data.attendance_history) ? data.attendance_history : fresh.attendanceHistory,
-        completedSteps: Array.isArray(data.completed_steps) ? data.completed_steps : fresh.completedSteps,
-        questionResults: Array.isArray(data.question_results) ? data.question_results : fresh.questionResults,
-        flaggedNeedReviewTopicIds: Array.isArray(data.flagged_topic_ids) ? data.flagged_topic_ids : fresh.flaggedNeedReviewTopicIds,
-        unlockedBadgeIds: Array.isArray(data.unlocked_badge_ids) ? data.unlocked_badge_ids : fresh.unlockedBadgeIds,
-        xpLogs: Array.isArray(data.xp_logs) ? data.xp_logs : fresh.xpLogs,
-        currentProgress: data.current_progress || fresh.currentProgress,
+        ...localFallback,
+        xpToday: Math.max(data.xp_today ?? 0, localFallback.xpToday ?? 0),
+        xpWeek: Math.max(data.xp_week ?? 0, localFallback.xpWeek ?? 0),
+        totalXp: Math.max(data.total_xp ?? 0, localFallback.totalXp ?? 0),
+        activeSecondsToday: Math.max(data.active_seconds_today ?? 0, localFallback.activeSecondsToday ?? 0),
+        lastAttendanceDate: effectiveAttendanceDate,
+        attendanceDaysThisWeek: effectiveAttendanceDays,
+        attendanceHistory:
+          Array.isArray(data.attendance_history) && data.attendance_history.length >= (localFallback.attendanceHistory?.length || 0)
+            ? data.attendance_history
+            : localFallback.attendanceHistory || [],
+        completedSteps:
+          Array.isArray(data.completed_steps) && data.completed_steps.length >= (localFallback.completedSteps?.length || 0)
+            ? data.completed_steps
+            : localFallback.completedSteps || [],
+        questionResults:
+          Array.isArray(data.question_results) && data.question_results.length >= (localFallback.questionResults?.length || 0)
+            ? data.question_results
+            : localFallback.questionResults || [],
+        flaggedNeedReviewTopicIds: Array.isArray(data.flagged_topic_ids) ? data.flagged_topic_ids : localFallback.flaggedNeedReviewTopicIds,
+        unlockedBadgeIds: Array.isArray(data.unlocked_badge_ids) ? data.unlocked_badge_ids : localFallback.unlockedBadgeIds,
+        xpLogs:
+          Array.isArray(data.xp_logs) && data.xp_logs.length >= (localFallback.xpLogs?.length || 0)
+            ? data.xp_logs
+            : localFallback.xpLogs,
+        currentProgress: data.current_progress || localFallback.currentProgress,
       };
     } catch (err) {
       console.error('[SupabaseAttempt] Ngoại lệ getStudentState:', err);
-      return mockAttemptRepo.getStudentState(studentId);
+      return localFallback;
     }
   }
 
@@ -858,7 +903,10 @@ export class SupabaseAttemptRepository implements AttemptRepository {
         updated_at: new Date().toISOString(),
       };
 
-      await supabase.from('student_states').upsert(payload, { onConflict: 'student_id' });
+      const { error: upsertError } = await supabase.from('student_states').upsert(payload, { onConflict: 'student_id' });
+      if (upsertError) {
+        console.error('[SupabaseAttempt] ❌ Lưu student_states thất bại:', upsertError.message);
+      }
       await mockAttemptRepo.saveStudentState(studentId, state, sourceId);
       syncEventBus.emit('state', { studentId }, sourceId);
     } catch (err) {
@@ -953,8 +1001,11 @@ export class SupabaseEssayRepository implements EssayRepository {
     studentId?: string;
     quizId?: string;
   }): Promise<EssaySubmission[]> {
+    // 1. Luôn lấy danh sách bài nộp từ local/student states
+    const localList = await mockEssayRepo.getSubmissions(filter);
+
     if (!isSupabaseReady()) {
-      return mockEssayRepo.getSubmissions(filter);
+      return localList;
     }
 
     try {
@@ -978,11 +1029,11 @@ export class SupabaseEssayRepository implements EssayRepository {
 
       const { data, error } = await query;
       if (error) {
-        console.warn('[SupabaseEssay] Lỗi getSubmissions, dùng fallback:', error.message);
-        return mockEssayRepo.getSubmissions(filter);
+        console.warn('[SupabaseEssay] Lỗi getSubmissions Supabase, dùng fallback local:', error.message);
+        return localList;
       }
 
-      return (data || []).map((e: any) => ({
+      const remoteList: EssaySubmission[] = (data || []).map((e: any) => ({
         id: e.id,
         questionId: e.question_id || 'q_essay_01',
         quizId: e.question_id || 'q_essay_01',
@@ -990,6 +1041,7 @@ export class SupabaseEssayRepository implements EssayRepository {
         studentName: e.students?.name || 'Học sinh',
         classId: e.class_id,
         className: e.classes?.name || '7A2',
+        promptTitle: 'Bài tập làm văn',
         prompt: 'Bài tập làm văn',
         content: e.content,
         wordCount: e.word_count || 0,
@@ -1001,8 +1053,15 @@ export class SupabaseEssayRepository implements EssayRepository {
         finalRatio: e.final_ratio ? Number(e.final_ratio) : undefined,
         hoursWaiting: Math.max(0, Math.floor((Date.now() - new Date(e.created_at || Date.now()).getTime()) / 3600000)),
       }));
+
+      // HỢP NHẤT (MERGE) hai nguồn để không sót bài của học sinh
+      const map = new Map<string, EssaySubmission>();
+      localList.forEach((item) => map.set(item.id, item));
+      remoteList.forEach((item) => map.set(item.id, item));
+
+      return Array.from(map.values()).sort((a, b) => b.submittedAt - a.submittedAt);
     } catch {
-      return mockEssayRepo.getSubmissions(filter);
+      return localList;
     }
   }
 
@@ -1014,41 +1073,69 @@ export class SupabaseEssayRepository implements EssayRepository {
   async createSubmission(
     submission: Omit<EssaySubmission, 'id' | 'submittedAt'>
   ): Promise<EssaySubmission> {
+    // 1. Luôn lưu vào local state trước để bài nộp được bảo toàn và có AI chấm gợi ý
+    const localCreated = await mockEssayRepo.createSubmission(submission);
+
     if (!isSupabaseReady()) {
-      return mockEssayRepo.createSubmission(submission);
+      return localCreated;
     }
 
     try {
-      const payload = {
-        question_id: submission.questionId || submission.quizId || 'q_essay_01',
-        student_id: isUUID(submission.studentId) ? submission.studentId : '00000000-0000-0000-0000-000000000101',
-        class_id: isUUID(submission.classId) ? submission.classId : DEFAULT_CLASS_UUID,
-        content: submission.content,
-        word_count: submission.wordCount || submission.content.trim().split(/\s+/).length,
-        status: submission.status || 'PENDING_TEACHER',
-      };
+      let targetStudentUUID = isUUID(submission.studentId) ? submission.studentId : null;
+      let targetClassUUID = isUUID(submission.classId) ? submission.classId : null;
 
-      const { data: created, error } = await supabase
-        .from('essay_submissions')
-        .insert(payload)
-        .select()
-        .single();
+      if (!targetStudentUUID) {
+        const { data: matched } = await supabase
+          .from('students')
+          .select('id, class_id')
+          .ilike('username', submission.studentId)
+          .maybeSingle();
+        if (matched) {
+          targetStudentUUID = matched.id;
+          targetClassUUID = matched.class_id;
+        } else {
+          const { data: anyStudent } = await supabase.from('students').select('id, class_id').limit(1).maybeSingle();
+          if (anyStudent) {
+            targetStudentUUID = anyStudent.id;
+            targetClassUUID = anyStudent.class_id;
+          }
+        }
+      }
 
-      if (error || !created) {
-        return mockEssayRepo.createSubmission(submission);
+      if (targetStudentUUID) {
+        const payload = {
+          question_id: submission.questionId || submission.quizId || 'q_essay_01',
+          student_id: targetStudentUUID,
+          class_id: targetClassUUID || DEFAULT_CLASS_UUID,
+          content: submission.content,
+          word_count: submission.wordCount || submission.content.trim().split(/\s+/).length,
+          status: localCreated.status || submission.status || 'PENDING_TEACHER',
+          ai_suggested_scores: localCreated.aiSuggestion?.rubricScores || null,
+          ai_suggested_feedback: localCreated.aiSuggestion?.overallComment || null,
+        };
+
+        const { data: created, error } = await supabase
+          .from('essay_submissions')
+          .insert(payload)
+          .select()
+          .single();
+
+        if (!error && created) {
+          syncEventBus.emit('essay');
+          return {
+            ...localCreated,
+            id: created.id,
+            submittedAt: new Date(created.created_at).getTime(),
+            status: created.status,
+          };
+        }
       }
 
       syncEventBus.emit('essay');
-
-      return {
-        ...submission,
-        id: created.id,
-        submittedAt: new Date(created.created_at).getTime(),
-        status: created.status,
-        hoursWaiting: 0,
-      };
+      return localCreated;
     } catch {
-      return mockEssayRepo.createSubmission(submission);
+      syncEventBus.emit('essay');
+      return localCreated;
     }
   }
 
@@ -1059,8 +1146,10 @@ export class SupabaseEssayRepository implements EssayRepository {
       teacherFeedback?: string;
     }
   ): Promise<EssaySubmission> {
+    const localResult = await mockEssayRepo.saveSubmissionDraft(id, draft);
+
     if (!isSupabaseReady() || !isUUID(id)) {
-      return mockEssayRepo.saveSubmissionDraft(id, draft);
+      return localResult;
     }
 
     try {
@@ -1071,9 +1160,9 @@ export class SupabaseEssayRepository implements EssayRepository {
       await supabase.from('essay_submissions').update(payload).eq('id', id);
       syncEventBus.emit('essay');
       const item = await this.getSubmissionById(id);
-      return item || mockEssayRepo.saveSubmissionDraft(id, draft);
+      return item || localResult;
     } catch {
-      return mockEssayRepo.saveSubmissionDraft(id, draft);
+      return localResult;
     }
   }
 
@@ -1088,8 +1177,10 @@ export class SupabaseEssayRepository implements EssayRepository {
     },
     teacherActorId: string
   ): Promise<EssaySubmission> {
+    const localResult = await mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
+
     if (!isSupabaseReady() || !isUUID(id)) {
-      return mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
+      return localResult;
     }
 
     try {
@@ -1100,18 +1191,15 @@ export class SupabaseEssayRepository implements EssayRepository {
         total_score: grading.totalScore,
         final_ratio: grading.finalRatio,
         graded_by: isUUID(teacherActorId) ? teacherActorId : DEFAULT_TEACHER_UUID,
+        graded_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase.from('essay_submissions').update(payload).eq('id', id);
-      if (error) {
-        return mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
-      }
-
+      await supabase.from('essay_submissions').update(payload).eq('id', id);
       syncEventBus.emit('essay');
       const item = await this.getSubmissionById(id);
-      return item || mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
+      return item || localResult;
     } catch {
-      return mockEssayRepo.gradeSubmission(id, grading, teacherActorId);
+      return localResult;
     }
   }
 
@@ -1470,5 +1558,678 @@ export class SupabaseTeacherRepository implements TeacherRepository {
 }
 
 export const supabaseTeacherRepo = new SupabaseTeacherRepository();
+
+// ==============================================================================
+// 7. SUPABASE QUIZ & QUESTION REPOSITORY (NGÂN HÀNG CÂU HỎI TRỰC TIẾP POSTGRESQL)
+// ==============================================================================
+
+function toSupabaseType(type?: string): string {
+  switch (type) {
+    case 'single':
+    case 'single_choice':
+      return 'single_choice';
+    case 'multi':
+    case 'multiple_choice':
+      return 'multiple_choice';
+    case 'fill':
+    case 'fill_in_blank':
+      return 'fill_in_blank';
+    case 'essay':
+      return 'essay';
+    default:
+      return 'single_choice';
+  }
+}
+
+function fromSupabaseType(type?: string): QuestionType {
+  switch (type) {
+    case 'single_choice':
+    case 'single':
+      return 'single';
+    case 'multiple_choice':
+    case 'multi':
+      return 'multi';
+    case 'fill_in_blank':
+    case 'fill':
+      return 'fill';
+    case 'essay':
+      return 'essay';
+    default:
+      return 'single';
+  }
+}
+
+export class SupabaseQuizRepository implements QuizRepository {
+  // QUIZZES: lưu vào bảng `quizzes` trên Supabase (payload JSON); localStorage chỉ là bộ nhớ đệm
+  private async ensureQuizLocal(id?: string): Promise<void> {
+    if (!id || !isSupabaseReady()) return;
+    if (readLocalList<PayloadItem>(QUIZ_CACHE_KEY).some((x) => x.id === id)) return;
+    await syncPayloadCollection('quizzes', QUIZ_CACHE_KEY);
+  }
+
+  async getQuizzes(classId?: string, onlyPublished = true): Promise<QuizWithMeta[]> {
+    const list = await syncPayloadCollection<QuizWithMeta>('quizzes', QUIZ_CACHE_KEY);
+    if (!list) return mockQuizRepo.getQuizzes(classId, onlyPublished);
+    return filterContentItems(list, classId, onlyPublished);
+  }
+
+  async getQuizById(id: string): Promise<QuizWithMeta | null> {
+    const list = await this.getQuizzes(undefined, false);
+    return list.find((q) => q.id === id) || null;
+  }
+
+  async saveQuiz(quiz: Partial<QuizWithMeta>): Promise<QuizWithMeta> {
+    await this.ensureQuizLocal(quiz.id);
+    const saved = await mockQuizRepo.saveQuiz(quiz);
+    const ok = await pushPayloadItem('quizzes', saved);
+    if (ok) console.log(`[SupabaseQuiz] ✅ Đã lưu bài kiểm tra [${saved.id}] vào Supabase database.`);
+    return saved;
+  }
+
+  async deleteQuiz(id: string, teacherActorId: string): Promise<void> {
+    await this.ensureQuizLocal(id);
+    await mockQuizRepo.deleteQuiz(id, teacherActorId);
+    await pushLocalById('quizzes', QUIZ_CACHE_KEY, id);
+  }
+
+  async publishQuiz(
+    id: string,
+    options: { classIds: string[]; notifyStudent?: boolean },
+    teacherActorId: string
+  ): Promise<QuizWithMeta> {
+    await this.ensureQuizLocal(id);
+    const result = await mockQuizRepo.publishQuiz(id, options, teacherActorId);
+    await pushPayloadItem('quizzes', result);
+    return result;
+  }
+
+  async unpublishQuiz(id: string, teacherActorId: string): Promise<QuizWithMeta> {
+    await this.ensureQuizLocal(id);
+    const result = await mockQuizRepo.unpublishQuiz(id, teacherActorId);
+    await pushPayloadItem('quizzes', result);
+    return result;
+  }
+
+  async archiveQuiz(id: string, teacherActorId: string): Promise<QuizWithMeta> {
+    await this.ensureQuizLocal(id);
+    const result = await mockQuizRepo.archiveQuiz(id, teacherActorId);
+    await pushPayloadItem('quizzes', result);
+    return result;
+  }
+
+  async duplicateQuiz(id: string, teacherActorId: string): Promise<QuizWithMeta> {
+    await this.ensureQuizLocal(id);
+    const cloned = await mockQuizRepo.duplicateQuiz(id, teacherActorId);
+    await pushPayloadItem('quizzes', cloned);
+    for (const qId of cloned.questionIds || []) {
+      const q = await mockQuizRepo.getQuestionById(qId);
+      if (q) await this.saveQuestion(q);
+    }
+    return cloned;
+  }
+
+  async hasStudentAttempts(quizId: string): Promise<boolean> {
+    await this.ensureQuizLocal(quizId);
+    return mockQuizRepo.hasStudentAttempts(quizId);
+  }
+
+  // QUESTIONS: KẾT NỐI TRỰC TIẾP BẢNG QUESTIONS TRÊN SUPABASE (POSTGRESQL)
+  async getQuestions(topicId?: string): Promise<Record<string, QuestionWithMeta>> {
+    // 1. Lấy dữ liệu nền từ mock (gồm 22 câu mẫu ban đầu)
+    const baseMockQuestions = await mockQuizRepo.getQuestions(topicId);
+
+    if (!isSupabaseReady()) {
+      return baseMockQuestions;
+    }
+
+    try {
+      let query = supabase.from('questions').select('*');
+      if (topicId && topicId !== 'all') {
+        query = query.or(`topic_id.eq.${topicId},topic_id.is.null`);
+      }
+
+      const { data: rows, error } = await query;
+      if (error) {
+        console.warn('[SupabaseQuiz] Lỗi truy vấn bảng questions, fallback sang mock:', error.message);
+        return baseMockQuestions;
+      }
+
+      // 2. Chuyển đổi dữ liệu từ Supabase sang QuestionWithMeta
+      const supabaseMap: Record<string, QuestionWithMeta> = {};
+      for (const row of rows || []) {
+        let optionsList: string[] = [];
+        if (Array.isArray(row.options)) {
+          optionsList = row.options;
+        }
+
+        const qItem: QuestionWithMeta = {
+          id: row.id,
+          topicId: row.topic_id || 'topic_1',
+          type: fromSupabaseType(row.type),
+          level: (row.level as any) || 'NHAN_BIET',
+          difficulty: row.level === 'NHAN_BIET' ? 'DE' : row.level === 'THONG_HIEU' ? 'TB' : 'KHO',
+          prompt: row.prompt || '',
+          options: optionsList.length > 0 ? optionsList : undefined,
+          answer: row.correct_answer,
+          explanation: row.explanation || 'Giải thích chi tiết chuẩn sách giáo khoa.',
+          points: 10,
+          isAiGenerated: row.id.includes('ai'),
+          isTeacherReviewed: true,
+          status: 'published',
+          version: 1,
+          class_ids: ['all'],
+          created_at: row.created_at || new Date().toISOString(),
+          updated_at: row.updated_at || new Date().toISOString(),
+        };
+
+        supabaseMap[row.id] = qItem;
+      }
+
+      const mergedQuestions: Record<string, QuestionWithMeta> = {
+        ...baseMockQuestions,
+        ...supabaseMap,
+      };
+
+      // Đồng bộ vào localStorage để chạy offline
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('mam_van_questions', JSON.stringify(mergedQuestions));
+        }
+      } catch {}
+
+      return mergedQuestions;
+    } catch (err) {
+      console.error('[SupabaseQuiz] Ngoại lệ getQuestions:', err);
+      return baseMockQuestions;
+    }
+  }
+
+  async getQuestionById(id: string): Promise<QuestionWithMeta | null> {
+    if (!isSupabaseReady()) {
+      return mockQuizRepo.getQuestionById(id);
+    }
+
+    try {
+      const { data: row, error } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error || !row) {
+        return mockQuizRepo.getQuestionById(id);
+      }
+
+      return {
+        id: row.id,
+        topicId: row.topic_id || 'topic_1',
+        type: fromSupabaseType(row.type),
+        level: (row.level as any) || 'NHAN_BIET',
+        difficulty: row.level === 'NHAN_BIET' ? 'DE' : row.level === 'THONG_HIEU' ? 'TB' : 'KHO',
+        prompt: row.prompt,
+        options: Array.isArray(row.options) ? row.options : undefined,
+        answer: row.correct_answer,
+        explanation: row.explanation || '',
+        points: 10,
+        isAiGenerated: row.id.includes('ai'),
+        isTeacherReviewed: true,
+        status: 'published',
+        version: 1,
+        class_ids: ['all'],
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      };
+    } catch {
+      return mockQuizRepo.getQuestionById(id);
+    }
+  }
+
+  async saveQuestion(question: Partial<QuestionWithMeta>): Promise<QuestionWithMeta> {
+    const qId = question.id || 'q_ai_' + Date.now() + Math.random().toString(36).substring(2, 6);
+    const now = new Date().toISOString();
+
+    // 1. Lưu vào mockRepo (LocalStorage) trước để fallback ngay tức thì
+    const savedMock = await mockQuizRepo.saveQuestion({
+      ...question,
+      id: qId,
+      updated_at: now,
+    });
+
+    if (!isSupabaseReady()) {
+      return savedMock;
+    }
+
+    try {
+      // 2. Chuẩn hóa topic_id an toàn (tránh lỗi khóa ngoại nếu topic chưa tạo trên Supabase)
+      let topicId: string | null = question.topicId || null;
+      if (topicId === 'all' || topicId === 'topic_1' || topicId === 'topic_tho_bon_nam') {
+        topicId = null;
+      }
+      if (topicId) {
+        // Kiểm tra xem topicId có thực sự tồn tại trong bảng topics không
+        const { data: topicExists } = await supabase
+          .from('topics')
+          .select('id')
+          .eq('id', topicId)
+          .maybeSingle();
+        if (!topicExists) {
+          topicId = null;
+        }
+      }
+
+      // 3. Chuẩn bị payload chuẩn bảng `questions` trên Supabase PostgreSQL
+      const dbPayload = {
+        id: qId,
+        topic_id: topicId,
+        type: toSupabaseType(question.type),
+        level: question.level || 'NHAN_BIET',
+        prompt: question.prompt || 'Câu hỏi chưa có tiêu đề',
+        options: Array.isArray(question.options) ? question.options : [],
+        correct_answer: question.answer ?? null,
+        explanation: question.explanation || '',
+        created_at: question.created_at || now,
+        updated_at: now,
+      };
+
+      const { data, error } = await supabase
+        .from('questions')
+        .upsert(dbPayload, { onConflict: 'id' })
+        .select()
+        .single();
+
+      if (error || !data) {
+        if (error) console.warn('[SupabaseQuiz] Lỗi lưu câu hỏi lên Supabase, giữ bản lưu mock:', error.message);
+        return savedMock;
+      }
+
+      console.log(`[SupabaseQuiz] ✅ Đã lưu vĩnh viễn câu hỏi [${qId}] vào Supabase database thành công!`);
+      syncEventBus.emit('quiz', { questionId: qId });
+
+      return {
+        ...savedMock,
+        id: data.id,
+        topicId: data.topic_id || topicId,
+        prompt: data.prompt,
+        options: Array.isArray(data.options) ? data.options : savedMock.options,
+        answer: data.correct_answer ?? savedMock.answer,
+        explanation: data.explanation || savedMock.explanation,
+        updated_at: data.updated_at || now,
+      };
+    } catch (err) {
+      console.error('[SupabaseQuiz] Ngoại lệ saveQuestion:', err);
+      return savedMock;
+    }
+  }
+
+  async deleteQuestion(id: string, teacherActorId: string): Promise<void> {
+    // 1. Xóa khỏi mockRepo
+    await mockQuizRepo.deleteQuestion(id, teacherActorId);
+
+    if (!isSupabaseReady()) return;
+
+    try {
+      // 2. Xóa khỏi Supabase bảng questions
+      const { error } = await supabase.from('questions').delete().eq('id', id);
+      if (error) {
+        console.warn('[SupabaseQuiz] Lỗi xóa câu hỏi khỏi Supabase:', error.message);
+      } else {
+        console.log(`[SupabaseQuiz] 🗑️ Đã xóa câu hỏi [${id}] khỏi Supabase database.`);
+      }
+      syncEventBus.emit('quiz', { deletedId: id });
+    } catch (err) {
+      console.error('[SupabaseQuiz] Ngoại lệ deleteQuestion:', err);
+    }
+  }
+}
+
+export const supabaseQuizRepo = new SupabaseQuizRepository();
+
+// ==============================================================================
+// 9. SUPABASE CONTENT REPOSITORY (QUẢN LÝ CÂY CHỦ ĐỀ & HỌC LIỆU TRÊN SUPABASE)
+// ==============================================================================
+export class SupabaseContentRepository implements ContentRepository {
+  async getTopics(classId?: string, onlyPublished = true): Promise<TopicWithMeta[]> {
+    if (!isSupabaseReady()) {
+      return mockContentRepo.getTopics(classId, onlyPublished);
+    }
+
+    try {
+      const { data: rows, error } = await supabase
+        .from('topics')
+        .select('*')
+        .order('order_index', { ascending: true });
+      if (error) {
+        console.warn('[SupabaseContent] Lỗi truy vấn bảng topics, fallback sang mock:', error.message);
+        return mockContentRepo.getTopics(classId, onlyPublished);
+      }
+
+      const remoteTopics: TopicWithMeta[] = (rows || []).map((row) => {
+        const vPayload = typeof row.video_payload === 'object' && row.video_payload !== null ? row.video_payload : {};
+        const tPayload = typeof row.theory_payload === 'object' && row.theory_payload !== null ? row.theory_payload : {};
+
+        return {
+          id: row.id,
+          title: row.title || '',
+          shortDesc: vPayload.shortDesc || '',
+          tag: row.category || 'Chung',
+          videoIds: Array.isArray(vPayload.videoIds) ? vPayload.videoIds : [],
+          theoryId: tPayload.theoryId || '',
+          colorScheme: vPayload.colorScheme || '#2F3E6B',
+          status: (row.status as any) || 'published',
+          class_ids: Array.isArray(vPayload.class_ids) ? vPayload.class_ids : ['all'],
+          version: typeof vPayload.version === 'number' ? vPayload.version : 1,
+          has_unpublished_edits: !!vPayload.has_unpublished_edits,
+          created_at: row.created_at || new Date().toISOString(),
+          updated_at: row.updated_at || new Date().toISOString(),
+        };
+      });
+
+      // Chủ đề chỉ có ở máy này (chưa lên được Supabase) -> giữ lại và tự đẩy lên để không bị mất
+      const remoteIds = new Set(remoteTopics.map((t) => t.id));
+      const localOnly = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY).filter(
+        (t) => t && t.id && !remoteIds.has(t.id) && !t.deleted_at
+      );
+      const topics: TopicWithMeta[] = [...remoteTopics, ...localOnly];
+
+      // Lưu đệm TOÀN BỘ chủ đề (cả bản nháp) vào localStorage để load mượt mà
+      writeLocalList(TOPIC_CACHE_KEY, topics);
+      if (localOnly.length > 0) {
+        await Promise.all(localOnly.map((t) => this.pushTopicRecord(t.id)));
+      }
+
+      // Lọc theo trạng thái xuất bản & lớp
+      let filtered = topics;
+      if (onlyPublished) {
+        filtered = filtered.filter((t) => t.status === 'published');
+      }
+      if (classId && classId !== 'all') {
+        filtered = filtered.filter((t) => t.class_ids.includes('all') || t.class_ids.includes(classId));
+      }
+
+      return filtered;
+    } catch (err) {
+      console.error('[SupabaseContent] Ngoại lệ getTopics:', err);
+      return mockContentRepo.getTopics(classId, onlyPublished);
+    }
+  }
+
+  async getTopicById(id: string): Promise<TopicWithMeta | null> {
+    const list = await this.getTopics(undefined, false);
+    return list.find((t) => t.id === id) || null;
+  }
+
+  async saveTopic(topic: Partial<TopicWithMeta>): Promise<TopicWithMeta> {
+    const topicId = topic.id || 'topic_' + Date.now();
+    const now = new Date().toISOString();
+
+    // 1. Lưu vào mock/local cache trước
+    const savedMock = await mockContentRepo.saveTopic({
+      ...topic,
+      id: topicId,
+      updated_at: now,
+    });
+
+    if (!isSupabaseReady()) {
+      return savedMock;
+    }
+
+    try {
+      const vPayload = {
+        shortDesc: topic.shortDesc || savedMock.shortDesc || '',
+        videoIds: topic.videoIds || savedMock.videoIds || [],
+        colorScheme: topic.colorScheme || savedMock.colorScheme || '#2F3E6B',
+        class_ids: topic.class_ids || savedMock.class_ids || ['all'],
+        version: topic.version ?? savedMock.version ?? 1,
+        has_unpublished_edits: topic.has_unpublished_edits ?? savedMock.has_unpublished_edits ?? false,
+      };
+
+      const tPayload = {
+        theoryId: topic.theoryId || savedMock.theoryId || '',
+      };
+
+      const dbPayload = {
+        id: topicId,
+        title: topic.title || savedMock.title || 'Chủ đề mới',
+        category: topic.tag || savedMock.tag || 'Chung',
+        order_index: (topic as any).order_index ?? 0,
+        video_payload: vPayload,
+        theory_payload: tPayload,
+        status: topic.status || savedMock.status || 'published',
+        created_at: topic.created_at || savedMock.created_at || now,
+        updated_at: now,
+      };
+
+      const { error } = await supabase
+        .from('topics')
+        .upsert(dbPayload, { onConflict: 'id' });
+
+      if (error) {
+        console.warn('[SupabaseContent] Lỗi lưu chủ đề lên Supabase:', error.message);
+        return savedMock;
+      }
+
+      console.log(`[SupabaseContent] ✅ Đã lưu chủ đề [${topicId}] vào Supabase database thành công!`);
+      syncEventBus.emit('content', { topicId });
+      return savedMock;
+    } catch (err) {
+      console.error('[SupabaseContent] Ngoại lệ saveTopic:', err);
+      return savedMock;
+    }
+  }
+
+  async deleteTopic(id: string, teacherActorId: string): Promise<void> {
+    await mockContentRepo.deleteTopic(id, teacherActorId);
+
+    if (!isSupabaseReady()) return;
+
+    try {
+      const { error } = await supabase.from('topics').delete().eq('id', id);
+      if (error) {
+        console.warn('[SupabaseContent] Lỗi xóa chủ đề trên Supabase:', error.message);
+      } else {
+        console.log(`[SupabaseContent] 🗑️ Đã xóa chủ đề [${id}] trên Supabase database.`);
+      }
+      syncEventBus.emit('content', { deletedTopicId: id });
+    } catch (err) {
+      console.error('[SupabaseContent] Ngoại lệ deleteTopic:', err);
+    }
+  }
+
+  async reorderTopics(topicIds: string[]): Promise<void> {
+    await mockContentRepo.reorderTopics(topicIds);
+
+    if (!isSupabaseReady()) return;
+
+    try {
+      await Promise.all(
+        topicIds.map((id, index) =>
+          supabase.from('topics').update({ order_index: index + 1 }).eq('id', id)
+        )
+      );
+      syncEventBus.emit('content');
+    } catch (err) {
+      console.error('[SupabaseContent] Ngoại lệ reorderTopics:', err);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Nội dung học (video / lý thuyết) được lưu vào các bảng `video_lessons`, `theory_lessons`
+  // trên Supabase (payload JSON). localStorage chỉ còn là bộ nhớ đệm.
+  // ---------------------------------------------------------------------------
+  private async ensureLocal(table: string, key: string, id?: string): Promise<void> {
+    if (!id || !isSupabaseReady()) return;
+    if (readLocalList<PayloadItem>(key).some((x) => x.id === id)) return;
+    await syncPayloadCollection(table, key);
+  }
+
+  /** Đẩy bản ghi chủ đề (đang ở bộ nhớ đệm) lên bảng topics trên Supabase. */
+  private async pushTopicRecord(topicId?: string): Promise<void> {
+    if (!topicId || !isSupabaseReady()) return;
+    const t = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY).find((x) => x.id === topicId);
+    if (!t) return;
+    try {
+      const { error } = await supabase.from('topics').upsert(
+        {
+          id: t.id,
+          title: t.title || 'Chủ đề mới',
+          category: t.tag || 'Chung',
+          video_payload: {
+            shortDesc: t.shortDesc || '',
+            videoIds: Array.isArray(t.videoIds) ? t.videoIds : [],
+            colorScheme: t.colorScheme || '#2F3E6B',
+            class_ids: Array.isArray(t.class_ids) ? t.class_ids : ['all'],
+            version: t.version ?? 1,
+            has_unpublished_edits: !!t.has_unpublished_edits,
+          },
+          theory_payload: { theoryId: t.theoryId || '' },
+          status: t.status || 'draft',
+          created_at: t.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+      if (error) console.warn('[SupabaseContent] Lỗi đẩy chủ đề lên Supabase:', error.message);
+    } catch (err) {
+      console.error('[SupabaseContent] Ngoại lệ pushTopicRecord:', err);
+    }
+  }
+
+  private async pushContentById(type: 'topic' | 'video' | 'theory', id: string): Promise<void> {
+    if (type === 'topic') {
+      await this.pushTopicRecord(id);
+    } else if (type === 'video') {
+      await pushLocalById('video_lessons', VIDEO_CACHE_KEY, id);
+    } else {
+      await pushLocalById('theory_lessons', THEORY_CACHE_KEY, id);
+    }
+    syncEventBus.emit('content');
+  }
+
+  async getVideoLessons(classId?: string, onlyPublished = true): Promise<VideoLessonWithMeta[]> {
+    const list = await syncPayloadCollection<VideoLessonWithMeta>('video_lessons', VIDEO_CACHE_KEY);
+    if (!list) return mockContentRepo.getVideoLessons(classId, onlyPublished);
+    return filterContentItems(list, classId, onlyPublished);
+  }
+
+  async getVideoLessonById(id: string): Promise<VideoLessonWithMeta | null> {
+    const list = await this.getVideoLessons(undefined, false);
+    return list.find((v) => v.id === id) || null;
+  }
+
+  async getTheoryLessons(classId?: string, onlyPublished = true): Promise<TheoryLessonWithMeta[]> {
+    const list = await syncPayloadCollection<TheoryLessonWithMeta>('theory_lessons', THEORY_CACHE_KEY);
+    if (!list) return mockContentRepo.getTheoryLessons(classId, onlyPublished);
+    return filterContentItems(list, classId, onlyPublished);
+  }
+
+  async getTheoryLessonById(id: string): Promise<TheoryLessonWithMeta | null> {
+    const list = await this.getTheoryLessons(undefined, false);
+    return list.find((t) => t.id === id) || null;
+  }
+
+  async saveVideoLesson(video: Partial<VideoLessonWithMeta>): Promise<VideoLessonWithMeta> {
+    await this.ensureLocal('video_lessons', VIDEO_CACHE_KEY, video.id);
+    const saved = await mockContentRepo.saveVideoLesson(video);
+    const ok = await pushPayloadItem('video_lessons', saved);
+    if (ok) console.log(`[SupabaseContent] ✅ Đã lưu video [${saved.id}] vào Supabase database.`);
+    return saved;
+  }
+
+  async saveTheoryLesson(theory: Partial<TheoryLessonWithMeta>): Promise<TheoryLessonWithMeta> {
+    await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, theory.id);
+    const saved = await mockContentRepo.saveTheoryLesson(theory);
+    const ok = await pushPayloadItem('theory_lessons', saved);
+    if (ok) console.log(`[SupabaseContent] ✅ Đã lưu bài lý thuyết [${saved.id}] vào Supabase database.`);
+    return saved;
+  }
+
+  async deleteVideoLesson(id: string, teacherActorId: string): Promise<void> {
+    await this.ensureLocal('video_lessons', VIDEO_CACHE_KEY, id);
+    const affectedTopicIds = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY)
+      .filter((t) => Array.isArray(t.videoIds) && t.videoIds.includes(id))
+      .map((t) => t.id);
+    await mockContentRepo.deleteVideoLesson(id, teacherActorId);
+    await pushLocalById('video_lessons', VIDEO_CACHE_KEY, id);
+    await Promise.all(affectedTopicIds.map((tid) => this.pushTopicRecord(tid)));
+  }
+
+  async deleteTheoryLesson(id: string, teacherActorId: string): Promise<void> {
+    await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, id);
+    await mockContentRepo.deleteTheoryLesson(id, teacherActorId);
+    await pushLocalById('theory_lessons', THEORY_CACHE_KEY, id);
+  }
+
+  async reorderTopicVideos(topicId: string, videoIds: string[]): Promise<void> {
+    await mockContentRepo.reorderTopicVideos(topicId, videoIds);
+    await this.pushTopicRecord(topicId);
+  }
+
+  async publishContent(
+    type: 'topic' | 'video' | 'theory',
+    id: string,
+    options: { classIds: string[]; notifyStudent?: boolean },
+    teacherActorId: string
+  ): Promise<void> {
+    if (type === 'video') await this.ensureLocal('video_lessons', VIDEO_CACHE_KEY, id);
+    if (type === 'theory') await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, id);
+
+    await mockContentRepo.publishContent(type, id, options, teacherActorId);
+
+    if (type === 'topic' && isSupabaseReady()) {
+      try {
+        await supabase.from('topics').update({ status: 'published' }).eq('id', id);
+      } catch {}
+    }
+    await this.pushContentById(type, id);
+
+    // Xuất bản video/lý thuyết => tự động xuất bản chủ đề cha để học sinh nhìn thấy
+    if (type !== 'topic') {
+      const key = type === 'video' ? VIDEO_CACHE_KEY : THEORY_CACHE_KEY;
+      const item = readLocalList<PayloadItem>(key).find((x) => x.id === id);
+      const parentId = item?.topicId;
+      if (parentId) {
+        const parent = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY).find((t) => t.id === parentId);
+        if (parent && parent.status !== 'published') {
+          await mockContentRepo.publishContent('topic', parentId, { classIds: options.classIds }, teacherActorId);
+          await this.pushContentById('topic', parentId);
+        }
+      }
+    }
+  }
+
+  async unpublishContent(type: 'topic' | 'video' | 'theory', id: string, teacherActorId: string): Promise<void> {
+    if (type === 'video') await this.ensureLocal('video_lessons', VIDEO_CACHE_KEY, id);
+    if (type === 'theory') await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, id);
+    await mockContentRepo.unpublishContent(type, id, teacherActorId);
+    await this.pushContentById(type, id);
+  }
+
+  async archiveContent(type: 'topic' | 'video' | 'theory', id: string, teacherActorId: string): Promise<void> {
+    if (type === 'video') await this.ensureLocal('video_lessons', VIDEO_CACHE_KEY, id);
+    if (type === 'theory') await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, id);
+    await mockContentRepo.archiveContent(type, id, teacherActorId);
+    await this.pushContentById(type, id);
+  }
+
+  async duplicateContent(
+    type: 'topic' | 'video' | 'theory',
+    id: string,
+    teacherActorId: string
+  ): Promise<TopicWithMeta | VideoLessonWithMeta | TheoryLessonWithMeta> {
+    if (type === 'video') await this.ensureLocal('video_lessons', VIDEO_CACHE_KEY, id);
+    if (type === 'theory') await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, id);
+    const result = await mockContentRepo.duplicateContent(type, id, teacherActorId);
+    if (result?.id) {
+      await this.pushContentById(type, result.id);
+      if (type === 'video' && (result as VideoLessonWithMeta).topicId) {
+        await this.pushTopicRecord((result as VideoLessonWithMeta).topicId);
+      }
+    }
+    return result;
+  }
+}
+
+export const supabaseContentRepo = new SupabaseContentRepository();
+
 
 

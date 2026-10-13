@@ -18,6 +18,7 @@
       --student:#0284c7; --student-light:#38bdf8;
       --game:#f59e0b; --game-light:#fbbf24;
       --infra:#8b5cf6; --infra-light:#c084fc;
+      --admin:#7c3aed; --admin-light:#a78bfa;
       --todo:#64748b; --todo-light:#94a3b8;
       --ok:#22c55e; --part:#eab308; --no:#ef4444; --rm:#64748b;
       --font:'Be Vietnam Pro',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
@@ -179,8 +180,8 @@
     <div class="brand-badge"><span>🌱 Mầm Văn 7</span> • <span>Bản Đồ Tổng Hợp Tính Năng Đã Hoàn Thành</span></div>
     <h1 class="header-title">Bản Đồ Tất Cả Những Gì Đã Làm Được</h1>
     <p class="header-desc">
-      Toàn bộ <strong>tính năng, màn hình, dịch vụ AI, logic gamification và hạ tầng</strong> đã xây dựng cho nền tảng học Ngữ văn lớp 7.
-      Nhấp vào từng khối để xem chi tiết, nhấp vào các mũi tên để hiểu luồng dữ liệu, và xem phần <strong>còn thiếu</strong> (Admin, Phụ huynh) ở khối xám.
+      Toàn bộ <strong>tính năng, màn hình, dịch vụ AI, logic gamification, cổng quản trị Admin và hạ tầng Supabase</strong> đã xây dựng cho nền tảng học Ngữ văn lớp 7.
+      Nhấp vào từng khối để xem chi tiết, nhấp vào các mũi tên để hiểu luồng dữ liệu tương tác trong toàn bộ hệ sinh thái.
     </p>
   </header>
 
@@ -207,7 +208,7 @@
       </div>
     </div>
     <div class="diagram-hint" style="margin-bottom:12px">💡 Nhấp vào khối module hoặc các vòng số trên mũi tên để xem diễn giải</div>
-    <div class="svg-viewport"><svg class="master-svg" id="mapSvg" viewBox="0 -60 1440 960" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div class="svg-viewport"><svg class="master-svg" id="mapSvg" viewBox="0 -60 1440 1220" xmlns="http://www.w3.org/2000/svg"></svg></div>
   </div>
 
   <section class="role-detail-panel" id="detailPanel">
@@ -344,25 +345,38 @@ const MODULES = {
       {c:'INF-01',s:'done',short:'React 19 + Vite 8 + TS + Tailwind 4',t:'Nền tảng frontend',b:'React 19, Vite 8, TypeScript, Tailwind v4, recharts, lucide-react, xlsx. Mobile-first, điều hướng bằng state trong App.tsx.',f:['package.json','App.tsx']},
       {c:'INF-02',s:'done',short:'Service registry + Repository',t:'Kiến trúc Repository',b:'services/index.ts đăng ký repo; có bản Mock và Supabase để hoán đổi, UI không phụ thuộc nguồn dữ liệu.',f:['services/index.ts','mock/','supabase/']},
       {c:'INF-03',s:'done',short:'Supabase: 9 bảng + schema.sql',t:'Cơ sở dữ liệu Supabase',b:'teachers, classes, students, student_states, topics, questions, essay_submissions, reward_requests, system_settings.',f:['database/schema.sql','supabaseRepositories.ts']},
-      {c:'INF-04',s:'done',short:'Fallback LocalStorage',t:'Chạy offline với LocalStorage',b:'Khi chưa cấu hình Supabase, Auth/Class/Student/Attempt/Essay repo tự lưu LocalStorage.',f:['supabase/client.ts']},
+      {c:'INF-04',s:'done',short:'Fallback LocalStorage',t:'Chạy offline với LocalStorage',b:'Khi chưa cấu hình Supabase, Auth/Class/Student/Attempt/Essay/Quiz repo tự lưu LocalStorage.',f:['supabase/client.ts']},
       {c:'INF-05',s:'done',short:'EventBus + dữ liệu seed demo',t:'Event bus & seed data',b:'eventBus đồng bộ sự kiện giữa màn hình; seedData & demoSeedHistory tạo dữ liệu demo.',f:['mock/eventBus.ts','seedData.ts','demoSeedHistory.ts']},
       {c:'INF-06',s:'done',short:'Deploy Vercel (mamvan.vercel.app)',t:'Triển khai Vercel',b:'Deploy production lên mamvan.vercel.app bằng npx vercel --prod; nhánh dev làm việc, main chưa đồng bộ.',f:['vercel.json','.vercel']},
       {c:'INF-07',s:'done',short:'Docs phase-1 / phase-2 / audit',t:'Tài liệu kiến trúc & audit',b:'Data flow audit, business rule gap, Supabase readiness, ERD, auth/RLS, roadmap, MAM_VAN_PROJECT_AUDIT.md.',f:['docs/phase-1','docs/phase-2']},
       {c:'INF-08',s:'done',short:'DevPanel + ErrorBoundary',t:'Công cụ dev & an toàn lỗi',b:'DevPanel để thao tác dữ liệu demo, ErrorBoundary chặn crash toàn app.',f:['DevPanel','ErrorBoundary']},
-      {c:'INF-09',s:'part',short:'Supabase Auth thật + RLS chặt',t:'Xác thực thật & RLS',b:'RLS hiện đang mở để dev; chưa chuyển sang Supabase Auth thật và chính sách RLS theo vai trò.',f:['docs/phase-2 (auth/RLS)']}
+      {c:'INF-09',s:'done',short:'SupabaseQuizRepo lưu câu hỏi vĩnh viễn',t:'Ngân hàng câu hỏi Supabase (PostgreSQL)',b:'Đấu nối SupabaseQuizRepository trực tiếp với bảng questions, tự động đồng bộ 22 câu mẫu, lưu vĩnh viễn mọi câu hỏi AI tạo, không bị mất khi reload.',f:['SupabaseQuizRepository','supabaseRepositories.ts']},
+      {c:'INF-10',s:'part',short:'Supabase Auth thật + RLS chặt',t:'Xác thực thật & RLS',b:'RLS hiện đang mở để dev; chưa chuyển sang Supabase Auth thật và chính sách RLS theo vai trò.',f:['docs/phase-2 (auth/RLS)']}
+    ]
+  },
+  admin:{
+    key:'admin', emoji:'🛡️', name:'ADMIN QUẢN TRỊ', color:'#7c3aed', light:'#a78bfa', grad:'gM',
+    x:1020,y:520,w:380,h:360, dir:'src/screens/admin/ • src/services/supabase/',
+    badge:'Cổng Admin Quản trị • Cấp tài khoản GV • Dùng thử • Impersonate • Khóa/Mở khóa',
+    features:[
+      {c:'ADM-01',s:'done',short:'Cổng Admin theme Giấy & Mực',t:'Cổng Admin Quản trị (Theme Giấy & Mực)',b:'Giao diện Admin đồng bộ theme giấy & mực: 4 thẻ thống kê trực quan (Tổng/Active/Trial/Locked), tìm kiếm tức thì theo tên/SĐT/email/trường, bộ lọc tab trạng thái.',f:['AdminPortal.tsx']},
+      {c:'ADM-02',s:'done',short:'Cấp tài khoản GV & Dùng thử 3-7 ngày',t:'Cấp tài khoản giáo viên mới',b:'Tạo tài khoản: tên, username tự sinh (gv...), mật khẩu mặc định (123456), trường, môn, loại dùng thử 3-7 ngày hoặc chính thức, ghi chú.',f:['CreateTeacherModal','teacherService']},
+      {c:'ADM-03',s:'done',short:'Sửa / Đổi MK / Gia hạn dùng thử',t:'Quản trị vòng đời tài khoản giáo viên',b:'Sửa thông tin, gia hạn thêm ngày dùng thử (+3, +7, +30 ngày), đặt lại mật khẩu mới.',f:['EditTeacherModal']},
+      {c:'ADM-04',s:'done',short:'Khóa / Mở khóa 1-click tức thì',t:'Khóa và mở khóa tài khoản giáo viên',b:'1-click Khóa tài khoản tạm thời chặn đăng nhập từ xa, hiển thị thông báo rõ ràng cho giáo viên khi bị khóa.',f:['toggleLockTeacher']},
+      {c:'ADM-05',s:'done',short:'Xóa an toàn & chặn xóa gv001',t:'Xóa tài khoản giáo viên an toàn',b:'Modal cảnh báo trước khi xóa; có cơ chế bảo vệ chặn xóa tài khoản mẫu gốc gv001.',f:['DeleteTeacherConfirmModal']},
+      {c:'ADM-06',s:'done',short:'Impersonate vào portal giáo viên',t:'Truy cập với tư cách GV (Impersonate)',b:'Admin bấm "Vào xem" để truy cập thẳng vào không gian của giáo viên kiểm tra lớp học/học liệu, có thanh banner tím bảo vệ trên đầu.',f:['onImpersonateTeacher']},
+      {c:'ADM-07',s:'done',short:'Đăng nhập Admin & URL /admin',t:'Định tuyến & Đăng nhập Admin',b:'Hỗ trợ URL /admin hoặc #/admin, vai trò Admin trên LoginScreen với nút điền nhanh tài khoản demo admin/123456.',f:['LoginScreen.tsx','App.tsx']},
+      {c:'ADM-08',s:'done',short:'TeacherRepository trên Supabase',t:'Hạ tầng dữ liệu TeacherRepository',b:'Kết nối bảng teachers trên Supabase PostgreSQL, tự động fallback LocalStorage khi mất mạng.',f:['TeacherRepository','supabaseRepositories.ts']}
     ]
   },
   todo:{
-    key:'todo', emoji:'⛔', name:'CHƯA LÀM (ADMIN + PHỤ HUYNH)', color:'#64748b', light:'#94a3b8', grad:'gX',
-    x:1020,y:520,w:380,h:360, dir:'(chưa có)',
-    badge:'Nằm trong kế hoạch nghiệp vụ nhưng chưa xây dựng',
+    key:'todo', emoji:'⛔', name:'ĐỊNH HƯỚNG MỞ RỘNG (PHỤ HUYNH)', color:'#64748b', light:'#94a3b8', grad:'gX',
+    x:1020,y:920,w:380,h:260, dir:'(kế hoạch giai đoạn tiếp theo)',
+    badge:'Nằm trong kế hoạch nghiệp vụ giai đoạn tiếp theo',
     features:[
-      {c:'ADM-01',s:'done',short:'Cổng Admin quản trị giáo viên',t:'Cổng Admin Quản trị (Theme Giáo viên)',b:'Giao diện Admin đồng bộ theme giấy & mực: thống kê 4 thẻ (Tổng/Active/Trial/Locked), tìm kiếm, bộ lọc trạng thái.',f:['screens/admin/AdminPortal.tsx']},
-      {c:'ADM-02',s:'done',short:'Cấp tài khoản giáo viên & Dùng thử',t:'Cấp tài khoản giáo viên mới',b:'Tạo tài khoản: tên, username (tự sinh), mật khẩu (123456), trường, môn, loại dùng thử 3-7 ngày hoặc chính thức, ghi chú.',f:['CreateTeacherModal','teacherService']},
-      {c:'ADM-03',s:'done',short:'Sửa / Xóa / Khóa / Impersonate',t:'Quản trị vòng đời tài khoản giáo viên',b:'Sửa thông tin, gia hạn dùng thử, đổi mật khẩu, 1-click Khóa/Mở khóa, Xóa tài khoản, và Impersonate vào thẳng portal giáo viên.',f:['EditTeacherModal','toggleLockTeacher','deleteTeacher']},
       {c:'PAR-01',s:'todo',short:'Cổng Phụ huynh + mã liên kết',t:'Cổng Phụ huynh',b:'Đăng nhập phụ huynh liên kết với hồ sơ con. Chưa triển khai.',f:[]},
       {c:'PAR-02',s:'todo',short:'Xem phút học, streak, cây, bài văn',t:'Giám sát học tập của con',b:'Xem số phút thực học, streak, sức khỏe cây tri thức, nguyên văn bài viết và lời phê.',f:[]},
-      {c:'SYS-01',s:'todo',short:'Thông báo đẩy / Zalo / SMS',t:'Kênh thông báo',b:'Thông báo duyệt rương, nhắc học… chưa tích hợp.',f:[]}
+      {c:'SYS-01',s:'todo',short:'Thông báo đẩy / Zalo / SMS',t:'Kênh thông báo đa kênh',b:'Thông báo duyệt rương, nhắc học hằng ngày… chưa tích hợp.',f:[]}
     ]
   }
 };
@@ -386,11 +400,17 @@ const FLOWS = {
       title:'Luồng [8]: Giáo viên ➜ Dữ liệu', desc:'Lớp, học sinh, câu hỏi, bài học, điểm, cài đặt được lưu qua Repository vào Supabase (hoặc LocalStorage khi offline).', note:'UI không phụ thuộc nguồn dữ liệu nhờ service registry.'},
   f9:{from:'infra',to:'game',    path:'M420 700 L530 700', n:'9', color:'#8b5cf6', bx:475,by:700,
       title:'Luồng [9]: Dữ liệu ⇄ Gamification', desc:'student_states, reward_requests lưu trạng thái XP/mastery/rương; eventBus đồng bộ sự kiện giữa các màn hình.', note:'Nền tảng cho việc chuyển hoàn toàn sang Supabase.'},
-  f10:{from:'game',to:'todo',     path:'M910 700 L1020 700', n:'?', color:'#64748b', bx:965,by:700, dashed:true,
-      title:'Luồng [?]: Chưa nối – Phụ huynh & Admin', desc:'Dữ liệu streak, phút học, cây tri thức, bài văn dự kiến hiển thị cho Phụ huynh; Admin theo dõi lớp của giáo viên. Hiện CHƯA có cổng.', note:'Đây là hạng mục kế tiếp theo kế hoạch nghiệp vụ.'}
+  f10:{from:'admin',to:'teacher', path:'M1020 560 C700 560 380 480 380 400', n:'10', color:'#7c3aed', bx:670,by:520,
+      title:'Luồng [10]: Admin ➜ Giáo viên (Quản trị & Impersonate)', desc:'Admin cấp tài khoản, cấp quyền dùng thử 3-7 ngày, khóa/mở khóa tài khoản và 1-click Impersonate vào không gian của giáo viên để kiểm tra lớp học/học liệu.', note:'Admin giám sát toàn bộ giáo viên và có thanh banner bảo vệ tím trên đầu.'},
+  f11:{from:'infra',to:'admin',   path:'M420 800 C700 800 1020 800 1020 700', n:'11', color:'#8b5cf6', bx:720,by:790,
+      title:'Luồng [11]: Dữ liệu ⇄ Admin', desc:'Bảng teachers và questions trên PostgreSQL/Supabase được đồng bộ trực tiếp hai chiều, kiểm tra trạng thái khóa và phân quyền bảo mật.', note:'Dữ liệu giáo viên và câu hỏi được lưu trữ vĩnh viễn trên Supabase Cloud.'},
+  f12:{from:'game',to:'todo',     path:'M910 840 C960 880 1020 900 1020 940', n:'?', color:'#64748b', bx:965,by:890, dashed:true,
+      title:'Luồng [?]: Định hướng nối – Phụ huynh', desc:'Dữ liệu streak, phút học, cây tri thức, bài văn dự kiến hiển thị cho Phụ huynh qua cổng liên kết mã học sinh. Đang trong kế hoạch.', note:'Hạng mục kế tiếp sau khi hoàn thành cổng Admin.'}
 };
 
 const TIMELINE = [
+  {c:'#7c3aed',t:'Xây dựng Cổng Admin Quản trị Giáo viên & Impersonate',b:'src/screens/admin/AdminPortal.tsx: theme Giấy & Mực, 4 thẻ thống kê, cấp tài khoản dùng thử, 1-click khóa/mở khóa, xóa an toàn, Impersonate thẳng vào cổng GV.'},
+  {c:'#38bdf8',t:'Đấu nối SupabaseQuizRepository lưu câu hỏi vĩnh viễn',b:'src/services/supabase/supabaseRepositories.ts: kết nối trực tiếp bảng questions trên Supabase (PostgreSQL), câu hỏi AI tạo lưu vĩnh viễn vào DB, tải lại trang không bị mất.'},
   {c:'#34d399',t:'Gỡ bộ lọc text AI từ link YouTube',b:'Bỏ ô nhập link khó dùng; tab nguồn đổi thành “Ghi chú / Lời giảng”, chỉ dán văn bản.'},
   {c:'#fbbf24',t:'Thêm tưới nước cho cây trong Vườn Văn Mầm Mực',b:'isWatering, thanh “Nước tưới Mầm Mực”, nút tưới (+XP), truyền onCheckIn từ App.'},
   {c:'#f472b6',t:'Sửa Gemini key mới & model',b:'Key AQ.… dùng header X-goog-api-key; đổi mặc định sang gemini-flash-latest; bỏ model 2.0 đã chết; thêm danh sách model dự phòng.'},
@@ -457,7 +477,7 @@ function renderMap(){
     s+=`<marker id="arr-${c.slice(1)}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="${c}"/></marker>`;
   });
   s+=`<pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="rgba(255,255,255,.035)"/></pattern></defs>`;
-  s+=`<rect x="0" y="-60" width="1440" height="960" fill="url(#grid)"/>`;
+  s+=`<rect x="0" y="-60" width="1440" height="1300" fill="url(#grid)"/>`;
 
   // flows
   Object.entries(FLOWS).forEach(([k,f])=>{

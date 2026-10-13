@@ -3,8 +3,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const DEFAULT_SUPABASE_URL = 'https://mktrtiqawvhettiwcels.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_ZBfzRL5pOM_wH5c9ZBL1AQ_pjgdzyOS';
 
-const supabaseUrl: string = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-const supabasePublishableKey: string = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_ANON_KEY;
+const supabaseUrl: string = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || DEFAULT_SUPABASE_URL;
+const supabasePublishableKey: string = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY) || DEFAULT_SUPABASE_ANON_KEY;
 
 // Kiểm tra xem cấu hình có hợp lệ hay không
 const isConfigured = Boolean(

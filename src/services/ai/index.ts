@@ -15,6 +15,7 @@ import {
   AIEssayGradingOptions,
   AIEssayGradingResult,
   AIChatResponse,
+  AIExtractedSource,
 } from './AIService.ts';
 import { MockAIService } from './MockAIService.ts';
 import { GeminiAIService } from './GeminiAIService.ts';

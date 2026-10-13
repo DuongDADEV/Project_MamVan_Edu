@@ -23,11 +23,17 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   onComplete,
   onExit,
 }) => {
+  let localStoredQuestions: Record<string, Question> = {};
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('mam_van_questions') : null;
+    if (raw) localStoredQuestions = JSON.parse(raw);
+  } catch {}
+
   const questions: Question[] =
     customQuestions && customQuestions.length > 0
       ? customQuestions
-      : quiz.questionIds
-          .map((id) => QUESTIONS_BANK[id])
+      : (quiz.questionIds || [])
+          .map((id) => localStoredQuestions[id] || QUESTIONS_BANK[id])
           .filter(Boolean);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -42,7 +48,19 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   const [timeLeft, setTimeLeft] = useState(initialSeconds);
   const timerRef = useRef<any>(null);
 
-  const currentQ = questions[currentIndex];
+  // Khi chuyển sang bài quiz khác, reset ngay lập tức toàn bộ trạng thái về câu số 1
+  useEffect(() => {
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setEssayDrafts({});
+    setPracticeChecked({});
+    setIsSubmitModalOpen(false);
+    setTimeLeft(quiz.timeLimitMinutes ? quiz.timeLimitMinutes * 60 : 0);
+  }, [quiz.id]);
+
+  // Đảm bảo chỉ số câu hỏi luôn an toàn, không bao giờ vượt quá chiều dài mảng câu hỏi
+  const safeIndex = questions.length > 0 ? Math.min(currentIndex, questions.length - 1) : 0;
+  const currentQ = questions[safeIndex];
 
   useEffect(() => {
     if (!isPractice && initialSeconds > 0) {
@@ -207,7 +225,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               {skillInfo?.displayName || 'Nhận thức'}
             </span>
             <span className="text-xs text-slate-400 font-mono">
-              Câu {currentIndex + 1}/{questions.length}
+              Câu {safeIndex + 1}/{questions.length}
             </span>
           </div>
           <h3 className="text-sm font-extrabold text-[#1E1B4B] mt-0.5">{quiz.title}</h3>

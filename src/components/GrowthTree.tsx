@@ -45,14 +45,17 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
   const stepsToNext = nextStage ? nextStage.minSteps - completedStepsCount : 0;
 
   // Xử lý hiệu ứng tưới cây kết thúc sau 1.8 giây
+  const onWaterCompleteRef = React.useRef(onWaterComplete);
+  onWaterCompleteRef.current = onWaterComplete;
+
   useEffect(() => {
     if (isWatering) {
       const timer = setTimeout(() => {
-        if (onWaterComplete) onWaterComplete();
+        if (onWaterCompleteRef.current) onWaterCompleteRef.current();
       }, 1800);
       return () => clearTimeout(timer);
     }
-  }, [isWatering, onWaterComplete]);
+  }, [isWatering]);
 
   // Màu lá theo Mastery
   const getLeafStyle = (status: MasteryStatus) => {

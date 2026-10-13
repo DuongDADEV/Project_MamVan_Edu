@@ -127,7 +127,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   const [editingQuestion, setEditingQuestion] = useState<Partial<QuestionWithMeta> | null>(null);
 
   // Form State cho Câu hỏi thủ công
-  const [formTopicId, setFormTopicId] = useState<string>('topic_tho_bon_nam');
+  const [formTopicId, setFormTopicId] = useState<string>('');
   const [formType, setFormType] = useState<QuestionType>('single');
   const [formLevel, setFormLevel] = useState<SkillLevel>('NHAN_BIET');
   const [formDifficulty, setFormDifficulty] = useState<Difficulty>('TB');
@@ -148,7 +148,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   // Mở modal thêm câu hỏi mới
   const handleOpenAddQuestionModal = () => {
     setEditingQuestion(null);
-    setFormTopicId(topics[0]?.id || 'topic_tho_bon_nam');
+    setFormTopicId(topics[0]?.id || '');
     setFormType('single');
     setFormLevel('NHAN_BIET');
     setFormDifficulty('TB');
@@ -166,19 +166,37 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   // Mở modal sửa câu hỏi
   const handleOpenEditQuestion = (q: QuestionWithMeta) => {
     setEditingQuestion(q);
-    setFormTopicId(q.topicId || topics[0]?.id || 'topic_tho_bon_nam');
+    setFormTopicId(q.topicId || topics[0]?.id || '');
     setFormType(q.type || 'single');
     setFormLevel(q.level || 'NHAN_BIET');
     setFormDifficulty(q.difficulty || 'TB');
     setFormPrompt(q.prompt || '');
     setFormPassage(q.passage || '');
-    setFormOptions(q.options && q.options.length > 0 ? q.options : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D']);
+    const currentOptions =
+      q.options && q.options.length > 0
+        ? q.options
+        : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'];
+    setFormOptions(currentOptions);
     if (q.type === 'single') {
-      setFormSingleAnswer(typeof q.answer === 'string' ? q.answer : 'A');
+      const optIdx = currentOptions.indexOf(q.answer as string);
+      if (optIdx >= 0) {
+        setFormSingleAnswer(['A', 'B', 'C', 'D'][optIdx] || 'A');
+      } else {
+        setFormSingleAnswer(
+          typeof q.answer === 'string' && ['A', 'B', 'C', 'D'].includes(q.answer.toUpperCase())
+            ? q.answer.toUpperCase()
+            : 'A'
+        );
+      }
     } else if (q.type === 'multi') {
-      setFormMultiAnswers(Array.isArray(q.answer) ? q.answer : ['A']);
+      const ansArr = Array.isArray(q.answer) ? q.answer : [];
+      const mapped = ansArr.map((ans) => {
+        const idx = currentOptions.indexOf(ans);
+        return idx >= 0 ? ['A', 'B', 'C', 'D'][idx] : ans;
+      });
+      setFormMultiAnswers(mapped.length > 0 ? mapped : ['A']);
     } else if (q.type === 'fill') {
-      setFormFillAnswers(Array.isArray(q.answer) ? q.answer.join(', ') : (q.answer || ''));
+      setFormFillAnswers(Array.isArray(q.answer) ? q.answer.join(', ') : q.answer || '');
     }
     setFormExplanation(q.explanation || '');
     setFormPoints(q.points || 10);
@@ -206,8 +224,18 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     }
 
     let finalAnswer: any = formSingleAnswer;
-    if (formType === 'multi') {
-      finalAnswer = formMultiAnswers;
+    if (formType === 'single') {
+      const letterIndex = ['A', 'B', 'C', 'D'].indexOf(formSingleAnswer);
+      if (letterIndex >= 0 && formOptions[letterIndex]) {
+        finalAnswer = formOptions[letterIndex];
+      } else {
+        finalAnswer = formSingleAnswer;
+      }
+    } else if (formType === 'multi') {
+      finalAnswer = formMultiAnswers.map((k) => {
+        const letterIndex = ['A', 'B', 'C', 'D'].indexOf(k);
+        return letterIndex >= 0 && formOptions[letterIndex] ? formOptions[letterIndex] : k;
+      });
     } else if (formType === 'fill') {
       finalAnswer = formFillAnswers
         .split(',')
@@ -1151,6 +1179,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     onChange={(e) => setFormTopicId(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
                   >
+                    <option value="">-- Chưa gắn chủ đề (Chung) --</option>
                     {topics.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.title}

@@ -1,7 +1,33 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
-## [2026-10-12] - Cổng Quản Trị Admin (Quản lý Tài khoản Giáo viên) & Bản Đồ Tính Năng
+## [2026-10-14] - Khắc Phục Lỗi Phân Bố Phổ Điểm Histogram & Lỗi Mất Bài Nộp Tự Luận Chờ Chấm
 ### Đã thực hiện:
+- **Khắc phục lỗi Phân bố phổ điểm (Histogram) hiển thị sai số lượng học sinh (`src/analytics/scoreAnalytics.ts`)**:
+  - *Nguyên nhân:* Trước đó hàm `computeScoreDistribution` duyệt và cộng dồn từng câu hỏi học sinh làm (`qList.forEach`), khiến 42 câu hỏi đã làm bị đếm thành "30 học sinh" ở dải < 5 và "12 học sinh" ở dải 8-10.
+  - *Khắc phục:* Viết lại hàm tính toán theo đúng chuẩn thống kê sư phạm: duyệt theo từng học sinh trong lớp (`students.forEach`), tính điểm trung bình của mỗi học sinh từ các bài làm đã hoàn thành và xếp mỗi học sinh vào duy nhất 1 dải điểm tương ứng. Tổng số học sinh trên các cột biểu đồ luôn khớp 100% với số học sinh thực tế của lớp.
+- **Khắc phục lỗi học sinh gửi bài nhưng giáo viên không thấy bài trong Hàng đợi chấm (`src/services/supabase/supabaseRepositories.ts`, `src/services/mock/mockRepositories.ts`, `src/App.tsx`, `src/screens/TheoryLessonScreen.tsx`, `src/screens/VideoLessonScreen.tsx`)**:
+  - *Nguyên nhân 1:* Trong `App.tsx`, khi học sinh hoàn thành bài tập về nhà / quiz có câu tự luận, hàm `onComplete` không gọi `essayRepository.createSubmission` và không lưu vào `essaySubmissions` của học sinh.
+  - *Nguyên nhân 2:* Trong `TheoryLessonScreen.tsx` và `VideoLessonScreen.tsx`, `studentId` bị hardcode là `'hs001'`, không lấy ID và tên thực tế của tài khoản học sinh đang đăng nhập.
+  - *Nguyên nhân 3:* Trong `SupabaseEssayRepository.getSubmissions()`, hệ thống chỉ truy vấn bảng Supabase và nếu Supabase trả về rỗng thì không hợp nhất với bài nộp lưu trữ ở local/fallback, dẫn đến giáo viên thấy 0 bài.
+  - *Khắc phục:* 
+    - Đấu nối `essayRepository.createSubmission` trong `App.tsx` cho mọi luồng nộp bài tập tự luận.
+    - Truyền động `state.profile.id`, `state.profile.name`, `grade` trong các màn hình học tập.
+    - Cập nhật `SupabaseEssayRepository.getSubmissions` và `createSubmission` tự động hợp nhất (merge) dữ liệu từ Supabase và Local State, đảm bảo không bao giờ bị thất lạc bài nộp của học sinh dù làm bài online hay offline.
+
+### Đã thực hiện:
+- **Xây dựng `SupabaseQuizRepository` kết nối trực tiếp PostgreSQL (`src/services/supabase/supabaseRepositories.ts`)**:
+  - Triển khai `QuizRepository` kết nối bảng `questions` trên Supabase Database Cloud.
+  - Tự động chuẩn hóa kiểu dữ liệu giữa TypeScript (`single`, `multi`, `fill`, `essay`) và PostgreSQL (`single_choice`, `multiple_choice`, `fill_in_blank`, `essay`).
+  - Lưu vĩnh viễn mọi câu hỏi do AI tạo hoặc giáo viên nhập thủ công vào Supabase (`upsert onConflict id`).
+  - Hỗ trợ fallback tức thì sang `mockRepo` (LocalStorage) khi offline hoặc chưa cấu hình Supabase.
+  - Tự động đồng bộ và nạp 22 câu hỏi mẫu khởi nguồn lên Supabase Database, ngăn ngừa tình trạng mất dữ liệu hay bị reset về 22 câu khi tải lại trang.
+- **Cập nhật Service Registry (`src/services/index.ts`)**:
+  - Xuất `quizService` và `quizRepository` trỏ thẳng sang `supabaseQuizRepo`.
+- **Cập nhật Bản Đồ Tính Năng (`BAN_DO_TINH_NANG_DA_LAM_MAM_VAN.html`)**:
+  - Chuyển Cổng Admin (`admin`) thành một module chính thức hoàn thành (`ADM-01` đến `ADM-08`), màu tím `#7c3aed`.
+  - Bổ sung `INF-09` (SupabaseQuizRepository lưu câu hỏi vĩnh viễn) vào khối Dữ liệu & Hạ tầng.
+  - Mở rộng luồng tương tác: Luồng [10] (Admin ➜ Giáo viên: Quản trị & Impersonate), Luồng [11] (Hạ tầng ⇄ Admin: Dữ liệu hai chiều).
+  - Tách riêng khối mở rộng tương lai cho Phụ huynh và Kênh thông báo.
 - **Xây dựng Cổng Admin Quản trị (`src/screens/admin/AdminPortal.tsx`) theo theme Giáo viên**:
   - Đồng bộ bảng màu và phong cách thiết kế Giấy & Mực (nền ấm `#FAF7F0`, thẻ `#FFFDF8`, viền `#E6DCC8`, màu nhận diện `#2F3E6B` & `#7C3AED`).
   - Thống kê 4 thẻ trực quan: Tổng số giáo viên, Đang hoạt động, Dùng thử (Trial), Bị khóa.
