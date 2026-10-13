@@ -1921,6 +1921,19 @@ export class MockEssayRepository implements EssayRepository {
       }
     }
 
+    if (!targetEssay) {
+      const independent = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
+      const idx = independent.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        targetEssay = {
+          ...independent[idx],
+          teacherDraft: draft,
+        };
+        independent[idx] = targetEssay;
+        writeStorage(STORAGE_KEYS.ESSAYS, independent);
+      }
+    }
+
     if (!targetEssay) throw new Error('Không tìm thấy bài viết');
     syncEventBus.emit('essay');
     return targetEssay;
@@ -1979,6 +1992,31 @@ export class MockEssayRepository implements EssayRepository {
 
         await attemptRepo.saveStudentState(sId, st);
         break;
+      }
+    }
+
+    if (!targetEssay) {
+      const independent = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
+      const idx = independent.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        const original = independent[idx];
+        const aiScore = original.aiSuggestion?.suggestedTotalScore ?? grading.totalScore;
+        const diff =
+          grading.ai_vs_teacher_diff !== undefined
+            ? grading.ai_vs_teacher_diff
+            : Math.round(Math.abs(grading.totalScore - aiScore) * 10) / 10;
+        targetEssay = {
+          ...original,
+          ...grading,
+          finalScore: grading.totalScore,
+          finalComment: grading.teacherFeedback,
+          gradedAt: Date.now(),
+          status: 'GRADED',
+          ai_vs_teacher_diff: diff,
+        };
+        independent[idx] = targetEssay;
+        writeStorage(STORAGE_KEYS.ESSAYS, independent);
+        targetStudentId = original.studentId;
       }
     }
 
