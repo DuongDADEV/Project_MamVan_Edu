@@ -635,8 +635,8 @@ export default function App() {
                         essayRepository.createSubmission({
                           studentId: currentStudentId,
                           studentName: studentState.profile?.name || 'Học sinh',
-                          classId: (studentState.profile as any)?.classId || 'class_7a2',
-                          className: studentState.profile?.grade || '7A2',
+                          classId: (studentState.profile as any)?.classId,
+                          className: studentState.profile?.grade || '7A1',
                           questionId: e.questionId,
                           quizId: targetQuiz.id,
                           content: e.content,
