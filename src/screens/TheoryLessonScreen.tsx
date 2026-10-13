@@ -210,8 +210,10 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
         essayRepository.createSubmission({
           studentId: state.profile?.id || 'hs001',
           studentName: state.profile?.name || 'Học sinh',
-          className: state.profile?.grade || '7A2',
+          classId: (state.profile as any)?.classId,
+          className: state.profile?.grade || '7A1',
           questionId: e.questionId,
+          quizId: qId,
           content: e.content,
           wordCount: e.wordCount,
           status: 'PENDING_TEACHER',

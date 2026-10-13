@@ -75,8 +75,8 @@ const THEORY_CACHE_KEY = 'mam_van_theories';
 const QUIZ_CACHE_KEY = 'mam_van_quizzes';
 
 const SESSION_STORAGE_KEY = 'mam_van_auth_session';
-const DEFAULT_TEACHER_UUID = '00000000-0000-0000-0000-000000000001';
-const DEFAULT_CLASS_UUID = '00000000-0000-0000-0000-000000000010';
+const DEFAULT_TEACHER_UUID = 'd47261be-b00b-452f-93bb-222e844def70';
+const DEFAULT_CLASS_UUID = '8b249107-f084-4151-a2e9-21d973f0c566';
 
 function isUUID(str?: string | null): boolean {
   if (!str) return false;
@@ -844,8 +844,16 @@ export class SupabaseAttemptRepository implements AttemptRepository {
           : (data.attendance_days_this_week ?? localFallback.attendanceDaysThisWeek ?? fresh.attendanceDaysThisWeek);
 
       return {
-        ...fresh,
         ...localFallback,
+        ...fresh,
+        profile: {
+          ...fresh.profile,
+          name: student ? student.name : fresh.profile.name,
+          username: student ? student.username : fresh.profile.username,
+        },
+        essaySubmissions: (localFallback.essaySubmissions || []).filter(
+          (e) => !e.id?.startsWith('sub_demo') && e.studentName !== 'Trần Minh An'
+        ),
         xpToday: Math.max(data.xp_today ?? 0, localFallback.xpToday ?? 0),
         xpWeek: Math.max(data.xp_week ?? 0, localFallback.xpWeek ?? 0),
         totalXp: Math.max(data.total_xp ?? 0, localFallback.totalXp ?? 0),
@@ -1001,11 +1009,14 @@ export class SupabaseEssayRepository implements EssayRepository {
     studentId?: string;
     quizId?: string;
   }): Promise<EssaySubmission[]> {
-    // 1. Luôn lấy danh sách bài nộp từ local/student states
+    // 1. Lấy danh sách local, tuyệt đối lọc bỏ toàn bộ bài nộp demo
     const localList = await mockEssayRepo.getSubmissions(filter);
+    const cleanLocalList = (localList || []).filter(
+      (e) => !e.id?.startsWith('sub_demo') && e.studentName !== 'Trần Minh An'
+    );
 
     if (!isSupabaseReady()) {
-      return localList;
+      return cleanLocalList;
     }
 
     try {
@@ -1014,10 +1025,13 @@ export class SupabaseEssayRepository implements EssayRepository {
         .select('*, students(name), classes(name)')
         .order('created_at', { ascending: false });
 
-      if (filter?.studentId && isUUID(filter.studentId)) query = query.eq('student_id', filter.studentId);
+      if (filter?.studentId && isUUID(filter.studentId)) {
+        query = query.eq('student_id', filter.studentId);
+      }
       if (filter?.classId && filter.classId !== 'all') {
-        const cId = filter.classId === 'class_7a2' ? DEFAULT_CLASS_UUID : filter.classId;
-        if (isUUID(cId)) query = query.eq('class_id', cId);
+        if (isUUID(filter.classId)) {
+          query = query.eq('class_id', filter.classId);
+        }
       }
       if (filter?.status && filter.status !== 'ALL') {
         if (filter.status === 'PENDING_TEACHER') {
@@ -1030,38 +1044,52 @@ export class SupabaseEssayRepository implements EssayRepository {
       const { data, error } = await query;
       if (error) {
         console.warn('[SupabaseEssay] Lỗi getSubmissions Supabase, dùng fallback local:', error.message);
-        return localList;
+        return cleanLocalList;
       }
 
-      const remoteList: EssaySubmission[] = (data || []).map((e: any) => ({
-        id: e.id,
-        questionId: e.question_id || 'q_essay_01',
-        quizId: e.question_id || 'q_essay_01',
-        studentId: e.student_id,
-        studentName: e.students?.name || 'Học sinh',
-        classId: e.class_id,
-        className: e.classes?.name || '7A2',
-        promptTitle: 'Bài tập làm văn',
-        prompt: 'Bài tập làm văn',
-        content: e.content,
-        wordCount: e.word_count || 0,
-        submittedAt: new Date(e.created_at || Date.now()).getTime(),
-        status: e.status,
-        teacherFeedback: e.teacher_feedback || undefined,
-        rubricScores: Array.isArray(e.rubric_scores) ? e.rubric_scores : undefined,
-        totalScore: e.total_score ? Number(e.total_score) : undefined,
-        finalRatio: e.final_ratio ? Number(e.final_ratio) : undefined,
-        hoursWaiting: Math.max(0, Math.floor((Date.now() - new Date(e.created_at || Date.now()).getTime()) / 3600000)),
-      }));
+      const remoteList: EssaySubmission[] = (data || []).map((e: any) => {
+        const qInfo = (QUESTIONS_BANK as any)[e.question_id];
+        const submittedTime = new Date(e.created_at || Date.now()).getTime();
+        return {
+          id: e.id,
+          questionId: e.question_id || 'q_essay_01',
+          quizId: e.question_id || 'q_essay_01',
+          studentId: e.student_id,
+          studentName: e.students?.name || 'Học sinh',
+          classId: e.class_id,
+          className: e.classes?.name || '7A1',
+          promptTitle: qInfo?.prompt || 'Cảm nghĩ về bài thơ / văn bản',
+          quizTitle: 'Bài tập làm văn',
+          prompt: qInfo?.prompt || 'Viết đoạn văn theo yêu cầu',
+          content: e.content,
+          wordCount: e.word_count || (e.content ? e.content.trim().split(/\s+/).length : 0),
+          submittedAt: submittedTime,
+          status: e.status,
+          teacherFeedback: e.teacher_feedback || undefined,
+          rubricScores: Array.isArray(e.rubric_scores) ? e.rubric_scores : undefined,
+          totalScore: e.total_score != null ? Number(e.total_score) : undefined,
+          finalRatio: e.total_score != null ? Number(e.total_score) / 10 : undefined,
+          aiSuggestion: e.ai_suggested_scores ? {
+            rubricScores: e.ai_suggested_scores,
+            overallComment: e.ai_suggested_feedback || '',
+            suggestedTotalScore: Array.isArray(e.ai_suggested_scores)
+              ? e.ai_suggested_scores.reduce((sum: number, c: any) => sum + (c.score || 0), 0)
+              : undefined,
+            suggestedAt: e.created_at,
+          } : undefined,
+          skillLevel: qInfo?.level || 'VAN_DUNG',
+          hoursWaiting: Math.max(0, Math.floor((Date.now() - submittedTime) / 3600000)),
+        };
+      });
 
-      // HỢP NHẤT (MERGE) hai nguồn để không sót bài của học sinh
+      // HỢP NHẤT hai nguồn (remote ưu tiên, local chỉ là phần đệm chưa kịp đồng bộ)
       const map = new Map<string, EssaySubmission>();
-      localList.forEach((item) => map.set(item.id, item));
+      cleanLocalList.forEach((item) => map.set(item.id, item));
       remoteList.forEach((item) => map.set(item.id, item));
 
       return Array.from(map.values()).sort((a, b) => b.submittedAt - a.submittedAt);
     } catch {
-      return localList;
+      return cleanLocalList;
     }
   }
 
@@ -1073,7 +1101,11 @@ export class SupabaseEssayRepository implements EssayRepository {
   async createSubmission(
     submission: Omit<EssaySubmission, 'id' | 'submittedAt'>
   ): Promise<EssaySubmission> {
-    // 1. Luôn lưu vào local state trước để bài nộp được bảo toàn và có AI chấm gợi ý
+    if (!submission.content || submission.content.trim().length === 0) {
+      throw new Error('Nội dung bài viết không được để trống.');
+    }
+
+    // 1. Lưu vào local state để phản hồi tức thời
     const localCreated = await mockEssayRepo.createSubmission(submission);
 
     if (!isSupabaseReady()) {
@@ -1081,33 +1113,87 @@ export class SupabaseEssayRepository implements EssayRepository {
     }
 
     try {
-      let targetStudentUUID = isUUID(submission.studentId) ? submission.studentId : null;
-      let targetClassUUID = isUUID(submission.classId) ? submission.classId : null;
+      // 2. Tìm ID học sinh thực tế trong Supabase (tránh vi phạm khóa ngoại)
+      let targetStudentUUID: string | null = null;
+      let targetClassUUID: string | null = null;
 
-      if (!targetStudentUUID) {
-        const { data: matched } = await supabase
+      if (isUUID(submission.studentId)) {
+        const { data: s } = await supabase
           .from('students')
           .select('id, class_id')
-          .ilike('username', submission.studentId)
+          .eq('id', submission.studentId)
           .maybeSingle();
-        if (matched) {
-          targetStudentUUID = matched.id;
-          targetClassUUID = matched.class_id;
-        } else {
-          const { data: anyStudent } = await supabase.from('students').select('id, class_id').limit(1).maybeSingle();
-          if (anyStudent) {
-            targetStudentUUID = anyStudent.id;
-            targetClassUUID = anyStudent.class_id;
-          }
+        if (s) {
+          targetStudentUUID = s.id;
+          targetClassUUID = s.class_id;
         }
+      }
+
+      if (!targetStudentUUID) {
+        const { data: s } = await supabase
+          .from('students')
+          .select('id, class_id')
+          .or(`username.eq.${submission.studentId},student_code.eq.${submission.studentId}`)
+          .maybeSingle();
+        if (s) {
+          targetStudentUUID = s.id;
+          targetClassUUID = s.class_id;
+        }
+      }
+
+      if (!targetStudentUUID && submission.studentName) {
+        const { data: s } = await supabase
+          .from('students')
+          .select('id, class_id')
+          .ilike('name', submission.studentName)
+          .maybeSingle();
+        if (s) {
+          targetStudentUUID = s.id;
+          targetClassUUID = s.class_id;
+        }
+      }
+
+      if (!targetStudentUUID) {
+        const { data: anyStudent } = await supabase
+          .from('students')
+          .select('id, class_id')
+          .limit(1)
+          .maybeSingle();
+        if (anyStudent) {
+          targetStudentUUID = anyStudent.id;
+          targetClassUUID = anyStudent.class_id;
+        }
+      }
+
+      // 3. Xác minh class_id có thực trong database hoặc gán null (hợp lệ theo FK ON DELETE SET NULL)
+      let finalClassUUID: string | null = null;
+      if (isUUID(submission.classId)) {
+        finalClassUUID = submission.classId;
+      } else if (targetClassUUID && isUUID(targetClassUUID)) {
+        finalClassUUID = targetClassUUID;
+      }
+
+      if (finalClassUUID) {
+        const { data: cls } = await supabase
+          .from('classes')
+          .select('id')
+          .eq('id', finalClassUUID)
+          .maybeSingle();
+        if (!cls) {
+          const { data: anyCls } = await supabase.from('classes').select('id').limit(1).maybeSingle();
+          finalClassUUID = anyCls ? anyCls.id : null;
+        }
+      } else {
+        const { data: anyCls } = await supabase.from('classes').select('id').limit(1).maybeSingle();
+        finalClassUUID = anyCls ? anyCls.id : null;
       }
 
       if (targetStudentUUID) {
         const payload = {
           question_id: submission.questionId || submission.quizId || 'q_essay_01',
           student_id: targetStudentUUID,
-          class_id: targetClassUUID || DEFAULT_CLASS_UUID,
-          content: submission.content,
+          class_id: finalClassUUID,
+          content: submission.content.trim(),
           word_count: submission.wordCount || submission.content.trim().split(/\s+/).length,
           status: localCreated.status || submission.status || 'PENDING_TEACHER',
           ai_suggested_scores: localCreated.aiSuggestion?.rubricScores || null,
@@ -1117,14 +1203,20 @@ export class SupabaseEssayRepository implements EssayRepository {
         const { data: created, error } = await supabase
           .from('essay_submissions')
           .insert(payload)
-          .select()
+          .select('*, students(name), classes(name)')
           .single();
 
-        if (!error && created) {
+        if (error) {
+          console.error('[SupabaseEssay] Lỗi insert essay_submissions:', error.message);
+        } else if (created) {
           syncEventBus.emit('essay');
           return {
             ...localCreated,
             id: created.id,
+            studentId: created.student_id,
+            studentName: created.students?.name || localCreated.studentName,
+            classId: created.class_id,
+            className: created.classes?.name || localCreated.className,
             submittedAt: new Date(created.created_at).getTime(),
             status: created.status,
           };
@@ -1133,7 +1225,8 @@ export class SupabaseEssayRepository implements EssayRepository {
 
       syncEventBus.emit('essay');
       return localCreated;
-    } catch {
+    } catch (err: any) {
+      console.error('[SupabaseEssay] Ngoại lệ createSubmission:', err?.message || err);
       syncEventBus.emit('essay');
       return localCreated;
     }
@@ -1189,8 +1282,6 @@ export class SupabaseEssayRepository implements EssayRepository {
         teacher_feedback: grading.teacherFeedback,
         rubric_scores: grading.rubricScores,
         total_score: grading.totalScore,
-        final_ratio: grading.finalRatio,
-        graded_by: isUUID(teacherActorId) ? teacherActorId : DEFAULT_TEACHER_UUID,
         graded_at: new Date().toISOString(),
       };
 
@@ -1198,7 +1289,8 @@ export class SupabaseEssayRepository implements EssayRepository {
       syncEventBus.emit('essay');
       const item = await this.getSubmissionById(id);
       return item || localResult;
-    } catch {
+    } catch (err: any) {
+      console.error('[SupabaseEssay] Lỗi gradeSubmission Supabase:', err?.message || err);
       return localResult;
     }
   }
