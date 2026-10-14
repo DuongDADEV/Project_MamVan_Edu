@@ -4,8 +4,14 @@ import {
   StudentAttentionItem,
   PedagogicalInsight,
 } from './types.ts';
-import { StudentState, QuestionResult, SkillLevel } from '../types.ts';
-import { StudentAccount, TopicWithMeta } from '../services/types.ts';
+import {
+  AnalyticsFilter,
+  OverviewMetricsData,
+  StudentAttentionItem,
+  PedagogicalInsight,
+} from './types.ts';
+import { StudentState, QuestionResult, SkillLevel, EssaySubmission, RewardRequest } from '../types.ts';
+import { StudentAccount, TopicWithMeta, ClassItem } from '../services/types.ts';
 import { getFilterDateRange, filterStudents, filterStudentStates, filterQuestionResults } from './filterUtils.ts';
 import { calculateLevelMastery, calculateAllMastery } from '../logic/mastery.ts';
 
@@ -18,7 +24,9 @@ const SEVEN_DAYS = 7 * ONE_DAY;
 export function computeOverviewMetrics(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
-  filter: AnalyticsFilter
+  filter: AnalyticsFilter,
+  allEssays?: EssaySubmission[],
+  allRewards?: RewardRequest[]
 ): OverviewMetricsData {
   const students = filterStudents(allStudents, filter);
   const studentIds = new Set(students.map((s) => s.id));
@@ -30,7 +38,8 @@ export function computeOverviewMetrics(
   let activePrev7DaysCount = 0;
 
   students.forEach((s) => {
-    const lastActive = typeof s.last_active_at === 'number' ? s.last_active_at : (s.last_active_at ? new Date(s.last_active_at).getTime() : 0);
+    if (!s.last_active_at) return;
+    const lastActive = typeof s.last_active_at === 'number' ? s.last_active_at : new Date(s.last_active_at).getTime();
     if (now - lastActive <= SEVEN_DAYS) {
       active7DaysCount++;
     }
@@ -88,19 +97,31 @@ export function computeOverviewMetrics(
 
   const avgActiveMinutesDiff = 0;
 
-  // 5. Số bài viết chờ chấm
+  // 5. Số bài viết chờ chấm (Ưu tiên đếm từ bảng essay_submissions thực tế)
   let pendingGradingCount = 0;
-  Object.values(states).forEach((st) => {
-    const pending = (st.essaySubmissions || []).filter((e) => e.status !== 'GRADED').length;
-    pendingGradingCount += pending;
-  });
+  if (allEssays && Array.isArray(allEssays)) {
+    const classSet = filter.classIds && filter.classIds.length > 0 ? new Set(filter.classIds) : null;
+    pendingGradingCount = allEssays.filter((e) => {
+      const matchClass = !classSet || !e.class_id || classSet.has(e.class_id);
+      return matchClass && e.status !== 'GRADED';
+    }).length;
+  } else {
+    Object.values(states).forEach((st) => {
+      const pending = (st.essaySubmissions || []).filter((e) => e.status !== 'GRADED').length;
+      pendingGradingCount += pending;
+    });
+  }
 
-  // 6. Số yêu cầu quà chờ duyệt
+  // 6. Số yêu cầu quà chờ duyệt (Ưu tiên đếm từ bảng reward_requests thực tế)
   let pendingRewardCount = 0;
-  Object.values(states).forEach((st) => {
-    const pending = (st.rewardRequests || []).filter((r) => r.status === 'PENDING_APPROVAL').length;
-    pendingRewardCount += pending;
-  });
+  if (allRewards && Array.isArray(allRewards)) {
+    pendingRewardCount = allRewards.filter((r) => r.status === 'PENDING' || r.status === 'PENDING_APPROVAL').length;
+  } else {
+    Object.values(states).forEach((st) => {
+      const pending = (st.rewardRequests || []).filter((r) => r.status === 'PENDING_APPROVAL').length;
+      pendingRewardCount += pending;
+    });
+  }
 
   return {
     active7DaysCount,
@@ -123,7 +144,8 @@ export function detectStudentsNeedingAttention(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
   topics: TopicWithMeta[],
-  filter: AnalyticsFilter
+  filter: AnalyticsFilter,
+  allClasses?: ClassItem[]
 ): StudentAttentionItem[] {
   const students = filterStudents(allStudents, filter);
   const studentIds = new Set(students.map((s) => s.id));
@@ -136,9 +158,30 @@ export function detectStudentsNeedingAttention(
     const state = states[st.id];
     if (!state) return;
 
-    const className = st.class_id === 'class_7a2' ? '7A2' : '7A3';
-    const lastActive = typeof st.last_active_at === 'number' ? st.last_active_at : (st.last_active_at ? new Date(st.last_active_at).getTime() : 0);
-    const daysInactive = Math.floor((now - lastActive) / ONE_DAY);
+    const matchedClass = allClasses?.find((c) => c.id === st.class_id);
+    const className = matchedClass?.name || (st.class_id === 'class_7a2' ? '7A2' : st.class_id || '7A3');
+
+    const hasLastActive = Boolean(st.last_active_at);
+    const lastActive = typeof st.last_active_at === 'number'
+      ? st.last_active_at
+      : (st.last_active_at ? new Date(st.last_active_at).getTime() : 0);
+    const daysInactive = hasLastActive && lastActive > 0 ? Math.floor((now - lastActive) / ONE_DAY) : -1;
+
+    // QUY TẮC 0: Học sinh chưa từng đăng nhập vào hệ thống
+    if (!hasLastActive || daysInactive < 0) {
+      attentionList.push({
+        studentId: st.id,
+        studentName: st.name,
+        className,
+        avatarSeed: st.username,
+        severity: 'high',
+        reasonTag: 'Chưa từng vào học',
+        reasonDetail: 'Em chưa có hoạt động học tập nào trên hệ thống kể từ khi tạo tài khoản.',
+        suggestedAction: 'Gửi mã đăng nhập cho học sinh và hướng dẫn em cách vào học buổi đầu tiên.',
+        lastActiveText: 'Chưa vào',
+      });
+      return;
+    }
 
     // QUY TẮC 1: Hơn 5 ngày chưa đăng nhập
     if (daysInactive >= 5) {
