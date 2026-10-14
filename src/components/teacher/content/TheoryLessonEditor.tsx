@@ -434,75 +434,77 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
           </div>
 
           {/* 2. KHU SOẠN THẢO VĂN BẢN THEO KHỐI (BLOCK-BASED EDITOR) */}
-          <div className="space-y-4 min-w-0 max-w-full">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="min-w-0">
-                <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-[#7C3AED]" />
-                  <span>Trình soạn thảo khối (Block Editor)</span>
-                </h4>
-                <p className="text-[11px] text-[#8C7E6A] mt-0.5 truncate">
-                  Thêm các khối tiêu đề, đoạn văn, danh sách, ví dụ và hình ảnh minh họa
-                </p>
-              </div>
+          <div className="space-y-3 min-w-0 max-w-full">
+            <div>
+              <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-[#7C3AED]" />
+                <span>Trình soạn thảo khối (Block Editor)</span>
+              </h4>
+              <p className="text-[11px] text-[#8C7E6A] mt-0.5">
+                Thêm các khối tiêu đề, đoạn văn, danh sách, ví dụ và hình ảnh minh họa
+              </p>
+            </div>
 
-              {/* Toolbar thêm khối nhanh */}
-              <div className="flex items-center gap-1 flex-wrap shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleAddBlock('heading')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs"
-                  title="Thêm khối Tiêu đề (H2/H3)"
-                >
-                  <Heading className="w-3.5 h-3.5 text-[#7C3AED]" />
-                  <span>Tiêu đề</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddBlock('paragraph')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs"
-                  title="Thêm khối Đoạn văn"
-                >
-                  <AlignLeft className="w-3.5 h-3.5 text-[#2F3E6B]" />
-                  <span>Đoạn văn</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddBlock('list')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs"
-                  title="Thêm khối Danh sách"
-                >
-                  <List className="w-3.5 h-3.5 text-[#0D9488]" />
-                  <span>Danh sách</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddBlock('example')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs"
-                  title="Thêm khối Ví dụ trích đoạn & Phân tích"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#E2704A]" />
-                  <span>Ví dụ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddBlock('takeaway')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs"
-                  title="Thêm khối Ghi nhớ trọng tâm"
-                >
-                  <Bookmark className="w-3.5 h-3.5 text-[#F2B84B]" />
-                  <span>Ghi nhớ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddBlock('image')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs"
-                  title="Thêm khối Hình ảnh"
-                >
-                  <ImageIcon className="w-3.5 h-3.5 text-[#2563EB]" />
-                  <span>Hình ảnh</span>
-                </button>
-              </div>
+            {/* Toolbar thêm khối nhanh */}
+            <div className="p-2 sm:p-2.5 rounded-2xl bg-[#FAF5EB] border border-[#E6DCC8] flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold text-[#8C7E6A] px-1.5 flex items-center gap-1 shrink-0">
+                <Plus className="w-3.5 h-3.5 text-[#E2704A]" />
+                <span>Thêm khối:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => handleAddBlock('heading')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
+                title="Thêm khối Tiêu đề (H2/H3)"
+              >
+                <Heading className="w-3.5 h-3.5 text-[#7C3AED]" />
+                <span>Tiêu đề</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddBlock('paragraph')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
+                title="Thêm khối Đoạn văn"
+              >
+                <AlignLeft className="w-3.5 h-3.5 text-[#2F3E6B]" />
+                <span>Đoạn văn</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddBlock('list')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
+                title="Thêm khối Danh sách"
+              >
+                <List className="w-3.5 h-3.5 text-[#0D9488]" />
+                <span>Danh sách</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddBlock('example')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
+                title="Thêm khối Ví dụ trích đoạn & Phân tích"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#E2704A]" />
+                <span>Ví dụ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddBlock('takeaway')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
+                title="Thêm khối Ghi nhớ trọng tâm"
+              >
+                <Bookmark className="w-3.5 h-3.5 text-[#F2B84B]" />
+                <span>Ghi nhớ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddBlock('image')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
+                title="Thêm khối Hình ảnh"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span>Hình ảnh</span>
+              </button>
             </div>
 
             {/* Blocks List */}
