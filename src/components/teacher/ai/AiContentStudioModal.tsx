@@ -51,6 +51,128 @@ interface AiContentStudioModalProps {
   }) => void;
 }
 
+/**
+ * Component định dạng Markdown và dọn dẹp các mã ID kỹ thuật [src_...] trong câu trả lời của AI
+ */
+const FormattedChatMessage: React.FC<{ text: string; isUser: boolean }> = ({ text, isUser }) => {
+  // 1. Dọn dẹp triệt để các mã kỹ thuật [src_...], [Tài liệu ...] khỏi câu chữ
+  const sanitized = text
+    .replace(/\s*\[src_[^\]]+\]/g, '')
+    .replace(/\s*\[Tài liệu\s+\d+[^\]]*\]/g, '')
+    .replace(/\s*\[id\s*:\s*[^\]]+\]/gi, '')
+    .trim();
+
+  // Helper phân tích các thẻ in đậm (**), in nghiêng (*), code (`)
+  const renderInline = (str: string, keyPrefix: string) => {
+    const parts = str.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return (
+          <strong
+            key={`${keyPrefix}-${i}`}
+            className={isUser ? 'font-bold text-white' : 'font-bold text-[#2F3E6B]'}
+          >
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+      if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+        return (
+          <code
+            key={`${keyPrefix}-${i}`}
+            className="px-1.5 py-0.5 rounded bg-black/10 text-[11px] font-mono"
+          >
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      if (part.startsWith('*') && part.endsWith('*') && part.length >= 2) {
+        return (
+          <em key={`${keyPrefix}-${i}`} className="italic font-medium">
+            {part.slice(1, -1)}
+          </em>
+        );
+      }
+      return <React.Fragment key={`${keyPrefix}-${i}`}>{part}</React.Fragment>;
+    });
+  };
+
+  const lines = sanitized.split('\n');
+
+  return (
+    <div className="space-y-1.5 text-xs">
+      {lines.map((line, lineIdx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={lineIdx} className="h-1" />;
+        }
+
+        // Tiêu đề Markdown: #, ##, ###
+        const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const content = headingMatch[2];
+          return (
+            <div
+              key={lineIdx}
+              className={`font-bold ${
+                isUser ? 'text-white' : 'text-[#2F3E6B]'
+              } ${
+                level === 1
+                  ? 'text-sm mt-3 mb-1'
+                  : level === 2
+                  ? 'text-xs mt-2.5 mb-1'
+                  : 'text-xs mt-2 mb-0.5'
+              }`}
+            >
+              {renderInline(content, `h-${lineIdx}`)}
+            </div>
+          );
+        }
+
+        // Gạch đầu dòng danh sách: * hoặc - hoặc •
+        const bulletMatch = line.match(/^(\s*)([*•-])\s+(.+)$/);
+        if (bulletMatch) {
+          const indentSpaces = bulletMatch[1].length;
+          const content = bulletMatch[3];
+          const isSubBullet = indentSpaces >= 2;
+
+          return (
+            <div
+              key={lineIdx}
+              className={`flex items-start gap-2 ${
+                isSubBullet ? 'pl-4 sm:pl-5 text-[11.5px]' : 'pl-0.5 text-xs'
+              }`}
+            >
+              <span
+                className={`shrink-0 select-none mt-1 ${
+                  isUser
+                    ? 'text-white/80'
+                    : isSubBullet
+                    ? 'text-[#8C7E6A] text-[9px]'
+                    : 'text-[#0D9488] font-bold text-[12px]'
+                }`}
+              >
+                {isSubBullet ? '◦' : '•'}
+              </span>
+              <div className="flex-1 min-w-0 leading-relaxed">
+                {renderInline(content, `b-${lineIdx}`)}
+              </div>
+            </div>
+          );
+        }
+
+        // Đoạn văn thông thường
+        return (
+          <p key={lineIdx} className="leading-relaxed">
+            {renderInline(line, `p-${lineIdx}`)}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   isOpen,
   onClose,
@@ -935,7 +1057,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                       : 'bg-[#FAF5EB] text-[#2F3E6B] border border-[#E6DCC8] rounded-bl-xs'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                  <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />
 
                   {/* Chú thích nguồn tham chiếu */}
                   {msg.citations && msg.citations.length > 0 && (
