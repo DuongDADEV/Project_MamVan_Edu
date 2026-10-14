@@ -278,7 +278,7 @@ export class GeminiAIService implements AIService {
     }
 
     const sourcesText = activeSources
-      .map((s, idx) => `[Tài liệu ${idx + 1}: ID "${s.id}" - "${s.title}"]\n${s.content}`)
+      .map((s, idx) => `[Tài liệu ${idx + 1}: "${s.title}"] (Mã nguồn: ${s.id})\n${s.content}`)
       .join('\n\n');
 
     const historyText = (history || [])
@@ -301,6 +301,7 @@ QUY TẮC RAG GROUNDING BẮT BUỘC:
 1. Trả lời chi tiết, bám sát từng ý trong các tài liệu nguồn trên. Nêu rõ chi tiết, câu thơ, từ ngữ làm dẫn chứng.
 2. Định dạng câu trả lời bằng Markdown đẹp mắt (dùng gạch đầu dòng, **in đậm** ý quan trọng, phân đoạn rõ ràng).
 3. Đính kèm trích dẫn (citations) cụ thể: đoạn trích từ tài liệu nào.
+4. TUYỆT ĐỐI KHÔNG chèn mã ID kỹ thuật dạng [src_...] hoặc [Tài liệu ...] vào giữa câu chữ trong văn bản trả lời. Hãy viết câu văn tự nhiên, mượt mà. Mọi thông tin trích dẫn nguồn sẽ được đưa riêng vào mảng "citations" trong JSON.
 
 Định dạng trả về: DUY NHẤT một chuỗi JSON theo cấu trúc:
 {
@@ -314,12 +315,23 @@ QUY TẮC RAG GROUNDING BẮT BUỘC:
   ]
 }`;
 
+    const cleanReply = (str: string) =>
+      str
+        .replace(/\s*\[src_[^\]]+\]/g, '')
+        .replace(/\s*\[Tài liệu\s+\d+[^\]]*\]/g, '')
+        .replace(/\s*\[id\s*:\s*[^\]]+\]/gi, '')
+        .trim();
+
     const raw = await this.callGemini(prompt);
     try {
-      return this.parseJsonFromText<AIChatResponse>(raw);
+      const parsed = this.parseJsonFromText<AIChatResponse>(raw);
+      if (parsed && parsed.reply) {
+        parsed.reply = cleanReply(parsed.reply);
+      }
+      return parsed;
     } catch {
       return {
-        reply: raw.replace(/^```json/, '').replace(/```$/, '').trim(),
+        reply: cleanReply(raw.replace(/^```json/, '').replace(/```$/, '').trim()),
         citations: [
           {
             sourceId: activeSources[0]?.id,
