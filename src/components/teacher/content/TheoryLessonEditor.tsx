@@ -28,7 +28,10 @@ import {
   Copy,
   Layers,
   ListOrdered,
+  Upload,
+  Loader2,
 } from 'lucide-react';
+import { uploadLessonMedia } from '../../../services/supabase/storage.ts';
 
 interface TheoryLessonEditorProps {
   theory: TheoryLessonWithMeta;
@@ -161,6 +164,31 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   // Cập nhật khối
   const handleUpdateBlock = (id: string, updates: Partial<TheoryBlock>) => {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
+  };
+
+  const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
+
+  // Tải file ảnh / sơ đồ từ máy tính lên Supabase Storage
+  const handleImageFileUpload = async (blockId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setUploadingBlockId(blockId);
+    try {
+      const publicUrl = await uploadLessonMedia(file, 'images');
+      handleUpdateBlock(blockId, { imageUrl: publicUrl });
+    } catch (err: any) {
+      console.error('Lỗi tải file ảnh lên:', err);
+      // Fallback tự động sang FileReader DataURL
+      const reader = new FileReader();
+      reader.onload = () => {
+        handleUpdateBlock(blockId, { imageUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploadingBlockId(null);
+    }
   };
 
   // Xóa khối
@@ -673,19 +701,82 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                     )}
 
                     {block.type === 'image' && (
-                      <div className="space-y-2 p-3 rounded-2xl bg-blue-50/40 border border-blue-200">
+                      <div className="space-y-3 p-3.5 rounded-2xl bg-blue-50/40 border border-blue-200">
+                        {/* Khu vực tải tệp từ máy tính hoặc dán URL */}
                         <div>
-                          <label className="block text-[11px] font-bold text-[#2563EB] mb-1">
-                            Đường dẫn hình ảnh (URL) hoặc dán link:
-                          </label>
-                          <input
-                            type="text"
-                            value={block.imageUrl || ''}
-                            onChange={(e) => handleUpdateBlock(block.id, { imageUrl: e.target.value })}
-                            placeholder="https://... /so_do_tu_duy.png"
-                            className="w-full px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B]"
-                          />
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-[11px] font-bold text-[#2563EB]">
+                              Ảnh / Tệp sơ đồ minh họa:
+                            </label>
+                            {uploadingBlockId === block.id && (
+                              <span className="text-[11px] text-[#2563EB] flex items-center gap-1 font-semibold animate-pulse">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                Đang tải tệp lên...
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                            {/* Nút tải tệp từ thiết bị */}
+                            <label
+                              className={`px-3 py-1.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-[#2563EB] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 shadow-2xs hover:shadow-xs active:scale-95 ${
+                                uploadingBlockId === block.id ? 'opacity-50 pointer-events-none' : ''
+                              }`}
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Tải ảnh từ máy tính</span>
+                              <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                className="hidden"
+                                onChange={(e) => handleImageFileUpload(block.id, e)}
+                              />
+                            </label>
+
+                            <span className="text-[11px] text-[#8C7E6A] text-center sm:text-left font-medium">hoặc</span>
+
+                            {/* Ô nhập URL trực tiếp */}
+                            <input
+                              type="text"
+                              value={block.imageUrl || ''}
+                              onChange={(e) => handleUpdateBlock(block.id, { imageUrl: e.target.value })}
+                              placeholder="Dán link ảnh từ web (https://... /so_do.png)"
+                              className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B] placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                          </div>
                         </div>
+
+                        {/* Xem trước ảnh nếu đã có */}
+                        {block.imageUrl && (
+                          <div className="p-2.5 rounded-xl bg-white border border-blue-100 flex items-center gap-3">
+                            <img
+                              src={block.imageUrl}
+                              alt="Xem trước"
+                              className="w-16 h-16 object-contain rounded-lg border border-slate-200 shrink-0 bg-slate-50"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-[#2F3E6B] truncate">
+                                {block.imageUrl.startsWith('data:') ? 'Tệp ảnh từ máy tính' : block.imageUrl}
+                              </p>
+                              <p className="text-[10px] text-[#10B981] font-medium flex items-center gap-1 mt-0.5">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Đã sẵn sàng hiển thị trong bài học
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateBlock(block.id, { imageUrl: '' })}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Xóa tệp này"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+
                         <div>
                           <label className="block text-[11px] font-bold text-[#2F3E6B] mb-1">
                             Chú thích hình ảnh (Caption):
