@@ -99,7 +99,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   };
 
   return (
-    <div className="w-full md:w-80 lg:w-96 flex flex-col bg-[#FFFDF8] border-r border-[#E6DCC8] rounded-2xl md:rounded-r-none overflow-hidden shrink-0 shadow-xs">
+    <div className="w-full md:w-72 lg:w-80 flex flex-col bg-[#FFFDF8] border-r border-[#E6DCC8] rounded-2xl md:rounded-r-none overflow-hidden shrink-0 shadow-xs">
       {/* Top Header */}
       <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center justify-between">
         <div className="flex items-center gap-2">

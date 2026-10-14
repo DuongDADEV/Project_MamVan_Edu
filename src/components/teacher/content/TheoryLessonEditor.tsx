@@ -274,7 +274,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   const topicQuizzes = quizzes.filter((q) => !topicId || q.topicId === topicId);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-hidden shadow-xs">
+    <div className="flex-1 flex flex-col min-w-0 max-w-full bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-hidden shadow-xs">
       {/* Top Header */}
       <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
@@ -338,9 +338,9 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
       </div>
 
       {/* Main Content Area: Editor + Sidebar Table of Contents */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 flex flex-col lg:flex-row gap-6 min-w-0 max-w-full">
         {/* Left / Center: Main Form & Blocks */}
-        <div className="flex-1 space-y-6">
+        <div className="flex-1 min-w-0 max-w-full space-y-6">
           {/* 1. Loại lý thuyết & Thông tin chung */}
           <div className="p-4 rounded-3xl bg-[#FAF5EB]/60 border border-[#E6DCC8] space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -434,20 +434,20 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
           </div>
 
           {/* 2. KHU SOẠN THẢO VĂN BẢN THEO KHỐI (BLOCK-BASED EDITOR) */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="space-y-4 min-w-0 max-w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
                 <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-[#7C3AED]" />
                   <span>Trình soạn thảo khối (Block Editor)</span>
                 </h4>
-                <p className="text-[11px] text-[#8C7E6A] mt-0.5">
+                <p className="text-[11px] text-[#8C7E6A] mt-0.5 truncate">
                   Thêm các khối tiêu đề, đoạn văn, danh sách, ví dụ và hình ảnh minh họa
                 </p>
               </div>
 
               {/* Toolbar thêm khối nhanh */}
-              <div className="flex items-center gap-1 flex-wrap">
+              <div className="flex items-center gap-1 flex-wrap shrink-0">
                 <button
                   type="button"
                   onClick={() => handleAddBlock('heading')}
@@ -506,20 +506,20 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
             </div>
 
             {/* Blocks List */}
-            <div className="space-y-3">
+            <div className="space-y-3 min-w-0 max-w-full">
               {blocks.map((block, index) => {
                 return (
                   <div
                     key={block.id}
-                    className="p-4 rounded-3xl bg-white border border-[#E6DCC8] shadow-2xs space-y-2.5 group relative"
+                    className="p-4 rounded-3xl bg-white border border-[#E6DCC8] shadow-2xs space-y-2.5 group relative min-w-0 max-w-full overflow-hidden"
                   >
                     {/* Block Toolbar */}
-                    <div className="flex items-center justify-between pb-2 border-b border-[#E6DCC8]/60 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#FAF5EB] text-[#2F3E6B] text-[10px] font-bold flex items-center justify-center border border-[#E6DCC8]">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#E6DCC8]/60 text-xs gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-[#FAF5EB] text-[#2F3E6B] text-[10px] font-bold flex items-center justify-center border border-[#E6DCC8] shrink-0">
                           {index + 1}
                         </span>
-                        <span className="font-bold text-[#2F3E6B] uppercase text-[11px] tracking-wider">
+                        <span className="font-bold text-[#2F3E6B] uppercase text-[11px] tracking-wider truncate">
                           {block.type === 'heading' && `Tiêu đề (H${block.level || 2})`}
                           {block.type === 'paragraph' && 'Đoạn văn'}
                           {block.type === 'list' && 'Danh sách liệt kê'}
@@ -529,14 +529,14 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
                         {block.type === 'heading' && (
                           <div className="flex items-center bg-[#FAF5EB] rounded-lg p-0.5 border border-[#E6DCC8] mr-1">
                             <button
                               type="button"
                               onClick={() => handleUpdateBlock(block.id, { level: 2 })}
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                block.level === 2 ? 'bg-white text-[#2F3E6B] shadow-2xs' : 'text-[#8C7E6A]'
+                                (block.level || 2) === 2 ? 'bg-white text-[#2F3E6B] shadow-2xs' : 'text-[#8C7E6A]'
                               }`}
                             >
                               H2
@@ -597,7 +597,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                         value={block.content || ''}
                         onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
                         placeholder="Nhập tiêu đề mục (VD: 1. Đặc điểm số tiếng và nhịp điệu)..."
-                        className={`w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] font-lora font-bold text-[#2F3E6B] ${
+                        className={`w-full min-w-0 px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] font-lora font-bold text-[#2F3E6B] ${
                           block.level === 3 ? 'text-sm' : 'text-base'
                         }`}
                       />
@@ -609,15 +609,15 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                         value={block.content || ''}
                         onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
                         placeholder="Nội dung đoạn văn giải thích lý thuyết chi tiết..."
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] leading-relaxed resize-none"
+                        className="w-full min-w-0 px-3.5 py-2.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] leading-relaxed resize-none"
                       />
                     )}
 
                     {block.type === 'list' && (
-                      <div className="space-y-2">
+                      <div className="space-y-2 min-w-0 max-w-full">
                         {(block.items || []).map((item: string, itemIdx: number) => (
-                          <div key={itemIdx} className="flex items-center gap-2">
-                            <span className="text-[#0D9488] font-bold">•</span>
+                          <div key={itemIdx} className="flex items-center gap-2 min-w-0 w-full">
+                            <span className="text-[#0D9488] font-bold shrink-0">•</span>
                             <input
                               type="text"
                               value={item}
@@ -626,7 +626,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                                 newItems[itemIdx] = e.target.value;
                                 handleUpdateBlock(block.id, { items: newItems });
                               }}
-                              className="flex-1 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
+                              className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
                             />
                             <button
                               type="button"
@@ -634,7 +634,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                                 const newItems = (block.items || []).filter((_: string, i: number) => i !== itemIdx);
                                 handleUpdateBlock(block.id, { items: newItems });
                               }}
-                              className="p-1 text-[#8C7E6A] hover:text-rose-600"
+                              className="p-1 text-[#8C7E6A] hover:text-rose-600 shrink-0"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -656,7 +656,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                     )}
 
                     {block.type === 'example' && (
-                      <div className="space-y-2 p-3 rounded-2xl bg-orange-50/40 border border-orange-200">
+                      <div className="space-y-2 p-3 rounded-2xl bg-orange-50/40 border border-orange-200 min-w-0 max-w-full overflow-hidden">
                         <div>
                           <label className="block text-[11px] font-bold text-[#E2704A] mb-1">
                             Trích đoạn ngữ liệu / Ví dụ mẫu:
@@ -666,7 +666,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                             value={block.exampleText || ''}
                             onChange={(e) => handleUpdateBlock(block.id, { exampleText: e.target.value })}
                             placeholder='"Hạt gạo làng ta / Có vị phù sa / Của sông Kinh Thầy..."'
-                            className="w-full px-3 py-1.5 rounded-xl bg-white border border-orange-200 text-xs text-[#2F3E6B] italic resize-none"
+                            className="w-full min-w-0 px-3 py-1.5 rounded-xl bg-white border border-orange-200 text-xs text-[#2F3E6B] italic resize-none"
                           />
                         </div>
                         <div>
@@ -678,53 +678,53 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                             value={block.exampleAnalysis || ''}
                             onChange={(e) => handleUpdateBlock(block.id, { exampleAnalysis: e.target.value })}
                             placeholder="Mỗi dòng thơ gồm 4 tiếng, nhịp điệu nhanh, gợi tả sự hồn nhiên..."
-                            className="w-full px-3 py-1.5 rounded-xl bg-white border border-orange-200 text-xs text-[#2F3E6B] resize-none"
+                            className="w-full min-w-0 px-3 py-1.5 rounded-xl bg-white border border-orange-200 text-xs text-[#2F3E6B] resize-none"
                           />
                         </div>
                       </div>
                     )}
 
                     {block.type === 'takeaway' && (
-                      <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1">
+                      <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1 min-w-0 max-w-full overflow-hidden">
                         <label className="block text-[11px] font-bold text-amber-800 flex items-center gap-1">
-                          <Bookmark className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Khối ghi nhớ (Học sinh cần nắm vững):</span>
+                          <Bookmark className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="truncate">Khối ghi nhớ (Học sinh cần nắm vững):</span>
                         </label>
                         <textarea
                           rows={2}
                           value={block.takeawayText || ''}
                           onChange={(e) => handleUpdateBlock(block.id, { takeawayText: e.target.value })}
                           placeholder="Quy tắc cốt lõi: Thơ bốn chữ ngắt nhịp 2/2..."
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-amber-200 text-xs font-bold text-[#2F3E6B] resize-none"
+                          className="w-full min-w-0 px-3 py-2 rounded-xl bg-white border border-amber-200 text-xs font-bold text-[#2F3E6B] resize-none"
                         />
                       </div>
                     )}
 
                     {block.type === 'image' && (
-                      <div className="space-y-3 p-3.5 rounded-2xl bg-blue-50/40 border border-blue-200">
+                      <div className="space-y-3 p-3.5 rounded-2xl bg-blue-50/40 border border-blue-200 min-w-0 max-w-full overflow-hidden">
                         {/* Khu vực tải tệp từ máy tính hoặc dán URL */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-[11px] font-bold text-[#2563EB]">
+                        <div className="min-w-0 max-w-full">
+                          <div className="flex items-center justify-between mb-1.5 gap-2">
+                            <label className="block text-[11px] font-bold text-[#2563EB] truncate">
                               Ảnh / Tệp sơ đồ minh họa:
                             </label>
                             {uploadingBlockId === block.id && (
-                              <span className="text-[11px] text-[#2563EB] flex items-center gap-1 font-semibold animate-pulse">
+                              <span className="text-[11px] text-[#2563EB] flex items-center gap-1 font-semibold animate-pulse shrink-0">
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 Đang tải tệp lên...
                               </span>
                             )}
                           </div>
 
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0 w-full">
                             {/* Nút tải tệp từ thiết bị */}
                             <label
                               className={`px-3 py-1.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-[#2563EB] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 shadow-2xs hover:shadow-xs active:scale-95 ${
                                 uploadingBlockId === block.id ? 'opacity-50 pointer-events-none' : ''
                               }`}
                             >
-                              <Upload className="w-3.5 h-3.5" />
-                              <span>Tải ảnh từ máy tính</span>
+                              <Upload className="w-3.5 h-3.5 shrink-0" />
+                              <span className="whitespace-nowrap">Tải ảnh từ máy tính</span>
                               <input
                                 type="file"
                                 accept="image/*,.pdf"
@@ -733,7 +733,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                               />
                             </label>
 
-                            <span className="text-[11px] text-[#8C7E6A] text-center sm:text-left font-medium">hoặc</span>
+                            <span className="text-[11px] text-[#8C7E6A] text-center sm:text-left font-medium shrink-0">hoặc</span>
 
                             {/* Ô nhập URL trực tiếp */}
                             <input
@@ -741,14 +741,14 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                               value={block.imageUrl || ''}
                               onChange={(e) => handleUpdateBlock(block.id, { imageUrl: e.target.value })}
                               placeholder="Dán link ảnh từ web (https://... /so_do.png)"
-                              className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B] placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              className="flex-1 min-w-0 w-full px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B] placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400 truncate"
                             />
                           </div>
                         </div>
 
                         {/* Xem trước ảnh nếu đã có */}
                         {block.imageUrl && (
-                          <div className="p-2.5 rounded-xl bg-white border border-blue-100 flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-white border border-blue-100 flex items-center gap-3 min-w-0 max-w-full overflow-hidden">
                             <img
                               src={block.imageUrl}
                               alt="Xem trước"
@@ -757,19 +757,23 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                                 (e.target as HTMLElement).style.display = 'none';
                               }}
                             />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-[#2F3E6B] truncate">
-                                {block.imageUrl.startsWith('data:') ? 'Tệp ảnh từ máy tính' : block.imageUrl}
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                              <p className="text-xs font-semibold text-[#2F3E6B] truncate block" title={block.imageUrl}>
+                                {block.imageUrl.startsWith('data:')
+                                  ? 'Tệp ảnh từ máy tính'
+                                  : block.imageUrl.includes('/')
+                                  ? block.imageUrl.split('/').pop() || block.imageUrl
+                                  : block.imageUrl}
                               </p>
-                              <p className="text-[10px] text-[#10B981] font-medium flex items-center gap-1 mt-0.5">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Đã sẵn sàng hiển thị trong bài học
+                              <p className="text-[10px] text-[#10B981] font-medium flex items-center gap-1 mt-0.5 truncate">
+                                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                <span className="truncate">Đã sẵn sàng hiển thị trong bài học</span>
                               </p>
                             </div>
                             <button
                               type="button"
                               onClick={() => handleUpdateBlock(block.id, { imageUrl: '' })}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
                               title="Xóa tệp này"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -786,7 +790,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                             value={block.caption || ''}
                             onChange={(e) => handleUpdateBlock(block.id, { caption: e.target.value })}
                             placeholder="Hình 1: Sơ đồ tư duy cấu tạo từ láy bộ phận"
-                            className="w-full px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B]"
+                            className="w-full min-w-0 px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B]"
                           />
                         </div>
                       </div>
@@ -798,14 +802,14 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
           </div>
 
           {/* 3. LIÊN KẾT BÀI TẬP */}
-          <div className="space-y-3 pt-3 border-t border-[#E6DCC8]">
+          <div className="space-y-3 pt-3 border-t border-[#E6DCC8] min-w-0 max-w-full">
             <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
               <FileQuestion className="w-3.5 h-3.5 text-[#4F46E5]" />
               <span>Bài tập thực hành sau khi đọc lý thuyết</span>
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0 max-w-full">
+              <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#2F3E6B]">Bài luyện tập sau lý thuyết</span>
                   <button
@@ -830,7 +834,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                 </select>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2">
+              <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#2F3E6B]">Bài kiểm tra lý thuyết</span>
                   <button
@@ -859,7 +863,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
         </div>
 
         {/* Right Sidebar: Auto-generated Table of Contents & Info */}
-        <div className="w-full lg:w-72 space-y-4">
+        <div className="w-full lg:w-64 xl:w-72 shrink-0 space-y-4">
           {/* Table of Contents */}
           <div className="p-4 rounded-3xl bg-[#FAF5EB] border border-[#E6DCC8] space-y-3">
             <div className="flex items-center gap-1.5">

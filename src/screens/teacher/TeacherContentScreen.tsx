@@ -478,7 +478,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     selectedItem?.type === 'topic' ? topics.find((t) => t.id === selectedItem.id) : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full min-w-0">
       {/* Page Header with Main "+ Tạo mới" Dropdown */}
       <PageHeader
         title="Nội dung học"
@@ -629,7 +629,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       />
 
       {/* Main Two-Pane Area: Left (Topic Tree) + Right (Editor) */}
-      <div className="flex flex-col md:flex-row gap-0 items-stretch min-h-[680px]">
+      <div className="flex flex-col md:flex-row gap-0 items-stretch min-h-[680px] w-full max-w-full min-w-0 overflow-hidden">
         {/* Left Pane: Topic Tree Sidebar */}
         <TopicTreeSidebar
           topics={topics}
