@@ -52,7 +52,21 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     ['content'],
     [videoId]
   );
-  const video = liveVideo || VIDEOS[videoId];
+  const { data: allVideos } = useLiveQuery<VideoLessonWithMeta[]>(
+    () => contentService.getVideoLessons(undefined, true),
+    ['content']
+  );
+  const video = useMemo(() => {
+    if (liveVideo && !liveVideo.deleted_at) return liveVideo;
+    if (VIDEOS[videoId]) return VIDEOS[videoId];
+    if (allVideos && allVideos.length > 0) {
+      const match = allVideos.find((v) => v.id === videoId && !v.deleted_at);
+      if (match) return match;
+      const fallback = allVideos.find((v) => v.status === 'published' && !v.deleted_at);
+      if (fallback) return fallback;
+    }
+    return null;
+  }, [liveVideo, videoId, allVideos]);
 
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(undefined, false),
