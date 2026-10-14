@@ -148,13 +148,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const tMastery = calculateAllMastery(state.questionResults, t.id);
     const hasLowSkill = Object.values(tMastery).some((m) => m.status === 'NEEDS_REVIEW');
     if ((isFlagged || hasLowSkill) && weakItems.length < 3) {
+      // Tìm video bài giảng THỰC TẾ đang tồn tại và đã xuất bản của chủ đề này
+      const availableVideo = (liveVideos || []).find(
+        (v) => v.topicId === t.id && v.status === 'published' && !v.deleted_at
+      ) || (t.videoIds ? t.videoIds.map((id) => (liveVideos || []).find((v) => v.id === id && v.status === 'published' && !v.deleted_at)).find(Boolean) : undefined);
+
       weakItems.push({
         id: t.id,
         title: t.title,
         reason: isFlagged
           ? 'Bạn đã đánh dấu "Chưa hiểu" ở bài lý thuyết'
           : 'Cần củng cố thêm một số câu hỏi trắc nghiệm',
-        videoId: t.videoIds && t.videoIds.length > 0 ? t.videoIds[0] : undefined,
+        videoId: availableVideo ? availableVideo.id : undefined,
       });
     }
   });
