@@ -117,13 +117,13 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
 
   // 1. Tính toán 6 thẻ số liệu tổng quan với so sánh kỳ trước (+/- %)
   const overviewMetrics = useMemo(() => {
-    return computeOverviewMetrics(studentStates, students, filters);
-  }, [students, studentStates, filters]);
+    return computeOverviewMetrics(studentStates, students, filters, essays, rewards);
+  }, [students, studentStates, filters, essays, rewards]);
 
   // 2. Tự động nhận diện học sinh cần quan tâm sư phạm
   const attentionStudents = useMemo(() => {
-    return detectStudentsNeedingAttention(studentStates, students, topics as any, filters);
-  }, [studentStates, students, topics, filters]);
+    return detectStudentsNeedingAttention(studentStates, students, topics as any, filters, classes);
+  }, [studentStates, students, topics, filters, classes]);
 
   // 3. Tự động sinh nhận xét sư phạm 3-5 câu
   const pedagogicalInsights = useMemo(() => {
