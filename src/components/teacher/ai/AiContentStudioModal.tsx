@@ -195,8 +195,75 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
     latencyMs: number;
   } | null>(null);
 
-  // 2. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI)
-  const [sources, setSources] = useState<AISource[]>([]);
+  // Nguồn ngữ liệu mặc định: Bài thơ "Cây dừa" (Trần Đăng Khoa)
+  const DEFAULT_CAY_DUA_SOURCE: AISource = {
+    id: 'src_cay_dua_default',
+    title: 'Bài thơ: Cây dừa (Trần Đăng Khoa)',
+    type: 'text',
+    content: `Cây dừa xanh toả nhiều tàu,
+Dang tay đón gió, gật đầu gọi trăng.
+Thân dừa bạc phếch tháng năm,
+Quả dừa – đàn lợn con nằm trên cao.
+
+Đêm hè hoa nở cùng sao,
+Tàu dừa – chiếc lược chải vào mây xanh.
+Ai mang nước ngọt, nước lành,
+Ai đeo bao hũ rượu quanh cổ dừa.
+
+Tiếng dừa làm dịu nắng trưa,
+Gọi đàn gió đến cùng dừa múa reo.
+Trời trong đầy tiếng rì rào,
+Đàn cò đánh nhịp bay vào bay ra...
+
+Đứng canh trời đất bao la,
+Mà dừa đủng đỉnh như là đứng chơi.`,
+    wordCount: 104,
+    isEnabled: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  // 2. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI) - LƯU LOCALSTORAGE THEO CHỦ ĐỀ
+  const sourcesStorageKey = `mamvan_ai_sources_${topicId}`;
+  const [sources, setSources] = useState<AISource[]>(() => {
+    try {
+      const saved = localStorage.getItem(`mamvan_ai_sources_${topicId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi đọc nguồn tài liệu từ localStorage:', e);
+    }
+    return [DEFAULT_CAY_DUA_SOURCE];
+  });
+
+  // Tự động lưu nguồn tài liệu vào localStorage khi thay đổi
+  useEffect(() => {
+    try {
+      localStorage.setItem(sourcesStorageKey, JSON.stringify(sources));
+    } catch (e) {
+      console.warn('Lỗi lưu nguồn tài liệu vào localStorage:', e);
+    }
+  }, [sources, sourcesStorageKey]);
+
+  // Cập nhật khi topicId thay đổi
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`mamvan_ai_sources_${topicId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSources(parsed);
+          return;
+        }
+      }
+      setSources([DEFAULT_CAY_DUA_SOURCE]);
+    } catch (e) {
+      console.warn(e);
+    }
+  }, [topicId]);
 
   const [activeTabSourceInput, setActiveTabSourceInput] = useState<'paste' | 'file' | 'video'>('paste');
   const [newSourceTitle, setNewSourceTitle] = useState('');
@@ -952,7 +1019,30 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
 
           {/* Danh sách nguồn tài liệu */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-            {sources.map((src) => (
+            {sources.length === 0 ? (
+              <div className="p-4 text-center space-y-3 bg-white rounded-2xl border border-dashed border-[#E6DCC8]">
+                <p className="text-xs text-[#8C7E6A] italic">
+                  Chưa có nguồn tài liệu nào được thêm.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddSourceForm(true)}
+                    className="px-3 py-1.5 rounded-xl bg-[#E2704A] text-white text-xs font-bold hover:bg-[#D45E36] transition-colors shadow-2xs"
+                  >
+                    + Thêm nguồn tài liệu mới
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSources([DEFAULT_CAY_DUA_SOURCE])}
+                    className="px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-[#2F3E6B] text-xs font-bold hover:bg-black/5 transition-colors"
+                  >
+                    Khôi phục bài thơ "Cây dừa"
+                  </button>
+                </div>
+              </div>
+            ) : (
+              sources.map((src) => (
               <div
                 key={src.id}
                 className={`p-3 rounded-2xl border transition-all ${
@@ -1007,7 +1097,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                   "{src.content.slice(0, 100)}..."
                 </p>
               </div>
-            ))}
+            )))}
           </div>
         </div>
 
