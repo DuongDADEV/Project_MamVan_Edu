@@ -57,20 +57,56 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
     }
   }, [isWatering]);
 
-  // Màu lá theo Mastery
+  // Màu lá theo Mastery (theo Figma "Vườn Văn Mầm Mục"):
+  // >= 80% xanh lá đậm (đã hoàn thành) • 50-79% xanh biển (đang học)
+  // < 50% vàng (cần ôn lại) • chưa học: xám
   const getLeafStyle = (status: MasteryStatus) => {
     switch (status) {
       case 'SOLID':
-        return { fill: '#10B981', stroke: '#059669', label: 'Vững' };
+        return { fill: '#16A34A', stroke: '#14532D', label: 'Đã hoàn thành' };
       case 'PROGRESSING':
-        return { fill: '#22D3EE', stroke: '#0891B2', label: 'Đang tiến bộ' };
+        return { fill: '#38BDF8', stroke: '#0369A1', label: 'Đang học' };
       case 'NEEDS_REVIEW':
-        return { fill: '#FBBF24', stroke: '#D97706', label: 'Cần ôn' };
+        return { fill: '#FBBF24', stroke: '#D97706', label: 'Cần ôn lại' };
       case 'INSUFFICIENT_DATA':
       default:
-        return { fill: '#E2E8F0', stroke: '#CBD5E1', label: 'Chưa học' };
+        return { fill: '#E2E8F0', stroke: '#94A3B8', label: 'Chưa học' };
     }
   };
+
+  // 15 vị trí lá trên tán cây: 4 vị trí đầu là 4 lá chính (lấy 4 chủ đề đầu tiên),
+  // 11 vị trí còn lại là "lá ẩn" — chỉ xuất hiện khi có thêm chủ đề thứ 5 trở đi.
+  const LEAF_POSITIONS = [
+    { x: 100, y: 160, rot: -25 },
+    { x: 260, y: 155, rot: 25 },
+    { x: 130, y: 90, rot: -15 },
+    { x: 230, y: 85, rot: 15 },
+    { x: 180, y: 55, rot: 0 },
+    { x: 72, y: 118, rot: -35 },
+    { x: 288, y: 112, rot: 35 },
+    { x: 88, y: 64, rot: -20 },
+    { x: 272, y: 58, rot: 20 },
+    { x: 155, y: 140, rot: -8 },
+    { x: 208, y: 138, rot: 8 },
+    { x: 180, y: 105, rot: 0 },
+    { x: 118, y: 180, rot: -15 },
+    { x: 242, y: 178, rot: 15 },
+    { x: 205, y: 62, rot: -5 },
+  ];
+
+  // Lá đang được "nhấp" vào cây (hiệu ứng ấn xuống khi bấm lá đã hoàn thành)
+  const [pressedTopicId, setPressedTopicId] = useState<string | null>(null);
+
+  const handleLeafPress = (leaf: TopicLeafData) => {
+    if (leaf.masteryStatus === 'SOLID') {
+      setPressedTopicId(leaf.topicId);
+      setTimeout(() => setPressedTopicId(null), 320);
+    }
+    if (onLeafClick) onLeafClick(leaf.topicId);
+  };
+
+  // Chỉ vẽ tối đa 15 lá (đúng số chủ đề thực tế, không vẽ lá thừa)
+  const visibleLeaves = topicLeaves.slice(0, LEAF_POSITIONS.length);
 
   // Kích thước SVG
   const width = compact ? 220 : 360;
@@ -264,35 +300,38 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
           )}
 
           {/* CÁC CHIẾC LÁ ĐẠI DIỆN CHO TỪNG CHỦ ĐỀ HỌC (Interactive Topic Leaves) */}
-          {topicLeaves.map((leaf, index) => {
+          {visibleLeaves.map((leaf, index) => {
             const style = getLeafStyle(leaf.masteryStatus);
-
-            // Vị trí cố định hài hòa của 4 chủ đề trên cây
-            const leafPositions = [
-              { x: 100, y: 160, rot: -25, align: 'start' },
-              { x: 260, y: 155, rot: 25, align: 'end' },
-              { x: 130, y: 90, rot: -15, align: 'start' },
-              { x: 230, y: 85, rot: 15, align: 'end' },
-            ];
-
-            const pos = leafPositions[index % leafPositions.length];
+            const pos = LEAF_POSITIONS[index];
+            const isMainLeaf = index < 4; // 4 lá chính đầu tiên to hơn, có nhãn
+            const isPressed = pressedTopicId === leaf.topicId;
 
             return (
               <g
                 key={leaf.topicId}
                 className="cursor-pointer transition-transform duration-200 hover:scale-110"
-                onClick={() => onLeafClick && onLeafClick(leaf.topicId)}
+                style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+                onClick={() => handleLeafPress(leaf)}
               >
-                <g transform={`translate(${pos.x}, ${pos.y}) rotate(${pos.rot})`}>
+                <title>{`${leaf.topicTitle} — ${style.label} (${leaf.percentage}%)`}</title>
+                {isPressed && (
+                  <circle cx={pos.x} cy={pos.y - 20} r="26" fill="none" stroke="#16A34A" strokeWidth="2.5" className="animate-ping" opacity="0.7" />
+                )}
+                <g transform={`translate(${pos.x}, ${pos.y}) rotate(${pos.rot})${isMainLeaf ? '' : ' scale(0.78)'}`}>
                   {/* Cuống lá */}
                   <path d="M 0 0 Q -5 -8 -8 -16" stroke="#3A5E40" strokeWidth="2" fill="none" />
-                  {/* Bản lá */}
+                  {/* Bản lá (lá hoàn thành được "nhấp" lún xuống khi bấm) */}
                   <path
                     d="M -8 -16 C -20 -28 -12 -42 0 -48 C 12 -42 20 -28 8 -16 C 0 -10 -4 -12 -8 -16 Z"
                     fill={style.fill}
                     stroke={style.stroke}
                     strokeWidth="2"
-                    className="drop-shadow-sm"
+                    className="drop-shadow-sm transition-transform duration-200"
+                    style={{
+                      transformBox: 'fill-box',
+                      transformOrigin: 'bottom center',
+                      transform: isPressed ? 'scale(0.78) translateY(3px)' : undefined,
+                    }}
                   />
                   {/* Gân lá */}
                   <path d="M 0 -14 L 0 -44" stroke="#FFFDF8" strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
@@ -304,8 +343,8 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
                   )}
                 </g>
 
-                {/* Nhãn nhỏ khi không compact */}
-                {!compact && (
+                {/* Nhãn nhỏ khi không compact — chỉ cho 4 lá chính */}
+                {!compact && isMainLeaf && (
                   <text
                     x={pos.x}
                     y={pos.y + 22}

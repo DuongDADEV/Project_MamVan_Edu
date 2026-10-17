@@ -222,6 +222,26 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
               className="my-4"
             />
 
+            {/* CHÚ THÍCH MÀU LÁ THEO MỨC THÀNH THẠO */}
+            <div className="w-full flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 my-2 text-[11px] font-semibold text-slate-600">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#16A34A', borderColor: '#14532D' }} />
+                ≥80% • Đã hoàn thành
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#38BDF8', borderColor: '#0369A1' }} />
+                50–79% • Đang học
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#FBBF24', borderColor: '#D97706' }} />
+                &lt;50% • Cần ôn lại
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#E2E8F0', borderColor: '#94A3B8' }} />
+                Chưa học
+              </span>
+            </div>
+
             {/* Thông báo nếu giáo viên chưa xuất bản chủ đề nào */}
             {activeTopics.length === 0 && (
               <div className="w-full text-center py-3 px-4 my-2 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-800 font-medium">

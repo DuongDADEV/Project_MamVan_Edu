@@ -13,6 +13,15 @@
 ### Kiểm chứng:
 - `npm run build` (đã gồm kiểm tra type) thành công; app chạy thử hiển thị bình thường.
 
+## [2026-10-18] - Đợt 5: Cây tri thức "Vườn Văn Mầm Mục" — 15 vị trí lá theo chủ đề thật, màu trạng thái chuẩn Figma, hiệu ứng nhấp lá
+### Đã thực hiện (`src/components/GrowthTree.tsx`, `src/screens/TreeScreen.tsx`):
+- **15 vị trí lá trên tán cây, gắn với chủ đề thật:** trước đây chỉ có 4 vị trí và chủ đề thứ 5 trở đi bị vẽ chồng lên vị trí cũ. Nay cây có 15 vị trí lá — **4 lá chính đầu tiên** tương ứng 4 chủ đề đầu tiên trong thứ tự khóa học (lá to, có nhãn tên), và **từ chủ đề thứ 5 trở đi các "lá ẩn" mới bắt đầu xuất hiện** ở 11 vị trí còn lại (lá nhỏ hơn, rê chuột để xem tên + %). Không có chủ đề thì không vẽ lá — tối đa 15 lá.
+- **Màu lá đúng quy ước Figma:** đã hoàn thành (≥80%) = **xanh lá đậm**, đang học (50–79%) = **xanh biển**, cần ôn lại (<50%) = **vàng**, chưa học = **xám**. Thêm hàng chú thích màu ngay dưới cây trong màn Cây tri thức.
+- **Hiệu ứng "NHẤP vào cây":** bấm vào lá đã hoàn thành, lá lún xuống như bị ấn vào tán cây kèm vòng sáng lan tỏa; các lá khác giữ nguyên thao tác bấm để xem chi tiết chủ đề.
+- Giữ nguyên cơ chế tưới nước "Nước tưới Mầm Mực" và các giai đoạn sinh trưởng của cây.
+### Kiểm chứng:
+- `npm run build` (gồm kiểm tra TypeScript) thành công, 0 lỗi type.
+
 ## [2026-10-18] - Đợt 4: Chấm bài — thêm luồng "Xem chi tiết" theo học sinh, bỏ dấu "+" thừa
 ### Đã thực hiện:
 - **Thêm nút [Xem chi tiết] theo học sinh** (theo Figma Giao diện 1 — trước đây còn thiếu): mỗi dòng trong Hàng đợi chấm bài giờ có thêm nút "Xem chi tiết" bên cạnh [Chấm ngay / Xem lại] (`GradingQueueTable.tsx`).
