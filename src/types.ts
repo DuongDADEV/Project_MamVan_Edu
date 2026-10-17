@@ -319,6 +319,9 @@ export interface StudentState {
   xpToday: number;
   xpWeek: number;
   totalXp: number;
+  // Mốc lật ngày/tuần cho bộ đếm XP (YYYY-MM-DD giờ địa phương; tuần = ngày thứ Hai)
+  lastXpResetDate?: string;
+  xpWeekKey?: string;
   activeSecondsToday: number;
   activeSecondsContinuous: number;
   lastActiveTimestamp: number;
@@ -333,6 +336,11 @@ export interface StudentState {
   // Bước học đã hoàn thành lần đầu (Set lưu dạng mảng chuỗi)
   // Ví dụ: 'video_watch:v1', 'summary_read:v1', 'quiz_completed:q1', 'theory_understood:t1'
   completedSteps: string[];
+  // Các bước ĐÃ ĐƯỢC TRẢ XP thật (tách khỏi completedSteps = tiến độ học):
+  // một bước học lúc chạm trần XP vẫn tính tiến độ nhưng chưa được trả XP,
+  // hôm sau làm lại sẽ được trả đúng một lần. State cũ không có trường này
+  // thì coi completedSteps là đã trả (giữ nguyên chống farm như trước).
+  xpAwardedSteps?: string[];
   
   // Lịch sử trả lời câu hỏi để tính Mastery
   questionResults: QuestionResult[];
@@ -364,6 +372,9 @@ export interface StudentState {
     topicId: string;
     itemId: string;
     stepIndex: number;
+    // Khóa của bước (ổn định hơn stepIndex khi GV thêm/bớt bài tập liên kết
+    // làm thứ tự bước thay đổi — khôi phục ưu tiên theo khóa này)
+    stepKey?: string;
     videoSeconds?: number;
   };
 

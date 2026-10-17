@@ -17,6 +17,7 @@ import {
 } from './data/mockData.ts';
 import { XP_CONFIG, ATTENDANCE_CONFIG, TIME_CONFIG } from './config.ts';
 import { awardXP } from './logic/xpEngine.ts';
+import { getLocalTodayStr, rolloverStudentState } from './logic/studentStateUtils.ts';
 import { useActiveLearningTimer } from './logic/useActiveLearningTimer.ts';
 import { Navbar, NavTab } from './components/Navbar.tsx';
 import { DevPanel } from './components/DevPanel.tsx';
@@ -95,6 +96,16 @@ export default function App() {
   // State lưu thông tin admin khi đang impersonate giáo viên
   const [impersonatingFromAdmin, setImpersonatingFromAdmin] = useState<AdminProfile | null>(null);
 
+  // Phiên gốc của GV/Admin trước khi vào "Xem góc Học sinh" (để thoát về đúng phiên)
+  const [previewReturnSession, setPreviewReturnSession] = useState<AuthSession | null>(() => {
+    try {
+      const raw = sessionStorage.getItem('mam_van_preview_return');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // 1b. Quản lý Route URL (/admin, /teacher hoặc /)
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -106,12 +117,15 @@ export default function App() {
     return '/';
   });
 
-  const navigateTo = useCallback((path: string) => {
+  const navigateTo = useCallback((path: string, replace = false) => {
     setCurrentPath(path);
     if (typeof window !== 'undefined') {
       const target = path === '/admin' ? '/admin' : path === '/teacher' ? '/teacher' : '/';
       if (window.location.pathname !== target) {
-        window.history.pushState(null, '', target);
+        // replace: dùng cho điều hướng ép buộc của Route Guard để nút Back
+        // không kẹt trong vòng lặp pushState (vào /teacher -> bị đẩy về / -> Back lại vào /teacher)
+        if (replace) window.history.replaceState(null, '', target);
+        else window.history.pushState(null, '', target);
       }
     }
   }, []);
@@ -137,20 +151,20 @@ export default function App() {
   useEffect(() => {
     if (!currentSession) {
       if (currentPath === '/teacher' || currentPath === '/admin') {
-        navigateTo('/');
+        navigateTo('/', true);
       }
     } else if (currentSession.role === 'admin') {
       if (currentPath !== '/admin') {
-        navigateTo('/admin');
+        navigateTo('/admin', true);
       }
     } else if (currentSession.role === 'teacher') {
       if (currentPath !== '/teacher') {
-        navigateTo('/teacher');
+        navigateTo('/teacher', true);
       }
     } else if (currentSession.role === 'student') {
       // Học sinh không vào được khu giáo viên hay admin
       if (currentPath === '/teacher' || currentPath === '/admin') {
-        navigateTo('/');
+        navigateTo('/', true);
       }
     }
   }, [currentSession, currentPath, navigateTo]);
@@ -162,10 +176,10 @@ export default function App() {
     try {
       const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
       if (allStates[currentStudentId]) {
-        return allStates[currentStudentId];
+        return rolloverStudentState(allStates[currentStudentId]);
       }
       const legacySaved = localStorage.getItem(STATE_STORAGE_PREFIX + currentStudentId);
-      if (legacySaved) return JSON.parse(legacySaved);
+      if (legacySaved) return rolloverStudentState(JSON.parse(legacySaved));
       return currentStudentId === 'hs002' ? createInitialStateHs002() : createInitialStateHs001();
     } catch {
       return createInitialStateHs001();
@@ -184,11 +198,12 @@ export default function App() {
   useEffect(() => {
     if (currentSession?.role === 'student') {
       attemptService.getStudentState(currentSession.user.id).then((st) => {
+        const rolled = rolloverStudentState(st);
         const currentJson = JSON.stringify(studentStateRef.current);
-        const freshJson = JSON.stringify(st);
+        const freshJson = JSON.stringify(rolled);
         if (currentJson !== freshJson) {
           lastSavedStateJsonRef.current = freshJson;
-          setStudentState(st);
+          setStudentState(rolled);
         }
       });
     }
@@ -292,11 +307,11 @@ export default function App() {
   // Nạp danh sách bài kiểm tra & câu hỏi từ Kho chung
   const { data: rawQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(studentState.profile.grade, true),
-    ['quizzes', 'content']
+    ['quiz', 'content']
   );
   const { data: rawQuestions } = useLiveQuery<Record<string, QuestionWithMeta>>(
     () => quizService.getQuestions(),
-    ['questions', 'content']
+    ['quiz', 'content']
   );
 
   // Đồng bộ Cỡ chữ hiển thị lên toàn bộ giao diện thông qua thẻ html gốc
@@ -314,6 +329,7 @@ export default function App() {
 
   // 3. Quản lý Điều hướng màn hình học sinh
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
+  const [learnFocusTopicId, setLearnFocusTopicId] = useState<string | null>(null);
   const [activeFlow, setActiveFlow] = useState<
     | null
     | { type: 'video'; videoId: string }
@@ -343,6 +359,9 @@ export default function App() {
     multiplier: studentState.devTimeMultiplier || 1,
     isVideoPlaying: activeFlow?.type === 'video',
     onTick: (activeSecondsToday) => {
+      // Chỉ tính giờ học khi người dùng hiện tại thực sự là học sinh —
+      // tránh cộng giờ học ảo vào hs001 khi GV/Admin đang làm việc
+      if (currentSession?.role !== 'student') return;
       setStudentState((prev) => ({
         ...prev,
         activeSecondsToday,
@@ -356,6 +375,10 @@ export default function App() {
 
   // 7. Xử lý Đăng nhập & Đổi người dùng
   const handleLoginSuccess = (session: AuthSession) => {
+    try {
+      sessionStorage.removeItem('mam_van_preview_return');
+    } catch {}
+    setPreviewReturnSession(null);
     setCurrentSession(session);
     try {
       sessionStorage.removeItem('mam_van_watered_session_' + session.user.id);
@@ -379,11 +402,33 @@ export default function App() {
     await authService.signOut();
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem('mam_van_auth_session');
+    try {
+      sessionStorage.removeItem('mam_van_preview_return');
+    } catch {}
+    setPreviewReturnSession(null);
+    setImpersonatingFromAdmin(null);
+    // Hủy lần lưu đang chờ để state của người vừa đăng xuất không bị ghi
+    // chéo sang tài khoản mặc định sau khi phiên đã đổi
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const fresh = createInitialStateHs001();
+    lastSavedStateJsonRef.current = JSON.stringify(fresh);
+    setStudentState(fresh);
+    setActiveFlow(null);
     setCurrentSession(null);
     navigateTo('/');
   };
 
   const handleSwitchToStudentView = async () => {
+    // Lưu phiên GV/Admin hiện tại để thoát xem thử quay về đúng phiên
+    if (currentSession && currentSession.role !== 'student') {
+      try {
+        sessionStorage.setItem('mam_van_preview_return', JSON.stringify(currentSession));
+      } catch {}
+      setPreviewReturnSession(currentSession);
+    }
     // Chuyển sang trải nghiệm học sinh với tài khoản hs001
     const res = await authService.signIn('student', 'hs001', '123456');
     if (res.session) {
@@ -398,6 +443,23 @@ export default function App() {
       setActiveFlow(null);
       navigateTo('/');
       showToast('Đang ở góc xem trước Học sinh (hs001)');
+    } else {
+      showToast(res.error || 'Không vào được góc xem trước Học sinh (tài khoản hs001 chưa sẵn sàng)');
+    }
+  };
+
+  const handleExitStudentPreview = () => {
+    const origin = previewReturnSession;
+    try {
+      sessionStorage.removeItem('mam_van_preview_return');
+    } catch {}
+    setPreviewReturnSession(null);
+    if (origin) {
+      setCurrentSession(origin);
+      navigateTo(origin.role === 'admin' ? '/admin' : origin.role === 'teacher' ? '/teacher' : '/');
+      showToast('Đã thoát góc xem trước Học sinh');
+    } else {
+      handleLogout();
     }
   };
 
@@ -412,22 +474,23 @@ export default function App() {
 
   // 9. Điểm danh hôm nay (+2 XP và tưới cây)
   const handleAttendanceCheckIn = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (studentState.lastAttendanceDate === todayStr) {
+    const todayStr = getLocalTodayStr();
+    const baseState = rolloverStudentState(studentState);
+    if (baseState.lastAttendanceDate === todayStr) {
       showToast('Hôm nay bạn đã điểm danh rồi!');
       return;
     }
 
     const xpRes = awardXP(
-      studentState,
+      baseState,
       `attendance:${todayStr}`,
       XP_CONFIG.ATTENDANCE_DAILY_XP,
       'Điểm danh hằng ngày',
       true
     );
 
-    const nextDays = (studentState.attendanceDaysThisWeek || 0) + 1;
-    let newBadges = [...(studentState.unlockedBadgeIds || [])];
+    const nextDays = (baseState.attendanceDaysThisWeek || 0) + 1;
+    let newBadges = [...(baseState.unlockedBadgeIds || [])];
     if (nextDays >= 3 && !newBadges.includes('badge_streak_3')) {
       newBadges.push('badge_streak_3');
       showToast('🎉 Nhận được huy hiệu: Chăm chỉ 3 ngày!');
@@ -438,11 +501,11 @@ export default function App() {
     }
 
     const updatedState: StudentState = {
-      ...studentState,
+      ...baseState,
       ...xpRes.updatedState,
       lastAttendanceDate: todayStr,
       attendanceDaysThisWeek: nextDays,
-      attendanceHistory: [todayStr, ...(studentState.attendanceHistory || [])],
+      attendanceHistory: [todayStr, ...(baseState.attendanceHistory || [])],
       unlockedBadgeIds: newBadges,
     };
 
@@ -460,7 +523,11 @@ export default function App() {
       console.error('Lỗi lưu điểm danh vào storage:', e);
     }
 
-    showToast('🌱 Điểm danh thành công: +2 XP & Tưới cây!');
+    if (xpRes.actualXp > 0) {
+      showToast(`🌱 Điểm danh thành công: +${xpRes.actualXp} XP & Tưới cây!`);
+    } else {
+      showToast('🌱 Điểm danh thành công & đã tưới cây! (XP hôm nay đã đạt trần nên lần này không cộng thêm)');
+    }
   };
 
   // 10. Tiếp tục học dở (Nút Học tiếp)
@@ -492,6 +559,13 @@ export default function App() {
 
   // 11. Xin nhận quà (mở rương)
   const handleRequestReward = (rewardId: string) => {
+    const existing = (studentStateRef.current.rewardRequests || []).find(
+      (r) => r.rewardId === rewardId && r.status !== 'REJECTED'
+    );
+    if (existing) {
+      showToast('Em đã có yêu cầu cho phần quà này rồi — chờ thầy/cô duyệt nhé!');
+      return;
+    }
     setStudentState((prev) => ({
       ...prev,
       rewardRequests: [
@@ -504,7 +578,7 @@ export default function App() {
         ...prev.rewardRequests,
       ],
     }));
-    showToast('Đã gửi yêu cầu mở rương tới thầy/cô! Hãy dùng Dev Panel để duyệt rương nhanh nhé.');
+    showToast('Đã gửi yêu cầu mở rương tới thầy/cô!');
   };
 
   // 11b. Mở rương và thu thập vào bộ sưu tập
@@ -650,6 +724,7 @@ export default function App() {
               <div className="w-full max-w-2xl mx-auto py-6 px-4">
                 <QuizRunner
                   quiz={targetQuiz}
+                  studentId={currentStudentId}
                   questions={qList.length > 0 ? qList : undefined}
                   onComplete={(results, essays, earned, max) => {
                     if (essays && essays.length > 0) {
@@ -671,22 +746,23 @@ export default function App() {
                       });
                     }
 
-                    setStudentState((prev) => {
-                      const xpRes = awardXP(
-                        prev,
-                        `quiz_completed:${targetQuiz.id}`,
-                        xpEarned,
-                        `BTVN: ${targetQuiz.title}`
-                      );
-                      return {
-                        ...prev,
-                        ...xpRes.updatedState,
-                        completedSteps: [...(prev.completedSteps || []), `quiz_completed:${targetQuiz.id}`],
-                        questionResults: [...results, ...(prev.questionResults || [])],
-                        essaySubmissions: [...(essays || []), ...(prev.essaySubmissions || [])],
-                      };
-                    });
-                    showToast(`🎉 Xuất sắc! Em đã hoàn thành BTVN và nhận +${xpEarned} XP!`);
+                    const xpRes = awardXP(
+                      studentStateRef.current,
+                      `quiz_completed:${targetQuiz.id}`,
+                      xpEarned,
+                      `BTVN: ${targetQuiz.title}`
+                    );
+                    setStudentState((prev) => ({
+                      ...prev,
+                      ...xpRes.updatedState,
+                      questionResults: [...results, ...(prev.questionResults || [])],
+                      essaySubmissions: [...(essays || []), ...(prev.essaySubmissions || [])],
+                    }));
+                    if (xpRes.actualXp > 0) {
+                      showToast(`🎉 Xuất sắc! Em đã hoàn thành BTVN và nhận +${xpRes.actualXp} XP!`);
+                    } else {
+                      showToast('🎉 Em đã hoàn thành BTVN! (Lần này không cộng thêm XP — đã nhận trước đó hoặc đã đạt trần hôm nay)');
+                    }
                     setActiveFlow(null);
                   }}
                   onExit={() => setActiveFlow(null)}
@@ -710,6 +786,7 @@ export default function App() {
                 onCheckIn={handleAttendanceCheckIn}
                 onResumeLearning={handleResumeLearning}
                 onSelectTopic={(tId) => {
+                  setLearnFocusTopicId(tId);
                   setCurrentTab('learn');
                 }}
                 onSelectVideo={(vId) => setActiveFlow({ type: 'video', videoId: vId })}
@@ -723,6 +800,7 @@ export default function App() {
               <LearnScreen
                 state={studentState}
                 topics={publishedTopics}
+                focusTopicId={learnFocusTopicId}
                 onSelectVideo={(vId) => setActiveFlow({ type: 'video', videoId: vId })}
                 onSelectTheory={(thId) => setActiveFlow({ type: 'theory', theoryId: thId })}
               />
@@ -734,6 +812,7 @@ export default function App() {
                 topics={publishedTopics}
                 onCheckIn={handleAttendanceCheckIn}
                 onSelectTopic={(tId) => {
+                  setLearnFocusTopicId(tId);
                   setCurrentTab('learn');
                 }}
               />
@@ -744,6 +823,7 @@ export default function App() {
                 state={studentState}
                 topics={publishedTopics}
                 onSelectTopic={(tId) => {
+                  setLearnFocusTopicId(tId);
                   setCurrentTab('learn');
                 }}
               />
@@ -809,12 +889,30 @@ export default function App() {
         }}
       />
 
-      {/* DEV PANEL (BẢNG THỬ NGHIỆM ĐỂ TEST NHANH MỌI LUỒNG) */}
-      <DevPanel
-        state={studentState}
-        onUpdateState={setStudentState}
-        onResetData={handleResetData}
-      />
+      {/* BANNER XEM THỬ HỌC SINH: hiện rõ đang xem thử + đường thoát về phiên GV/Admin */}
+      {previewReturnSession && currentSession?.role === 'student' && (
+        <div className="fixed top-0 left-0 right-0 z-[60] bg-amber-500 text-white px-4 py-2 flex items-center justify-center gap-3 shadow-lg">
+          <span className="text-xs sm:text-sm font-bold">
+            Đang xem thử góc Học sinh (hs001) — thao tác tại đây lưu vào dữ liệu thật của hs001
+          </span>
+          <button
+            onClick={handleExitStudentPreview}
+            className="shrink-0 px-3 py-1 rounded-full bg-white text-amber-700 text-xs font-extrabold hover:bg-amber-50 active:scale-95 transition"
+          >
+            Thoát xem thử
+          </button>
+        </div>
+      )}
+
+      {/* DEV PANEL: chỉ tồn tại ở bản development — bản production không được
+          chứa công cụ tự cộng XP / tự duyệt quà / tự chấm bài cho học sinh */}
+      {import.meta.env.DEV && (
+        <DevPanel
+          state={studentState}
+          onUpdateState={setStudentState}
+          onResetData={handleResetData}
+        />
+      )}
 
       {/* TOAST THÔNG BÁO NHẸ NHÀNG */}
       {toastMessage && (

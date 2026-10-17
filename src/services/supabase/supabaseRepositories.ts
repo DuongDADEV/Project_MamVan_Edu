@@ -56,6 +56,7 @@ import {
   auditRepo,
 } from '../mock/mockRepositories.ts';
 import { createFreshStudentState } from '../mock/seedData.ts';
+import { getLocalTodayStr } from '../../logic/studentStateUtils.ts';
 import { syncEventBus } from '../mock/eventBus.ts';
 import { QuestionType } from '../../types.ts';
 import { QUESTIONS_BANK } from '../../data/mockData.ts';
@@ -76,8 +77,10 @@ const THEORY_CACHE_KEY = 'mam_van_theories';
 const QUIZ_CACHE_KEY = 'mam_van_quizzes';
 
 const SESSION_STORAGE_KEY = 'mam_van_auth_session';
-const DEFAULT_TEACHER_UUID = 'd47261be-b00b-452f-93bb-222e844def70';
-const DEFAULT_CLASS_UUID = '8b249107-f084-4151-a2e9-21d973f0c566';
+// PHẢI khớp dữ liệu seed trong database/schema.sql (gv001 / Lớp 7A2),
+// nếu không mọi thao tác ghi dùng các mặc định này sẽ vi phạm khóa ngoại
+const DEFAULT_TEACHER_UUID = '00000000-0000-0000-0000-000000000001';
+const DEFAULT_CLASS_UUID = '00000000-0000-0000-0000-000000000010';
 
 function isUUID(str?: string | null): boolean {
   if (!str) return false;
@@ -108,7 +111,7 @@ export class SupabaseAuthRepository implements AuthRepository {
     try {
       // 0. Phân hệ Quản trị viên (Admin)
       if (role === 'admin') {
-        if ((uClean === 'admin' || uClean === 'quantri') && (pClean === '123456' || pClean === 'admin123')) {
+        if ((uClean === 'admin' || uClean === 'quantri') && pClean === '123456') {
           const session: AuthSession = {
             user: {
               id: 'admin_001',
@@ -128,7 +131,7 @@ export class SupabaseAuthRepository implements AuthRepository {
         }
         return {
           success: false,
-          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: admin / 123456)',
+          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
         };
       }
 
@@ -146,9 +149,13 @@ export class SupabaseAuthRepository implements AuthRepository {
         }
 
         if (!teacher) {
+          // Tài khoản có thể chỉ tồn tại ở kho local (tạo lúc mất kết nối) —
+          // thử đăng nhập local trước khi kết luận không tồn tại
+          const localAttempt = await mockAuthRepo.signIn(role, uClean, pClean);
+          if (localAttempt.success) return localAttempt;
           return {
             success: false,
-            error: 'Tài khoản giáo viên không tồn tại trên hệ thống (Gợi ý tài khoản mẫu: gv001 / 123456)',
+            error: 'Tài khoản giáo viên không tồn tại trên hệ thống',
           };
         }
 
@@ -160,11 +167,11 @@ export class SupabaseAuthRepository implements AuthRepository {
           };
         }
 
-        const validPassword = teacher.password_hash === pClean || pClean === '123456';
+        const validPassword = teacher.password_hash === pClean;
         if (!validPassword) {
           return {
             success: false,
-            error: 'Mật khẩu giáo viên chưa chính xác (Gợi ý mật khẩu mẫu: 123456)',
+            error: 'Mật khẩu giáo viên chưa chính xác',
           };
         }
 
@@ -212,6 +219,9 @@ export class SupabaseAuthRepository implements AuthRepository {
         }
 
         if (!student) {
+          // Tài khoản có thể chỉ tồn tại ở kho local (tạo lúc mất kết nối)
+          const localAttempt = await mockAuthRepo.signIn(role, uClean, pClean);
+          if (localAttempt.success) return localAttempt;
           return {
             success: false,
             error: 'Hệ thống chưa nhận diện được tài khoản này, bạn vui lòng kiểm tra lại với thầy/cô phụ trách nhé!',
@@ -226,7 +236,7 @@ export class SupabaseAuthRepository implements AuthRepository {
           };
         }
 
-        const validPassword = student.password_hash === pClean || pClean === '123456';
+        const validPassword = student.password_hash === pClean;
         if (!validPassword) {
           return {
             success: false,
@@ -312,6 +322,10 @@ export class SupabaseClassRepository implements ClassRepository {
       }
       if (targetTeacherId && isUUID(targetTeacherId)) {
         query = query.eq('teacher_id', targetTeacherId);
+      } else if (targetTeacherId) {
+        // teacherId không phải UUID và không ánh xạ được (vd id từ kho local):
+        // KHÔNG được bỏ lọc rồi trả TẤT CẢ lớp của mọi giáo viên
+        return mockClassRepo.getClasses(teacherId);
       }
 
       const { data, error } = await query;
@@ -323,7 +337,7 @@ export class SupabaseClassRepository implements ClassRepository {
       const now = Date.now();
       const sevenDaysAgo = now - 7 * 86400000;
 
-      return data.map((c: any) => {
+      const dbClasses = data.map((c: any) => {
         const validStudents: any[] = Array.isArray(c.students) ? c.students : [];
         const active7DaysCount = validStudents.filter((s) => {
           if (!s.last_active_at) return false;
@@ -346,6 +360,16 @@ export class SupabaseClassRepository implements ClassRepository {
           deleted_at: null,
         };
       });
+
+      // Gộp thêm các lớp chỉ tồn tại ở kho local (tạo lúc mất mạng/chưa đồng bộ)
+      try {
+        const localClasses = await mockClassRepo.getClasses(teacherId);
+        const dbIds = new Set(dbClasses.map((c) => c.id));
+        const localOnly = localClasses.filter((c) => !dbIds.has(c.id));
+        return [...dbClasses, ...localOnly];
+      } catch {
+        return dbClasses;
+      }
     } catch (err) {
       console.error('[SupabaseClass] Ngoại lệ khi getClasses:', err);
       return mockClassRepo.getClasses(teacherId);
@@ -446,6 +470,9 @@ export class SupabaseClassRepository implements ClassRepository {
       }
 
       syncEventBus.emit('class');
+      // Đọc lại bản ghi đầy đủ (kèm số học sinh thật) thay vì trả studentCount = 0
+      const fresh = await this.getClassById(updated.id);
+      if (fresh) return fresh;
       return {
         id: updated.id,
         name: updated.name,
@@ -722,6 +749,7 @@ export class SupabaseStudentRepository implements StudentRepository {
       });
 
       syncEventBus.emit('student');
+      syncEventBus.emit('class');
       return { student, credential };
     } catch (err) {
       console.error('[SupabaseStudent] Ngoại lệ createStudent:', err);
@@ -758,6 +786,11 @@ export class SupabaseStudentRepository implements StudentRepository {
         updated_at: new Date().toISOString(),
       };
       if (data.name !== undefined) payload.name = data.name;
+      if (data.username !== undefined) payload.username = data.username;
+      if ((data as any).password_hash !== undefined) {
+        payload.password_hash = (data as any).password_hash;
+      }
+      if ((data as any).password !== undefined) payload.password_hash = (data as any).password;
       if (data.student_code !== undefined) payload.student_code = data.student_code;
       if (data.dob !== undefined) payload.dob = data.dob;
       if (data.class_id !== undefined && isUUID(data.class_id)) payload.class_id = data.class_id;
@@ -775,6 +808,7 @@ export class SupabaseStudentRepository implements StudentRepository {
       }
 
       syncEventBus.emit('student');
+      syncEventBus.emit('class');
       return {
         id: updated.id,
         name: updated.name,
@@ -800,8 +834,13 @@ export class SupabaseStudentRepository implements StudentRepository {
       return mockStudentRepo.deleteStudent(id, teacherActorId);
     }
     try {
-      await supabase.from('students').delete().eq('id', id);
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) {
+        console.error('[SupabaseStudent] Lỗi xóa học sinh trên DB, chuyển kho local:', error.message);
+        return mockStudentRepo.deleteStudent(id, teacherActorId);
+      }
       syncEventBus.emit('student');
+      syncEventBus.emit('class');
     } catch {
       return mockStudentRepo.deleteStudent(id, teacherActorId);
     }
@@ -812,7 +851,7 @@ export class SupabaseStudentRepository implements StudentRepository {
     teacherActorId: string,
     customNewPassword?: string
   ): Promise<{ credential: StudentCredentialVoucher }> {
-    const newPass = customNewPassword?.trim() || '123456';
+    const newPass = customNewPassword?.trim() || generateFriendlyPassword(8);
     if (!isSupabaseReady()) {
       return mockStudentRepo.resetPassword(id, teacherActorId, newPass);
     }
@@ -892,7 +931,7 @@ export class SupabaseAttemptRepository implements AttemptRepository {
         }
       );
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getLocalTodayStr();
       const effectiveAttendanceDate =
         localFallback.lastAttendanceDate === todayStr
           ? todayStr
@@ -904,8 +943,11 @@ export class SupabaseAttemptRepository implements AttemptRepository {
           : (data.attendance_days_this_week ?? localFallback.attendanceDaysThisWeek ?? fresh.attendanceDaysThisWeek);
 
       return {
-        ...localFallback,
+        // fresh (trạng thái trắng) chỉ làm nền; dữ liệu local phải thắng nó —
+        // thứ tự cũ (...local, ...fresh) xóa sạch rewardRequests và các tùy chọn
+        // cá nhân (theme/âm thanh/cỡ chữ) sau mỗi lần đọc ở chế độ Supabase
         ...fresh,
+        ...localFallback,
         profile: {
           ...fresh.profile,
           name: student ? student.name : fresh.profile.name,
@@ -1011,11 +1053,15 @@ export class SupabaseAttemptRepository implements AttemptRepository {
 
     try {
       const { data, error } = await supabase.from('student_states').select('*');
-      if (error || !data || data.length === 0) {
+      if (error || !data) {
         return mockAttemptRepo.getAllStates();
       }
 
-      const map: Record<string, StudentState> = {};
+      // Bắt đầu từ các state chỉ có ở local (chưa đồng bộ) rồi phủ dữ liệu DB lên —
+      // trước đây state local bị bỏ hẳn khiến học sinh "biến mất" khỏi màn giáo viên
+      const map: Record<string, StudentState> = await mockAttemptRepo
+        .getAllStates()
+        .catch(() => ({}));
       const students = await supabaseStudentRepo.getStudents();
 
       for (const row of data) {
@@ -1035,6 +1081,7 @@ export class SupabaseAttemptRepository implements AttemptRepository {
 
         map[row.student_id] = {
           ...fresh,
+          ...(map[row.student_id] || {}),
           xpToday: row.xp_today ?? fresh.xpToday,
           xpWeek: row.xp_week ?? fresh.xpWeek,
           totalXp: row.total_xp ?? fresh.totalXp,
@@ -1147,7 +1194,15 @@ export class SupabaseEssayRepository implements EssayRepository {
       cleanLocalList.forEach((item) => map.set(item.id, item));
       remoteList.forEach((item) => map.set(item.id, item));
 
-      return Array.from(map.values()).sort((a, b) => b.submittedAt - a.submittedAt);
+      let merged = Array.from(map.values()).sort((a, b) => b.submittedAt - a.submittedAt);
+      // quizId không có cột riêng trên DB (được suy từ question_id) nên lọc sau hợp nhất —
+      // trước đây bộ lọc này bị bỏ qua hoàn toàn sau khi gộp dữ liệu
+      if (filter?.quizId) {
+        merged = merged.filter(
+          (e) => e.quizId === filter.quizId || e.questionId === filter.quizId
+        );
+      }
+      return merged;
     } catch {
       return cleanLocalList;
     }
@@ -1213,17 +1268,8 @@ export class SupabaseEssayRepository implements EssayRepository {
         }
       }
 
-      if (!targetStudentUUID) {
-        const { data: anyStudent } = await supabase
-          .from('students')
-          .select('id, class_id')
-          .limit(1)
-          .maybeSingle();
-        if (anyStudent) {
-          targetStudentUUID = anyStudent.id;
-          targetClassUUID = anyStudent.class_id;
-        }
-      }
+      // KHÔNG suy đoán chủ bài viết: không xác định được học sinh thì giữ bản
+      // local (đúng chủ) và bỏ qua DB — tuyệt đối không gán bài cho học sinh khác.
 
       // 3. Xác minh class_id có thực trong database hoặc gán null (hợp lệ theo FK ON DELETE SET NULL)
       let finalClassUUID: string | null = null;
@@ -1240,12 +1286,9 @@ export class SupabaseEssayRepository implements EssayRepository {
           .eq('id', finalClassUUID)
           .maybeSingle();
         if (!cls) {
-          const { data: anyCls } = await supabase.from('classes').select('id').limit(1).maybeSingle();
-          finalClassUUID = anyCls ? anyCls.id : null;
+          // Lớp không tồn tại trên DB -> để NULL (FK ON DELETE SET NULL), không gán lớp lạ
+          finalClassUUID = null;
         }
-      } else {
-        const { data: anyCls } = await supabase.from('classes').select('id').limit(1).maybeSingle();
-        finalClassUUID = anyCls ? anyCls.id : null;
       }
 
       if (targetStudentUUID) {
@@ -1367,6 +1410,35 @@ export class SupabaseEssayRepository implements EssayRepository {
         if (updated) {
           syncEventBus.emit('essay');
 
+          // Ghi audit + thông báo cho học sinh (ngang hàng bản mock; thiếu trước đây)
+          try {
+            await auditRepo.log({
+              actor_id: teacherActorId,
+              actor_name: 'Thầy/Cô',
+              actor_role: 'teacher',
+              action: 'GRADE_ESSAY',
+              target_type: 'essay',
+              target_id: id,
+              target_name: `Bài viết của ${updated.student_id}`,
+              details: { totalScore: grading.totalScore },
+            });
+            if (typeof localStorage !== 'undefined') {
+              const annos = JSON.parse(localStorage.getItem('mam_van_announcements') || '[]');
+              annos.unshift({
+                id: 'anno_' + Date.now(),
+                title: 'Bài viết đã được chấm',
+                content: `Thầy/cô đã chấm bài viết của em. Điểm: ${grading.totalScore}/10. Hãy xem nhận xét chi tiết nhé!`,
+                type: 'essay_graded',
+                targetClassIds: ['all'],
+                studentId: updated.student_id,
+                created_at: new Date().toISOString(),
+              });
+              localStorage.setItem('mam_van_announcements', JSON.stringify(annos));
+            }
+          } catch (sideErr) {
+            console.warn('[SupabaseEssay] Lỗi ghi audit/thông báo sau chấm:', sideErr);
+          }
+
           // Cập nhật Mastery của học sinh nếu có bản ghi student_states
           if (updated.student_id) {
             try {
@@ -1379,20 +1451,35 @@ export class SupabaseEssayRepository implements EssayRepository {
               if (stRow) {
                 const currentQResults = Array.isArray(stRow.question_results) ? stRow.question_results : [];
                 const isPassed = grading.totalScore >= 5;
-                const newQResult = {
-                  questionId: updated.question_id || id,
-                  level: 'VAN_DUNG',
-                  isCorrect: isPassed,
-                  scoreRatio: grading.finalRatio || (grading.totalScore / 10),
-                  timestamp: Date.now(),
-                  topicId: 'topic_tho_bon_nam',
-                };
-                await supabase
-                  .from('student_states')
-                  .update({
-                    question_results: [...currentQResults, newQResult],
-                  })
-                  .eq('student_id', updated.student_id);
+                // Chủ đề/mức độ THẬT của câu hỏi (không gán cứng chủ đề thơ + VẬN DỤNG)
+                const qInfo2 = (QUESTIONS_BANK as any)[updated.question_id || ''];
+                let essayTopicId: string | undefined = qInfo2?.topicId;
+                if (!essayTopicId && updated.quiz_id) {
+                  try {
+                    const quiz = await supabaseQuizRepo.getQuizById(updated.quiz_id);
+                    essayTopicId = quiz?.topicId;
+                  } catch {
+                    /* bỏ qua: giữ undefined */
+                  }
+                }
+                if (essayTopicId) {
+                  const newQResult = {
+                    questionId: updated.question_id || id,
+                    level: qInfo2?.level || 'VAN_DUNG',
+                    isCorrect: isPassed,
+                    scoreRatio: grading.finalRatio || (grading.totalScore / 10),
+                    timestamp: Date.now(),
+                    topicId: essayTopicId,
+                  };
+                  await supabase
+                    .from('student_states')
+                    .update({
+                      question_results: [...currentQResults, newQResult],
+                    })
+                    .eq('student_id', updated.student_id);
+                } else {
+                  console.warn('[SupabaseEssay] Không xác định được chủ đề bài viết, bỏ qua ghi mastery.');
+                }
               }
             } catch (e) {
               console.warn('[SupabaseEssay] Không cập nhật được mastery học sinh:', e);
@@ -1491,7 +1578,7 @@ export class SupabaseRewardRepository implements RewardRepository {
     status?: RewardStatus;
   }): Promise<EnrichedRewardRequest[]> {
     if (!isSupabaseReady()) {
-      return [];
+      return mockRewardRepo.getRequests(filter);
     }
 
     try {
@@ -1510,54 +1597,127 @@ export class SupabaseRewardRepository implements RewardRepository {
 
       const { data, error } = await query;
       if (error || !data) {
-        return [];
+        if (error) console.error('[SupabaseReward] Lỗi đọc reward_requests:', error.message);
+        return mockRewardRepo.getRequests(filter);
       }
 
       const rewards = await this.getRewards();
 
-      return data.map((row: any) => {
+      // Dữ liệu thật để đối chiếu điều kiện: XP tuần + số ngày điểm danh từ student_states
+      const studentIds = [...new Set(data.map((r: any) => r.student_id).filter(Boolean))];
+      const stateByStudent = new Map<string, { xpWeek: number; attendanceDays: number }>();
+      if (studentIds.length > 0) {
+        const { data: stateRows } = await supabase
+          .from('student_states')
+          .select('student_id, xp_week, attendance_days_this_week')
+          .in('student_id', studentIds);
+        (stateRows || []).forEach((row: any) => {
+          stateByStudent.set(row.student_id, {
+            xpWeek: row.xp_week ?? 0,
+            attendanceDays: row.attendance_days_this_week ?? 0,
+          });
+        });
+      }
+
+      // Tên lớp thật từ bảng classes
+      const classIds = [...new Set(data.map((r: any) => r.students?.class_id).filter(Boolean))];
+      const classNameById = new Map<string, string>();
+      if (classIds.length > 0) {
+        const { data: classRows } = await supabase.from('classes').select('id, name').in('id', classIds);
+        (classRows || []).forEach((row: any) => classNameById.set(row.id, row.name));
+      }
+
+      const statusMap: Record<string, RewardStatus> = {
+        PENDING: 'PENDING_APPROVAL',
+        APPROVED: 'APPROVED',
+        REJECTED: 'REJECTED',
+        GIVEN: 'GIVEN',
+        OPENED: 'OPENED',
+      };
+
+      let enriched: EnrichedRewardRequest[] = data.map((row: any) => {
         const tierKey = (row.chest_type || 'hat').toUpperCase();
-        const matchedReward = rewards.find((r) => r.tierKey === tierKey) || rewards[0];
-        const statusMap: Record<string, RewardStatus> = {
-          PENDING: 'PENDING_APPROVAL',
-          APPROVED: 'APPROVED',
-          REJECTED: 'REJECTED',
-        };
+        const matchedReward = rewards.find((r) => r.tierKey === tierKey);
+        const live = stateByStudent.get(row.student_id);
+        const xpWeekActual = live?.xpWeek ?? row.xp_week_snapshot ?? 0;
+        const attendanceDaysActual = live?.attendanceDays ?? 0;
+        const reqXp = matchedReward ? matchedReward.requiredXp || matchedReward.xpCost || 0 : 0;
+        const reqDays = matchedReward ? matchedReward.requiredAttendanceDays || 0 : 0;
 
         return {
           id: row.id,
           studentId: row.student_id,
           studentName: row.students?.name || 'Học sinh',
-          classId: row.students?.class_id || DEFAULT_CLASS_UUID,
-          className: 'Lớp 7A2',
-          rewardId: matchedReward?.id || 'tier_hat',
+          classId: row.students?.class_id || undefined,
+          className: row.students?.class_id ? classNameById.get(row.students.class_id) : undefined,
+          rewardId: matchedReward?.id || `tier_${(row.chest_type || 'hat').toLowerCase()}`,
           requestedAt: new Date(row.created_at).getTime(),
           status: statusMap[row.status] || 'PENDING_APPROVAL',
-          xpWeekActual: row.xp_week_snapshot || 260,
-          attendanceDaysActual: 4,
-          isEligible: true,
+          xpWeekActual,
+          attendanceDaysActual,
+          isEligible: matchedReward ? xpWeekActual >= reqXp && attendanceDaysActual >= reqDays : false,
           reward: matchedReward,
         };
       });
-    } catch {
-      return [];
+
+      if (filter?.classId && filter.classId !== 'all') {
+        enriched = enriched.filter((r) => r.classId === filter.classId);
+      }
+
+      return enriched;
+    } catch (e) {
+      console.error('[SupabaseReward] getRequests thất bại:', e);
+      return mockRewardRepo.getRequests(filter);
     }
   }
 
   async createRequest(studentId: string, rewardId: string): Promise<RewardRequest> {
+    // Học sinh không có UUID (tài khoản demo/local) thì ghi ở kho local như mock,
+    // TUYỆT ĐỐI không gán nhờ sang id của một học sinh mẫu bất kỳ trên DB
+    if (!isSupabaseReady() || !isUUID(studentId)) {
+      return mockRewardRepo.createRequest(studentId, rewardId);
+    }
+
+    const rewards = await this.getRewards();
+    const reward = rewards.find((r) => r.id === rewardId);
+    const tierRaw = (reward?.tierKey || rewardId.replace('tier_', '') || 'hat').toLowerCase();
+    const chestType = ['hat', 'la', 'hoa', 'vang'].includes(tierRaw) ? tierRaw : 'hat';
+
+    // Snapshot XP tuần THẬT của học sinh (DB trước, local dự phòng) — không bịa số
+    let xpWeekSnapshot = 0;
+    try {
+      const { data: st } = await supabase
+        .from('student_states')
+        .select('xp_week')
+        .eq('student_id', studentId)
+        .maybeSingle();
+      if (st && typeof st.xp_week === 'number') {
+        xpWeekSnapshot = st.xp_week;
+      } else {
+        const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
+        xpWeekSnapshot = allStates[studentId]?.xpWeek ?? 0;
+      }
+    } catch {
+      xpWeekSnapshot = 0;
+    }
+
     const payload = {
-      student_id: isUUID(studentId) ? studentId : '00000000-0000-0000-0000-000000000102',
-      chest_type: rewardId.replace('tier_', '') || 'hat',
-      xp_week_snapshot: 260,
-      gift_name: 'Phần thưởng Mầm Văn',
+      student_id: studentId,
+      chest_type: chestType,
+      xp_week_snapshot: xpWeekSnapshot,
+      gift_name: reward?.name || 'Phần thưởng Mầm Văn',
       status: 'PENDING',
     };
-    const { data } = await supabase.from('reward_requests').insert(payload).select().single();
+    const { data, error } = await supabase.from('reward_requests').insert(payload).select().single();
+    if (error || !data) {
+      console.error('[SupabaseReward] Lỗi tạo yêu cầu quà, chuyển sang kho local:', error?.message);
+      return mockRewardRepo.createRequest(studentId, rewardId);
+    }
     syncEventBus.emit('reward');
     return {
-      id: data?.id || 'req_01',
+      id: data.id,
       rewardId,
-      requestedAt: Date.now(),
+      requestedAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
       status: 'PENDING_APPROVAL',
     };
   }
@@ -1568,20 +1728,39 @@ export class SupabaseRewardRepository implements RewardRepository {
     reason?: string,
     teacherActorId?: string
   ): Promise<RewardRequest> {
-    const dbStatus = status === 'PENDING_APPROVAL' ? 'PENDING' : status === 'APPROVED' ? 'APPROVED' : 'REJECTED';
-    await supabase
+    const dbStatus = status === 'PENDING_APPROVAL' ? 'PENDING' : status;
+
+    // Đọc bản ghi thật trước để trả về đúng rewardId/thời điểm, không chế dữ liệu
+    let existing: any = null;
+    try {
+      const { data } = await supabase
+        .from('reward_requests')
+        .select('chest_type, created_at')
+        .eq('id', requestId)
+        .maybeSingle();
+      existing = data;
+    } catch {}
+
+    const { error } = await supabase
       .from('reward_requests')
       .update({
         status: dbStatus,
         approved_at: status === 'APPROVED' ? new Date().toISOString() : null,
       })
       .eq('id', requestId);
+    if (error) {
+      // Thường do CHECK constraint trên DB chưa có GIVEN/OPENED (cần migration 003)
+      console.error('[SupabaseReward] Lỗi cập nhật trạng thái yêu cầu quà:', error.message);
+    }
 
     syncEventBus.emit('reward');
+    const rewards = await this.getRewards();
+    const tierKey = (existing?.chest_type || 'hat').toUpperCase();
+    const matched = rewards.find((r) => r.tierKey === tierKey);
     return {
       id: requestId,
-      rewardId: 'tier_hat',
-      requestedAt: Date.now(),
+      rewardId: matched?.id || `tier_${(existing?.chest_type || 'hat').toLowerCase()}`,
+      requestedAt: existing?.created_at ? new Date(existing.created_at).getTime() : Date.now(),
       status,
       rejectReason: reason,
     };
@@ -1593,14 +1772,17 @@ export class SupabaseRewardRepository implements RewardRepository {
     reason?: string,
     teacherActorId?: string
   ): Promise<void> {
-    const dbStatus = status === 'PENDING_APPROVAL' ? 'PENDING' : status === 'APPROVED' ? 'APPROVED' : 'REJECTED';
-    await supabase
+    const dbStatus = status === 'PENDING_APPROVAL' ? 'PENDING' : status;
+    const { error } = await supabase
       .from('reward_requests')
       .update({
         status: dbStatus,
         approved_at: status === 'APPROVED' ? new Date().toISOString() : null,
       })
       .in('id', requestIds);
+    if (error) {
+      console.error('[SupabaseReward] Lỗi cập nhật hàng loạt trạng thái quà:', error.message);
+    }
     syncEventBus.emit('reward');
   }
 }
@@ -1619,7 +1801,8 @@ export class SupabaseTeacherRepository implements TeacherRepository {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error || !data || data.length === 0) return mockTeacherRepo.getTeachers();
+      if (error) return mockTeacherRepo.getTeachers();
+      if (!data) return [];
 
       return data.map((t) => ({
         id: t.id,
@@ -1675,6 +1858,18 @@ export class SupabaseTeacherRepository implements TeacherRepository {
   async createTeacher(data: CreateTeacherInput): Promise<TeacherProfile> {
     if (!isSupabaseReady()) return mockTeacherRepo.createTeacher(data);
     try {
+      // Form tạo nhanh có thể không nhập username -> tự sinh từ họ tên như phía học sinh,
+      // tránh insert username NULL làm hỏng bản ghi
+      if (!data.username || !data.username.trim()) {
+        const existing = await this.getTeachers().catch(() => []);
+        data = {
+          ...data,
+          username: generateUsername(
+            data.name,
+            existing.map((t) => t.username.toLowerCase())
+          ),
+        };
+      }
       const trialDays = data.trialDays || 3;
       const trialExpiresAt =
         data.status === 'trial'
@@ -1770,7 +1965,11 @@ export class SupabaseTeacherRepository implements TeacherRepository {
   async deleteTeacher(id: string): Promise<void> {
     if (!isSupabaseReady()) return mockTeacherRepo.deleteTeacher(id);
     try {
-      await supabase.from('teachers').delete().eq('id', id);
+      const { error } = await supabase.from('teachers').delete().eq('id', id);
+      if (error) {
+        console.error('[SupabaseTeacher] Lỗi xóa giáo viên trên DB, chuyển kho local:', error.message);
+        return mockTeacherRepo.deleteTeacher(id);
+      }
       syncEventBus.emit('teacher');
     } catch {
       return mockTeacherRepo.deleteTeacher(id);
@@ -1853,7 +2052,6 @@ export class SupabaseQuizRepository implements QuizRepository {
     await this.ensureQuizLocal(quiz.id);
     const saved = await mockQuizRepo.saveQuiz(quiz);
     const ok = await pushPayloadItem('quizzes', saved);
-    if (ok) console.log(`[SupabaseQuiz] ✅ Đã lưu bài kiểm tra [${saved.id}] vào Supabase database.`);
     return saved;
   }
 
@@ -1953,7 +2151,12 @@ export class SupabaseQuizRepository implements QuizRepository {
           updated_at: row.updated_at || new Date().toISOString(),
         };
 
-        supabaseMap[row.id] = qItem;
+        // Nếu dòng có payload đầy đủ (migration_004) thì dùng nó phủ lên bản dựng
+        // từ cột cơ bản — giữ lại passage/points/status/class_ids... thay vì mất hết
+        supabaseMap[row.id] =
+          row.payload && typeof row.payload === 'object'
+            ? { ...qItem, ...row.payload, id: row.id }
+            : qItem;
       }
 
       const mergedQuestions: Record<string, QuestionWithMeta> = {
@@ -1991,7 +2194,7 @@ export class SupabaseQuizRepository implements QuizRepository {
         return mockQuizRepo.getQuestionById(id);
       }
 
-      return {
+      const reconstructed: QuestionWithMeta = {
         id: row.id,
         topicId: row.topic_id || 'topic_1',
         type: fromSupabaseType(row.type),
@@ -2010,6 +2213,9 @@ export class SupabaseQuizRepository implements QuizRepository {
         created_at: row.created_at,
         updated_at: row.updated_at,
       };
+      return row.payload && typeof row.payload === 'object'
+        ? { ...reconstructed, ...row.payload, id: row.id }
+        : reconstructed;
     } catch {
       return mockQuizRepo.getQuestionById(id);
     }
@@ -2073,7 +2279,21 @@ export class SupabaseQuizRepository implements QuizRepository {
         return savedMock;
       }
 
-      console.log(`[SupabaseQuiz] ✅ Đã lưu vĩnh viễn câu hỏi [${qId}] vào Supabase database thành công!`);
+      // Lưu thêm bản đầy đủ vào cột payload (migration_004) để không mất
+      // passage/points/status/class_ids... khi đọc lại từ Supabase.
+      // Chưa chạy migration -> lỗi cột, chỉ cảnh báo, bản cột cơ bản vẫn đã lưu.
+      try {
+        const { error: payloadError } = await supabase
+          .from('questions')
+          .update({ payload: savedMock })
+          .eq('id', qId);
+        if (payloadError) {
+          console.warn('[SupabaseQuiz] Chưa lưu được payload câu hỏi (đã chạy migration_004 chưa?):', payloadError.message);
+        }
+      } catch (payloadErr) {
+        console.warn('[SupabaseQuiz] Ngoại lệ khi lưu payload câu hỏi:', payloadErr);
+      }
+
       syncEventBus.emit('quiz', { questionId: qId });
 
       return {
@@ -2104,7 +2324,6 @@ export class SupabaseQuizRepository implements QuizRepository {
       if (error) {
         console.warn('[SupabaseQuiz] Lỗi xóa câu hỏi khỏi Supabase:', error.message);
       } else {
-        console.log(`[SupabaseQuiz] 🗑️ Đã xóa câu hỏi [${id}] khỏi Supabase database.`);
       }
       syncEventBus.emit('quiz', { deletedId: id });
     } catch (err) {
@@ -2370,7 +2589,6 @@ export class SupabaseContentRepository implements ContentRepository {
     await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, theory.id);
     const saved = await mockContentRepo.saveTheoryLesson(theory);
     const ok = await pushPayloadItem('theory_lessons', saved);
-    if (ok) console.log(`[SupabaseContent] ✅ Đã lưu bài lý thuyết [${saved.id}] vào Supabase database.`);
     return saved;
   }
 

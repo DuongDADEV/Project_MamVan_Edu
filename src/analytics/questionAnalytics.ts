@@ -43,10 +43,11 @@ export function computeQuestionAnalytics(
       return;
     }
 
-    const stat = questionMap[qId] || { attempts: 18, correct: 13, totalSeconds: 850 };
-    const attempts = Math.max(1, stat.attempts);
-    const accuracyRate = Math.round((stat.correct / attempts) * 100);
-    const avgTimeSeconds = Math.round(stat.totalSeconds / attempts);
+    // Chưa có lượt làm thật -> mọi chỉ số bằng 0 (không bịa số liệu mẫu)
+    const stat = questionMap[qId] || { attempts: 0, correct: 0, totalSeconds: 0 };
+    const attempts = stat.attempts;
+    const accuracyRate = attempts > 0 ? Math.round((stat.correct / attempts) * 100) : 0;
+    const avgTimeSeconds = attempts > 0 ? Math.round(stat.totalSeconds / attempts) : 0;
 
     // Gán cờ cảnh báo sư phạm
     let flag: 'too_hard' | 'too_easy' | 'possible_flaw' | undefined = undefined;

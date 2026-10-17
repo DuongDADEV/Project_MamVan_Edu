@@ -11,6 +11,16 @@ export async function uploadLessonMedia(
   folder: 'videos' | 'thumbnails' | 'images' | 'attachments'
 ): Promise<string> {
   const fileToDataUrl = (f: File): Promise<string> => {
+    // DataURL dự phòng bị giới hạn 5MB: file lớn hơn sẽ phình localStorage
+    // và làm trình duyệt treo — thà báo lỗi rõ ràng để GV dùng file nhỏ hơn
+    const MAX_DATAURL_BYTES = 5 * 1024 * 1024;
+    if (f.size > MAX_DATAURL_BYTES) {
+      return Promise.reject(
+        new Error(
+          `File "${f.name}" nặng ${(f.size / 1024 / 1024).toFixed(1)}MB — quá giới hạn 5MB cho chế độ lưu dự phòng. Hãy nén/giảm dung lượng hoặc kiểm tra kết nối kho lưu trữ.`
+        )
+      );
+    }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);

@@ -62,6 +62,27 @@ export const testGeminiApiKey = async (
 /**
  * SmartAIService: Gọi Gemini AI thật khi có API Key, báo rõ ràng khi chưa cấu hình
  */
+// Sổ ghi nhận lần gần nhất Gemini lỗi và hệ thống phải dùng bản dự phòng (Mock).
+// UI BẮT BUỘC kiểm tra sau mỗi lần sinh nội dung để cảnh báo giáo viên —
+// không được lặng lẽ gắn nhãn "Sinh bởi Gemini AI" cho nội dung dự phòng.
+export interface AiFallbackInfo {
+  method: string;
+  reason: string;
+  at: number;
+}
+let lastAiFallback: AiFallbackInfo | null = null;
+export const getLastAiFallback = (): AiFallbackInfo | null => lastAiFallback;
+export const clearLastAiFallback = (): void => {
+  lastAiFallback = null;
+};
+const noteAiFallback = (method: string, err: any): void => {
+  lastAiFallback = {
+    method,
+    reason: err?.message || String(err || 'Không rõ lỗi'),
+    at: Date.now(),
+  };
+};
+
 class SmartAIService implements AIService {
   private mock = new MockAIService();
 
@@ -80,6 +101,7 @@ class SmartAIService implements AIService {
         return await gemini.generateKeySummary(sources, options);
       } catch (err: any) {
         console.warn('GeminiAIService lỗi generateKeySummary, tự động dùng bộ sinh dự phòng chuẩn GDPT 2018:', err);
+        noteAiFallback('generateKeySummary', err);
         return this.mock.generateKeySummary(sources, options);
       }
     }
@@ -94,6 +116,7 @@ class SmartAIService implements AIService {
         return await gemini.generateTheory(sources, options);
       } catch (err: any) {
         console.warn('GeminiAIService lỗi generateTheory, tự động dùng bộ sinh dự phòng chuẩn GDPT 2018:', err);
+        noteAiFallback('generateTheory', err);
         return this.mock.generateTheory(sources, options);
       }
     }
@@ -107,6 +130,7 @@ class SmartAIService implements AIService {
         return await gemini.generateQuestions(sources, options);
       } catch (err: any) {
         console.warn('Gemini generateQuestions lỗi, tự động dùng bộ sinh câu hỏi sư phạm:', err);
+        noteAiFallback('generateQuestions', err);
         return this.mock.generateQuestions(sources, options);
       }
     }
@@ -126,6 +150,7 @@ class SmartAIService implements AIService {
         return await gemini.suggestEssayGrade(essayText, rubric, sampleEssays, options);
       } catch (err: any) {
         console.error('GeminiAIService lỗi:', err);
+        noteAiFallback('suggestEssayGrade', err);
       }
     }
     return this.mock.suggestEssayGrade(essayText, rubric, sampleEssays, options);
@@ -151,7 +176,7 @@ class SmartAIService implements AIService {
 
     // Khi CHƯA có API key:
     return {
-      reply: `⚠️ **Chưa kích hoạt Google AI Studio API Key!**\n\nĐể AI hoạt động **thật 100% giống như NotebookLM** (đọc hiểu, đối chiếu ngữ liệu, trích dẫn từng câu thơ và trả lời theo ngữ cảnh), thầy/cô vui lòng bấm vào nút **"🔑 Cấu hình API Key"** ở thanh trên cùng để dán API Key của Google AI Studio (miễn phí tại \`aistudio.google.com\`).`,
+      reply: `⚠️ **Chưa kích hoạt Google AI Studio API Key!**\n\nĐể AI hoạt động **thật 100% như Mầm AI Studio** (đọc hiểu, đối chiếu ngữ liệu, trích dẫn từng câu thơ và trả lời theo ngữ cảnh), thầy/cô vui lòng bấm vào nút **"🔑 Cấu hình API Key"** ở thanh trên cùng để dán API Key của Google AI Studio (miễn phí tại \`aistudio.google.com\`).`,
       citations: [],
     };
   }
@@ -163,6 +188,7 @@ class SmartAIService implements AIService {
         return await gemini.extractContentFromUrl(url);
       } catch (err: any) {
         console.error('Gemini extractContentFromUrl error:', err);
+        noteAiFallback('extractContentFromUrl', err);
       }
     }
     return this.mock.extractContentFromUrl(url);

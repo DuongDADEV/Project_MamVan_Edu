@@ -506,15 +506,31 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
         criticalErrors.push(`Câu ${qNum}: Đề bài đang để trống.`);
       }
 
-      // Kiểm tra đáp án
+      // Kiểm tra đáp án: phải tồn tại VÀ phải nằm trong danh sách phương án
       if (q.type === 'single') {
         if (!q.answer) {
           criticalErrors.push(`Câu ${qNum} (Trắc nghiệm): Chưa chọn đáp án đúng.`);
+        } else {
+          const opts = q.options || [];
+          const letters = opts.map((_, i) => String.fromCharCode(65 + i));
+          if (!opts.includes(q.answer as string) && !letters.includes(String(q.answer))) {
+            criticalErrors.push(
+              `Câu ${qNum} (Trắc nghiệm): Đáp án đúng không còn nằm trong danh sách phương án (có thể do đã xóa/sửa phương án).`
+            );
+          }
         }
       } else if (q.type === 'multi') {
         const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
         if (ans.length === 0) {
           criticalErrors.push(`Câu ${qNum} (Chọn nhiều): Chưa đánh dấu đáp án đúng.`);
+        } else {
+          const opts = q.options || [];
+          const letters = opts.map((_, i) => String.fromCharCode(65 + i));
+          if (ans.some((a) => !opts.includes(a) && !letters.includes(a))) {
+            criticalErrors.push(
+              `Câu ${qNum} (Chọn nhiều): Có đáp án đúng không còn nằm trong danh sách phương án.`
+            );
+          }
         }
       } else if (q.type === 'fill') {
         const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
@@ -1201,7 +1217,19 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                                   type="button"
                                   onClick={() => {
                                     const newOpts = (q.options || []).filter((_, i) => i !== optIdx);
-                                    handleUpdateQuestion(q.id, { options: newOpts });
+                                    // Xóa luôn đáp án trỏ vào phương án vừa xóa
+                                    // (tránh đáp án "ma" không còn trong danh sách)
+                                    const removedText = (q.options || [])[optIdx];
+                                    const removedLetter = String.fromCharCode(65 + optIdx);
+                                    let newAns: any = q.answer;
+                                    if (Array.isArray(q.answer)) {
+                                      newAns = q.answer.filter(
+                                        (a: string) => a !== removedText && a !== removedLetter
+                                      );
+                                    } else if (q.answer === removedText || q.answer === removedLetter) {
+                                      newAns = '';
+                                    }
+                                    handleUpdateQuestion(q.id, { options: newOpts, answer: newAns });
                                   }}
                                   className="p-1 text-[#8C7E6A] hover:text-rose-600"
                                 >
@@ -1291,7 +1319,19 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                                   type="button"
                                   onClick={() => {
                                     const newOpts = (q.options || []).filter((_, i) => i !== optIdx);
-                                    handleUpdateQuestion(q.id, { options: newOpts });
+                                    // Xóa luôn đáp án trỏ vào phương án vừa xóa
+                                    // (tránh đáp án "ma" không còn trong danh sách)
+                                    const removedText = (q.options || [])[optIdx];
+                                    const removedLetter = String.fromCharCode(65 + optIdx);
+                                    let newAns: any = q.answer;
+                                    if (Array.isArray(q.answer)) {
+                                      newAns = q.answer.filter(
+                                        (a: string) => a !== removedText && a !== removedLetter
+                                      );
+                                    } else if (q.answer === removedText || q.answer === removedLetter) {
+                                      newAns = '';
+                                    }
+                                    handleUpdateQuestion(q.id, { options: newOpts, answer: newAns });
                                   }}
                                   className="p-1 text-[#8C7E6A] hover:text-rose-600"
                                 >

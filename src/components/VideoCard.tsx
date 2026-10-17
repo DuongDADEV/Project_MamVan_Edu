@@ -191,7 +191,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const lessonNumber = match ? match[1] : `Bài ${index + 1}`;
   const shortTitle = video.title.replace(/^(Bài\s*\d+[:\-.]?\s*)/i, '');
 
-  const durationMinutes = Math.round(video.durationSec / 60);
+  const durationMinutes = Math.round((video.durationSec || 60) / 60);
 
   // Bảng màu & Icon theo chủ đề
   const palette =

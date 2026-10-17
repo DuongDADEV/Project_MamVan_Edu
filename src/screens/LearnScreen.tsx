@@ -10,6 +10,7 @@ import { QUIZZES } from '../data/mockData.ts';
 interface LearnScreenProps {
   state: StudentState;
   topics?: Topic[];
+  focusTopicId?: string | null;
   onSelectVideo: (videoId: string) => void;
   onSelectTheory: (theoryId: string) => void;
   isLoading?: boolean;
@@ -18,6 +19,7 @@ interface LearnScreenProps {
 export const LearnScreen: React.FC<LearnScreenProps> = ({
   state,
   topics,
+  focusTopicId,
   onSelectVideo,
   onSelectTheory,
   isLoading = false,
@@ -25,6 +27,18 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'video' | 'theory'>('video');
   const [filter, setFilter] = useState<'all' | 'unlearned' | 'needs_review'>('all');
   const activeTopics = topics ?? [];
+
+  // Điều hướng từ Trang chủ / Cây / Kết quả: cuộn tới đúng thẻ chủ đề được chọn
+  React.useEffect(() => {
+    if (!focusTopicId) return;
+    setFilter('all');
+    const t = setTimeout(() => {
+      document
+        .getElementById('learn-topic-' + focusTopicId)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [focusTopicId]);
 
   // Lắng nghe video, lý thuyết và bài tập đã xuất bản từ kho chung
   const { data: liveVideos } = useLiveQuery<VideoLessonWithMeta[]>(
@@ -174,7 +188,12 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
             return (
               <div
                 key={topic.id}
-                className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all"
+                id={'learn-topic-' + topic.id}
+                className={`bg-white rounded-3xl p-6 border shadow-sm hover:shadow-md transition-all ${
+                  focusTopicId === topic.id
+                    ? 'border-indigo-300 ring-2 ring-indigo-200'
+                    : 'border-slate-100 hover:border-indigo-100'
+                }`}
               >
                 {/* Header thẻ chủ đề */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">

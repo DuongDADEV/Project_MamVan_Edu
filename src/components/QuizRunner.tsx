@@ -8,6 +8,7 @@ import { Clock, CheckCircle2, XCircle, AlertCircle, Send, ArrowRight, ArrowLeft,
 interface QuizRunnerProps {
   quiz: Quiz;
   questions?: Question[];
+  studentId?: string;
   onComplete: (
     results: QuestionResult[],
     essaySubmissions: EssaySubmission[],
@@ -20,6 +21,7 @@ interface QuizRunnerProps {
 export const QuizRunner: React.FC<QuizRunnerProps> = ({
   quiz,
   questions: customQuestions,
+  studentId,
   onComplete,
   onExit,
 }) => {
@@ -41,6 +43,8 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
   const [practiceChecked, setPracticeChecked] = useState<Record<string, boolean>>({});
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const submittedRef = useRef(false);
+  const submitLatestRef = useRef<() => void>(() => {});
 
   // Đồng hồ đếm ngược nếu là bài test có time limit
   const isPractice = quiz.kind === 'practice';
@@ -55,6 +59,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     setEssayDrafts({});
     setPracticeChecked({});
     setIsSubmitModalOpen(false);
+    submittedRef.current = false;
     setTimeLeft(quiz.timeLimitMinutes ? quiz.timeLimitMinutes * 60 : 0);
   }, [quiz.id]);
 
@@ -65,23 +70,25 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   useEffect(() => {
     if (!isPractice && initialSeconds > 0) {
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            // Hết giờ tự nộp
-            handleSubmitFinal();
-            return 0;
-          }
-          return prev - 1;
-        });
+        setTimeLeft((prev) => Math.max(0, prev - 1));
       }, 1000);
 
       return () => clearInterval(timerRef.current);
     }
   }, [isPractice, initialSeconds]);
 
-  // Xử lý nộp bài chung
+  // Hết giờ -> tự nộp bằng bản handler MỚI NHẤT (đủ đáp án đã làm),
+  // không dùng closure cũ của lần render đầu như trước đây
+  useEffect(() => {
+    if (!isPractice && initialSeconds > 0 && timeLeft === 0) {
+      submitLatestRef.current();
+    }
+  }, [timeLeft, isPractice, initialSeconds]);
+
+  // Xử lý nộp bài chung — chốt chống nộp 2 lần (bấm đúp / hết giờ trùng bấm tay)
   const handleSubmitFinal = () => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setIsSubmitModalOpen(false);
 
     const results: QuestionResult[] = [];
@@ -156,7 +163,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           essaySubs.push({
             id: 'sub_' + Date.now() + '_' + q.id,
             questionId: q.id,
-            studentId: 'hs001',
+            studentId: studentId || 'hs001',
             promptTitle: q.prompt || 'Viết đoạn văn theo yêu cầu',
             quizTitle: quiz.title,
             content: text,
@@ -180,6 +187,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
 
     onComplete(results, essaySubs, Math.round(totalScore * 10) / 10, maxScore);
   };
+  submitLatestRef.current = handleSubmitFinal;
 
   if (!currentQ) {
     return (
@@ -530,7 +538,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               Xác nhận nộp bài?
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed mb-6">
-              Em đã hoàn thành phần làm bài của mình. Em có muốn kiểm tra lại trước khi gửi kết quả không?
+              {(() => {
+                const unanswered = questions.filter((q) =>
+                  q.type === 'essay'
+                    ? !(essayDrafts[q.id] || '').trim()
+                    : userAnswers[q.id] === undefined
+                ).length;
+                return unanswered > 0
+                  ? `Em còn ${unanswered} câu chưa trả lời. Nộp bây giờ thì các câu đó sẽ tính là chưa làm — em có muốn kiểm tra lại trước không?`
+                  : 'Em đã hoàn thành phần làm bài của mình. Em có muốn kiểm tra lại trước khi gửi kết quả không?';
+              })()}
             </p>
 
             <div className="flex gap-2.5">

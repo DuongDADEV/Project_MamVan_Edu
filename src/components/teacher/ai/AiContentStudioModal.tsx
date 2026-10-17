@@ -36,6 +36,8 @@ import {
   getGeminiModel,
   setGeminiModel,
   testGeminiApiKey,
+  getLastAiFallback,
+  clearLastAiFallback,
 } from '../../../services/ai/index.ts';
 import { MamMuc } from '../../MamMuc.tsx';
 import { SkillLevel, Difficulty, QuestionType, Question } from '../../../types.ts';
@@ -293,7 +295,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     return [
       {
         role: 'assistant',
-        text: 'Xin chào thầy/cô! Tôi là trợ lý AI NotebookLM Mầm Văn. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
+        text: 'Xin chào thầy/cô! Tôi là trợ lý Mầm AI Studio. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
       },
     ];
   });
@@ -310,7 +312,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  // Gợi ý câu hỏi nhanh chuẩn NotebookLM
+  // Gợi ý câu hỏi nhanh chuẩn Mầm AI Studio
   const suggestedPrompts = [
     'Tóm tắt các ý chính trong văn bản',
     'Biện pháp tu từ và tác dụng nghệ thuật',
@@ -460,7 +462,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
       const initialChat = [
         {
           role: 'assistant' as const,
-          text: 'Xin chào thầy/cô! Tôi là trợ lý AI NotebookLM Mầm Văn. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
+          text: 'Xin chào thầy/cô! Tôi là trợ lý Mầm AI Studio. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
         },
       ];
       setChatMessages(initialChat);
@@ -487,8 +489,8 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
         title: `Bộ câu hỏi: ${topicTitle} (Sinh bởi Gemini AI)`,
         kind: 'quick',
         topicId,
-        timeLimitMinutes: Math.max(7, totalQuestions),
-        xp: totalQuestions * 5,
+        timeLimitMinutes: Math.max(7, questionsToSave.length),
+        xp: questionsToSave.length * 5,
         questions: questionsToSave,
         isAiGenerated: true,
         isTeacherReviewed: true,
@@ -603,6 +605,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
       return;
     }
 
+    clearLastAiFallback();
     setIsGenerating(true);
     setGenerationStep('Gemini AI đang đọc và phân tích cấu trúc văn bản nguồn...');
 
@@ -614,13 +617,17 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           includeExamples: true,
         });
 
+        const fbVideo = getLastAiFallback();
+        if (fbVideo) {
+          alert(`⚠️ Gemini AI lỗi (${fbVideo.reason}). Nội dung vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô kiểm tra kỹ hoặc thử lại sau.`);
+        }
         setGenerationStep('Hoàn tất! Đang đưa vào trình chỉnh sửa video...');
         setTimeout(() => {
           setIsGenerating(false);
           onApplyDraft({
             type: 'video',
             data: {
-              title: `Bài giảng: Tìm hiểu ${topicTitle} (Sinh bởi Gemini AI)`,
+              title: `Bài giảng: Tìm hiểu ${topicTitle} ${fbVideo ? '(Bản dự phòng — Gemini lỗi)' : '(Sinh bởi Gemini AI)'}`,
               description: `Video bài giảng bám sát ngữ liệu: ${activeSources[0].title}.`,
               durationSec: 12 * 60,
               subtopics: [topicTitle, 'Đặc trưng thể loại'],
@@ -639,13 +646,17 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           includeExamples: true,
         });
 
+        const fbTheory = getLastAiFallback();
+        if (fbTheory) {
+          alert(`⚠️ Gemini AI lỗi (${fbTheory.reason}). Nội dung vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô kiểm tra kỹ hoặc thử lại sau.`);
+        }
         setGenerationStep('Hoàn tất! Đang chuyển sang trình soạn thảo lý thuyết...');
         setTimeout(() => {
           setIsGenerating(false);
           onApplyDraft({
             type: 'theory',
             data: {
-              title: `Lý thuyết chuyên sâu: ${topicTitle} (Sinh bởi Gemini AI)`,
+              title: `Lý thuyết chuyên sâu: ${topicTitle} ${fbTheory ? '(Bản dự phòng — Gemini lỗi)' : '(Sinh bởi Gemini AI)'}`,
               kind: 'general_topic',
               minReadSeconds: 180,
               blocks,
@@ -663,6 +674,11 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           typeCounts,
           difficulty,
         });
+
+        const fbQuestions = getLastAiFallback();
+        if (fbQuestions) {
+          alert(`⚠️ Gemini AI lỗi (${fbQuestions.reason}). Bộ câu hỏi vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô duyệt kỹ từng câu trước khi lưu.`);
+        }
 
         const processedQuestions = questions.map((q) => ({
           ...q,
@@ -703,7 +719,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                 Xưởng Sáng Tạo AI Mầm Văn
               </h2>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF5EB] text-[#E2704A] border border-[#E2704A]/30">
-                NotebookLM Style
+                Mầm AI Studio
               </span>
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#0D9488]/10 text-[#0D9488]">
                 Chủ đề: {topicTitle}

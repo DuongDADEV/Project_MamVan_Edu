@@ -5,7 +5,7 @@
  * https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
  * 
  * Tự động thử nghiệm các model (gemini-2.5-flash -> gemini-1.5-flash -> gemini-1.5-pro)
- * RAG Grounding 100% bám sát ngữ liệu nguồn theo chuẩn NotebookLM
+ * RAG Grounding 100% bám sát ngữ liệu nguồn theo chuẩn Mầm AI Studio
  */
 
 import {
@@ -262,7 +262,7 @@ export class GeminiAIService implements AIService {
   }
 
   /**
-   * Hỏi đáp và trò chuyện với tài liệu nguồn (NotebookLM Style)
+   * Hỏi đáp và trò chuyện với tài liệu nguồn (Mầm AI Studio)
    */
   async chatWithSources(
     sources: AISource[],
@@ -285,7 +285,7 @@ export class GeminiAIService implements AIService {
       .map((h) => `${h.role === 'user' ? 'Thầy/Cô' : 'AI'}: ${h.text}`)
       .join('\n');
 
-    const prompt = `Bạn là trợ lý AI sư phạm Mầm Văn theo chuẩn NotebookLM của Google.
+    const prompt = `Bạn là trợ lý AI sư phạm Mầm Văn theo chuẩn Mầm AI Studio.
 Nhiệm vụ của bạn là đọc và phân tích sâu các tài liệu nguồn dưới đây để trả lời câu hỏi của thầy/cô giáo dạy Ngữ văn 7.
 
 TÀI LIỆU NGUỒN ĐÃ BẬT:
@@ -368,7 +368,7 @@ QUY TẮC RAG GROUNDING BẮT BUỘC:
         ? `\nCƠ CẤU LOẠI CÂU HỎI (BẮT BUỘC ĐÚNG SỐ LƯỢNG TỪNG LOẠI):\n- "single" (Chọn 1 đáp án): ĐÚNG ${tc?.single || 0} câu\n- "multi" (Chọn nhiều đáp án): ĐÚNG ${tc?.multi || 0} câu\n- "fill" (Điền vào chỗ trống): ĐÚNG ${tc?.fill || 0} câu\n- "essay" (Tự luận): ĐÚNG ${tc?.essay || 0} câu\nTrường "type" của mỗi câu phải khớp cơ cấu trên; loại nào số lượng 0 thì TUYỆT ĐỐI không sinh câu thuộc loại đó.\n`
         : '';
 
-    const prompt = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Google NotebookLM.
+    const prompt = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Mầm AI Studio.
 Dựa vào ngữ liệu sau:
 ${sourcesText}
 
@@ -550,7 +550,7 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
 
   /**
    * Trích xuất lời thoại, phụ đề, nội dung bài giảng từ YouTube hoặc bất kỳ trang web nào
-   * Lọc sạch rác giao diện và tối ưu hóa nội dung sư phạm chuẩn NotebookLM
+   * Lọc sạch rác giao diện và tối ưu hóa nội dung sư phạm chuẩn Mầm AI Studio
    */
   async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
     const cleanUrl = url.trim();
@@ -630,7 +630,7 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
     combinedContent = this.cleanScrapedText(combinedContent, isYouTube);
 
     // 3. Phân tích và chuẩn hóa bằng Gemini AI
-    const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Google NotebookLM môn Ngữ văn và Khoa học Xã hội.
+    const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Mầm AI Studio môn Ngữ văn và Khoa học Xã hội.
 Nhiệm vụ: Phân tích tư liệu bài giảng/video sau đây và biên soạn thành một bài giảng/tài liệu tri thức hoàn chỉnh, sâu sắc, có cấu trúc sư phạm rõ ràng:
 - URL nguồn: ${cleanUrl}
 - Loại nguồn: ${isYouTube ? 'Video YouTube' : 'Bài viết Web'}

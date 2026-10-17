@@ -10,6 +10,8 @@ import {
 import {
   settingService,
   auditService,
+  authService,
+  teacherService,
   resetAllDemoData,
   useLiveQuery,
   DEFAULT_SYSTEM_SETTINGS,
@@ -161,6 +163,43 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
   // XỬ LÝ LƯU CÀI ĐẶT
   // ==========================================
   const handleSaveSettings = async () => {
+    // 0. Chặn giá trị rỗng/0/âm (xóa trắng ô số thành 0) và thứ tự ngưỡng mastery
+    const numericFields: [string, number][] = [
+      ['Trần XP tuần', settingsForm.xp.weeklyCap],
+      ['Trần XP ngày tối đa', settingsForm.xp.dailyCapTotal],
+      ['Trần XP dưới 45 phút', settingsForm.xp.dailyCapUnder45Min],
+      ['XP điểm danh/ngày', settingsForm.xp.attendanceDailyXp],
+      ['Ngưỡng Cần ôn lại', settingsForm.mastery.thresholdNeedsReview],
+      ['Ngưỡng Đang tiến bộ', settingsForm.mastery.thresholdProgressing],
+      ['Số câu tối thiểu', settingsForm.mastery.minQuestionsRequired],
+    ];
+    const badField = numericFields.find(
+      ([, v]) => typeof v !== 'number' || Number.isNaN(v) || v <= 0
+    );
+    if (badField) {
+      showToast(`Lỗi: "${badField[0]}" phải là số lớn hơn 0 (ô đang trống hoặc bằng 0)`, 'error');
+      return;
+    }
+    if (
+      !(
+        settingsForm.mastery.thresholdNeedsReview <
+        settingsForm.mastery.thresholdProgressing
+      )
+    ) {
+      showToast(
+        'Lỗi: Ngưỡng "Cần ôn lại" phải nhỏ hơn ngưỡng "Đang tiến bộ"!',
+        'error'
+      );
+      return;
+    }
+    if (
+      settingsForm.mastery.weightDecayFactor <= 0 ||
+      settingsForm.mastery.weightDecayFactor > 1
+    ) {
+      showToast('Lỗi: Hệ số suy giảm phải nằm trong khoảng (0, 1]!', 'error');
+      return;
+    }
+
     // 1. Kiểm tra validation trần XP
     if (settingsForm.xp.weeklyCap < settingsForm.xp.dailyCapTotal) {
       showToast('Lỗi: Trần XP tuần không thể nhỏ hơn trần XP ngày tối đa!', 'error');
@@ -229,6 +268,22 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
       return;
     }
 
+    // Kiểm tra mật khẩu hiện tại bằng chính đường đăng nhập thật
+    try {
+      await authService.signIn('teacher', teacher.username, currentPassword);
+    } catch {
+      setPasswordError('Mật khẩu hiện tại không đúng');
+      return;
+    }
+
+    // Lưu mật khẩu mới thật vào hồ sơ giáo viên
+    try {
+      await teacherService.updateTeacher(teacher.id, { password: newPassword });
+    } catch (err: any) {
+      setPasswordError(err?.message || 'Không lưu được mật khẩu mới, vui lòng thử lại');
+      return;
+    }
+
     // Ghi audit log TUYỆT ĐỐI KHÔNG LƯU MẬT KHẨU
     await auditService.log({
       actor_id: teacher.id,
@@ -261,7 +316,10 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
       target_name: `Đăng xuất toàn bộ phiên (${teacher.username})`,
       details: { notes: 'Yêu cầu hủy mọi phiên đăng nhập trên thiết bị khác' },
     });
-    showToast('Đã đăng xuất khỏi tất cả các thiết bị khác thành công!');
+    showToast(
+      'Đã ghi nhận yêu cầu. Lưu ý: phiên bản hiện tại chưa hỗ trợ đăng xuất từ xa — hãy đăng xuất trực tiếp trên từng thiết bị.',
+      'info'
+    );
     refreshLogs();
   };
 
@@ -1323,7 +1381,7 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                       <div>
                         <div className="font-bold text-[#2F3E6B]">Thiết bị này (Trình duyệt hiện tại)</div>
-                        <div className="text-[10px] text-[#6B7280]">Windows 11 • Chrome 134 • Đang hoạt động</div>
+                        <div className="text-[10px] text-[#6B7280]">Đang hoạt động</div>
                       </div>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
@@ -1331,18 +1389,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-2xl bg-[#FFFDF8] border border-[#E6DCC8] flex items-center justify-between text-xs opacity-75">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
-                      <div>
-                        <div className="font-bold text-[#4B5563]">iPad Air (Lớp học)</div>
-                        <div className="text-[10px] text-[#6B7280]">iOS 17 • Safari • Hoạt động 2 ngày trước</div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">
-                      Đã lưu
-                    </span>
-                  </div>
                 </div>
               </div>
 
@@ -1381,7 +1427,7 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                     )}
                   </div>
                   <p className="text-[11px] text-[#6B7280] mt-0.5">
-                    Kích hoạt trí tuệ nhân tạo thật cho Xưởng NotebookLM, sinh câu hỏi, video và chấm bài tự luận
+                    Kích hoạt trí tuệ nhân tạo thật cho Mầm AI Studio, sinh câu hỏi, video và chấm bài tự luận
                   </p>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { VIDEOS, QUIZZES, QUESTIONS_BANK } from '../data/mockData.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
 import { awardXP } from '../logic/xpEngine.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
+import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import {
   Clock,
@@ -88,6 +89,15 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   const [mediaDuration, setMediaDuration] = useState<number>(video?.durationSec || 0);
   const [summarySecondsLeft, setSummarySecondsLeft] = useState(TIME_CONFIG.MIN_SUMMARY_READ_SECONDS);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+  const [quizOutcome, setQuizOutcome] = useState<{
+    quiz: Quiz;
+    results: QuestionResult[];
+    essays: EssaySubmission[];
+    earned: number;
+    max: number;
+    xpAwarded: number;
+    cappedNotice?: string;
+  } | null>(null);
 
   const quizzesMap: Record<string, Quiz> = useMemo(() => ({
     ...QUIZZES,
@@ -195,14 +205,22 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   const watchedRatio = watchedSecondsSet.size / Math.max(1, effectiveDuration);
   const isWatchedEligible = watchedRatio >= 0.8 || state.completedSteps.includes(`video_watch:${videoId}`);
 
-  // Tự động khôi phục bước đang dở nếu có
+  // Tự động khôi phục bước đang dở nếu có (ưu tiên theo stepKey —
+  // stepIndex có thể lệch khi GV thêm/bớt bài tập liên kết)
   useEffect(() => {
     if (state.currentProgress && state.currentProgress.itemId === videoId) {
-      setCurrentStepIndex(state.currentProgress.stepIndex || 0);
+      const savedKey = state.currentProgress.stepKey;
+      const byKey = savedKey ? dynamicSteps.findIndex((st) => st.key === savedKey) : -1;
+      const restored =
+        byKey >= 0
+          ? byKey
+          : Math.min(state.currentProgress.stepIndex || 0, dynamicSteps.length - 1);
+      setCurrentStepIndex(Math.max(0, restored));
       if (state.currentProgress.videoSeconds && videoRef.current) {
         videoRef.current.currentTime = state.currentProgress.videoSeconds;
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, state.currentProgress]);
 
   // Bộ đếm thời gian khi phát video (theo dõi các giây đã xem thật sự)
@@ -264,6 +282,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
           topicId: video.topicId,
           itemId: videoId,
           stepIndex: currentStepIndex + 1,
+          stepKey: dynamicSteps[currentStepIndex + 1]?.key,
           videoSeconds: currentTime,
         },
       };
@@ -288,6 +307,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
           topicId: video.topicId,
           itemId: videoId,
           stepIndex: currentStepIndex + 1,
+          stepKey: dynamicSteps[currentStepIndex + 1]?.key,
         },
       };
     });
@@ -298,7 +318,9 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   const handleCompleteQuizStep = (
     step: FlowStep,
     results: QuestionResult[],
-    essays: EssaySubmission[]
+    essays: EssaySubmission[],
+    earned: number,
+    max: number
   ) => {
     if (!step.quiz) return;
     const qId = step.quiz.id;
@@ -324,46 +346,59 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
 
     const isNextComplete = currentStepIndex + 2 >= dynamicSteps.length;
 
-    onUpdateState((prev) => {
-      const res1 = awardXP(
-        prev,
-        `quiz_completed:${qId}`,
-        step.xpBonus,
-        `${step.label}: ${video.title}`
+    const res1 = awardXP(
+      state,
+      `quiz_completed:${qId}`,
+      step.xpBonus,
+      `${step.label}: ${video.title}`
+    );
+
+    let nextState: StudentState = {
+      ...state,
+      ...res1.updatedState,
+      questionResults: [...results, ...state.questionResults],
+      essaySubmissions: [...essays, ...(state.essaySubmissions || [])],
+    };
+
+    let xpAwarded = res1.actualXp;
+    let cappedNotice = res1.cappedNotice;
+
+    if (isNextComplete) {
+      const resBonus = awardXP(
+        nextState,
+        `video_flow_completed:${videoId}`,
+        XP_CONFIG.VIDEO_FULL_COMPLETION_XP,
+        `🎉 Thưởng hoàn thành trọn vẹn luồng học video: ${video.title}`
       );
-
-      let nextState = {
-        ...prev,
-        ...res1.updatedState,
-        questionResults: [...results, ...prev.questionResults],
-        essaySubmissions: [...essays, ...(prev.essaySubmissions || [])],
+      xpAwarded += resBonus.actualXp;
+      cappedNotice = resBonus.cappedNotice || cappedNotice;
+      nextState = {
+        ...nextState,
+        ...resBonus.updatedState,
+        currentProgress: undefined,
       };
+    } else {
+      nextState.currentProgress = {
+        type: 'video',
+        topicId: video.topicId,
+        itemId: videoId,
+        stepIndex: currentStepIndex + 1,
+          stepKey: dynamicSteps[currentStepIndex + 1]?.key,
+      };
+    }
 
-      if (isNextComplete) {
-        const resBonus = awardXP(
-          nextState,
-          `video_flow_completed:${videoId}`,
-          XP_CONFIG.VIDEO_FULL_COMPLETION_XP,
-          `🎉 Thưởng hoàn thành trọn vẹn luồng học video: ${video.title}`
-        );
-        nextState = {
-          ...nextState,
-          ...resBonus.updatedState,
-          currentProgress: undefined,
-        };
-      } else {
-        nextState.currentProgress = {
-          type: 'video',
-          topicId: video.topicId,
-          itemId: videoId,
-          stepIndex: currentStepIndex + 1,
-        };
-      }
+    onUpdateState(() => nextState);
 
-      return nextState;
+    // Hiện màn Kết quả (điểm, XP, xem lại từng câu) trước khi sang bước tiếp
+    setQuizOutcome({
+      quiz: step.quiz,
+      results,
+      essays,
+      earned,
+      max,
+      xpAwarded,
+      cappedNotice,
     });
-
-    setCurrentStepIndex((prev) => Math.min(prev + 1, dynamicSteps.length - 1));
   };
 
   return (
@@ -749,12 +784,32 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
             );
           }
 
+          if (quizOutcome && quizOutcome.quiz.id === q.id) {
+            return (
+              <QuizResult
+                quiz={quizOutcome.quiz}
+                questions={qList}
+                results={quizOutcome.results}
+                essaySubmissions={quizOutcome.essays}
+                earnedScore={quizOutcome.earned}
+                maxScore={quizOutcome.max}
+                xpAwarded={quizOutcome.xpAwarded}
+                cappedNotice={quizOutcome.cappedNotice}
+                onContinue={() => {
+                  setQuizOutcome(null);
+                  setCurrentStepIndex((p) => Math.min(p + 1, dynamicSteps.length - 1));
+                }}
+              />
+            );
+          }
+
           return (
             <QuizRunner
               key={q.id}
               quiz={q}
+              studentId={state.profile?.id}
               questions={qList}
-              onComplete={(results, essays) => handleCompleteQuizStep(currentStep, results, essays)}
+              onComplete={(results, essays, earned, max) => handleCompleteQuizStep(currentStep, results, essays, earned, max)}
               onExit={() => setCurrentStepIndex((p) => Math.max(0, p - 1))}
             />
           );

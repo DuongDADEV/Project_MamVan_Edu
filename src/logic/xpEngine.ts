@@ -1,5 +1,6 @@
 import { XP_CONFIG, getEffectiveXpConfig } from '../config.ts';
 import { StudentState, XPLogEntry } from '../types.ts';
+import { getLocalTodayStr, getWeekKey } from './studentStateUtils.ts';
 
 export interface XPCalculationResult {
   stepKey: string;
@@ -13,7 +14,10 @@ export interface XPCalculationResult {
     xpWeek: number;
     totalXp: number;
     completedSteps: string[];
+    xpAwardedSteps: string[];
     xpLogs: XPLogEntry[];
+    lastXpResetDate?: string;
+    xpWeekKey?: string;
   };
 }
 
@@ -44,7 +48,16 @@ export function awardXP(
   actionName: string,
   forceAllowRepeat = false
 ): XPCalculationResult {
-  const isFirstTime = !state.completedSteps.includes(actionKey);
+  // Lật ngày/tuần: bộ đếm hôm nay/tuần này chỉ còn hiệu lực nếu mốc khớp hiện tại.
+  // (App cũng lật khi nạp state; ở đây lật phòng thủ để phiên mở qua nửa đêm vẫn đúng.)
+  const todayStr = getLocalTodayStr();
+  const weekKey = getWeekKey();
+  const baseXpToday = state.lastXpResetDate === todayStr ? state.xpToday : 0;
+  const baseXpWeek = state.xpWeekKey === weekKey ? state.xpWeek : 0;
+  // "Lần đầu" cho mục đích TRẢ XP xét theo xpAwardedSteps (state cũ chưa có
+  // trường này thì dùng completedSteps như trước)
+  const awardedSteps = state.xpAwardedSteps ?? state.completedSteps;
+  const isFirstTime = !awardedSteps.includes(actionKey);
 
   // Quy tắc 1: Mỗi mục chỉ cộng XP lần đầu hoàn thành
   if (!isFirstTime && !forceAllowRepeat) {
@@ -55,16 +68,19 @@ export function awardXP(
       actualXp: 0,
       reason: `Bạn đã hoàn thành mục này trước đó. Luyện tập thêm rất tốt nhưng không cộng thêm XP để tránh áp lực điểm số.`,
       updatedState: {
-        xpToday: state.xpToday,
-        xpWeek: state.xpWeek,
+        xpToday: baseXpToday,
+        xpWeek: baseXpWeek,
         totalXp: state.totalXp,
         completedSteps: state.completedSteps,
+        xpAwardedSteps: awardedSteps,
         xpLogs: state.xpLogs,
+        lastXpResetDate: todayStr,
+        xpWeekKey: weekKey,
       },
     };
   }
 
-  const activeMinutes = Math.floor(state.activeSecondsToday / 60);
+  const activeMinutes = Math.floor((state.lastXpResetDate === todayStr ? state.activeSecondsToday : 0) / 60);
   const cfg = getEffectiveXpConfig();
 
   // Kiểm tra nếu học quá 90 phút trong ngày
@@ -87,21 +103,28 @@ export function awardXP(
       reason: 'Đạt trần 90 phút học trong ngày',
       cappedNotice: log.cappedNotice,
       updatedState: {
-        xpToday: state.xpToday,
-        xpWeek: state.xpWeek,
+        xpToday: baseXpToday,
+        xpWeek: baseXpWeek,
         totalXp: state.totalXp,
-        completedSteps: [...state.completedSteps, actionKey],
+        // Tiến độ học VẪN được ghi nhận (Cây/Năng lực tính bình thường) nhưng
+        // bước chưa vào xpAwardedSteps — hôm sau làm lại sẽ được trả XP 1 lần.
+        completedSteps: state.completedSteps.includes(actionKey)
+          ? state.completedSteps
+          : [...state.completedSteps, actionKey],
+        xpAwardedSteps: awardedSteps,
         xpLogs: [log, ...state.xpLogs].slice(0, 50),
+        lastXpResetDate: todayStr,
+        xpWeekKey: weekKey,
       },
     };
   }
 
   // Tính trần ngày
   const dailyCap = getCurrentDailyXpCap(activeMinutes);
-  const remainingDaily = Math.max(0, dailyCap - state.xpToday);
+  const remainingDaily = Math.max(0, dailyCap - baseXpToday);
 
   // Tính trần tuần
-  const remainingWeekly = Math.max(0, cfg.WEEKLY_XP_CAP - state.xpWeek);
+  const remainingWeekly = Math.max(0, cfg.WEEKLY_XP_CAP - baseXpWeek);
 
   // XP thực nhận bị chặn bởi trần ngày và trần tuần
   let actualXp = Math.min(rawXp, remainingDaily, remainingWeekly);
@@ -128,7 +151,15 @@ export function awardXP(
     cappedNotice,
   };
 
-  const newCompletedSteps = isFirstTime ? [...state.completedSteps, actionKey] : state.completedSteps;
+  const newCompletedSteps = state.completedSteps.includes(actionKey)
+    ? state.completedSteps
+    : [...state.completedSteps, actionKey];
+  // Chỉ đánh dấu "đã trả XP" khi thực sự trả > 0; chạm trần (0 XP) thì lần sau
+  // làm lại vẫn được trả đúng một lần
+  const newAwardedSteps =
+    actualXp > 0 && !awardedSteps.includes(actionKey)
+      ? [...awardedSteps, actionKey]
+      : awardedSteps;
 
   return {
     stepKey: actionKey,
@@ -138,11 +169,14 @@ export function awardXP(
     reason: `Hoàn thành: ${actionName}`,
     cappedNotice,
     updatedState: {
-      xpToday: state.xpToday + actualXp,
-      xpWeek: state.xpWeek + actualXp,
+      xpToday: baseXpToday + actualXp,
+      xpWeek: baseXpWeek + actualXp,
       totalXp: state.totalXp + actualXp,
       completedSteps: newCompletedSteps,
+      xpAwardedSteps: newAwardedSteps,
       xpLogs: [log, ...state.xpLogs].slice(0, 50),
+      lastXpResetDate: todayStr,
+      xpWeekKey: weekKey,
     },
   };
 }

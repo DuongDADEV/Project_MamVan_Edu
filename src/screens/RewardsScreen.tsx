@@ -50,7 +50,21 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
     .filter((req) => req.status === 'OPENED')
     .map((req) => ({
       request: req,
-      reward: REWARDS_CATALOG.find((r) => r.id === req.rewardId) || REWARDS_CATALOG[0],
+      // Không tìm thấy trong catalog tĩnh (quà do GV tạo/sửa) -> nhãn trung tính,
+      // TUYỆT ĐỐI không thay bằng một phần quà khác gây hiểu nhầm
+      reward: REWARDS_CATALOG.find((r) => r.id === req.rewardId) || {
+        id: req.rewardId,
+        requiredXp: 0,
+        xpCost: 0,
+        requiredAttendanceDays: 0,
+        tierKey: 'HAT' as const,
+        teaserDescription: '',
+        secret: {
+          name: 'Phần quà từ thầy/cô',
+          description: 'Món quà đặc biệt do thầy/cô trao tặng.',
+        },
+        isPhysical: false,
+      },
     }));
 
   return (

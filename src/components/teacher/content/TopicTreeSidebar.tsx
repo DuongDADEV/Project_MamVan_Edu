@@ -147,9 +147,9 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
           </div>
         ) : (
           topics.map((topic, index) => {
-            const isExpanded = !!expandedTopicIds[topic.id];
+            const isExpanded = expandedTopicIds[topic.id] !== false;
             const topicVideos = videos.filter((v) => v.topicId === topic.id);
-            const topicTheory = theories.find((th) => th.topicId === topic.id);
+            const topicTheories = theories.filter((th) => th.topicId === topic.id);
             const topicQuizzes = quizzes.filter((q) => q.topicId === topic.id);
 
             const isTopicSelected =
@@ -263,6 +263,18 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteTopic(topic.id);
+                      }}
+                      className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600 transition-colors"
+                      title="Xóa chủ đề"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
@@ -322,9 +334,10 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                       );
                     })}
 
-                    {/* Theory */}
-                    {topicTheory && (
+                    {/* Theories (hiện TẤT CẢ bài lý thuyết của chủ đề) */}
+                    {topicTheories.map((topicTheory) => (
                       <div
+                        key={topicTheory.id}
                         onClick={() => onSelectItem({ type: 'theory', id: topicTheory.id })}
                         className={`p-2 rounded-xl flex items-center justify-between gap-2 cursor-pointer transition-all text-xs ${
                           selectedItem?.type === 'theory' &&
@@ -369,7 +382,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                           </button>
                         </div>
                       </div>
-                    )}
+                    ))}
 
                     {/* Quizzes / Tests */}
                     {topicQuizzes.map((quiz) => {
@@ -429,7 +442,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                       );
                     })}
 
-                    {topicVideos.length === 0 && !topicTheory && topicQuizzes.length === 0 && (
+                    {topicVideos.length === 0 && topicTheories.length === 0 && topicQuizzes.length === 0 && (
                       <div className="py-2 text-center text-[11px] text-[#8C7E6A] italic">
                         Chủ đề này chưa có bài giảng hoặc bài tập.
                       </div>

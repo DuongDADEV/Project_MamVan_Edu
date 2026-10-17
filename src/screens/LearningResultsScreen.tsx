@@ -13,6 +13,7 @@ import {
 import { Trophy, Target, Zap, BookOpenCheck, Award, Lock, TrendingUp } from 'lucide-react';
 import { StudentState, Topic } from '../types.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
+import { countLearningSteps } from '../logic/studentStateUtils.ts';
 import { BADGES_CATALOG } from '../data/mockData.ts';
 
 interface LearningResultsScreenProps {
@@ -92,16 +93,17 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
   // Tiến bộ theo tuần (6 tuần gần nhất, chỉ tính bài làm của chính học sinh)
   const weeklyData = useMemo(() => {
     const now = Date.now();
-    const weeks: { weekLabel: string; diemTB: number; soCau: number }[] = [];
+    const weeks: { weekLabel: string; diemTB: number | null; soCau: number }[] = [];
     for (let w = 5; w >= 0; w--) {
       const start = now - (w + 1) * ONE_WEEK;
       const end = now - w * ONE_WEEK;
       const inWeek = results.filter((r) => r.timestamp >= start && r.timestamp < end);
+      // Tuần không làm bài -> null (đường điểm đứt đoạn), không vẽ như điểm 0
       const avg =
         inWeek.length > 0
           ? Math.round((inWeek.reduce((acc, r) => acc + r.scoreRatio, 0) / inWeek.length) * 100) /
             10
-          : 0;
+          : null;
       weeks.push({
         weekLabel: w === 0 ? 'Tuần này' : `-${w} tuần`,
         diemTB: avg,
@@ -144,7 +146,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
           </div>
           <div className="text-2xl font-black text-[#1E1B4B]">{overview.total}</div>
           <div className="text-[11px] text-slate-400 mt-0.5">
-            {state.completedSteps.length} hoạt động học đã hoàn thành
+            {countLearningSteps(state.completedSteps)} hoạt động học đã hoàn thành
           </div>
         </div>
         <div className="bg-white rounded-2xl border border-[#E8DFD1] p-4 shadow-xs">
@@ -259,6 +261,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                 name="Điểm trung bình"
                 stroke="#E2704A"
                 strokeWidth={2.5}
+                connectNulls={false}
                 dot={{ r: 3.5 }}
               />
             </ComposedChart>

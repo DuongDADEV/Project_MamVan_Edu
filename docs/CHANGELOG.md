@@ -1,5 +1,34 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - QA vòng 2: Đổi tên "Mầm AI Studio", sửa triệt để XP/điểm danh qua ngày, khóa cửa hậu bảo mật, gỡ số liệu bịa
+### Đổi tên thương hiệu:
+- **"NotebookLM AI Studio" → "Mầm AI Studio"** ở toàn bộ giao diện và tài liệu trong app (23 vị trí, 8 file). Kiểm chứng trên bản build production: "NotebookLM" còn 0 chỗ.
+### XP & điểm danh/tưới cây (kiểm chứng bằng test tự động `scripts/test_round2_logic.ts` — 27/27 đạt):
+- **Module ngày/tuần mới** `src/logic/studentStateUtils.ts`: ngày tính theo **giờ địa phương** thay vì UTC (trước đây ngày mới bắt đầu lúc 07:00 sáng giờ VN — học sinh có thể điểm danh 2 lần trong một buổi sáng hoặc bị chặn nhầm sáng hôm sau), khóa tuần theo thứ Hai, hàm lật bộ đếm ngày/tuần `rolloverStudentState`, và `countLearningSteps` không tính khóa điểm danh là "bước học".
+- **Sửa lỗi mất XP từ ngày thứ 2:** trước đây bộ đếm XP ngày/tuần không bao giờ được reset nên từ ngày thứ 2 mọi lần cộng XP đều trả về 0. Nay bộ đếm tự lật khi sang ngày/tuần mới (cả khi nạp state và phòng thủ ngay trong `awardXP`), state cũ được suy mốc từ ngày điểm danh gần nhất để không xóa nhầm số liệu hôm nay.
+- **Tách "tiến độ học" khỏi "đã trả XP"** (`xpAwardedSteps`): học lúc đã chạm trần XP vẫn ghi nhận tiến độ cho Cây/Năng lực, nhưng hôm sau làm lại sẽ được trả XP đúng một lần — trước đây bước bị "đốt", XP mất vĩnh viễn.
+- Cộng XP bài tập về nhà không còn ghi trùng khóa bước; thông báo XP hiển thị **số XP thực nhận** (kể cả khi bị chặn bởi trần); xin quà bị chặn trùng khi đã có yêu cầu chưa bị từ chối; màn Kết quả học tập và tỉ lệ tương tác không còn tính ngày điểm danh là hoạt động học.
+### Bảo mật & quyền:
+- **Xóa cửa hậu mật khẩu:** đăng nhập bằng "123456" (hoặc "admin123") với mọi tài khoản kể cả khi chủ tài khoản đã đổi mật khẩu khác — đã gỡ ở cả 2 bản kho dữ liệu; gợi ý mật khẩu bị xóa khỏi thông báo lỗi đăng nhập; đặt lại mật khẩu nay sinh mật khẩu ngẫu nhiên thay vì "123456".
+- **Dev Panel chỉ còn trong bản dev** (`import.meta.env.DEV`) — bản production không còn nút cộng XP/tự duyệt quà/tự chấm 9.0 (kiểm chứng: code bị loại khỏi gói build thật).
+- Đăng xuất nay xóa cả phiên "đang đóng vai", hủy lần lưu đang chờ và reset state — trước đây đăng xuất khi đang đóng vai GV có thể leo quyền trở lại.
+- "Xem góc Học sinh": lưu phiên gốc, có thanh cảnh báo cố định + nút **Thoát xem thử** quay về đúng phiên GV/Admin; lỗi đăng nhập hs001 được báo rõ thay vì im lặng. Bộ đếm giờ học chỉ chạy khi người dùng thật là học sinh.
+### Dữ liệu Supabase (kho dữ liệu thật):
+- **Yêu cầu quà dùng số liệu thật:** snapshot XP tuần/điểm danh/tên lớp tính từ state thật (trước đây bịa 260 XP/4 ngày và luôn "đủ điều kiện"); tạo yêu cầu không còn gán nhầm sang id của hs002, không nuốt lỗi insert; trạng thái GIVEN/OPENED không còn bị ghi thành REJECTED — kèm **`database/migration_003_reward_status.sql`** (chủ dự án chạy trong Supabase SQL Editor để DB chấp nhận 2 trạng thái này).
+- Câu hỏi giữ đủ trường (đoạn văn, điểm từng phần, trạng thái...) qua cột `payload` mới — **`database/migration_004_question_payload.sql`** (chạy kèm migration_003; app tự chạy chế độ tương thích khi chưa chạy).
+- Bài tự luận không còn bị gán cho "học sinh đầu tiên bất kỳ" khi không tra được chủ nhân; xóa học sinh/giáo viên đọc lỗi DB và lùi về dữ liệu cục bộ thay vì báo thành công giả; sửa UUID mặc định khớp seed trong `schema.sql`; sửa thứ tự gộp state làm mất yêu cầu quà/tùy chọn mỗi lần đọc; sửa payload cập nhật học sinh làm mất tên đăng nhập/mật khẩu; đăng nhập lùi về tài khoản tạo cục bộ khi DB chưa có; danh sách lớp gộp cả lớp chỉ có ở cục bộ; chấm bài ghi đúng chủ đề/năng lực + nhật ký kiểm toán + thông báo ở cả 2 kho (trước đây Supabase gán cứng 1 chủ đề thơ); bộ nhớ cục bộ sống sót qua nâng phiên bản schema (thêm khóa bảo vệ rubric/mẫu/cấu hình AI/quà/thông báo).
+### Luồng học & chấm:
+- **Quiz hết giờ nộp đúng đáp án đã làm** (trước đây nộp bài trống vì handler bị kẹt ở lần render đầu) + chốt chống nộp 2 lần; hộp xác nhận nộp bài báo số câu chưa trả lời; **sau mỗi quiz học sinh thấy màn hình kết quả** (điểm, XP thực nhận, xem lại từng câu với đúng câu hỏi đã làm — kể cả câu hỏi do GV/AI tạo); bài tự luận mang đúng mã học sinh.
+- Luồng lý thuyết: XP từng bước lấy từ cấu hình chuẩn (luyện tập 5, kiểm tra 8) và **cộng thưởng hoàn thành luồng +10** như đã hứa trong cấu hình (trước đây không bao giờ được cộng); khôi phục bước học dở theo khóa bước ổn định — màn lý thuyết trước đây luôn bắt đầu lại từ bước 0.
+- Ngân hàng câu hỏi: tô sáng đáp án đúng nhận cả 2 dạng lưu (chữ cái và toàn văn); QuizBuilder dọn đáp án khi xóa lựa chọn + chặn xuất bản khi đáp án không còn trong danh sách lựa chọn; điểm tiêu chí trong màn chấm bài gõ số thập phân/xóa trắng bình thường; rubric không cho lưu khi tổng trọng số ≠ 100.
+- **AI lỗi không còn giả danh:** khi Gemini lỗi và hệ thống dùng bản dự phòng, GV được cảnh báo rõ và tiêu đề bản nháp ghi "(Bản dự phòng — Gemini lỗi)" thay vì "(Sinh bởi Gemini AI)".
+### Phân tích (Analytics) — gỡ toàn bộ số liệu bịa:
+- Không còn số mặc định ngụy trang (tỉ lệ đúng 13/18, điểm TB lớp 7.5, đạt 82%, chuỗi chuyên cần 78→91%, xem video 84.5%...): mọi biểu đồ tính từ dữ liệu thật (lịch sử điểm danh, nhật ký XP, kết quả câu hỏi, bước đã học); tuần không có điểm hiển thị trống thay vì tụt về 0 giả.
+### Chi tiết khác (vòng rà soát sâu):
+- Lọc câu hỏi/chủ đề hiển thị đúng sự kiện đồng bộ (`quiz` thay vì `quizzes`/`questions` không tồn tại); eventBus tra đúng thực thể theo khóa storage thay vì phát "*" gây tải lại toàn bộ; bảng dữ liệu không còn trang trắng khi lọc/xóa ở trang cuối; hàng đợi quà: xuất CSV theo đúng bộ lọc đang xem, duyệt/trao hàng loạt chỉ tính yêu cầu hợp lệ; cài đặt: kiểm tra thứ tự ngưỡng + chặn giá trị 0/trống trước khi lưu, đổi mật khẩu nay kiểm tra mật khẩu hiện tại và lưu thật, bỏ hàng thiết bị bịa; thêm lớp: cảnh báo trùng tên + năm học; lớp đã lưu trữ không còn trong các ô chọn; nhập Excel lỗi hiện thông báo thay vì bảng trống im lặng; tạo lớp/học sinh dùng UUID đầy đủ + hàm sinh ngẫu nhiên an toàn (crypto); cảnh báo API Key Gemini lưu trong trình duyệt.
+### Kiểm chứng:
+- `npx tsc --noEmit` = 0 lỗi; `npm run build` thành công; test logic tự động 27/27 đạt; 2 lỗi ở bộ test cũ (`test_prompt2_flow` treo, `test_prompt5_flow` thiếu mốc rương) đã xác nhận **có sẵn trên code gốc** (kiểm chứng bằng git stash), không phải hồi quy của đợt này.
+
 ## [2026-10-18] - Đợt 0: Nền kỹ thuật — Cổng kiểm tra TypeScript & Sửa sạch 18 lỗi type
 ### Đã thực hiện:
 - **Bổ sung cổng kiểm tra TypeScript vào lệnh build (`package.json`)**: đổi script `build` thành `tsc --noEmit && vite build`. Trước đây build chỉ chạy Vite nên lỗi kiểu dữ liệu lọt qua khâu kiểm tra.

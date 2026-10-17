@@ -149,7 +149,15 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   };
 
   const handleDeleteTopic = async (topicId: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa chủ đề này?')) {
+    const childCount =
+      videos.filter((v) => v.topicId === topicId).length +
+      theories.filter((th) => th.topicId === topicId).length +
+      quizzes.filter((q) => q.topicId === topicId).length;
+    const warn =
+      childCount > 0
+        ? `Chủ đề này đang có ${childCount} bài học/bài tập liên quan — chúng sẽ bị gỡ khỏi chủ đề khi xóa. `
+        : '';
+    if (window.confirm(`${warn}Bạn có chắc chắn muốn xóa chủ đề này?`)) {
       await contentService.deleteTopic(topicId, teacherId);
       if (selectedItem?.id === topicId) {
         setSelectedItem(null);
@@ -286,9 +294,17 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     }
   };
 
-  // Tạo liên kết quiz từ editor video hoặc lý thuyết
+  // Tạo liên kết quiz từ editor video hoặc lý thuyết:
+  // quiz thuộc CHỦ ĐỀ của bài đang sửa (không phải chủ đề đầu tiên) và
+  // id của nó được GHI NGƯỢC vào trường liên kết của bài gốc,
+  // nếu không luồng học của học sinh sẽ không bao giờ chạy tới quiz này.
   const handleCreateLinkedQuiz = async (kind: 'practice' | 'quick' | 'mastery') => {
-    const targetTopicId = topics[0]?.id || 'topic_tho_bon_nam';
+    const sourceVideo =
+      selectedItem?.type === 'video' ? videos.find((v) => v.id === selectedItem.id) : null;
+    const sourceTheory =
+      selectedItem?.type === 'theory' ? theories.find((th) => th.id === selectedItem.id) : null;
+    const source = sourceVideo || sourceTheory;
+    const targetTopicId = source?.topicId || topics[0]?.id || 'topic_tho_bon_nam';
     const newQuiz = await quizService.saveQuiz({
       title: `${kind === 'practice' ? 'Luyện tập' : kind === 'quick' ? 'Kiểm tra nhanh' : 'Mastery Check'} mới`,
       kind,
@@ -299,10 +315,28 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       status: 'draft',
       class_ids: ['all', 'class_7a2'],
     });
+
+    try {
+      if (sourceVideo) {
+        const field =
+          kind === 'practice'
+            ? 'practiceQuizId'
+            : kind === 'quick'
+              ? 'quickTestId'
+              : 'masteryCheckId';
+        await contentService.saveVideoLesson({ ...sourceVideo, [field]: newQuiz.id } as any);
+      } else if (sourceTheory) {
+        const field = kind === 'practice' ? 'practiceQuizId' : 'testQuizId';
+        await contentService.saveTheoryLesson({ ...sourceTheory, [field]: newQuiz.id } as any);
+      }
+    } catch (err) {
+      console.error('Lỗi ghi liên kết quiz vào bài gốc:', err);
+    }
+
     setSelectedItem({ type: 'quiz', id: newQuiz.id });
   };
 
-  // Mở modal tạo với AI (NotebookLM style)
+  // Mở modal tạo với AI (Mầm AI Studio style)
   const [aiInitialType, setAiInitialType] = useState<'video' | 'theory' | 'quiz'>('quiz');
   const handleOpenAiModal = (target: string) => {
     setIsCreateDropdownOpen(false);
@@ -490,6 +524,12 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
             {/* Menu Dropdown: Video, Lý thuyết, Bài luyện tập, Bài kiểm tra, BTVN */}
             {isCreateDropdownOpen && (
+              <>
+              {/* Lớp phủ trong suốt: bấm ra ngoài là đóng menu */}
+              <div
+                className="fixed inset-0 z-20"
+                onClick={() => setIsCreateDropdownOpen(false)}
+              />
               <div className="absolute right-0 mt-2 w-72 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl shadow-xl z-30 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
                 {/* 1. Video */}
                 <div className="p-2 rounded-xl hover:bg-[#FAF5EB] transition-colors">
@@ -616,6 +656,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
                   </div>
                 </div>
               </div>
+              </>
             )}
           </div>
         }

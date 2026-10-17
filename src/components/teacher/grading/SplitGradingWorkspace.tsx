@@ -75,6 +75,9 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
 
   // Khởi tạo điểm và nhận xét từ AI hoặc draft cũ hoặc đã chấm
   const [criterionScores, setCriterionScores] = useState<Record<string, number>>({});
+  // Chuỗi đang gõ trong ô điểm: giữ nguyên "7." / ô rỗng trong lúc gõ,
+  // tránh parseFloat ép ngược lại làm mất dấu thập phân (điểm chỉ chốt khi hợp lệ)
+  const [scoreTexts, setScoreTexts] = useState<Record<string, string>>({});
   const [criterionComments, setCriterionComments] = useState<Record<string, string>>({});
   const [generalFeedback, setGeneralFeedback] = useState<string>('');
   const [showSampleEssay, setShowSampleEssay] = useState<boolean>(false);
@@ -117,6 +120,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
     }
 
     setCriterionScores(scores);
+    setScoreTexts({});
     setCriterionComments(comments);
     setSavedToSamples(false);
   }, [submission, initialRubric]);
@@ -475,14 +479,25 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                           step="0.1"
                           min="0"
                           max={maxPoints}
-                          value={teacherScore}
+                          value={scoreTexts[criterion.name] ?? String(teacherScore)}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            setCriterionScores({
-                              ...criterionScores,
-                              [criterion.name]: Math.min(maxPoints, Math.max(0, val)),
-                            });
+                            const txt = e.target.value;
+                            setScoreTexts((prev) => ({ ...prev, [criterion.name]: txt }));
+                            const val = parseFloat(txt);
+                            if (!Number.isNaN(val)) {
+                              setCriterionScores({
+                                ...criterionScores,
+                                [criterion.name]: Math.min(maxPoints, Math.max(0, val)),
+                              });
+                            }
                           }}
+                          onBlur={() =>
+                            setScoreTexts((prev) => {
+                              const next = { ...prev };
+                              delete next[criterion.name];
+                              return next;
+                            })
+                          }
                           className="w-12 text-center font-black text-sm text-[#4F46E5] focus:outline-hidden"
                         />
                         <span className="text-xs font-semibold text-slate-400">/ {maxPoints}</span>

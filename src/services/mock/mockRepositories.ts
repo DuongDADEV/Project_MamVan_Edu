@@ -64,7 +64,7 @@ import {
   AIGradingConfig,
   SkillLevel,
 } from '../../types.ts';
-import { createInitialStateHs001 } from '../../data/mockData.ts';
+import { createInitialStateHs001, QUESTIONS_BANK } from '../../data/mockData.ts';
 import { generateDemoSeedData } from './demoSeedHistory.ts';
 
 export const STORAGE_SCHEMA_VERSION = 'mam_van_v4_real_data';
@@ -147,7 +147,24 @@ function readStorage<T>(key: string, defaultVal: T): T {
     } else {
       val = memoryStorage[key] || null;
     }
-    return val ? JSON.parse(val) : defaultVal;
+    if (!val) return defaultVal;
+    const parsed = JSON.parse(val);
+    // Chặn dữ liệu hỏng/lệch kiểu (vd mảng bị ghi đè thành object sau nâng cấp):
+    // trả mặc định thay vì để cả app sập ở các .map/.includes phía sau
+    if (Array.isArray(defaultVal) && !Array.isArray(parsed)) {
+      console.warn(`[Storage] Dữ liệu [${key}] không phải mảng như mong đợi, dùng mặc định.`);
+      return defaultVal;
+    }
+    if (
+      defaultVal !== null &&
+      typeof defaultVal === 'object' &&
+      !Array.isArray(defaultVal) &&
+      (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+    ) {
+      console.warn(`[Storage] Dữ liệu [${key}] không phải object như mong đợi, dùng mặc định.`);
+      return defaultVal;
+    }
+    return parsed;
   } catch (e) {
     console.error(`Lỗi đọc localStorage [${key}]:`, e);
     return defaultVal;
@@ -237,6 +254,14 @@ export function bootstrapStorage(): { reset: boolean } {
         STORAGE_KEYS.STATES,
         STORAGE_KEYS.ESSAYS,
         STORAGE_KEYS.SETTINGS,
+        // Dữ liệu chỉ sống ở local (Supabase ủy quyền mock): mất là mất hẳn khi đổi version
+        STORAGE_KEYS.RUBRICS,
+        STORAGE_KEYS.SAMPLES,
+        STORAGE_KEYS.AI_CONFIG,
+        STORAGE_KEYS.REWARDS,
+        STORAGE_KEYS.REQUESTS,
+        STORAGE_KEYS.AUDIT,
+        'mam_van_announcements',
       ]);
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -379,7 +404,7 @@ export class MockAuthRepository implements AuthRepository {
       }
       return {
         success: false,
-        error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: admin / 123456)',
+        error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
       };
     }
 
@@ -389,7 +414,7 @@ export class MockAuthRepository implements AuthRepository {
       if (!matched) {
         return {
           success: false,
-          error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+          error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác',
         };
       }
 
@@ -402,7 +427,7 @@ export class MockAuthRepository implements AuthRepository {
       }
 
       // Mật khẩu giáo viên (mặc định 123456 hoặc mật khẩu riêng)
-      const validPw = (matched.password && matched.password === pClean) || pClean === '123456';
+      const validPw = !!(matched.password && matched.password === pClean);
       if (validPw) {
         const session: AuthSession = {
           user: matched,
@@ -415,7 +440,7 @@ export class MockAuthRepository implements AuthRepository {
       }
       return {
         success: false,
-        error: 'Mật khẩu giáo viên chưa chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+        error: 'Mật khẩu giáo viên chưa chính xác',
       };
     }
 
@@ -543,7 +568,7 @@ export class MockClassRepository implements ClassRepository {
     const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
     const newClass: ClassItem = {
       ...data,
-      id: 'class_' + generateUUID().slice(0, 8),
+      id: 'class_' + generateUUID(),
       studentCount: 0,
       active7DaysCount: 0,
       created_at: new Date().toISOString(),
@@ -686,7 +711,15 @@ export class MockStudentRepository implements StudentRepository {
         // KHÔNG lưu mật khẩu thô ở production. Trong mock lưu phục vụ đăng nhập demo.
         password_hash: rawPassword,
         class_id: item.class_id,
-        student_code: item.student_code?.trim() || generateStudentCode(existingCodes),
+        // Mã HS nhập tay bị trùng (với HS đã có hoặc trong cùng lô) -> cấp mã mới duy nhất,
+        // không để hai học sinh mang cùng một mã
+        student_code:
+          item.student_code?.trim() &&
+          !existingCodes.some(
+            (c) => c?.toLowerCase() === item.student_code!.trim().toLowerCase()
+          )
+            ? item.student_code.trim()
+            : generateStudentCode(existingCodes),
         dob: item.dob,
         status: 'active',
         has_logged_in: false,
@@ -868,7 +901,7 @@ export class MockContentRepository implements ContentRepository {
       topics = topics.filter((t) => t.status === 'published');
     }
     if (classId && classId !== 'all') {
-      topics = topics.filter((t) => t.class_ids.includes('all') || t.class_ids.includes(classId));
+      topics = topics.filter((t) => (t.class_ids || []).includes('all') || (t.class_ids || []).includes(classId));
     }
     return topics;
   }
@@ -885,7 +918,7 @@ export class MockContentRepository implements ContentRepository {
       videos = videos.filter((v) => v.status === 'published');
     }
     if (classId && classId !== 'all') {
-      videos = videos.filter((v) => v.class_ids.includes('all') || v.class_ids.includes(classId));
+      videos = videos.filter((v) => (v.class_ids || []).includes('all') || (v.class_ids || []).includes(classId));
     }
     return videos;
   }
@@ -902,7 +935,7 @@ export class MockContentRepository implements ContentRepository {
       theories = theories.filter((t) => t.status === 'published');
     }
     if (classId && classId !== 'all') {
-      theories = theories.filter((t) => t.class_ids.includes('all') || t.class_ids.includes(classId));
+      theories = theories.filter((t) => (t.class_ids || []).includes('all') || (t.class_ids || []).includes(classId));
     }
     return theories;
   }
@@ -927,7 +960,7 @@ export class MockContentRepository implements ContentRepository {
       topics[idx] = saved;
     } else {
       saved = {
-        id: topic.id || 'topic_' + generateUUID().slice(0, 8),
+        id: topic.id || 'topic_' + generateUUID(),
         title: topic.title || '',
         shortDesc: topic.shortDesc || '',
         tag: topic.tag || '',
@@ -964,7 +997,7 @@ export class MockContentRepository implements ContentRepository {
     } else {
       saved = {
         ...video,
-        id: video.id || 'video_' + generateUUID().slice(0, 8),
+        id: video.id || 'video_' + generateUUID(),
         created_at: now,
         updated_at: now,
         status: video.status || 'draft',
@@ -995,7 +1028,7 @@ export class MockContentRepository implements ContentRepository {
     } else {
       saved = {
         ...theory,
-        id: theory.id || 'theory_' + generateUUID().slice(0, 8),
+        id: theory.id || 'theory_' + generateUUID(),
         created_at: now,
         updated_at: now,
         status: theory.status || 'draft',
@@ -1278,7 +1311,7 @@ export class MockContentRepository implements ContentRepository {
       if (!t) throw new Error('Không tìm thấy chủ đề');
       const cloned: TopicWithMeta = {
         ...t,
-        id: 'topic_' + generateUUID().slice(0, 8),
+        id: 'topic_' + generateUUID(),
         title: `${t.title} (Bản sao)`,
         status: 'draft',
         created_at: now,
@@ -1296,7 +1329,7 @@ export class MockContentRepository implements ContentRepository {
       if (!v) throw new Error('Không tìm thấy video');
       const cloned: VideoLessonWithMeta = {
         ...v,
-        id: 'video_' + generateUUID().slice(0, 8),
+        id: 'video_' + generateUUID(),
         title: `${v.title} (Bản sao)`,
         status: 'draft',
         created_at: now,
@@ -1323,7 +1356,7 @@ export class MockContentRepository implements ContentRepository {
       if (!th) throw new Error('Không tìm thấy lý thuyết');
       const cloned: TheoryLessonWithMeta = {
         ...th,
-        id: 'theory_' + generateUUID().slice(0, 8),
+        id: 'theory_' + generateUUID(),
         title: `${th.title} (Bản sao)`,
         status: 'draft',
         created_at: now,
@@ -1352,7 +1385,7 @@ export class MockQuizRepository implements QuizRepository {
       quizzes = quizzes.filter((q) => q.status === 'published');
     }
     if (classId && classId !== 'all') {
-      quizzes = quizzes.filter((q) => q.class_ids.includes('all') || q.class_ids.includes(classId));
+      quizzes = quizzes.filter((q) => (q.class_ids || []).includes('all') || (q.class_ids || []).includes(classId));
     }
     return quizzes;
   }
@@ -1364,7 +1397,13 @@ export class MockQuizRepository implements QuizRepository {
 
   async getQuestions(topicId?: string): Promise<Record<string, QuestionWithMeta>> {
     const questions = readStorage<Record<string, QuestionWithMeta>>(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    if (!topicId) return questions;
+    if (!topicId) {
+      const alive: Record<string, QuestionWithMeta> = {};
+      for (const [k, q] of Object.entries(questions)) {
+        if (!q.deleted_at) alive[k] = q;
+      }
+      return alive;
+    }
     const filtered: Record<string, QuestionWithMeta> = {};
     for (const [k, q] of Object.entries(questions)) {
       if (q.topicId === topicId && !q.deleted_at) {
@@ -1376,7 +1415,8 @@ export class MockQuizRepository implements QuizRepository {
 
   async getQuestionById(id: string): Promise<QuestionWithMeta | null> {
     const questions = readStorage<Record<string, QuestionWithMeta>>(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    return questions[id] || null;
+    const q = questions[id];
+    return q && !q.deleted_at ? q : null;
   }
 
   async saveQuiz(quiz: Partial<QuizWithMeta>): Promise<QuizWithMeta> {
@@ -1395,7 +1435,7 @@ export class MockQuizRepository implements QuizRepository {
     } else {
       saved = {
         ...quiz,
-        id: quiz.id || 'quiz_' + generateUUID().slice(0, 8),
+        id: quiz.id || 'quiz_' + generateUUID(),
         created_at: now,
         updated_at: now,
         status: quiz.status || 'draft',
@@ -1412,7 +1452,7 @@ export class MockQuizRepository implements QuizRepository {
 
   async saveQuestion(question: Partial<QuestionWithMeta>): Promise<QuestionWithMeta> {
     const questions = readStorage<Record<string, QuestionWithMeta>>(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    const qId = question.id || 'q_' + generateUUID().slice(0, 8);
+    const qId = question.id || 'q_' + generateUUID();
     const now = new Date().toISOString();
     const saved: QuestionWithMeta = {
       ...(questions[qId] || {}),
@@ -1489,7 +1529,7 @@ export class MockQuizRepository implements QuizRepository {
         return true;
       }
       // Hoặc trong questionResults
-      const match = studentState.questionResults?.some((qr) => quiz.questionIds.includes(qr.questionId));
+      const match = studentState.questionResults?.some((qr) => (quiz.questionIds || []).includes(qr.questionId));
       if (match) return true;
     }
     return false;
@@ -1609,7 +1649,7 @@ export class MockQuizRepository implements QuizRepository {
     for (const qId of target.questionIds) {
       const originalQ = questions[qId];
       if (originalQ) {
-        const newQId = 'q_' + generateUUID().slice(0, 8);
+        const newQId = 'q_' + generateUUID();
         questions[newQId] = {
           ...originalQ,
           id: newQId,
@@ -1624,7 +1664,7 @@ export class MockQuizRepository implements QuizRepository {
 
     const clonedQuiz: QuizWithMeta = {
       ...target,
-      id: 'quiz_' + generateUUID().slice(0, 8),
+      id: 'quiz_' + generateUUID(),
       title: `${target.title} (Bản sao)`,
       questionIds: clonedQuestionIds,
       status: 'draft',
@@ -1692,8 +1732,12 @@ export class MockAttemptRepository implements AttemptRepository {
       },
       cls ? `Lớp ${cls.name}` : 'Lớp 7A2'
     );
-    states[studentId] = fresh;
-    writeStorage(STORAGE_KEYS.STATES, states);
+    // Chỉ lưu state cho học sinh CÓ tài khoản thật; id lạ (đã xóa/gõ sai) mà
+    // cũng lưu sẽ sinh "học sinh ma" làm phồng số liệu của giáo viên
+    if (acc) {
+      states[studentId] = fresh;
+      writeStorage(STORAGE_KEYS.STATES, states);
+    }
     return fresh;
   }
 
@@ -1853,7 +1897,7 @@ export class MockEssayRepository implements EssayRepository {
 
     const newEssay: EssaySubmission = {
       ...submission,
-      id: 'sub_' + generateUUID().slice(0, 8),
+      id: 'sub_' + generateUUID(),
       submittedAt: Date.now(),
       status: 'PENDING_TEACHER',
       studentName: submission.studentName || student?.name || 'Học sinh',
@@ -1981,18 +2025,28 @@ export class MockEssayRepository implements EssayRepository {
         st.essaySubmissions[eIdx] = gradedEssay;
         targetStudentId = sId;
 
-        // Cập nhật Mastery (Phân tích / Vận dụng) cho học sinh lúc này
+        // Cập nhật Mastery cho học sinh lúc này.
+        // Chủ đề phải là chủ đề THẬT của bài tập chứa câu hỏi này (qua quiz chứa nó,
+        // hoặc ngân hàng câu hỏi) — trước đây mọi bài đều bị ghi vào chủ đề thơ
         const masteryLevel: SkillLevel = original.skillLevel || 'VAN_DUNG';
         const isPassed = grading.totalScore >= 5;
+        const quizzes = readStorage<QuizWithMeta[]>(STORAGE_KEYS.QUIZZES, []);
+        const essayTopicId =
+          quizzes.find((q) => q.id === original.quizId)?.topicId ||
+          (QUESTIONS_BANK as any)[original.questionId || '']?.topicId;
         if (!st.questionResults) st.questionResults = [];
-        st.questionResults.push({
-          questionId: original.questionId || id,
-          level: masteryLevel,
-          isCorrect: isPassed,
-          scoreRatio: grading.finalRatio,
-          timestamp: Date.now(),
-          topicId: 'topic_tho_bon_nam',
-        });
+        if (essayTopicId) {
+          st.questionResults.push({
+            questionId: original.questionId || id,
+            level: masteryLevel,
+            isCorrect: isPassed,
+            scoreRatio: grading.finalRatio,
+            timestamp: Date.now(),
+            topicId: essayTopicId,
+          });
+        } else {
+          console.warn('[Essay] Không xác định được chủ đề của bài viết, bỏ qua ghi mastery.');
+        }
 
         await attemptRepo.saveStudentState(sId, st);
         break;
@@ -2067,7 +2121,7 @@ export class MockEssayRepository implements EssayRepository {
 
   async saveRubricTemplate(template: Partial<RubricTemplate>): Promise<RubricTemplate> {
     const list = await this.getRubricTemplates();
-    const id = template.id || 'rubric_' + generateUUID().slice(0, 8);
+    const id = template.id || 'rubric_' + generateUUID();
     const saved: RubricTemplate = {
       id,
       title: template.title || 'Rubric mới',
@@ -2098,7 +2152,7 @@ export class MockEssayRepository implements EssayRepository {
 
   async saveGradedSample(sample: Partial<GradedSampleEssay>): Promise<GradedSampleEssay> {
     const list = await this.getGradedSamples();
-    const id = sample.id || 'sample_' + generateUUID().slice(0, 8);
+    const id = sample.id || 'sample_' + generateUUID();
     const saved: GradedSampleEssay = {
       id,
       title: sample.title || 'Bài mẫu mới',
@@ -2236,7 +2290,7 @@ export class MockRewardRepository implements RewardRepository {
       const xpReq = reward.requiredXp ?? 300;
       const tierKey = reward.tierKey || (xpReq <= 300 ? 'HAT' : xpReq <= 500 ? 'LA' : xpReq <= 700 ? 'HOA' : 'VANG');
       saved = {
-        id: 'reward_' + generateUUID().slice(0, 8),
+        id: 'reward_' + generateUUID(),
         tierKey,
         requiredXp: xpReq,
         xpCost: xpReq,
@@ -2344,7 +2398,7 @@ export class MockRewardRepository implements RewardRepository {
 
   async createRequest(studentId: string, rewardId: string): Promise<RewardRequest> {
     const newReq: RewardRequest = {
-      id: 'req_' + generateUUID().slice(0, 8),
+      id: 'req_' + generateUUID(),
       rewardId,
       requestedAt: Date.now(),
       status: 'PENDING_APPROVAL',
@@ -2372,6 +2426,20 @@ export class MockRewardRepository implements RewardRepository {
       const idx = st.rewardRequests?.findIndex((r) => r.id === requestId);
       if (idx !== undefined && idx >= 0) {
         const cur = st.rewardRequests[idx];
+        // Chặn chuyển trạng thái ngược/không hợp lệ (vd PENDING -> GIVEN bỏ qua duyệt,
+        // OPENED/REJECTED là trạng thái cuối không được hồi sinh)
+        const ALLOWED: Record<string, string[]> = {
+          PENDING_APPROVAL: ['APPROVED', 'REJECTED'],
+          APPROVED: ['GIVEN', 'REJECTED'],
+          GIVEN: ['OPENED'],
+          OPENED: [],
+          REJECTED: [],
+        };
+        if (cur.status !== status && !(ALLOWED[cur.status] || []).includes(status)) {
+          throw new Error(
+            `Không thể chuyển yêu cầu quà từ "${cur.status}" sang "${status}"`
+          );
+        }
         const now = Date.now();
         updatedReq = {
           ...cur,
@@ -2422,8 +2490,14 @@ export class MockRewardRepository implements RewardRepository {
     reason?: string,
     teacherActorId?: string
   ): Promise<void> {
+    // Xử lý từng yêu cầu độc lập: yêu cầu không hợp lệ bị bỏ qua,
+    // các yêu cầu còn lại vẫn được xử lý (không hủy cả lô vì 1 lỗi)
     for (const id of requestIds) {
-      await this.updateRequestStatus(id, status, reason, teacherActorId);
+      try {
+        await this.updateRequestStatus(id, status, reason, teacherActorId);
+      } catch (err) {
+        console.error(`Bỏ qua yêu cầu ${id} khi cập nhật hàng loạt:`, err);
+      }
     }
   }
 }

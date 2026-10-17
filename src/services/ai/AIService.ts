@@ -5,7 +5,7 @@
  * - Sinh lý thuyết chi tiết theo khối
  * - Sinh bộ câu hỏi theo 4 mức năng lực chuẩn GDPT 2018
  * - Gợi ý chấm bài viết đoạn văn theo Rubric
- * - Hỏi đáp / Trò chuyện với tài liệu nguồn (NotebookLM style)
+ * - Hỏi đáp / Trò chuyện với tài liệu nguồn (Mầm AI Studio style)
  */
 
 import { Question, KeyPoint, TheoryBlock, SkillLevel, QuestionType, Difficulty } from '../../types.ts';

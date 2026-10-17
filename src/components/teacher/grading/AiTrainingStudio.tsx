@@ -896,24 +896,43 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
               ))}
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-              <button
-                onClick={() => setIsRubricModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={async () => {
-                  await onSaveRubricTemplate(editingRubric);
-                  setIsRubricModalOpen(false);
-                }}
-                disabled={!editingRubric.title.trim()}
-                className="px-4 py-2 bg-[#E2704A] text-white text-xs font-bold rounded-xl"
-              >
-                Lưu Rubric
-              </button>
-            </div>
+            {(() => {
+              const totalWeight = editingRubric.criteria.reduce(
+                (acc, c) => acc + (Number(c.weight) || 0),
+                0
+              );
+              const weightOk = totalWeight === 100;
+              return (
+                <>
+                  <p
+                    className={`text-xs font-bold text-right ${
+                      weightOk ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
+                  >
+                    Tổng trọng số: {totalWeight}%{' '}
+                    {weightOk ? '✓' : '(phải đúng 100% mới lưu được — vì điểm từng tiêu chí được tính theo tỉ lệ này)'}
+                  </p>
+                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <button
+                      onClick={() => setIsRubricModalOpen(false)}
+                      className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await onSaveRubricTemplate(editingRubric);
+                        setIsRubricModalOpen(false);
+                      }}
+                      disabled={!editingRubric.title.trim() || !weightOk}
+                      className="px-4 py-2 bg-[#E2704A] text-white text-xs font-bold rounded-xl disabled:opacity-50"
+                    >
+                      Lưu Rubric
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

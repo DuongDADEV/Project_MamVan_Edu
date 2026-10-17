@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StudentState, Topic } from '../types.ts';
 import { TOPICS, VIDEOS, REWARDS_CATALOG, QUIZZES } from '../data/mockData.ts';
 import { getCurrentDailyXpCap } from '../logic/xpEngine.ts';
+import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
@@ -66,7 +67,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   );
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(state.profile.grade || undefined, true),
-    ['quizzes', 'content']
+    ['quiz', 'content']
   );
 
   // Xác định bài học tiếp tục / bắt đầu
@@ -111,7 +112,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       ? 'Chào buổi chiều'
       : 'Chào buổi tối';
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalTodayStr();
   const hasCheckedInToday = state.lastAttendanceDate === todayStr;
 
   const activeMinutes = Math.floor(state.activeSecondsToday / 60);
@@ -132,8 +133,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     mascotMood = 'proud';
   }
 
-  // Lấy dữ liệu quà gần đạt nhất
-  const closestReward = REWARDS_CATALOG[0];
+  // Lấy dữ liệu quà gần đạt nhất: mốc đầu tiên chưa đạt, nếu đạt hết thì lấy mốc cao nhất
+  const closestReward =
+    REWARDS_CATALOG.find((r) => (r.requiredXp ?? r.xpCost) > state.xpWeek) ||
+    REWARDS_CATALOG[REWARDS_CATALOG.length - 1];
   const rewardXpPercent = Math.min(
     100,
     Math.round((state.xpWeek / Math.max(1, closestReward.xpCost)) * 100)
@@ -480,11 +483,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <>
                   Bước hiện tại:{' '}
                   <strong className="text-[#4F46E5]">
-                    {state.currentProgress?.stepIndex === 3
-                      ? 'Luyện tập sau video'
-                      : state.currentProgress?.stepIndex === 4
-                      ? 'Kiểm tra 1 (7 phút)'
-                      : 'Xem bài giảng & Tóm tắt'}
+                    {state.currentProgress?.type === 'theory'
+                      ? `Đọc lý thuyết (bước ${(state.currentProgress?.stepIndex ?? 0) + 1})`
+                      : `Học video (bước ${(state.currentProgress?.stepIndex ?? 0) + 1})`}
                   </strong>
                 </>
               ) : activeLesson ? (
@@ -582,7 +583,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <GrowthTree
             compact
-            completedStepsCount={state.completedSteps.length}
+            completedStepsCount={countLearningSteps(state.completedSteps)}
             topicLeaves={topicLeavesData}
             isWatering={wateringTrigger}
             onWaterComplete={() => setWateringTrigger(false)}
@@ -640,7 +641,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 className="w-full py-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm border border-emerald-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
               >
                 <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span>Xem lại / Làm lại bài (+XP)</span>
+                <span>Xem lại / Làm lại bài</span>
               </button>
             ) : (
               <button

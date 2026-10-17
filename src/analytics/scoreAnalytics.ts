@@ -247,10 +247,24 @@ export function computeClassComparison(
       classId: c.id,
       className: c.name,
       studentCount: classStudents.length,
-      averageScore: scoreCount === 0 ? 7.5 : Math.round((totalScore / scoreCount) * 10) / 10,
-      passRate: scoreCount === 0 ? 82 : Math.round((passCount / scoreCount) * 100),
+      averageScore: scoreCount === 0 ? 0 : Math.round((totalScore / scoreCount) * 10) / 10,
+      passRate: scoreCount === 0 ? 0 : Math.round((passCount / scoreCount) * 100),
       activeMinutesPerWeek: classStudents.length === 0 ? 0 : Math.round(totalMinutes / classStudents.length),
-      solidMasteryRate: c.id === 'class_7a2' ? 68 : 52,
+      solidMasteryRate: (() => {
+        // Tỉ lệ học sinh của lớp đạt mức vững (điểm TB các câu đã làm >= 8/10), tính từ dữ liệu thật
+        let solid = 0;
+        let withData = 0;
+        classStudents.forEach((stu: any) => {
+          const st: any = (allStates as any)[stu.id];
+          const results = st?.questionResults || [];
+          if (results.length > 0) {
+            withData++;
+            const avg = results.reduce((sum: number, r: any) => sum + (r.scoreRatio || 0) * 10, 0) / results.length;
+            if (avg >= 8) solid++;
+          }
+        });
+        return withData === 0 ? 0 : Math.round((solid / withData) * 100);
+      })(),
     };
   });
 }
@@ -279,7 +293,7 @@ export function computeStudentScoreRankings(
       });
     }
 
-    const averageScore = attemptCount === 0 ? 7.0 : Math.round((totalScore / attemptCount) * 10) / 10;
+    const averageScore = attemptCount === 0 ? 0 : Math.round((totalScore / attemptCount) * 10) / 10;
     const masteryStatus = averageScore >= 8.0 ? 'SOLID' : averageScore >= 5.5 ? 'PROGRESSING' : 'NEEDS_REVIEW';
     const statusLabel = averageScore >= 8.0 ? 'Vững' : averageScore >= 5.5 ? 'Đang tiến bộ' : 'Cần ôn lại';
     const activeMinutesTotal = Math.round(((state?.activeSecondsToday || 0) + (state?.attendanceHistory?.length || 0) * 1800) / 60);

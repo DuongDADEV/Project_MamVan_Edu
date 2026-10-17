@@ -235,27 +235,49 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   // Chuyển lớp hàng loạt hoặc 1 em
   const handleConfirmChangeClass = async () => {
     if (changeClassModal.studentIds.length === 0 || !changeClassModal.targetClassId) return;
-    for (const sId of changeClassModal.studentIds) {
-      await studentService.changeClass(sId, changeClassModal.targetClassId, teacherId);
+    try {
+      for (const sId of changeClassModal.studentIds) {
+        await studentService.changeClass(sId, changeClassModal.targetClassId, teacherId);
+      }
+      setChangeClassModal({ isOpen: false, studentIds: [], targetClassId: '' });
+      setSelectedStudentIds([]);
+      onRefreshData();
+    } catch (err: any) {
+      alert('Không chuyển lớp được: ' + (err?.message || 'đã xảy ra lỗi, vui lòng thử lại'));
     }
-    setChangeClassModal({ isOpen: false, studentIds: [], targetClassId: '' });
-    setSelectedStudentIds([]);
-    onRefreshData();
   };
 
   // Khóa hàng loạt
   const handleBulkToggleLock = async (isLock: boolean) => {
-    for (const sId of selectedStudentIds) {
-      await studentService.toggleLock(sId, isLock, teacherId);
+    try {
+      for (const sId of selectedStudentIds) {
+        await studentService.toggleLock(sId, isLock, teacherId);
+      }
+      setSelectedStudentIds([]);
+      onRefreshData();
+    } catch (err: any) {
+      alert('Không cập nhật được trạng thái khóa: ' + (err?.message || 'đã xảy ra lỗi'));
     }
-    setSelectedStudentIds([]);
-    onRefreshData();
   };
 
   // Tạo lớp mới
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
+    const dup = classes.find(
+      (c) =>
+        c.name.trim().toLowerCase() === newClassName.trim().toLowerCase() &&
+        c.schoolYear === (newClassYear.trim() || '2026-2027') &&
+        c.status !== 'archived'
+    );
+    if (
+      dup &&
+      !window.confirm(
+        `Đã có lớp "${dup.name}" (${dup.schoolYear}) đang hoạt động. Vẫn tạo thêm một lớp trùng tên?`
+      )
+    ) {
+      return;
+    }
     await classService.createClass({
       name: newClassName.trim(),
       grade: 'Lớp 7',
@@ -630,7 +652,9 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                       setChangeClassModal({
                         isOpen: true,
                         studentIds: ids,
-                        targetClassId: classes.find((c) => c.id !== detailClass.id)?.id || '',
+                        targetClassId:
+                          classes.find((c) => c.id !== detailClass.id && c.status !== 'archived')
+                            ?.id || '',
                       })
                     }
                     className="px-2.5 py-1 rounded-lg border border-[#E6DCC8] bg-white hover:bg-[#FAF5EB] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1"
@@ -871,7 +895,11 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
           setChangeClassModal({
             isOpen: true,
             studentIds: [id],
-            targetClassId: drawerStudent?.class_id || classes[0]?.id || '',
+            // Mặc định chọn lớp KHÁC lớp hiện tại của học sinh (và chưa lưu trữ)
+            targetClassId:
+              classes.find(
+                (c) => c.id !== drawerStudent?.class_id && c.status !== 'archived'
+              )?.id || '',
           });
         }}
         onEditStudent={(s) => {
@@ -996,11 +1024,13 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                   }
                   className="w-full px-3 py-2.5 rounded-xl border border-[#E6DCC8] bg-white text-xs text-[#2F3E6B] outline-none"
                 >
-                  {classes.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      Lớp {cls.name} ({cls.schoolYear})
-                    </option>
-                  ))}
+                  {classes
+                    .filter((cls) => cls.status !== 'archived')
+                    .map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        Lớp {cls.name} ({cls.schoolYear})
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -1169,11 +1199,13 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                   }
                   className="w-full px-3 py-2 rounded-xl border border-[#E6DCC8] bg-white text-xs text-[#2F3E6B] outline-none"
                 >
-                  {classes.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      Lớp {cls.name} ({cls.schoolYear})
-                    </option>
-                  ))}
+                  {classes
+                    .filter((cls) => cls.status !== 'archived')
+                    .map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        Lớp {cls.name} ({cls.schoolYear})
+                      </option>
+                    ))}
                 </select>
               </div>
 

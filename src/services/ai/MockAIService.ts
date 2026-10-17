@@ -524,7 +524,7 @@ export class MockAIService implements AIService {
   }
 
   /**
-   * Hỏi đáp với tài liệu nguồn (NotebookLM chat)
+   * Hỏi đáp với tài liệu nguồn (Mầm AI Studio chat)
    */
   async chatWithSources(
     sources: AISource[],

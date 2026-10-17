@@ -91,7 +91,7 @@ export const RewardTrack: React.FC<RewardTrackProps> = ({
           {/* CỘT MỐC HÌNH MẦM CÂY NHỎ CHỈ VỊ TRÍ HIỆN TẠI CỦA HỌC SINH */}
           <div
             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 transition-all duration-700 pointer-events-none"
-            style={{ left: `${currentPercent}%` }}
+            style={{ left: `${Math.min(97, Math.max(3, currentPercent))}%` }}
           >
             {/* Nhãn mầm cây nổi phía trên */}
             <div className="absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap animate-[bounce_2.5s_ease-in-out_infinite] motion-reduce:animate-none">
@@ -110,11 +110,13 @@ export const RewardTrack: React.FC<RewardTrackProps> = ({
           </div>
         </div>
 
-        {/* CÁC ĐIỂM DỪNG RƯƠNG TRÊN ĐƯỜNG RAY */}
-        <div className="relative w-full mt-3">
+        {/* CÁC ĐIỂM DỪNG RƯƠNG TRÊN ĐƯỜNG RAY (chiều cao cố định: các điểm dừng
+            đều position absolute nên không đặt chiều cao là khung sập về 0) */}
+        <div className="relative w-full mt-3 h-24">
           {sortedRewards.map((reward) => {
             const tierConfig = getChestTierConfig(reward.requiredXp, reward.tierKey);
-            const posPercent = (reward.requiredXp / maxXp) * 100;
+            // Kẹp vị trí hiển thị để rương ở mốc 0%/100% không tràn ra ngoài khung
+            const posPercent = Math.min(96, Math.max(4, (reward.requiredXp / maxXp) * 100));
             const isReached = currentXp >= reward.requiredXp;
 
             return (

@@ -3,6 +3,7 @@ import { StudentState, Topic } from '../types.ts';
 import { BADGES_CATALOG, TOPICS } from '../data/mockData.ts';
 import { TREE_STAGES_CONFIG } from '../config.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
+import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import { GrowthTree, TopicLeafData } from '../components/GrowthTree.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { Award, Sprout, BarChart3, ArrowRight, CheckCircle2, Lock, Sparkles, Layers, Droplets } from 'lucide-react';
@@ -20,12 +21,12 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
   const [isWatering, setIsWatering] = useState(false);
   const [wateringFeedback, setWateringFeedback] = useState<string | null>(null);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalTodayStr();
   const [hasWateredThisSession, setHasWateredThisSession] = useState<boolean>(() => {
     try {
       const studentKey = state.profile?.id || 'hs001';
       return (
-        sessionStorage.getItem('mam_van_watered_session_' + studentKey) === 'true' ||
+        sessionStorage.getItem('mam_van_watered_session_' + studentKey) === todayStr ||
         state.lastAttendanceDate === todayStr
       );
     } catch {
@@ -41,7 +42,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
     setHasWateredThisSession(true);
     try {
       const studentKey = state.profile?.id || 'hs001';
-      sessionStorage.setItem('mam_van_watered_session_' + studentKey, 'true');
+      sessionStorage.setItem('mam_van_watered_session_' + studentKey, todayStr);
     } catch {}
 
     if (onCheckIn) {
@@ -207,14 +208,14 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
               <div className="text-right">
                 <span className="text-xs text-slate-500 font-medium block">Đã tích lũy:</span>
                 <span className="font-extrabold text-[#4F46E5] font-mono text-sm sm:text-base">
-                  {state.completedSteps.length} hoạt động học
+                  {countLearningSteps(state.completedSteps)} hoạt động học
                 </span>
               </div>
             </div>
 
             {/* VẼ CÂY LỚN BẰNG SVG */}
             <GrowthTree
-              completedStepsCount={state.completedSteps.length}
+              completedStepsCount={countLearningSteps(state.completedSteps)}
               topicLeaves={topicLeavesData}
               isWatering={isWatering}
               onWaterComplete={() => setIsWatering(false)}
@@ -331,7 +332,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {TREE_STAGES_CONFIG.map((stage, idx) => {
-                const isReached = state.completedSteps.length >= stage.minSteps;
+                const isReached = countLearningSteps(state.completedSteps) >= stage.minSteps;
 
                 return (
                   <div

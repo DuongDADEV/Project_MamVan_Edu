@@ -16,12 +16,32 @@ export function removeVietnameseTones(str: string): string {
  * Sinh username theo quy tắc: tên + chữ đầu họ đệm + 2 số
  * Nguyễn Minh Anh -> "anh" + "n" + "m" + "27" = "anhnm27"
  */
+// Số ngẫu nhiên an toàn (crypto) cho mật khẩu/UUID — Math.random đoán được
+function secureRandomInt(maxExclusive: number): number {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const arr = new Uint32Array(1);
+      crypto.getRandomValues(arr);
+      return arr[0] % maxExclusive;
+    }
+  } catch {
+    /* rơi xuống fallback */
+  }
+  return Math.floor(Math.random() * maxExclusive);
+}
+
 export function generateUsername(fullName: string, existingUsernames: string[] = []): string {
   const cleanName = removeVietnameseTones(fullName.trim().toLowerCase());
   const parts = cleanName.split(/\s+/).filter(Boolean);
 
   if (parts.length === 0) {
-    return 'hocsinh' + Math.floor(10 + Math.random() * 90);
+    // Cũng phải qua vòng kiểm tra trùng bên dưới như tên thường
+    const taken = new Set(existingUsernames.map((u) => u.toLowerCase()));
+    for (let num = 10; num <= 9999; num++) {
+      const candidate = `hocsinh${num}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+    return `hocsinh${Date.now()}`;
   }
 
   const firstName = parts[parts.length - 1]; // Tên chính (vd: Anh -> anh)
@@ -71,7 +91,7 @@ export function generateFriendlyPassword(length = 8): string {
   const chars = '23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
   let password = '';
   for (let i = 0; i < length; i++) {
-    const idx = Math.floor(Math.random() * chars.length);
+    const idx = secureRandomInt(chars.length);
     password += chars.charAt(idx);
   }
   return password;
@@ -81,8 +101,15 @@ export function generateFriendlyPassword(length = 8): string {
  * Tạo UUID đơn giản cho mock
  */
 export function generateUUID(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* rơi xuống fallback */
+  }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0;
+    const r = secureRandomInt(16);
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });

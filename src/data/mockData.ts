@@ -9,6 +9,7 @@ import {
   Topic,
   VideoLesson,
 } from '../types.ts';
+import { getLocalTodayStr } from '../logic/studentStateUtils.ts';
 
 // Danh sách 4 chủ đề Ngữ văn 7
 export const TOPICS: Topic[] = [
@@ -913,7 +914,7 @@ export const DEMO_STUDENTS: StudentProfile[] = [
  * Trạng thái ban đầu cho học sinh hs001 (đã có chút tiến độ để demo)
  */
 export function createInitialStateHs001(): StudentState {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalTodayStr();
 
   return {
     profile: DEMO_STUDENTS[0],

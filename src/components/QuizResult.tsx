@@ -7,6 +7,7 @@ import { CheckCircle2, XCircle, Award, ArrowRight, RotateCcw, BookOpen, Sparkles
 
 interface QuizResultProps {
   quiz: Quiz;
+  questions?: Question[];
   results: QuestionResult[];
   essaySubmissions: EssaySubmission[];
   earnedScore: number;
@@ -19,6 +20,7 @@ interface QuizResultProps {
 
 export const QuizResult: React.FC<QuizResultProps> = ({
   quiz,
+  questions,
   results,
   essaySubmissions,
   earnedScore,
@@ -175,7 +177,9 @@ export const QuizResult: React.FC<QuizResultProps> = ({
           </h3>
 
           {quiz.questionIds.map((qId, idx) => {
-            const q = QUESTIONS_BANK[qId];
+            // Ưu tiên danh sách câu hỏi THẬT đã dùng khi làm bài (câu GV tạo/AI sinh
+            // không có trong ngân hàng tĩnh) — tránh câu hỏi biến mất khỏi màn xem lại
+            const q = (questions || []).find((qq) => qq.id === qId) || QUESTIONS_BANK[qId];
             if (!q) return null;
             const res = results.find((r) => r.questionId === qId);
             const isEssay = q.type === 'essay';

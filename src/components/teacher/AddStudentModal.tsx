@@ -55,8 +55,10 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- STATE TAB NHẬP TAY ---
+  // Lớp đã lưu trữ không nhận thêm học sinh
+  const selectableClasses = classes.filter((c) => c.status !== 'archived');
   const activeClassId =
-    defaultClassId !== 'all' ? defaultClassId : classes[0]?.id || 'class_7a2';
+    defaultClassId !== 'all' ? defaultClassId : selectableClasses[0]?.id || 'class_7a2';
 
   const [manualRows, setManualRows] = useState<ManualRow[]>([
     {
@@ -141,13 +143,18 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     setUploadedFile(file);
     setIsParsing(true);
     try {
-      const classNames = classes.map((c) => c.name);
-      const defaultClsName = classes.find((c) => c.id === activeClassId)?.name || '7A2';
+      const classNames = selectableClasses.map((c) => c.name);
+      const defaultClsName = selectableClasses.find((c) => c.id === activeClassId)?.name || '7A2';
       const result = await parseUploadedExcel(file, existingStudents, classNames, defaultClsName);
       setExcelRows(result.rows);
       setExcelSummary({ validCount: result.validCount, errorCount: result.errorCount });
-    } catch (e) {
+    } catch (e: any) {
       console.error('Lỗi khi đọc file Excel:', e);
+      setExcelRows([]);
+      setExcelSummary(null);
+      alert(
+        'Không đọc được file Excel này (file hỏng hoặc sai định dạng). Vui lòng kiểm tra lại file và thử lại!'
+      );
     } finally {
       setIsParsing(false);
     }
@@ -168,11 +175,23 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     const updated = [...excelRows];
     updated[index] = { ...updated[index], [field]: val };
 
-    // Tái kiểm tra dòng đó
+    // Tái kiểm tra dòng đó — gồm cả trùng Mã HS như lúc đọc file
+    // (trước đây sửa ô xong là mất cảnh báo trùng mã)
     const row = updated[index];
     const errors: string[] = [];
     if (!row.name.trim()) errors.push('Thiếu họ và tên');
+    else if (row.name.trim().length < 2) errors.push('Họ và tên quá ngắn');
     if (!row.className.trim()) errors.push('Thiếu lớp học');
+    const code = row.studentCode?.trim().toLowerCase();
+    if (code) {
+      const dupExisting = existingStudents.some(
+        (st) => st.student_code?.trim().toLowerCase() === code
+      );
+      const dupInBatch = updated.some(
+        (r, i) => i !== index && r.studentCode?.trim().toLowerCase() === code
+      );
+      if (dupExisting || dupInBatch) errors.push('Mã HS bị trùng lặp');
+    }
     row.errors = errors;
     row.isValid = errors.length === 0;
 
@@ -373,7 +392,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                             }
                             className="w-full px-2 py-1.5 rounded-lg border border-[#E6DCC8] bg-white focus:border-[#2F3E6B] outline-none text-xs text-[#2F3E6B]"
                           >
-                            {classes.map((c) => (
+                            {selectableClasses.map((c) => (
                               <option key={c.id} value={c.id}>
                                 Lớp {c.name}
                               </option>

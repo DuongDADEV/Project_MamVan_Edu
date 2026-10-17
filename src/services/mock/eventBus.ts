@@ -32,10 +32,31 @@ class SyncEventBus {
     }
 
     if (typeof window !== 'undefined') {
+      // Ánh xạ khóa localStorage -> entity tương ứng để dispatch đúng thực thể.
+      // Trước đây mọi lần ghi đều phát entity '*' khiến các tab khác nạp lại
+      // TOÀN BỘ dữ liệu hai lần (một qua BroadcastChannel, một qua storage).
+      const KEY_TO_ENTITY: Record<string, string> = {
+        mam_van_classes: 'class',
+        mam_van_students: 'student',
+        mam_van_teachers: 'teacher',
+        mam_van_topics: 'content',
+        mam_van_videos: 'content',
+        mam_van_theories: 'content',
+        mam_van_quizzes: 'quiz',
+        mam_van_questions: 'quiz',
+        mam_van_rewards: 'reward',
+        mam_van_reward_requests: 'reward',
+        mam_van_student_states: 'state',
+        mam_van_essay_submissions: 'essay',
+        mam_van_auth_session: 'auth',
+        mam_van_system_settings: 'settings',
+        mam_van_audit_logs: 'audit',
+      };
       window.addEventListener('storage', (e) => {
         if (e.key && e.key.startsWith('mam_van_')) {
           // Sự kiện storage của trình duyệt chỉ đến từ tab khác
-          this.dispatchLocal('*', { key: e.key }, 'browser-storage-event');
+          const entity = KEY_TO_ENTITY[e.key] || '*';
+          this.dispatchLocal(entity, { key: e.key }, 'browser-storage-event');
         }
       });
     }

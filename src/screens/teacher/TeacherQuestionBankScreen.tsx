@@ -89,7 +89,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   const videos = rawVideos ?? [];
   const theories = rawTheories ?? [];
 
-  // 2. TABS ĐIỀU HƯỚNG CHÍNH: 'bank' (Kho câu hỏi) HOẶC 'ai_studio' (Xưởng AI NotebookLM)
+  // 2. TABS ĐIỀU HƯỚNG CHÍNH: 'bank' (Kho câu hỏi) HOẶC 'ai_studio' (Mầm AI Studio)
   const [activeMainTab, setActiveMainTab] = useState<'bank' | 'ai_studio'>('bank');
 
   // Trạng thái AI Key & Model
@@ -480,11 +480,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
       {/* 1. THANH TIÊU ĐỀ TRANG */}
       <PageHeader
         title="Ngân hàng câu hỏi & Kho học liệu"
-        subtitle="Quản lý toàn bộ câu hỏi trắc nghiệm, tự luận, video bài giảng và lý thuyết; tích hợp Xưởng Sáng Tạo AI (NotebookLM Style) đối chiếu trực tiếp từ ngữ liệu."
+        subtitle="Quản lý toàn bộ câu hỏi trắc nghiệm, tự luận, video bài giảng và lý thuyết; tích hợp Mầm AI Studio đối chiếu trực tiếp từ ngữ liệu."
         badge={
           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#E2704A]/10 text-[#E2704A] border border-[#E2704A]/20 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-[#E2704A]" />
-            <span>NotebookLM AI Studio</span>
+            <span>Mầm AI Studio</span>
           </span>
         }
         actions={
@@ -507,7 +507,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               }`}
             >
               <Sparkles className="w-4 h-4" />
-              <span>{activeMainTab === 'ai_studio' ? '📚 Quay lại Kho ngân hàng' : '⚡ Mở Xưởng AI NotebookLM'}</span>
+              <span>{activeMainTab === 'ai_studio' ? '📚 Quay lại Kho ngân hàng' : '⚡ Mở Mầm AI Studio'}</span>
             </button>
           </div>
         }
@@ -572,7 +572,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>Xưởng Sáng Tạo AI (NotebookLM Style)</span>
+          <span>Mầm AI Studio</span>
           <span className="px-1.5 py-0.5 rounded text-[10px] bg-white/20 font-bold">RAG Studio</span>
         </button>
       </div>
@@ -813,7 +813,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                       {q.isAiGenerated && !newlyCreatedQuestionIds.includes(q.id) && (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-purple-500" />
-                          NotebookLM AI
+                          Mầm AI
                         </span>
                       )}
                     </div>
@@ -859,7 +859,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       {options.map((opt, oIdx) => {
                         const optKey = String.fromCharCode(65 + oIdx);
-                        const isCorrect = q.answer === optKey;
+                        const isCorrect = q.answer === optKey || q.answer === opt;
                         return (
                           <div
                             key={oIdx}
@@ -890,7 +890,9 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       {options.map((opt, oIdx) => {
                         const optKey = String.fromCharCode(65 + oIdx);
-                        const isCorrect = Array.isArray(q.answer) && q.answer.includes(optKey);
+                        const isCorrect =
+                          Array.isArray(q.answer) &&
+                          (q.answer.includes(optKey) || q.answer.includes(opt));
                         return (
                           <div
                             key={oIdx}
@@ -1104,7 +1106,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     Không tìm thấy câu hỏi hoặc học liệu phù hợp
                   </h3>
                   <p className="text-xs text-[#8C7E6A] max-w-md mx-auto">
-                    Thử đổi bộ lọc hoặc dùng Xưởng Sáng Tạo AI (NotebookLM Style) để nạp ngữ liệu và sinh thêm câu hỏi tự động.
+                    Thử đổi bộ lọc hoặc dùng Mầm AI Studio để nạp ngữ liệu và sinh thêm câu hỏi tự động.
                   </p>
                   <div className="flex items-center justify-center gap-3">
                     <button
@@ -1126,7 +1128,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                       className="px-4 py-2 rounded-xl bg-[#E2704A] text-white text-xs font-bold flex items-center gap-2 shadow-xs hover:bg-[#D45E36]"
                     >
                       <Sparkles className="w-4 h-4" />
-                      <span>Mở Xưởng AI NotebookLM</span>
+                      <span>Mở Mầm AI Studio</span>
                     </button>
                   </div>
                 </div>
@@ -1419,6 +1421,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                   <span>Lấy API Key miễn phí tại Google AI Studio</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-2">
+                  Lưu ý bảo mật: API Key được lưu ngay trên trình duyệt này (localStorage).
+                  Không dùng máy chung/không chia sẻ key — ai mở được trình duyệt này đều
+                  xem được key trong phần Cài đặt.
+                </p>
               </div>
 
               <div>

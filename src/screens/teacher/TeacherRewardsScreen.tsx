@@ -132,10 +132,25 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
     return list;
   }, [requests, selectedClassId, statusFilter, searchQuery]);
 
-  // Lọc lịch sử
+  // Lọc lịch sử (tôn trọng bộ lọc lớp + ô tìm kiếm giống hàng đợi)
   const historyList = useMemo(() => {
-    return requests.filter((r) => r.status === 'GIVEN' || r.status === 'OPENED' || r.status === 'REJECTED');
-  }, [requests]);
+    let list = requests.filter(
+      (r) => r.status === 'GIVEN' || r.status === 'OPENED' || r.status === 'REJECTED'
+    );
+    if (selectedClassId !== 'all') {
+      list = list.filter((r) => r.classId === selectedClassId);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (r) =>
+          r.studentName?.toLowerCase().includes(q) ||
+          r.className?.toLowerCase().includes(q) ||
+          r.reward?.teaserDescription.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [requests, selectedClassId, searchQuery]);
 
   // Xử lý đơn lẻ
   const handleApprove = async (req: EnrichedRewardRequest) => {
@@ -190,10 +205,18 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
 
   const handleBatchApprove = async () => {
     if (selectedRequestIds.size === 0) return;
+    // Chỉ yêu cầu đang CHỜ mới duyệt được — lọc trước để thông báo đúng số lượng
+    const actionable = Array.from(selectedRequestIds).filter(
+      (id) => requests.find((r) => r.id === id)?.status === 'PENDING_APPROVAL'
+    );
+    if (actionable.length === 0) {
+      showNotification('Không có yêu cầu nào đang chờ duyệt trong số đã chọn', 'info');
+      return;
+    }
     setBatchActionLoading(true);
     try {
-      await rewardService.batchUpdateStatus(Array.from(selectedRequestIds), 'APPROVED', undefined, 'teacher_001');
-      showNotification(`Đã phê duyệt hàng loạt ${selectedRequestIds.size} yêu cầu!`);
+      await rewardService.batchUpdateStatus(actionable, 'APPROVED', undefined, 'teacher_001');
+      showNotification(`Đã phê duyệt hàng loạt ${actionable.length} yêu cầu!`);
       setSelectedRequestIds(new Set());
       refreshRequests();
     } catch (err: any) {
@@ -205,10 +228,18 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
 
   const handleBatchGive = async () => {
     if (selectedRequestIds.size === 0) return;
+    // Chỉ yêu cầu ĐÃ DUYỆT mới trao được
+    const actionable = Array.from(selectedRequestIds).filter(
+      (id) => requests.find((r) => r.id === id)?.status === 'APPROVED'
+    );
+    if (actionable.length === 0) {
+      showNotification('Không có yêu cầu nào đã duyệt (chờ trao) trong số đã chọn', 'info');
+      return;
+    }
     setBatchActionLoading(true);
     try {
-      await rewardService.batchUpdateStatus(Array.from(selectedRequestIds), 'GIVEN', undefined, 'teacher_001');
-      showNotification(`Đã trao quà hàng loạt cho ${selectedRequestIds.size} học sinh!`);
+      await rewardService.batchUpdateStatus(actionable, 'GIVEN', undefined, 'teacher_001');
+      showNotification(`Đã trao quà hàng loạt cho ${actionable.length} học sinh!`);
       setSelectedRequestIds(new Set());
       refreshRequests();
     } catch (err: any) {
