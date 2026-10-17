@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
 import { GradingQueueTable } from '../../components/teacher/grading/GradingQueueTable.tsx';
+import { StudentGradingDetail } from '../../components/teacher/grading/StudentGradingDetail.tsx';
 import { SplitGradingWorkspace } from '../../components/teacher/grading/SplitGradingWorkspace.tsx';
 import { AiTrainingStudio } from '../../components/teacher/grading/AiTrainingStudio.tsx';
 import {
@@ -38,6 +39,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
   // Dữ liệu bài viết
   const [submissions, setSubmissions] = useState<EssaySubmission[]>([]);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
+  const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(true);
 
   // Dữ liệu huấn luyện AI
@@ -195,7 +197,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
       )}
 
       {/* HEADER MÀN HÌNH (Chỉ hiển thị khi đang ở hàng đợi hoặc huấn luyện) */}
-      {!selectedSubmission && (
+      {!selectedSubmission && !detailStudentId && (
         <>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <PageHeader
@@ -253,6 +255,14 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
           hasPrevSubmission={hasPrev}
           onSaveToSampleLibrary={handleSaveToSampleLibrary}
         />
+      ) : detailStudentId ? (
+        /* XEM CHI TIẾT THEO HỌC SINH (Figma Giao diện 1) */
+        <StudentGradingDetail
+          studentId={detailStudentId}
+          submissions={submissions}
+          onBack={() => setDetailStudentId(null)}
+          onSelectSubmission={(sub) => setSelectedSubmissionId(sub.id)}
+        />
       ) : activeMainTab === 'queue' ? (
         /* HÀNG ĐỢI BÀI CHỜ CHỐT */
         <GradingQueueTable
@@ -260,6 +270,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
           classes={classes}
           selectedClassId={selectedClassId}
           onSelectSubmission={(sub) => setSelectedSubmissionId(sub.id)}
+          onViewStudent={(sub) => setDetailStudentId(sub.studentId)}
         />
       ) : (
         /* TAB HUẤN LUYỆN AI CHẤM */

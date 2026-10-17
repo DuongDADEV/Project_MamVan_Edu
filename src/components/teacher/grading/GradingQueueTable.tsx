@@ -9,6 +9,7 @@ import {
   ArrowUpDown,
   BookOpen,
   ChevronRight,
+  Eye,
   Filter,
   Flame,
   Award,
@@ -19,6 +20,7 @@ interface GradingQueueTableProps {
   classes: ClassItem[];
   selectedClassId?: string;
   onSelectSubmission: (submission: EssaySubmission) => void;
+  onViewStudent?: (submission: EssaySubmission) => void;
 }
 
 export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
@@ -26,6 +28,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
   classes,
   selectedClassId = 'all',
   onSelectSubmission,
+  onViewStudent,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'AI_SUGGESTED' | 'GRADED'>('ALL');
@@ -371,6 +374,20 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
 
                       {/* Thao tác */}
                       <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                        {onViewStudent && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onViewStudent(sub);
+                            }}
+                            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white border border-slate-200 text-slate-600 hover:border-[#4F46E5] hover:text-[#4F46E5] transition-colors inline-flex items-center gap-1"
+                            title="Xem chi tiết các bài học sinh này đã làm"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Xem chi tiết
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -385,6 +402,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
                           {sub.status === 'GRADED' ? 'Xem lại' : 'Chấm ngay'}
                           <ChevronRight className="w-3.5 h-3.5" />
                         </button>
+                        </div>
                       </td>
                     </tr>
                   );

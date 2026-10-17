@@ -574,7 +574,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                     }
                     className="text-[11px] font-semibold px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 rounded-lg transition-colors border border-slate-200"
                   >
-                    + {chip}
+                    {chip}
                   </button>
                 ))}
               </div>

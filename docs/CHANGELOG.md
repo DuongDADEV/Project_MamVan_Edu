@@ -13,6 +13,15 @@
 ### Kiểm chứng:
 - `npm run build` (đã gồm kiểm tra type) thành công; app chạy thử hiển thị bình thường.
 
+## [2026-10-18] - Đợt 4: Chấm bài — thêm luồng "Xem chi tiết" theo học sinh, bỏ dấu "+" thừa
+### Đã thực hiện:
+- **Thêm nút [Xem chi tiết] theo học sinh** (theo Figma Giao diện 1 — trước đây còn thiếu): mỗi dòng trong Hàng đợi chấm bài giờ có thêm nút "Xem chi tiết" bên cạnh [Chấm ngay / Xem lại] (`GradingQueueTable.tsx`).
+- **Màn hình chi tiết học sinh mới** (`src/components/teacher/grading/StudentGradingDetail.tsx`, nối vào `TeacherGradingScreen.tsx`): hiển thị thông tin học sinh + lớp, thống kê nhanh (tổng bài đã nộp / đã chấm / chờ chấm / điểm trung bình), và toàn bộ bài em đã làm **nhóm theo từng bài kiểm tra** — mỗi bài gồm tên đề, năng lực, số từ, thời điểm nộp, trích đoạn nội dung, trạng thái/điểm và nút [Chấm ngay / Xem lại] mở thẳng màn hình chấm bài đó. Có nút Quay lại về hàng đợi.
+- **Bỏ dấu "+" thừa:** các nút câu nhận xét mẫu nhanh trong màn hình chấm bài từng hiển thị "+ <câu mẫu>" — đã bỏ dấu "+" ở đầu (`SplitGradingWorkspace.tsx`), chỉ giữ nội dung câu mẫu.
+- Giữ nguyên nút [Chấm ngay / Xem lại] và toàn bộ luồng chốt điểm hiện có.
+### Kiểm chứng:
+- `npm run build` (gồm kiểm tra TypeScript) thành công, 0 lỗi type.
+
 ## [2026-10-18] - Đợt 3: Nội dung học — màu chủ đề nhuộm cả thẻ, tiêu đề lớn, bỏ chữ "Ngữ văn 7", kéo-thả sắp xếp chủ đề, nút Quay lại ở 3 trình soạn
 ### Đã thực hiện (đủ 6 yêu cầu của tài liệu góp ý):
 - **Màu nhận diện đổi cả chủ đề** (`TopicTreeSidebar.tsx`, `TeacherContentScreen.tsx`): thẻ chủ đề ở cây bên trái được nhuộm nền + viền theo đúng màu nhận diện đã chọn (không còn chỉ là chấm tròn nhỏ); trạng thái đang chọn cũng tô theo màu của chính chủ đề đó. Trang chi tiết chủ đề nhuộm nền/viền đồng bộ và ô chữ cái đầu dùng nguyên màu chủ đề.
