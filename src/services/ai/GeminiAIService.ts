@@ -356,9 +356,17 @@ QUY TẮC RAG GROUNDING BẮT BUỘC:
       .map((s, idx) => `[Tài liệu ${idx + 1}: ${s.title}]\n${s.content}`)
       .join('\n\n');
 
-    const count = options?.totalQuestions || options?.count || 5;
+    const tc = options?.typeCounts;
+    const typeTotal = tc
+      ? (tc.single || 0) + (tc.multi || 0) + (tc.fill || 0) + (tc.essay || 0)
+      : 0;
+    const count = typeTotal > 0 ? typeTotal : options?.totalQuestions || options?.count || 5;
     const difficulty = options?.difficulty || 'TB';
     const topic = options?.topicTitle || activeSources[0]?.title || 'Ngữ văn 7';
+    const typeBreakdown =
+      typeTotal > 0
+        ? `\nCƠ CẤU LOẠI CÂU HỎI (BẮT BUỘC ĐÚNG SỐ LƯỢNG TỪNG LOẠI):\n- "single" (Chọn 1 đáp án): ĐÚNG ${tc?.single || 0} câu\n- "multi" (Chọn nhiều đáp án): ĐÚNG ${tc?.multi || 0} câu\n- "fill" (Điền vào chỗ trống): ĐÚNG ${tc?.fill || 0} câu\n- "essay" (Tự luận): ĐÚNG ${tc?.essay || 0} câu\nTrường "type" của mỗi câu phải khớp cơ cấu trên; loại nào số lượng 0 thì TUYỆT ĐỐI không sinh câu thuộc loại đó.\n`
+        : '';
 
     const prompt = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Google NotebookLM.
 Dựa vào ngữ liệu sau:
@@ -370,7 +378,7 @@ YÊU CẦU ĐẶC BIỆT QUAN TRỌNG VỀ SỐ LƯỢNG (BẮT BUỘC):
 - Bạn PHẢI tạo CHÍNH XÁC đúng ${count} câu hỏi riêng biệt trong mảng JSON (BẮT BUỘC có đủ ${count} phần tử).
 - TUYỆT ĐỐI KHÔNG ĐƯỢC sinh ít hơn ${count} câu (ví dụ người dùng chọn ${count} câu thì phải đủ ${count} câu, không được chỉ trả về 5 câu).
 - Khai thác phong phú mọi chi tiết, từ ngữ, câu văn/thơ trong ngữ liệu để mỗi câu hỏi là một khía cạnh riêng biệt.
-
+${typeBreakdown}
 Phân bổ theo ma trận 4 mức độ năng lực:
 - NHAN_BIET: Nhận biết dấu hiệu thể loại, chi tiết, từ ngữ trong văn bản
 - THONG_HIEU: Hiểu ý nghĩa hình ảnh, biện pháp tu từ, tâm trạng nhân vật

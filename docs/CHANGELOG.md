@@ -13,6 +13,20 @@
 ### Kiểm chứng:
 - `npm run build` (đã gồm kiểm tra type) thành công; app chạy thử hiển thị bình thường.
 
+## [2026-10-18] - Đợt 2: Xưởng AI (đếm câu theo loại, panel kéo/thu) & Ngân hàng câu hỏi (lọc dạng list, gọn trạng thái AI); kiểm chứng Gemini API Key
+### Đã thực hiện:
+- **Xưởng Sáng Tạo AI (`src/components/teacher/ai/AiContentStudioModal.tsx`):**
+  - Bỏ hẳn mục "Loại bài kiểm tra đích" và thanh trượt "Tổng số câu" theo Figma. Thay bằng bảng **Loại câu hỏi và số lượng**: 4 dòng (Chọn 1 đáp án / Chọn nhiều đáp án / Điền vào chỗ trống / Tự luận) với nút − / + từng loại; dòng cuối tự cộng "Tổng số câu dự kiến". Nút sinh nội dung bị khóa khi tổng = 0. (Hàm đếm `typeCounts` vốn đã có sẵn trong code nhưng chưa được nối — nay đã nối hoàn chỉnh.)
+  - Cấu hình số lượng được truyền xuống tầng AI: prompt của Gemini (`src/services/ai/GeminiAIService.ts`) có thêm mục "CƠ CẤU LOẠI CÂU HỎI (BẮT BUỘC ĐÚNG SỐ LƯỢNG TỪNG LOẠI)" — loại nào để 0 thì không sinh câu loại đó; bộ sinh dự phòng (`MockAIService.ts`) cũng chọn đúng cơ cấu loại khi Gemini lỗi.
+  - Khi lưu bộ câu hỏi AI vào ngân hàng: tiêu đề chuẩn hóa "Bộ câu hỏi: <chủ đề>", thời lượng = tối đa(7 phút, số câu), XP = số câu × 5 (không còn phụ thuộc loại bài kiểm tra đã bị bỏ).
+  - **3 panel kéo ra / thu vào / chỉnh độ rộng** theo ghi chú Figma: kéo viền giữa các panel để đổi độ rộng (giới hạn 240–620px), nút chevron trên tay kéo để thu panel thành thanh dọc 46px, bấm thanh dọc để mở lại. Độ rộng + trạng thái thu được lưu theo máy (localStorage), chỉ áp dụng ở màn hình ≥768px.
+- **Ngân hàng câu hỏi (`src/screens/teacher/TeacherQuestionBankScreen.tsx`):**
+  - Thanh trạng thái Gemini ở đầu trang thu gọn thành 1 dòng: chấm trạng thái + dòng chữ ngắn + nút "Cấu hình" (chưa có key thì nút cam "Nhập API Key"). Bỏ khối mô tả dài và nút to theo ảnh chụp yêu cầu.
+  - Bộ lọc chuyển từ dạng chip sang **dạng danh sách (list)** 3 nhóm rõ ràng: 1. Dạng học liệu, 2. Năng lực (viết đầy đủ: Nhận biết / Thông hiểu / Phân tích / Vận dụng), 3. Độ khó (Dễ / Trung bình / Khó) — mục đang chọn được tô nền nổi bật.
+### Kiểm chứng:
+- `npm run build` (gồm kiểm tra TypeScript) thành công, 0 lỗi type.
+- **Gemini API Key đã kiểm chứng bằng lệnh gọi thật:** model `gemini-2.5-flash` trả lời đúng (khóa hợp lệ). Lưu ý: `gemini-2.0-flash` đã bị Google ngừng cung cấp; `gemini-flash-latest` thỉnh thoảng quá tải (lỗi 503 tạm thời) — có thể đổi model trong mục "Cấu hình" ở đầu trang Ngân hàng câu hỏi nếu gặp lỗi này trong Xưởng AI.
+
 ## [2026-10-18] - Đợt 1: Lớp & Học sinh — Sửa lỗi thêm học sinh không hiện, tên đăng nhập trùng; bỏ mục Danh sách học sinh; gọn trường thông tin
 ### Đã thực hiện:
 - **Sửa lỗi "thêm học sinh đầu tiên không hiện, chỉ hiện học sinh thứ 2":**

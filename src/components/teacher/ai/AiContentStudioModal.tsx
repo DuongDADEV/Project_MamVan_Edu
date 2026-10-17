@@ -14,6 +14,8 @@ import {
   HelpCircle,
   Layers,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   BookOpen,
   Sliders,
   Check,
@@ -318,8 +320,6 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
 
   // 4. STATE XƯỞNG TẠO (VÙNG PHẢI)
   const [outputType, setOutputType] = useState<'video' | 'theory' | 'quiz'>(targetTypeInitial);
-  const [totalQuestions, setTotalQuestions] = useState(5);
-  const [targetQuizKind, setTargetQuizKind] = useState<'quick' | 'mastery' | 'practice'>('quick');
 
   // STATE XEM TRƯỚC VÀ PHÊ DUYỆT BỘ CÂU HỎI AI VỪA TẠO
   const [reviewDraftQuestions, setReviewDraftQuestions] = useState<Question[] | null>(null);
@@ -336,6 +336,67 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     fill: 1,
     essay: 1,
   });
+
+  // Tổng số câu dự kiến = cộng dồn theo từng loại câu hỏi (theo thiết kế Figma)
+  const totalQuestions = typeCounts.single + typeCounts.multi + typeCounts.fill + typeCounts.essay;
+
+  const adjustTypeCount = (key: 'single' | 'multi' | 'fill' | 'essay', delta: number) => {
+    setTypeCounts((prev) => ({
+      ...prev,
+      [key]: Math.max(0, Math.min(20, prev[key] + delta)),
+    }));
+  };
+
+  // --- PANEL KÉO/THU (theo ghi chú Figma: kéo ra, thu vào, chỉnh độ rộng) ---
+  const [isWide, setIsWide] = useState<boolean>(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = (e: MediaQueryListEvent) => setIsWide(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const [panelWidths, setPanelWidths] = useState<{ left: number; right: number }>(() => {
+    try {
+      const raw = localStorage.getItem('mamvan_ai_studio_panel_widths');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.left === 'number' && typeof parsed.right === 'number') return parsed;
+      }
+    } catch {}
+    return { left: 330, right: 395 };
+  });
+  const [collapsedPanels, setCollapsedPanels] = useState<{ left: boolean; right: boolean }>(() => {
+    try {
+      const raw = localStorage.getItem('mamvan_ai_studio_panel_collapsed');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { left: false, right: false };
+  });
+  useEffect(() => {
+    try { localStorage.setItem('mamvan_ai_studio_panel_widths', JSON.stringify(panelWidths)); } catch {}
+  }, [panelWidths]);
+  useEffect(() => {
+    try { localStorage.setItem('mamvan_ai_studio_panel_collapsed', JSON.stringify(collapsedPanels)); } catch {}
+  }, [collapsedPanels]);
+  const startPanelResize = (side: 'left' | 'right') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = side === 'left' ? panelWidths.left : panelWidths.right;
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      const next = side === 'left' ? startW + delta : startW - delta;
+      const clamped = Math.max(240, Math.min(620, next));
+      setPanelWidths((prev) => ({ ...prev, [side]: clamped }));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const [difficulty, setDifficulty] = useState<Difficulty>('TB');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -423,11 +484,11 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     onApplyDraft({
       type: 'quiz',
       data: {
-        title: `${targetQuizKind === 'quick' ? 'Kiểm tra nhanh' : targetQuizKind === 'mastery' ? 'Mastery Check' : 'Luyện tập'}: ${topicTitle} (Sinh bởi Gemini AI)`,
-        kind: targetQuizKind,
+        title: `Bộ câu hỏi: ${topicTitle} (Sinh bởi Gemini AI)`,
+        kind: 'quick',
         topicId,
-        timeLimitMinutes: targetQuizKind === 'quick' ? 7 : 15,
-        xp: targetQuizKind === 'quick' ? 25 : 50,
+        timeLimitMinutes: Math.max(7, totalQuestions),
+        xp: totalQuestions * 5,
         questions: questionsToSave,
         isAiGenerated: true,
         isTeacherReviewed: true,
@@ -599,6 +660,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
         const questions = await aiService.generateQuestions(activeSources, {
           topicTitle,
           totalQuestions,
+          typeCounts,
           difficulty,
         });
 
@@ -898,7 +960,22 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
         {/* ========================================================= */}
         {/* VÙNG 1: NGUỒN TÀI LIỆU (BÊN TRÁI ~ 330px) */}
         {/* ========================================================= */}
-        <div className="w-full md:w-[320px] lg:w-[340px] flex flex-col shrink-0 bg-[#FAF5EB]/50">
+        <div
+          className="w-full flex flex-col shrink-0 bg-[#FAF5EB]/50 overflow-hidden"
+          style={isWide ? { width: collapsedPanels.left ? 46 : panelWidths.left } : undefined}
+        >
+          {collapsedPanels.left ? (
+            <button
+              type="button"
+              onClick={() => setCollapsedPanels((p) => ({ ...p, left: false }))}
+              className="flex-1 flex flex-col items-center gap-2 py-4 text-[#8C7E6A] hover:text-[#2F3E6B] transition-colors"
+              title="Mở panel Nguồn tài liệu"
+            >
+              <ChevronsRight className="w-4 h-4" />
+              <span className="[writing-mode:vertical-rl] text-[11px] font-bold uppercase tracking-wider">1. Nguồn tài liệu</span>
+            </button>
+          ) : (
+            <>
           <div className="p-4 border-b border-[#E6DCC8] flex items-center justify-between">
             <div>
               <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
@@ -1099,7 +1176,26 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
               </div>
             )))}
           </div>
+            </>
+          )}
         </div>
+        {isWide && !collapsedPanels.left && (
+          <div
+            onMouseDown={startPanelResize('left')}
+            className="w-1.5 shrink-0 cursor-col-resize bg-[#E6DCC8]/50 hover:bg-[#E2704A]/40 transition-colors relative"
+            title="Kéo để chỉnh độ rộng panel"
+          >
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setCollapsedPanels((p) => ({ ...p, left: true }))}
+              className="absolute top-2 -left-2 z-10 w-5 h-5 rounded-full bg-white border border-[#E6DCC8] shadow-xs flex items-center justify-center text-[#8C7E6A] hover:text-[#2F3E6B]"
+              title="Thu gọn panel Nguồn tài liệu"
+            >
+              <ChevronsLeft className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
         {/* ========================================================= */}
         {/* VÙNG 2: TRÒ CHUYỆN VỚI NGUỒN (Ở GIỮA) */}
@@ -1217,10 +1313,43 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           </div>
         </div>
 
+        {isWide && !collapsedPanels.right && (
+          <div
+            onMouseDown={startPanelResize('right')}
+            className="w-1.5 shrink-0 cursor-col-resize bg-[#E6DCC8]/50 hover:bg-[#E2704A]/40 transition-colors relative"
+            title="Kéo để chỉnh độ rộng panel"
+          >
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setCollapsedPanels((p) => ({ ...p, right: true }))}
+              className="absolute top-2 -right-2 z-10 w-5 h-5 rounded-full bg-white border border-[#E6DCC8] shadow-xs flex items-center justify-center text-[#8C7E6A] hover:text-[#2F3E6B]"
+              title="Thu gọn panel Xưởng tạo đầu ra"
+            >
+              <ChevronsRight className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
         {/* ========================================================= */}
         {/* VÙNG 3: XƯỞNG TẠO (BÊN PHẢI ~ 380px) */}
         {/* ========================================================= */}
-        <div className="w-full md:w-[380px] lg:w-[410px] flex flex-col shrink-0 bg-[#FAF5EB]/70 overflow-y-auto">
+        <div
+          className="w-full flex flex-col shrink-0 bg-[#FAF5EB]/70 overflow-y-auto overflow-x-hidden"
+          style={isWide ? { width: collapsedPanels.right ? 46 : panelWidths.right } : undefined}
+        >
+          {collapsedPanels.right ? (
+            <button
+              type="button"
+              onClick={() => setCollapsedPanels((p) => ({ ...p, right: false }))}
+              className="flex-1 flex flex-col items-center gap-2 py-4 text-[#8C7E6A] hover:text-[#2F3E6B] transition-colors"
+              title="Mở panel Xưởng tạo đầu ra"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+              <span className="[writing-mode:vertical-rl] text-[11px] font-bold uppercase tracking-wider">3. Xưởng tạo đầu ra</span>
+            </button>
+          ) : (
+            <>
           <div className="p-4 border-b border-[#E6DCC8]">
             <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
               <Wand2 className="w-4 h-4 text-[#E2704A]" />
@@ -1279,31 +1408,46 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
             {outputType === 'quiz' && (
               <div className="space-y-3 p-3.5 bg-white rounded-2xl border border-[#E6DCC8]">
                 <div>
-                  <label className="text-xs font-bold text-[#2F3E6B] block mb-1">Loại bài kiểm tra đích:</label>
-                  <select
-                    value={targetQuizKind}
-                    onChange={(e) => setTargetQuizKind(e.target.value as any)}
-                    className="w-full px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B]"
-                  >
-                    <option value="quick">Kiểm tra nhanh (mặc định 5 câu / 7 phút)</option>
-                    <option value="mastery">Mastery Check (đánh giá chuyên sâu 10 câu)</option>
-                    <option value="practice">Luyện tập củng cố (không giới hạn)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-bold text-[#2F3E6B]">Tổng số câu:</span>
-                    <span className="font-bold text-[#E2704A]">{totalQuestions} câu</span>
+                  <label className="text-xs font-bold text-[#2F3E6B] block mb-1.5">Loại câu hỏi và số lượng:</label>
+                  <div className="divide-y divide-[#E6DCC8]/70 rounded-xl border border-[#E6DCC8] overflow-hidden">
+                    {([
+                      { key: 'single', label: 'Chọn 1 đáp án' },
+                      { key: 'multi', label: 'Chọn nhiều đáp án' },
+                      { key: 'fill', label: 'Điền vào chỗ trống' },
+                      { key: 'essay', label: 'Tự luận' },
+                    ] as const).map((row) => (
+                      <div key={row.key} className="flex items-center justify-between px-3 py-2 bg-[#FAF5EB]/60">
+                        <span className="text-xs font-medium text-[#2F3E6B]">{row.label}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => adjustTypeCount(row.key, -1)}
+                            disabled={typeCounts[row.key] === 0}
+                            className="w-6 h-6 rounded-lg border border-[#E6DCC8] bg-white text-[#2F3E6B] font-bold text-sm leading-none disabled:opacity-35 hover:bg-[#FAF5EB] transition-colors"
+                            aria-label={`Giảm số câu ${row.label}`}
+                          >
+                            −
+                          </button>
+                          <span className="w-6 text-center text-xs font-bold text-[#2F3E6B]">{typeCounts[row.key]}</span>
+                          <button
+                            type="button"
+                            onClick={() => adjustTypeCount(row.key, 1)}
+                            className="w-6 h-6 rounded-lg border border-[#E6DCC8] bg-white text-[#2F3E6B] font-bold text-sm leading-none hover:bg-[#FAF5EB] transition-colors"
+                            aria-label={`Tăng số câu ${row.label}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between px-3 py-2 bg-[#2F3E6B]/5">
+                      <span className="text-xs font-bold text-[#2F3E6B]">Tổng số câu dự kiến</span>
+                      <span className="text-xs font-bold text-[#E2704A]">{totalQuestions} câu</span>
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min={3}
-                    max={15}
-                    value={totalQuestions}
-                    onChange={(e) => setTotalQuestions(Number(e.target.value))}
-                    className="w-full accent-[#E2704A]"
-                  />
+                  {totalQuestions === 0 && (
+                    <p className="text-[11px] text-rose-500 mt-1.5">Hãy chọn ít nhất 1 câu hỏi để AI tạo bộ câu hỏi.</p>
+                  )}
                 </div>
 
                 <div>
@@ -1333,7 +1477,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
               <button
                 type="button"
                 onClick={handleGenerateDraft}
-                disabled={isGenerating || sources.filter((s) => s.isEnabled).length === 0}
+                disabled={isGenerating || sources.filter((s) => s.isEnabled).length === 0 || (outputType === 'quiz' && totalQuestions === 0)}
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#E2704A] to-[#D45E36] hover:from-[#D45E36] hover:to-[#C34F28] disabled:opacity-40 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
               >
                 {isGenerating ? (
@@ -1353,6 +1497,8 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
               </p>
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
       )}

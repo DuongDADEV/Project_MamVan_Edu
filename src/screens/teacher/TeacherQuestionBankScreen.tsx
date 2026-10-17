@@ -521,34 +521,14 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         </div>
       )}
 
-      {/* THANH BÁO TRẠNG THÁI AI GOOGLE STUDIO */}
-      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs transition-all ${
-        hasApiKey
-          ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
-          : 'bg-amber-50/80 border-amber-300 text-amber-950'
-      }`}>
-        <div className="flex items-center gap-3">
-          {hasApiKey ? (
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 font-bold">
-              <Sparkles className="w-4 h-4 text-emerald-700" />
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 font-bold">
-              <KeyRound className="w-4 h-4 text-amber-700" />
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-2 font-bold text-xs">
-              <span>{hasApiKey ? `🟢 Đang kích hoạt Google Gemini AI thật (${activeModel})` : '⚠️ Chưa cấu hình Google AI Studio API Key!'}</span>
-            </div>
-            <p className="text-[11px] text-[#6B7280] mt-0.5">
-              {hasApiKey
-                ? 'Khi bấm sinh nội dung hoặc trò chuyện trong Xưởng AI, hệ thống sẽ gọi trực tiếp Google Gemini AI thật theo đúng ngữ liệu.'
-                : 'Để AI sinh câu hỏi thật bám sát ngữ liệu chuẩn NotebookLM (thay vì dữ liệu mặc định), vui lòng dán API Key của Google AI Studio tại đây.'}
-            </p>
-          </div>
+      {/* THANH TRẠNG THÁI AI (đã tối giản) */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl border border-[#E6DCC8] bg-[#FFFDF8] shadow-2xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${hasApiKey ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+          <span className="text-xs font-semibold text-[#2F3E6B] truncate">
+            {hasApiKey ? `Gemini AI đang kích hoạt (${activeModel})` : 'Chưa cấu hình Google AI Studio API Key'}
+          </span>
         </div>
-
         <button
           type="button"
           onClick={() => {
@@ -557,14 +537,14 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
             setKeyTestResult(null);
             setShowApiKeyModal(true);
           }}
-          className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors shrink-0 cursor-pointer ${
+          className={`px-3 py-1.5 rounded-xl font-bold text-[11px] flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors ${
             hasApiKey
-              ? 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-              : 'bg-[#E2704A] hover:bg-[#D45E36] text-white animate-pulse'
+              ? 'bg-white border border-[#E6DCC8] text-[#2F3E6B] hover:bg-[#FAF5EB]'
+              : 'bg-[#E2704A] hover:bg-[#D45E36] text-white'
           }`}
         >
           <KeyRound className="w-3.5 h-3.5" />
-          <span>{hasApiKey ? 'Cấu hình lại API Key' : '🔑 Nhập API Key ngay'}</span>
+          <span>{hasApiKey ? 'Cấu hình' : 'Nhập API Key'}</span>
         </button>
       </div>
 
@@ -709,74 +689,91 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               </div>
             </div>
 
-            {/* Dòng Tabs chọn Loại học liệu */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[#E6DCC8]/60">
-              <span className="text-xs font-bold text-[#8C7E6A] mr-2">Dạng học liệu:</span>
-              {[
-                { id: 'all', label: 'Tất cả' },
-                { id: 'single', label: 'Trắc nghiệm đơn' },
-                { id: 'multi', label: 'Nhiều đáp án' },
-                { id: 'fill', label: 'Điền từ' },
-                { id: 'essay', label: 'Tự luận' },
-                { id: 'video', label: 'Video & Ý trọng tâm' },
-                { id: 'theory', label: 'Lý thuyết chi tiết' },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedContentType(item.id as any)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
-                    selectedContentType === item.id
-                      ? 'bg-[#2F3E6B] text-white shadow-2xs'
-                      : 'bg-[#FAF5EB] text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-[#E6DCC8]/40'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Lọc theo Năng lực & Độ khó */}
-            <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-[#E6DCC8]/60">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-[#8C7E6A]">Năng lực:</span>
-                {(['all', 'NHAN_BIET', 'THONG_HIEU', 'PHAN_TICH', 'VAN_DUNG'] as const).map((lvl) => (
-                  <button
-                    key={lvl}
-                    onClick={() => setSelectedLevel(lvl)}
-                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition-colors ${
-                      selectedLevel === lvl
-                        ? 'bg-[#E2704A] text-white'
-                        : 'bg-[#FAF5EB] text-[#8C7E6A] hover:text-[#2F3E6B]'
-                    }`}
-                  >
-                    {lvl === 'all'
-                      ? 'Tất cả'
-                      : lvl === 'NHAN_BIET'
-                      ? 'NB'
-                      : lvl === 'THONG_HIEU'
-                      ? 'TH'
-                      : lvl === 'PHAN_TICH'
-                      ? 'PT'
-                      : 'VD'}
-                  </button>
-                ))}
+            {/* BỘ LỌC DẠNG DANH SÁCH (LIST) — 3 nhóm theo Figma */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-[#E6DCC8]/60">
+              <div>
+                <p className="text-xs font-bold text-[#2F3E6B] mb-1.5">1. Dạng học liệu</p>
+                <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
+                  {[
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'single', label: 'Trắc nghiệm đơn' },
+                    { id: 'multi', label: 'Nhiều đáp án' },
+                    { id: 'fill', label: 'Điền từ' },
+                    { id: 'essay', label: 'Tự luận' },
+                    { id: 'video', label: 'Video & Ý trọng tâm' },
+                    { id: 'theory', label: 'Lý thuyết chi tiết' },
+                  ].map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedContentType(item.id as any)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                          selectedContentType === item.id
+                            ? 'bg-[#2F3E6B] text-white font-bold'
+                            : 'bg-[#FFFDF8] text-[#4B5563] hover:bg-[#FAF5EB]'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selectedContentType === item.id ? 'bg-white' : 'bg-[#E6DCC8]'}`} />
+                        {item.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-[#8C7E6A]">Độ khó:</span>
-                {(['all', 'DE', 'TB', 'KHO'] as const).map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setSelectedDifficulty(d)}
-                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-colors ${
-                      selectedDifficulty === d
-                        ? 'bg-[#2F3E6B] text-white'
-                        : 'bg-[#FAF5EB] text-[#8C7E6A] hover:text-[#2F3E6B]'
-                    }`}
-                  >
-                    {d === 'all' ? 'Tất cả' : d === 'DE' ? 'Dễ' : d === 'TB' ? 'TB' : 'Khó'}
-                  </button>
-                ))}
+              <div>
+                <p className="text-xs font-bold text-[#2F3E6B] mb-1.5">2. Năng lực</p>
+                <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
+                  {([
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'NHAN_BIET', label: 'Nhận biết' },
+                    { id: 'THONG_HIEU', label: 'Thông hiểu' },
+                    { id: 'PHAN_TICH', label: 'Phân tích' },
+                    { id: 'VAN_DUNG', label: 'Vận dụng' },
+                  ] as const).map((lvl) => (
+                    <li key={lvl.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLevel(lvl.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                          selectedLevel === lvl.id
+                            ? 'bg-[#E2704A] text-white font-bold'
+                            : 'bg-[#FFFDF8] text-[#4B5563] hover:bg-[#FAF5EB]'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selectedLevel === lvl.id ? 'bg-white' : 'bg-[#E6DCC8]'}`} />
+                        {lvl.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-[#2F3E6B] mb-1.5">3. Độ khó</p>
+                <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
+                  {([
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'DE', label: 'Dễ' },
+                    { id: 'TB', label: 'Trung bình' },
+                    { id: 'KHO', label: 'Khó' },
+                  ] as const).map((d) => (
+                    <li key={d.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDifficulty(d.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                          selectedDifficulty === d.id
+                            ? 'bg-[#2F3E6B] text-white font-bold'
+                            : 'bg-[#FFFDF8] text-[#4B5563] hover:bg-[#FAF5EB]'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selectedDifficulty === d.id ? 'bg-white' : 'bg-[#E6DCC8]'}`} />
+                        {d.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
