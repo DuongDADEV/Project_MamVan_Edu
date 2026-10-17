@@ -61,7 +61,6 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   isAddModalOpenInitially = false,
   onCloseAddModalInitial,
 }) => {
-  const [activeTab, setActiveTab] = useState<'students' | 'classes'>('students');
 
   // Quản lý xem chi tiết lớp học
   const [detailClassId, setDetailClassId] = useState<string | null>(null);
@@ -72,7 +71,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   const [editingStudent, setEditingStudent] = useState<StudentAccount | null>(null);
 
   // Lọc
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'locked' | 'new'>('all');
+  const [classSearch, setClassSearch] = useState('');
 
   // Multi-select
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -144,25 +143,6 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
         };
       });
   }, [students, classes, studentStates, teacherClassIds]);
-
-  // Lọc theo lớp và trạng thái
-  const filteredStudents = useMemo(() => {
-    return enrichedStudents.filter((s) => {
-      if (selectedClassId !== 'all' && s.class_id !== selectedClassId) {
-        return false;
-      }
-      if (statusFilter === 'active' && (s.status !== 'active' || !s.has_logged_in)) {
-        return false;
-      }
-      if (statusFilter === 'locked' && s.status !== 'locked') {
-        return false;
-      }
-      if (statusFilter === 'new' && (s.has_logged_in || s.status === 'locked')) {
-        return false;
-      }
-      return true;
-    });
-  }, [enrichedStudents, selectedClassId, statusFilter]);
 
   // --- CÁC HÀNH ĐỘNG HỌC SINH ---
 
@@ -704,145 +684,38 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
             title="Quản lý Lớp & Học sinh"
             subtitle="Quản lý danh sách lớp, cấp tài khoản học tập tự động và theo dõi năng lực học sinh"
             actions={
-              <>
-                <button
-                  type="button"
-                  onClick={() => exportStudentsList(filteredStudents, 'xlsx')}
-                  className="px-4 py-2.5 rounded-2xl border border-[#E6DCC8] bg-[#FFFDF8] hover:bg-[#FAF5EB] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1.5 transition-colors shadow-xs"
-                >
-                  <Download className="w-4 h-4 text-[#7FA88A]" />
-                  <span>Xuất danh sách (Excel)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(true)}
-                  className="px-5 py-2.5 rounded-2xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-[#E2704A]/25 transition-all active:scale-[0.98]"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Thêm học sinh</span>
-                </button>
-              </>
-            }
-          />
-
-          {/* CHUYỂN TAB: DANH SÁCH HỌC SINH / QUẢN LÝ LỚP HỌC */}
-          <div className="flex items-center justify-between border-b border-[#E6DCC8] pb-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab('students')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 ${
-                  activeTab === 'students'
-                    ? 'bg-[#2F3E6B] text-white shadow-xs'
-                    : 'text-[#4B5563] hover:bg-[#FAF5EB] hover:text-[#2F3E6B]'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>Danh sách học sinh ({filteredStudents.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('classes')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 ${
-                  activeTab === 'classes'
-                    ? 'bg-[#2F3E6B] text-white shadow-xs'
-                    : 'text-[#4B5563] hover:bg-[#FAF5EB] hover:text-[#2F3E6B]'
-                }`}
-              >
-                <Layers className="w-4 h-4" />
-                <span>Quản lý lớp học ({classes.length})</span>
-              </button>
-            </div>
-
-            {activeTab === 'classes' && (
               <button
                 type="button"
                 onClick={() => setIsCreateClassModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-[#FAF5EB] hover:bg-[#E6DCC8]/50 border border-[#E6DCC8] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1.5 transition-colors"
+                className="px-5 py-2.5 rounded-2xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-[#E2704A]/25 transition-all active:scale-[0.98]"
               >
-                <PlusCircle className="w-3.5 h-3.5 text-[#E2704A]" />
-                <span>Tạo lớp học mới</span>
+                <PlusCircle className="w-4 h-4" />
+                <span>+ Tạo lớp mới</span>
               </button>
-            )}
+            }
+          />
+
+          {/* TÌM KIẾM LỚP */}
+          <div className="flex items-center justify-between gap-3 border-b border-[#E6DCC8] pb-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#8C7E6A]" />
+              <input
+                type="text"
+                value={classSearch}
+                onChange={(e) => setClassSearch(e.target.value)}
+                placeholder="Tìm theo tên lớp..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#E6DCC8] bg-[#FFFDF8] text-xs sm:text-sm text-[#2F3E6B] placeholder-[#8C7E6A]/60 focus:outline-none focus:border-[#2F3E6B] transition-colors"
+              />
+            </div>
+            <span className="text-xs text-[#6B7280] font-medium">{classes.length} lớp học</span>
           </div>
-
-          {/* ======================================================== */}
-          {/* TAB 1: DANH SÁCH HỌC SINH (DATATABLE) */}
-          {/* ======================================================== */}
-          {activeTab === 'students' && (
-            <DataTable
-              data={filteredStudents}
-              columns={studentColumns}
-              keyExtractor={(item) => item.id}
-              searchPlaceholder="Tìm theo tên học sinh, mã HS hoặc tên đăng nhập..."
-              selectable={true}
-              selectedIds={selectedStudentIds}
-              onSelectionChange={setSelectedStudentIds}
-              emptyTitle="Chưa có học sinh nào"
-              emptyDescription="Hãy bấm nút 'Thêm học sinh' để nhập tay hoặc tải file danh sách Excel lên."
-              emptyActionText="Thêm học sinh ngay"
-              onEmptyAction={() => setIsAddModalOpen(true)}
-              filterComponent={
-                <div className="flex items-center gap-2">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
-                    className="px-3 py-1.5 rounded-xl border border-[#E6DCC8] bg-[#FAF5EB]/50 text-xs font-medium text-[#2F3E6B] outline-none"
-                  >
-                    <option value="all">Tất cả trạng thái</option>
-                    <option value="active">Đang hoạt động</option>
-                    <option value="new">Chưa đăng nhập lần nào</option>
-                    <option value="locked">Bị tạm khóa</option>
-                  </select>
-                </div>
-              }
-              bulkActions={(ids, clear) => (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setChangeClassModal({
-                        isOpen: true,
-                        studentIds: ids,
-                        targetClassId: classes[0]?.id || '',
-                      })
-                    }
-                    className="px-2.5 py-1 rounded-lg border border-[#E6DCC8] bg-white hover:bg-[#FAF5EB] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1"
-                  >
-                    <ArrowRightLeft className="w-3.5 h-3.5" />
-                    <span>Chuyển lớp</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleBulkToggleLock(true)}
-                    className="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs font-semibold text-amber-800 flex items-center gap-1"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Khóa tài khoản</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleBulkToggleLock(false)}
-                    className="px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 flex items-center gap-1"
-                  >
-                    <Unlock className="w-3.5 h-3.5" />
-                    <span>Mở khóa</span>
-                  </button>
-                </div>
-              )}
-            />
-          )}
 
           {/* ======================================================== */}
           {/* TAB 2: QUẢN LÝ LỚP HỌC */}
           {/* ======================================================== */}
-          {activeTab === 'classes' && (
+          {(
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {classes.map((cls) => {
+              {classes.filter((cls) => cls.name.toLowerCase().includes(classSearch.trim().toLowerCase())).map((cls) => {
                 const isSelected = selectedClassId === cls.id;
 
                 return (
@@ -907,7 +780,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                         }}
                         className="font-semibold text-[#2F3E6B] hover:text-[#E2704A] transition-colors flex items-center gap-1"
                       >
-                        <span>Xem chi tiết lớp →</span>
+                        <span>Vào lớp →</span>
                       </button>
 
                       <div className="flex items-center gap-1">

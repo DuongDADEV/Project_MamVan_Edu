@@ -46,6 +46,7 @@ import {
 import {
   generateUsername,
   generateFriendlyPassword,
+  generateStudentCode,
   generateUUID,
 } from './credentialUtils.ts';
 import { syncEventBus } from './eventBus.ts';
@@ -659,6 +660,7 @@ export class MockStudentRepository implements StudentRepository {
     const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
     const states = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
     const existingUsernames = students.map((s) => s.username.toLowerCase());
+    const existingCodes: (string | undefined)[] = students.map((s) => s.student_code);
 
     const createdStudents: StudentAccount[] = [];
     const credentials: StudentCredentialVoucher[] = [];
@@ -684,7 +686,7 @@ export class MockStudentRepository implements StudentRepository {
         // KHÔNG lưu mật khẩu thô ở production. Trong mock lưu phục vụ đăng nhập demo.
         password_hash: rawPassword,
         class_id: item.class_id,
-        student_code: item.student_code?.trim(),
+        student_code: item.student_code?.trim() || generateStudentCode(existingCodes),
         dob: item.dob,
         status: 'active',
         has_logged_in: false,
@@ -694,6 +696,7 @@ export class MockStudentRepository implements StudentRepository {
       };
 
       students.push(newStudent);
+      existingCodes.push(newStudent.student_code);
       createdStudents.push(newStudent);
 
       // Khởi tạo StudentState sạch bắt đầu từ 0

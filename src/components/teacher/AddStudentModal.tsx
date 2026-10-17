@@ -212,7 +212,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
         name: r.name.trim(),
         class_id: r.class_id,
         student_code: r.student_code.trim() || undefined,
-        dob: r.dob || undefined,
         custom_username: u || undefined,
       };
     });
@@ -247,7 +246,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
           name: r.name.trim(),
           class_id: cls ? cls.id : activeClassId,
           student_code: r.studentCode?.trim() || undefined,
-          dob: r.dob || undefined,
         };
       });
 
@@ -340,8 +338,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                     <th className="py-2.5 px-3 w-8 text-center">#</th>
                     <th className="py-2.5 px-3">Họ và tên học sinh (*)</th>
                     <th className="py-2.5 px-3 w-28">Lớp</th>
-                    <th className="py-2.5 px-3 w-28">Mã HS (tùy chọn)</th>
-                    <th className="py-2.5 px-3 w-32">Ngày sinh (tùy chọn)</th>
+                    <th className="py-2.5 px-3 w-28">Mã HS</th>
                     <th className="py-2.5 px-3 w-40">Tên đăng nhập (tự sinh / sửa)</th>
                     <th className="py-2.5 px-3 w-10 text-center">Xóa</th>
                   </tr>
@@ -390,18 +387,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                             onChange={(e) =>
                               handleUpdateManualRow(row.id, 'student_code', e.target.value)
                             }
-                            placeholder="HS7A2-..."
+                            placeholder="Tự động"
                             className="w-full px-2.5 py-1.5 rounded-lg border border-[#E6DCC8] bg-white focus:border-[#2F3E6B] outline-none text-xs text-[#2F3E6B]"
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="date"
-                            value={row.dob}
-                            onChange={(e) =>
-                              handleUpdateManualRow(row.id, 'dob', e.target.value)
-                            }
-                            className="w-full px-2 py-1.5 rounded-lg border border-[#E6DCC8] bg-white focus:border-[#2F3E6B] outline-none text-xs text-[#2F3E6B]"
                           />
                         </td>
                         <td className="py-2 px-3">
@@ -524,7 +511,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                         <th className="py-2.5 px-3">Họ và tên</th>
                         <th className="py-2.5 px-3 w-28">Lớp</th>
                         <th className="py-2.5 px-3 w-28">Mã HS</th>
-                        <th className="py-2.5 px-3 w-28">Ngày sinh</th>
                         <th className="py-2.5 px-3">Trạng thái kiểm tra</th>
                         <th className="py-2.5 px-3 w-10 text-center">Bỏ</th>
                       </tr>
@@ -571,17 +557,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                               onChange={(e) =>
                                 handleEditExcelCell(idx, 'studentCode', e.target.value)
                               }
-                              className="w-full px-2 py-1 rounded border border-[#E6DCC8] bg-white text-xs"
-                            />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input
-                              type="text"
-                              value={row.dob || ''}
-                              onChange={(e) =>
-                                handleEditExcelCell(idx, 'dob', e.target.value)
-                              }
-                              placeholder="YYYY-MM-DD"
                               className="w-full px-2 py-1 rounded border border-[#E6DCC8] bg-white text-xs"
                             />
                           </td>

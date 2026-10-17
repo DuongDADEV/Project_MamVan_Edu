@@ -13,6 +13,20 @@
 ### Kiểm chứng:
 - `npm run build` (đã gồm kiểm tra type) thành công; app chạy thử hiển thị bình thường.
 
+## [2026-10-18] - Đợt 1: Lớp & Học sinh — Sửa lỗi thêm học sinh không hiện, tên đăng nhập trùng; bỏ mục Danh sách học sinh; gọn trường thông tin
+### Đã thực hiện:
+- **Sửa lỗi "thêm học sinh đầu tiên không hiện, chỉ hiện học sinh thứ 2":**
+  - *Nguyên nhân:* Ở chế độ Supabase, `getStudents` chỉ đọc bảng `students` trên DB, trong khi `createStudent` khi gặp lỗi (trùng tên đăng nhập, class_id không phải UUID) lại âm thầm rơi về kho mock (localStorage) hoặc gán học sinh sang lớp mặc định — học sinh tạo ra không nằm trong dữ liệu được đọc nên không hiển thị.
+  - *Khắc phục (`src/services/supabase/supabaseRepositories.ts`):* `getStudents` hợp nhất thêm học sinh từ kho mock chưa có trên DB (theo id + username); `createStudent` không còn gán bừa sang lớp mặc định — class_id dạng UUID dùng thẳng, `class_7a2` ánh xạ lớp mặc định như đường đọc, id lạ chuyển mock xử lý để giữ đúng lớp; trùng tên đăng nhập ở DB thì sinh lại tên khác và thử lại 1 lần trước khi fallback.
+- **Sửa lỗi "mỗi lần thêm học sinh phải tự đổi Tên đăng nhập":**
+  - *Nguyên nhân:* `generateUsername` dùng số ngẫu nhiên và tầng Supabase thậm chí không dùng hàm này (sinh `hs_` + chuỗi ngẫu nhiên), dễ trùng khi thêm nhiều học sinh.
+  - *Khắc phục (`src/services/mock/credentialUtils.ts`):* sinh hậu tố số **xác định** — chọn số nhỏ nhất chưa bị dùng; tầng Supabase dùng chung `generateUsername` với danh sách tên hiện có. Kiểm chứng bằng test tự động: 5 học sinh trùng tên → 5 tên đăng nhập khác nhau, chạy lại cho kết quả giống hệt.
+- **Mã HS tự động:** thêm `generateStudentCode` (HS0001, HS0002, ... chọn số trống nhỏ nhất); để trống Mã HS khi tạo là hệ thống tự cấp ở cả 2 tầng lưu trữ. Ô nhập đổi placeholder thành "Tự động", tiêu đề cột chuẩn hóa thành "Mã HS".
+- **Bỏ trường Ngày sinh** khỏi form thêm học sinh (nhập tay + xem trước Excel) và ngừng thu thập khi tạo tài khoản (`src/components/teacher/AddStudentModal.tsx`). Dữ liệu cũ trong DB giữ nguyên.
+- **Bỏ mục "Danh sách học sinh" ở màn tổng quan** (`src/screens/teacher/ClassesAndStudentsScreen.tsx`) theo Figma: màn hình chỉ còn quản lý lớp — nút "+ Tạo lớp mới", ô "Tìm theo tên lớp...", thẻ lớp với nút "Vào lớp →"; quản lý học sinh thực hiện bên trong từng lớp (đã có sẵn bảng học sinh + nút Thêm học sinh ở trang chi tiết lớp).
+### Kiểm chứng:
+- `npm run build` (gồm kiểm tra TypeScript) thành công, 0 lỗi type; test đơn vị cho hàm sinh tên đăng nhập/mã HS đạt.
+
 ## [2026-10-14] - Khắc Phục Lỗi Phân Bố Phổ Điểm Histogram & Lỗi Mất Bài Nộp Tự Luận Chờ Chấm
 ### Đã thực hiện:
 - **Khắc phục lỗi Phân bố phổ điểm (Histogram) hiển thị sai số lượng học sinh (`src/analytics/scoreAnalytics.ts`)**:

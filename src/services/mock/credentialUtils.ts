@@ -32,21 +32,35 @@ export function generateUsername(fullName: string, existingUsernames: string[] =
 
   const baseUsername = `${firstName}${initialLetters}`;
 
-  // Thử sinh số từ 10 đến 99 (hoặc tiếp tục nếu trùng)
-  let attempts = 0;
-  let candidate = '';
-  do {
-    const num = Math.floor(10 + Math.random() * 90);
-    candidate = `${baseUsername}${num}`;
-    attempts++;
-    if (attempts > 50) {
-      // Nếu trùng quá nhiều, dùng 3 chữ số
-      candidate = `${baseUsername}${Math.floor(100 + Math.random() * 900)}`;
-      break;
+  // Sinh hậu tố số XÁC ĐỊNH (không ngẫu nhiên): chọn số nhỏ nhất chưa bị dùng.
+  // Cách này bảo đảm không bao giờ trùng khi danh sách hiện có đầy đủ,
+  // kể cả khi thêm nhiều học sinh trùng tên trong cùng một lần.
+  const taken = new Set(existingUsernames.map((u) => u.toLowerCase()));
+  for (let num = 10; num <= 9999; num++) {
+    const candidate = `${baseUsername}${num}`;
+    if (!taken.has(candidate)) {
+      return candidate;
     }
-  } while (existingUsernames.includes(candidate));
+  }
 
-  return candidate;
+  return `${baseUsername}${Date.now()}`;
+}
+
+/**
+ * Sinh Mã HS tự động dạng HS + 4 chữ số (HS0001, HS0002, ...):
+ * chọn số nhỏ nhất chưa bị dùng trong danh sách hiện có.
+ */
+export function generateStudentCode(existingCodes: (string | undefined | null)[] = []): string {
+  const taken = new Set(
+    existingCodes.filter(Boolean).map((c) => String(c).toUpperCase())
+  );
+  for (let num = 1; num <= 9999; num++) {
+    const candidate = `HS${String(num).padStart(4, '0')}`;
+    if (!taken.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `HS${Date.now()}`;
 }
 
 /**

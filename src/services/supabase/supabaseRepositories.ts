@@ -68,6 +68,7 @@ import {
   syncPayloadCollection,
   filterContentItems,
 } from './payloadStore.ts';
+import { generateUsername, generateFriendlyPassword, generateStudentCode } from '../mock/credentialUtils.ts';
 
 const TOPIC_CACHE_KEY = 'mam_van_topics';
 const VIDEO_CACHE_KEY = 'mam_van_videos';
@@ -534,6 +535,22 @@ export class SupabaseStudentRepository implements StudentRepository {
         );
       }
 
+      // Hợp nhất với kho mock (local): học sinh từng rơi vào đường fallback khi
+      // tạo vẫn phải hiển thị trong danh sách, tránh lỗi "thêm mà không thấy".
+      try {
+        const dbIds = new Set(result.map((s) => s.id));
+        const dbUsernames = new Set(result.map((s) => s.username.toLowerCase()));
+        const mockList = await mockStudentRepo.getStudents(filter);
+        const extras = mockList.filter(
+          (s) => !dbIds.has(s.id) && !dbUsernames.has(s.username.toLowerCase())
+        );
+        if (extras.length > 0) {
+          result = [...result, ...extras].sort((a, b) => a.name.localeCompare(b.name));
+        }
+      } catch {
+        // Bỏ qua lỗi hợp nhất, giữ nguyên kết quả từ DB
+      }
+
       return result;
     } catch (err) {
       console.error('[SupabaseStudent] Ngoại lệ getStudents:', err);
@@ -588,28 +605,71 @@ export class SupabaseStudentRepository implements StudentRepository {
 
     try {
       const cleanName = data.name.trim();
-      const generatedUsername =
-        data.custom_username?.trim().toLowerCase() ||
-        'hs_' + Math.random().toString(36).substring(2, 8);
-      const initialPassword = data.custom_password?.trim() || '123456';
-      const cleanClassId = isUUID(data.class_id) ? data.class_id : DEFAULT_CLASS_UUID;
+      // Tên đăng nhập: ưu tiên giá trị giáo viên đặt; nếu trống thì sinh theo chuẩn
+      // dự án (generateUsername xác định, không ngẫu nhiên) dựa trên danh sách hiện có.
+      let generatedUsername = data.custom_username?.trim().toLowerCase() || '';
+      if (!generatedUsername) {
+        const existing = await this.getStudents();
+        generatedUsername = generateUsername(
+          cleanName,
+          existing.map((s) => s.username.toLowerCase())
+        );
+      }
+      const initialPassword = data.custom_password?.trim() || generateFriendlyPassword(8);
+      // class_id: UUID dùng thẳng; id lớp mẫu 'class_7a2' ánh xạ sang lớp mặc định
+      // (giống đường đọc getStudents). Id lạ không thuộc DB thì để mock xử lý để
+      // giữ đúng lớp — danh sách đọc đã hợp nhất nên học sinh vẫn hiển thị.
+      let cleanClassId: string | null = null;
+      if (isUUID(data.class_id)) {
+        cleanClassId = data.class_id;
+      } else if (data.class_id === 'class_7a2') {
+        cleanClassId = DEFAULT_CLASS_UUID;
+      }
+      if (!cleanClassId) {
+        return mockStudentRepo.createStudent(data, teacherActorId);
+      }
 
       const payload = {
         name: cleanName,
         username: generatedUsername,
         password_hash: initialPassword,
         class_id: cleanClassId,
-        student_code: data.student_code?.trim() || null,
+        student_code:
+          data.student_code?.trim() ||
+          generateStudentCode((await this.getStudents()).map((s) => s.student_code)),
         dob: data.dob || null,
         status: 'active',
         has_logged_in: false,
       };
 
-      const { data: created, error } = await supabase
+      let { data: created, error } = await supabase
         .from('students')
         .insert(payload)
         .select()
         .single();
+
+      if ((error || !created) && error) {
+        // Trùng tên đăng nhập ở DB (unique): sinh lại tên khác và thử lại 1 lần
+        // thay vì đổ sang mock khiến học sinh "tạo mà không thấy".
+        const isDuplicateUsername =
+          (error as any).code === '23505' || /username|duplicate/i.test(error.message || '');
+        if (isDuplicateUsername) {
+          const existing = await this.getStudents();
+          const retryUsername = generateUsername(
+            cleanName,
+            existing.map((s) => s.username.toLowerCase()).concat(generatedUsername)
+          );
+          const retry = await supabase
+            .from('students')
+            .insert({ ...payload, username: retryUsername })
+            .select()
+            .single();
+          if (!retry.error && retry.data) {
+            created = retry.data;
+            error = null;
+          }
+        }
+      }
 
       if (error || !created) {
         console.warn('[SupabaseStudent] Không tạo được học sinh trên DB, dùng mock:', error?.message);
