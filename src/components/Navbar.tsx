@@ -1,11 +1,11 @@
 import React from 'react';
-import { Home, BookOpen, Sprout, Gift, User, Flame, Clock, Palette } from 'lucide-react';
+import { Home, BookOpen, Sprout, Gift, User, Flame, Clock, Palette, TrendingUp } from 'lucide-react';
 import { APP_NAME, MASCOT_NAME } from '../config.ts';
 import { StudentState } from '../types.ts';
 import { THEMES_LIST } from '../data/themes.ts';
 import { BrandHeaderLockup } from './MamVanLogo.tsx';
 
-export type NavTab = 'home' | 'learn' | 'tree' | 'rewards' | 'profile';
+export type NavTab = 'home' | 'learn' | 'tree' | 'results' | 'rewards' | 'profile';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -32,6 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       badge: topicsCount !== undefined ? (topicsCount > 0 ? `${topicsCount} chủ đề` : null) : null,
     },
     { key: 'tree' as NavTab, label: 'Cây tri thức', icon: Sprout, badge: null },
+    { key: 'results' as NavTab, label: 'Kết quả học tập', icon: TrendingUp, badge: null },
     { key: 'rewards' as NavTab, label: 'Đổi quà', icon: Gift, badge: 'Mới' },
     { key: 'profile' as NavTab, label: 'Hồ sơ', icon: User, badge: null },
   ];

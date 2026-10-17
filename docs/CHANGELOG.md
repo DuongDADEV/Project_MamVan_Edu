@@ -13,6 +13,18 @@
 ### Kiểm chứng:
 - `npm run build` (đã gồm kiểm tra type) thành công; app chạy thử hiển thị bình thường.
 
+## [2026-10-18] - Đợt 6: Thêm mục "Kết quả học tập" cho học sinh + chia nhỏ gói JS (tải lười)
+### Đã thực hiện:
+- **Mục mới "Kết quả học tập"** ở thanh điều hướng học sinh (theo ghi chú Figma cạnh sidebar — trước đây chưa có trong hệ thống), nằm giữa "Cây tri thức" và "Đổi quà" (`src/components/Navbar.tsx`, `src/App.tsx`, `src/types` điều hướng `NavTab` thêm `'results'`).
+- **Màn hình Kết quả học tập mới** (`src/screens/LearningResultsScreen.tsx`), đúng nội dung đã chốt:
+  - *Thẻ tổng quan:* tổng XP (+XP hôm nay), số câu đã làm, điểm trung bình /10 + tỉ lệ đúng, số huy hiệu đã đạt.
+  - *Điểm theo từng chủ đề:* mức thành thạo 4 năng lực (Nhận biết / Thông hiểu / Phân tích / Vận dụng) dạng thanh %, điểm trung bình và trạng thái (Đã hoàn thành / Đang học / Cần ôn lại / Chưa học) — dùng chung hàm tính `calculateAllMastery` với Cây tri thức nên số liệu nhất quán; bấm tên chủ đề để tới bài học.
+  - *Biểu đồ tiến bộ:* biểu đồ Recharts 6 tuần gần nhất (cột = số câu đã làm, đường = điểm trung bình), tính từ chính lịch sử làm bài của học sinh.
+  - *Thành tích & huy hiệu:* toàn bộ danh mục huy hiệu, phân biệt đã đạt / chưa đạt.
+- **Chia nhỏ gói JS bằng tải lười (React.lazy):** TeacherPortal, LearnScreen, TreeScreen, RewardsScreen, ProfileScreen và màn Kết quả học tập được tách thành các gói riêng chỉ tải khi cần. Gói JS ban đầu giảm từ **2,37 MB xuống ~0,79 MB**; phần giáo viên (~1,08 MB) và thư viện biểu đồ (~0,39 MB) chỉ tải khi vào đúng khu vực.
+### Kiểm chứng:
+- `npm run build` thành công, 0 lỗi TypeScript; máy chủ dev khởi động bình thường (HTTP 200).
+
 ## [2026-10-18] - Đợt 5: Cây tri thức "Vườn Văn Mầm Mục" — 15 vị trí lá theo chủ đề thật, màu trạng thái chuẩn Figma, hiệu ứng nhấp lá
 ### Đã thực hiện (`src/components/GrowthTree.tsx`, `src/screens/TreeScreen.tsx`):
 - **15 vị trí lá trên tán cây, gắn với chủ đề thật:** trước đây chỉ có 4 vị trí và chủ đề thứ 5 trở đi bị vẽ chồng lên vị trí cũ. Nay cây có 15 vị trí lá — **4 lá chính đầu tiên** tương ứng 4 chủ đề đầu tiên trong thứ tự khóa học (lá to, có nhãn tên), và **từ chủ đề thứ 5 trở đi các "lá ẩn" mới bắt đầu xuất hiện** ở 11 vị trí còn lại (lá nhỏ hơn, rê chuột để xem tên + %). Không có chủ đề thì không vẽ lá — tối đa 15 lá.

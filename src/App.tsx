@@ -45,13 +45,27 @@ import {
 // Screens
 import { LoginScreen } from './screens/LoginScreen.tsx';
 import { HomeScreen } from './screens/HomeScreen.tsx';
-import { LearnScreen } from './screens/LearnScreen.tsx';
-import { TreeScreen } from './screens/TreeScreen.tsx';
-import { RewardsScreen } from './screens/RewardsScreen.tsx';
-import { ProfileScreen } from './screens/ProfileScreen.tsx';
+// Các màn hình còn lại được tải lười (lazy) để chia nhỏ gói JS ban đầu
+const LearnScreen = React.lazy(() =>
+  import('./screens/LearnScreen.tsx').then((m) => ({ default: m.LearnScreen }))
+);
+const TreeScreen = React.lazy(() =>
+  import('./screens/TreeScreen.tsx').then((m) => ({ default: m.TreeScreen }))
+);
+const LearningResultsScreen = React.lazy(() =>
+  import('./screens/LearningResultsScreen.tsx').then((m) => ({ default: m.LearningResultsScreen }))
+);
+const RewardsScreen = React.lazy(() =>
+  import('./screens/RewardsScreen.tsx').then((m) => ({ default: m.RewardsScreen }))
+);
+const ProfileScreen = React.lazy(() =>
+  import('./screens/ProfileScreen.tsx').then((m) => ({ default: m.ProfileScreen }))
+);
 import { VideoLessonScreen } from './screens/VideoLessonScreen.tsx';
 import { TheoryLessonScreen } from './screens/TheoryLessonScreen.tsx';
-import { TeacherPortal } from './screens/TeacherPortal.tsx';
+const TeacherPortal = React.lazy(() =>
+  import('./screens/TeacherPortal.tsx').then((m) => ({ default: m.TeacherPortal }))
+);
 import { AdminPortal } from './screens/admin/AdminPortal.tsx';
 
 const USER_STORAGE_KEY = 'vo_muc_active_user';
@@ -565,11 +579,19 @@ export default function App() {
             </button>
           </div>
         )}
-        <TeacherPortal
-          teacher={currentSession.user as TeacherProfile}
-          onLogout={handleLogout}
-          onSwitchToStudentView={handleSwitchToStudentView}
-        />
+        <React.Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center text-sm font-semibold text-[#2F3E6B]">
+              Đang tải không gian giáo viên...
+            </div>
+          }
+        >
+          <TeacherPortal
+            teacher={currentSession.user as TeacherProfile}
+            onLogout={handleLogout}
+            onSwitchToStudentView={handleSwitchToStudentView}
+          />
+        </React.Suspense>
       </div>
     );
   }
@@ -674,7 +696,13 @@ export default function App() {
           })()
         ) : (
           /* CÁC TAB CHÍNH */
-          <>
+          <React.Suspense
+            fallback={
+              <div className="flex items-center justify-center py-24 text-sm font-semibold text-[#2F3E6B]">
+                Đang tải nội dung...
+              </div>
+            }
+          >
             {currentTab === 'home' && (
               <HomeScreen
                 state={studentState}
@@ -711,6 +739,16 @@ export default function App() {
               />
             )}
 
+            {currentTab === 'results' && (
+              <LearningResultsScreen
+                state={studentState}
+                topics={publishedTopics}
+                onSelectTopic={(tId) => {
+                  setCurrentTab('learn');
+                }}
+              />
+            )}
+
             {currentTab === 'rewards' && (
               <RewardsScreen
                 state={studentState}
@@ -727,7 +765,7 @@ export default function App() {
                 onLogout={handleLogout}
               />
             )}
-          </>
+          </React.Suspense>
         )}
       </main>
 
