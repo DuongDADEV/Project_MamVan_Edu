@@ -1,5 +1,18 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Đợt 0: Nền kỹ thuật — Cổng kiểm tra TypeScript & Sửa sạch 18 lỗi type
+### Đã thực hiện:
+- **Bổ sung cổng kiểm tra TypeScript vào lệnh build (`package.json`)**: đổi script `build` thành `tsc --noEmit && vite build`. Trước đây build chỉ chạy Vite nên lỗi kiểu dữ liệu lọt qua khâu kiểm tra.
+- **Sửa sạch 18/18 lỗi TypeScript (kiểm tra `tsc --noEmit` từ 18 lỗi → 0 lỗi):**
+  - `src/analytics/metricsEngine.ts`: xóa block import trùng lặp 4 type từ `./types.ts`; sửa `e.class_id` → `e.classId` khi đếm bài chờ chấm; bỏ phép so sánh chết `status === 'PENDING'` (type `RewardStatus` không có giá trị này, chỉ có `PENDING_APPROVAL`).
+  - `src/components/VideoCard.tsx`, `src/screens/LearnScreen.tsx`: gọi sai dịch vụ — `contentService.getQuizzes` không tồn tại trên `ContentRepository`; chuyển sang `quizService.getQuizzes` (QuizRepository) giống các màn hình còn lại.
+  - `src/screens/VideoLessonScreen.tsx`: bảo vệ truy cập `video.durationSec` khi `video` có thể null/undefined khi tính thời lượng hiệu dụng.
+  - `src/services/mock/mockRepositories.ts`: cố định `filter.classId` vào biến cục bộ trước khi dùng trong callback lọc bài nộp.
+  - `src/services/supabase/supabaseRepositories.ts`: ép `submission.classId` về `string | null` đúng kiểu khi lưu bài nộp; ánh xạ trường đề bài sang `questionPrompt` (type `EssaySubmission` không có trường `prompt`, bảng `essay_submissions` cũng không có cột này).
+- **Cấu hình môi trường:** tạo `.env.local` (Supabase live + GEMINI_API_KEY) — file được .gitignore bảo vệ, không commit.
+### Kiểm chứng:
+- `npm run build` (đã gồm kiểm tra type) thành công; app chạy thử hiển thị bình thường.
+
 ## [2026-10-14] - Khắc Phục Lỗi Phân Bố Phổ Điểm Histogram & Lỗi Mất Bài Nộp Tự Luận Chờ Chấm
 ### Đã thực hiện:
 - **Khắc phục lỗi Phân bố phổ điểm (Histogram) hiển thị sai số lượng học sinh (`src/analytics/scoreAnalytics.ts`)**:

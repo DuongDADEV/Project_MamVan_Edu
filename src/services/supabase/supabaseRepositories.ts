@@ -1168,7 +1168,7 @@ export class SupabaseEssayRepository implements EssayRepository {
       // 3. Xác minh class_id có thực trong database hoặc gán null (hợp lệ theo FK ON DELETE SET NULL)
       let finalClassUUID: string | null = null;
       if (isUUID(submission.classId)) {
-        finalClassUUID = submission.classId;
+        finalClassUUID = submission.classId ?? null;
       } else if (targetClassUUID && isUUID(targetClassUUID)) {
         finalClassUUID = targetClassUUID;
       }
@@ -1353,7 +1353,7 @@ export class SupabaseEssayRepository implements EssayRepository {
             className: updated.classes?.name || '7A1',
             promptTitle: qInfo?.prompt || 'Cảm nghĩ về bài thơ / văn bản',
             quizTitle: 'Bài tập làm văn',
-            prompt: qInfo?.prompt || 'Viết đoạn văn theo yêu cầu',
+            questionPrompt: qInfo?.prompt || 'Viết đoạn văn theo yêu cầu',
             content: updated.content,
             wordCount: updated.word_count || 0,
             submittedAt: new Date(updated.created_at || Date.now()).getTime(),

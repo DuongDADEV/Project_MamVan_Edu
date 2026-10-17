@@ -4,12 +4,6 @@ import {
   StudentAttentionItem,
   PedagogicalInsight,
 } from './types.ts';
-import {
-  AnalyticsFilter,
-  OverviewMetricsData,
-  StudentAttentionItem,
-  PedagogicalInsight,
-} from './types.ts';
 import { StudentState, QuestionResult, SkillLevel, EssaySubmission, RewardRequest } from '../types.ts';
 import { StudentAccount, TopicWithMeta, ClassItem } from '../services/types.ts';
 import { getFilterDateRange, filterStudents, filterStudentStates, filterQuestionResults } from './filterUtils.ts';
@@ -102,7 +96,7 @@ export function computeOverviewMetrics(
   if (allEssays && Array.isArray(allEssays)) {
     const classSet = filter.classIds && filter.classIds.length > 0 ? new Set(filter.classIds) : null;
     pendingGradingCount = allEssays.filter((e) => {
-      const matchClass = !classSet || !e.class_id || classSet.has(e.class_id);
+      const matchClass = !classSet || !e.classId || classSet.has(e.classId);
       return matchClass && e.status !== 'GRADED';
     }).length;
   } else {
@@ -115,7 +109,7 @@ export function computeOverviewMetrics(
   // 6. Số yêu cầu quà chờ duyệt (Ưu tiên đếm từ bảng reward_requests thực tế)
   let pendingRewardCount = 0;
   if (allRewards && Array.isArray(allRewards)) {
-    pendingRewardCount = allRewards.filter((r) => r.status === 'PENDING' || r.status === 'PENDING_APPROVAL').length;
+    pendingRewardCount = allRewards.filter((r) => r.status === 'PENDING_APPROVAL').length;
   } else {
     Object.values(states).forEach((st) => {
       const pending = (st.rewardRequests || []).filter((r) => r.status === 'PENDING_APPROVAL').length;

@@ -1823,11 +1823,12 @@ export class MockEssayRepository implements EssayRepository {
     }
 
     if (filter?.classId && filter.classId !== 'all') {
+      const classId = filter.classId;
       const allowedStudentIds = new Set(
-        students.filter((s) => s.class_id === filter.classId).map((s) => s.id)
+        students.filter((s) => s.class_id === classId).map((s) => s.id)
       );
       result = result.filter(
-        (e) => allowedStudentIds.has(e.studentId) || e.classId === filter.classId || e.className?.toLowerCase().includes(filter.classId.toLowerCase())
+        (e) => allowedStudentIds.has(e.studentId) || e.classId === classId || e.className?.toLowerCase().includes(classId.toLowerCase())
       );
     }
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { VideoLesson, Topic, StudentState, Quiz } from '../types.ts';
 import { XP_CONFIG, TOTAL_VIDEO_XP } from '../config.ts';
-import { useLiveQuery, contentService, QuizWithMeta } from '../services/index.ts';
+import { useLiveQuery, contentService, quizService, QuizWithMeta } from '../services/index.ts';
 import { QUIZZES } from '../data/mockData.ts';
 import {
   Clock,
@@ -174,7 +174,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
   // Lắng nghe realtime quizzes nếu component chưa được truyền quizzes
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
-    () => contentService.getQuizzes(undefined, true),
+    () => quizService.getQuizzes(undefined, true),
     ['content']
   );
 

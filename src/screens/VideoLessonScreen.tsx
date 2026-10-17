@@ -188,7 +188,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   }, [video?.durationSec]);
 
   // Độ dài hiệu dụng thật của bài giảng
-  const effectiveDuration = mediaDuration > 0 ? mediaDuration : (video?.durationSec > 0 ? video.durationSec : 60);
+  const fallbackDuration = video?.durationSec && video.durationSec > 0 ? video.durationSec : 60;
+  const effectiveDuration = mediaDuration > 0 ? mediaDuration : fallbackDuration;
 
   // Theo dõi tỷ lệ đã xem thật (≥ 80%)
   const watchedRatio = watchedSecondsSet.size / Math.max(1, effectiveDuration);

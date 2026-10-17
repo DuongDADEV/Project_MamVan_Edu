@@ -4,7 +4,7 @@ import { calculateAllMastery, isTopicSolid } from '../logic/mastery.ts';
 import { VideoCard, VideoCardSkeleton } from '../components/VideoCard.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { Video, BookOpen, CheckCircle, Clock, ArrowRight, Filter, Sparkles, Layers } from 'lucide-react';
-import { useLiveQuery, contentService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
+import { useLiveQuery, contentService, quizService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
 import { QUIZZES } from '../data/mockData.ts';
 
 interface LearnScreenProps {
@@ -36,7 +36,7 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
     ['content']
   );
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
-    () => contentService.getQuizzes(undefined, true),
+    () => quizService.getQuizzes(undefined, true),
     ['content']
   );
 
