@@ -16,8 +16,7 @@ import {
   MoreVertical,
   Edit2,
   Trash2,
-  ArrowUp,
-  ArrowDown,
+  GripVertical,
   FolderPlus,
   Layers,
   Sparkles,
@@ -42,7 +41,7 @@ interface TopicTreeSidebarProps {
   onOpenCreateTopic: () => void;
   onEditTopic: (topic: TopicWithMeta) => void;
   onDeleteTopic: (topicId: string) => void;
-  onMoveTopic: (topicId: string, direction: 'up' | 'down') => void;
+  onReorderTopics: (orderedIds: string[]) => void;
   onDuplicateItem: (type: ContentItemType, id: string) => void;
   onDeleteItem: (type: ContentItemType, id: string) => void;
 }
@@ -57,7 +56,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   onOpenCreateTopic,
   onEditTopic,
   onDeleteTopic,
-  onMoveTopic,
+  onReorderTopics,
   onDuplicateItem,
   onDeleteItem,
 }) => {
@@ -72,6 +71,24 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
 
   // Menu tùy chọn đang mở
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Kéo-thả đổi thứ tự chủ đề (giữ-kéo thay cho nút lên/xuống)
+  const [draggingTopicId, setDraggingTopicId] = useState<string | null>(null);
+  const [dragOverTopicId, setDragOverTopicId] = useState<string | null>(null);
+
+  const handleTopicDrop = (targetId: string) => {
+    const fromId = draggingTopicId;
+    setDraggingTopicId(null);
+    setDragOverTopicId(null);
+    if (!fromId || fromId === targetId) return;
+    const ids = topics.map((t) => t.id);
+    const from = ids.indexOf(fromId);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, fromId);
+    onReorderTopics(ids);
+  };
 
   const toggleTopic = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -138,19 +155,53 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
             const isTopicSelected =
               selectedItem?.type === 'topic' && selectedItem?.id === topic.id;
 
+            const topicColor = topic.colorScheme || '#2F3E6B';
+            // Không hiển thị thẻ mặc định "Ngữ văn 7" (theo yêu cầu bỏ chữ này)
+            const displayTag =
+              topic.tag && topic.tag.trim() !== '' && topic.tag.trim() !== 'Ngữ văn 7'
+                ? topic.tag
+                : null;
+
             return (
               <div
                 key={topic.id}
-                className="rounded-2xl border border-[#E6DCC8] bg-[#FAF5EB]/40 overflow-hidden transition-all"
+                draggable
+                onDragStart={(e) => {
+                  setDraggingTopicId(topic.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragEnd={() => {
+                  setDraggingTopicId(null);
+                  setDragOverTopicId(null);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggingTopicId && draggingTopicId !== topic.id) setDragOverTopicId(topic.id);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleTopicDrop(topic.id);
+                }}
+                className={`rounded-2xl border overflow-hidden transition-all ${
+                  draggingTopicId === topic.id ? 'opacity-50' : ''
+                } ${dragOverTopicId === topic.id ? 'ring-2 ring-[#E2704A]' : ''}`}
+                style={{
+                  backgroundColor: `${topicColor}14`,
+                  borderColor: `${topicColor}59`,
+                }}
+                title="Giữ và kéo để đổi thứ tự chủ đề"
               >
                 {/* Topic Header Row */}
                 <div
                   onClick={() => onSelectItem({ type: 'topic', id: topic.id })}
                   className={`px-3 py-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors ${
-                    isTopicSelected
-                      ? 'bg-[#2F3E6B]/10 border-l-4 border-l-[#2F3E6B]'
-                      : 'hover:bg-black/5'
+                    isTopicSelected ? 'border-l-4' : 'hover:bg-black/5'
                   }`}
+                  style={
+                    isTopicSelected
+                      ? { backgroundColor: `${topicColor}26`, borderLeftColor: topicColor }
+                      : undefined
+                  }
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <button
@@ -171,13 +222,17 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                           className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: topic.colorScheme || '#2F3E6B' }}
                         />
-                        <h4 className="text-xs font-bold text-[#2F3E6B] truncate">
+                        <h4 className="text-base font-lora font-bold text-[#2F3E6B] leading-snug">
                           {topic.title}
                         </h4>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-[#8C7E6A]">{topic.tag}</span>
-                        <span className="text-[10px] text-slate-300">•</span>
+                        {displayTag && (
+                          <>
+                            <span className="text-[10px] text-[#8C7E6A]">{displayTag}</span>
+                            <span className="text-[10px] text-slate-300">•</span>
+                          </>
+                        )}
                         <StatusBadge
                           status={topic.status}
                           hasUnpublishedEdits={topic.has_unpublished_edits}
@@ -189,31 +244,13 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
 
                   {/* Actions on topic */}
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* Up / Down Reorder */}
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMoveTopic(topic.id, 'up');
-                      }}
-                      className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] disabled:opacity-30 transition-colors"
-                      title="Di chuyển lên trên"
+                    {/* Tay nắm kéo-thả đổi thứ tự (giữ và kéo thẻ chủ đề) */}
+                    <span
+                      className="p-1 text-[#8C7E6A] cursor-grab active:cursor-grabbing"
+                      title="Giữ và kéo để đổi thứ tự chủ đề"
                     >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === topics.length - 1}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMoveTopic(topic.id, 'down');
-                      }}
-                      className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] disabled:opacity-30 transition-colors"
-                      title="Di chuyển xuống dưới"
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
+                      <GripVertical className="w-4 h-4" />
+                    </span>
 
                     <button
                       type="button"

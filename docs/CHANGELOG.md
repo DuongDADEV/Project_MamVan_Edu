@@ -13,6 +13,17 @@
 ### Kiểm chứng:
 - `npm run build` (đã gồm kiểm tra type) thành công; app chạy thử hiển thị bình thường.
 
+## [2026-10-18] - Đợt 3: Nội dung học — màu chủ đề nhuộm cả thẻ, tiêu đề lớn, bỏ chữ "Ngữ văn 7", kéo-thả sắp xếp chủ đề, nút Quay lại ở 3 trình soạn
+### Đã thực hiện (đủ 6 yêu cầu của tài liệu góp ý):
+- **Màu nhận diện đổi cả chủ đề** (`TopicTreeSidebar.tsx`, `TeacherContentScreen.tsx`): thẻ chủ đề ở cây bên trái được nhuộm nền + viền theo đúng màu nhận diện đã chọn (không còn chỉ là chấm tròn nhỏ); trạng thái đang chọn cũng tô theo màu của chính chủ đề đó. Trang chi tiết chủ đề nhuộm nền/viền đồng bộ và ô chữ cái đầu dùng nguyên màu chủ đề.
+- **Tiêu đề chủ đề lớn hơn:** ở cây chủ đề tăng từ 12px lên 16px (font Lora, đậm); ở trang chi tiết chủ đề tăng lên 30px.
+- **Bỏ chữ "Ngữ văn 7"** trong khu quản lý nội dung: `TopicModal` không còn tự điền tag mặc định "Ngữ văn 7" khi tạo/sửa chủ đề; các chủ đề cũ đang lưu tag này sẽ không hiển thị tag ở cây chủ đề và trang chi tiết nữa (tag thật như "Thơ ca", "Tiếng Việt"... vẫn hiện bình thường).
+- **Sắp xếp chủ đề bằng kéo-thả:** bỏ 2 nút mũi tên lên/xuống, thay bằng tay nắm kéo ở mỗi thẻ — giữ và kéo thẻ chủ đề tới vị trí mới (thẻ đích được khoanh viền cam), thứ tự mới lưu ngay qua `reorderTopics` có sẵn.
+- **Nút "Quay lại" ở cả 3 trình soạn** (VideoLessonEditor, TheoryLessonEditor, QuizBuilder): nút ở góc trái thanh tiêu đề, bấm để quay về trang chi tiết của chủ đề chứa bài — không còn cảnh mở bài liên kết xong không có đường quay lại.
+- **Bỏ dòng chữ thừa** "Kiểu Google Form • Hỗ trợ 4 định dạng chuyên biệt cho môn Ngữ văn" trong QuizBuilder.
+### Kiểm chứng:
+- `npm run build` (gồm kiểm tra TypeScript) thành công, 0 lỗi type.
+
 ## [2026-10-18] - Đợt 2: Xưởng AI (đếm câu theo loại, panel kéo/thu) & Ngân hàng câu hỏi (lọc dạng list, gọn trạng thái AI); kiểm chứng Gemini API Key
 ### Đã thực hiện:
 - **Xưởng Sáng Tạo AI (`src/components/teacher/ai/AiContentStudioModal.tsx`):**

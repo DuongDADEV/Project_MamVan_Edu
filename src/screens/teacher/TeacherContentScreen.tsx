@@ -157,16 +157,9 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     }
   };
 
-  const handleMoveTopic = async (topicId: string, direction: 'up' | 'down') => {
-    const ids = topics.map((t) => t.id);
-    const index = ids.indexOf(topicId);
-    if (index === -1) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= ids.length) return;
-
-    ids[index] = ids[targetIndex];
-    ids[targetIndex] = topicId;
-    await contentService.reorderTopics(ids);
+  // Kéo-thả đổi thứ tự: sidebar trả về danh sách id đã sắp xếp lại
+  const handleReorderTopics = async (orderedIds: string[]) => {
+    await contentService.reorderTopics(orderedIds);
   };
 
   // ==========================================
@@ -641,7 +634,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           onOpenCreateTopic={handleOpenCreateTopic}
           onEditTopic={handleEditTopic}
           onDeleteTopic={handleDeleteTopic}
-          onMoveTopic={handleMoveTopic}
+          onReorderTopics={handleReorderTopics}
           onDuplicateItem={handleDuplicateItem}
           onDeleteItem={handleDeleteItem}
         />
@@ -658,6 +651,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onPublish={handleOpenPublishModalForCurrent}
             onPreviewStudent={() => handlePreviewStudent('video')}
             onCreateLinkedQuiz={handleCreateLinkedQuiz}
+            onBack={() => setSelectedItem({ type: 'topic', id: currentVideo.topicId })}
           />
         ) : currentTheory ? (
           <TheoryLessonEditor
@@ -670,6 +664,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onPublish={handleOpenPublishModalForCurrent}
             onPreviewStudent={() => handlePreviewStudent('theory')}
             onCreateLinkedQuiz={handleCreateLinkedQuiz}
+            onBack={() => setSelectedItem({ type: 'topic', id: currentTheory.topicId })}
           />
         ) : currentQuiz ? (
           <QuizBuilder
@@ -693,10 +688,17 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onPreviewStudent={(draftQuiz, draftQuestions) =>
               handlePreviewStudent('quiz', draftQuiz, draftQuestions)
             }
+            onBack={() => setSelectedItem({ type: 'topic', id: currentQuiz.topicId })}
           />
         ) : currentTopic ? (
           /* Khối thông tin chi tiết của chủ đề đang chọn */
-          <div className="flex-1 p-8 bg-[#FFFDF8] rounded-2xl md:rounded-l-none border border-[#E6DCC8] shadow-xs flex flex-col items-center justify-center text-center space-y-4">
+          <div
+            className="flex-1 p-8 rounded-2xl md:rounded-l-none border shadow-xs flex flex-col items-center justify-center text-center space-y-4"
+            style={{
+              backgroundColor: `${currentTopic.colorScheme || '#2F3E6B'}0F`,
+              borderColor: `${currentTopic.colorScheme || '#2F3E6B'}59`,
+            }}
+          >
             <div
               className="w-16 h-16 rounded-3xl flex items-center justify-center shadow-md text-white font-lora font-bold text-2xl"
               style={{ backgroundColor: currentTopic.colorScheme || '#2F3E6B' }}
@@ -704,8 +706,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               {currentTopic.title.slice(0, 1)}
             </div>
             <div className="max-w-md space-y-1">
-              <span className="text-xs font-bold text-[#E2704A]">{currentTopic.tag}</span>
-              <h3 className="font-lora font-bold text-xl text-[#2F3E6B]">
+              {currentTopic.tag && currentTopic.tag.trim() !== '' && currentTopic.tag.trim() !== 'Ngữ văn 7' && (
+                <span className="text-xs font-bold text-[#E2704A]">{currentTopic.tag}</span>
+              )}
+              <h3 className="font-lora font-bold text-3xl text-[#2F3E6B]">
                 {currentTopic.title}
               </h3>
               <p className="text-xs text-[#8C7E6A] leading-relaxed">

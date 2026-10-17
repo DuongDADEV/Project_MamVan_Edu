@@ -8,6 +8,7 @@ import {
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
 import {
+  ArrowLeft,
   BookOpen,
   Heading,
   AlignLeft,
@@ -41,6 +42,7 @@ interface TheoryLessonEditorProps {
   onPublish: () => void;
   onPreviewStudent: () => void;
   onCreateLinkedQuiz: (kind: 'practice' | 'quick' | 'mastery') => void;
+  onBack?: () => void;
 }
 
 export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
@@ -51,6 +53,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   onPublish,
   onPreviewStudent,
   onCreateLinkedQuiz,
+  onBack,
 }) => {
   const [title, setTitle] = useState(theory.title || '');
   const [topicId, setTopicId] = useState(theory.topicId || topics[0]?.id || '');
@@ -278,6 +281,17 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
       {/* Top Header */}
       <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] hover:border-[#2F3E6B] transition-colors shrink-0"
+              title="Quay lại chủ đề"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Quay lại</span>
+            </button>
+          )}
           <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200 text-[#7C3AED] flex items-center justify-center shrink-0">
             <BookOpen className="w-4 h-4" />
           </div>

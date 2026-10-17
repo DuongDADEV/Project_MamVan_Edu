@@ -40,7 +40,7 @@ export const TopicModal: React.FC<TopicModalProps> = ({
     } else {
       setTitle('');
       setShortDesc('');
-      setTag('Ngữ văn 7');
+      setTag('');
       setColorScheme('#2F3E6B');
     }
     setError(null);
@@ -62,7 +62,7 @@ export const TopicModal: React.FC<TopicModalProps> = ({
         id: initialData?.id,
         title: title.trim(),
         shortDesc: shortDesc.trim(),
-        tag: tag.trim() || 'Ngữ văn 7',
+        tag: tag.trim(),
         colorScheme,
       });
       onClose();
