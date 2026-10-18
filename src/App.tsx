@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   StudentProfile,
   StudentState,
@@ -21,6 +21,10 @@ import { awardXP } from './logic/xpEngine.ts';
 import { getLocalTodayStr, rolloverStudentState } from './logic/studentStateUtils.ts';
 import { useActiveLearningTimer } from './logic/useActiveLearningTimer.ts';
 import { Navbar, NavTab } from './components/Navbar.tsx';
+import {
+  buildStudentNotifications,
+  StudentNotification,
+} from './logic/studentNotifications.ts';
 import { DevPanel } from './components/DevPanel.tsx';
 import { BreakReminderModal } from './components/BreakReminderModal.tsx';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal.tsx';
@@ -38,6 +42,8 @@ import {
   essayRepository,
   QuizWithMeta,
   QuestionWithMeta,
+  VideoLessonWithMeta,
+  TheoryLessonWithMeta,
   syncEventBus,
   useLiveQuery,
   AuthSession,
@@ -319,6 +325,16 @@ export default function App() {
   );
   const publishedTopics = rawTopics ?? [];
 
+  // Nạp video & lý thuyết đã xuất bản (phục vụ cả thông báo bài mới)
+  const { data: rawVideos } = useLiveQuery<VideoLessonWithMeta[]>(
+    () => contentService.getVideoLessons(studentState.profile.grade, true),
+    ['content']
+  );
+  const { data: rawTheories } = useLiveQuery<TheoryLessonWithMeta[]>(
+    () => contentService.getTheoryLessons(studentState.profile.grade, true),
+    ['content']
+  );
+
   // Nạp danh sách bài kiểm tra & câu hỏi từ Kho chung
   const { data: rawQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(studentState.profile.grade, true),
@@ -338,6 +354,60 @@ export default function App() {
     const zoom = pref === 'larger' ? '1.25' : pref === 'large' ? '1.12' : '1';
     document.body.style.setProperty('zoom', zoom);
   }, [studentState.fontSizePreference]);
+
+  // THÔNG BÁO BÀI MỚI: suy ra từ nội dung thầy/cô vừa xuất bản (published_at).
+  // Đã đọc lưu trong state nên đồng bộ theo tài khoản qua Supabase.
+  const studentNotifications = useMemo(
+    () =>
+      buildStudentNotifications({
+        videos: rawVideos || [],
+        theories: rawTheories || [],
+        quizzes: rawQuizzes || [],
+        topics: (publishedTopics || []) as any,
+        classId: (currentSession?.user as any)?.class_id,
+        className: studentState.profile.grade,
+      }),
+    [rawVideos, rawTheories, rawQuizzes, publishedTopics, currentSession, studentState.profile.grade]
+  );
+  const unreadNotifications = useMemo(
+    () =>
+      studentNotifications.filter(
+        (n) => !(studentState.seenNotificationIds || []).includes(n.id)
+      ),
+    [studentNotifications, studentState.seenNotificationIds]
+  );
+
+  const markNotificationSeen = (id: string) => {
+    setStudentState((prev) => {
+      const seen = prev.seenNotificationIds || [];
+      if (seen.includes(id)) return prev;
+      return { ...prev, seenNotificationIds: [...seen, id].slice(-200) };
+    });
+  };
+
+  const handleOpenNotification = (n: StudentNotification) => {
+    markNotificationSeen(n.id);
+    if (n.kind === 'video') {
+      setActiveFlow({ type: 'video', videoId: n.itemId });
+    } else if (n.kind === 'theory') {
+      setActiveFlow({ type: 'theory', theoryId: n.itemId });
+    } else if (n.quizKind === 'homework') {
+      setActiveFlow({ type: 'homework', homeworkQuizId: n.itemId });
+    } else {
+      const quiz = (rawQuizzes || []).find((q) => q.id === n.itemId);
+      if (quiz?.topicId) setLearnFocusTopicId(quiz.topicId);
+      setActiveFlow(null);
+      setCurrentTab('learn');
+    }
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setStudentState((prev) => {
+      const seen = new Set(prev.seenNotificationIds || []);
+      studentNotifications.forEach((n) => seen.add(n.id));
+      return { ...prev, seenNotificationIds: Array.from(seen).slice(-200) };
+    });
+  };
 
   // 3. Quản lý Điều hướng màn hình học sinh
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
@@ -729,6 +799,11 @@ export default function App() {
         state={studentState}
         topicsCount={publishedTopics.length}
         onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
+        notifications={studentNotifications}
+        unreadNotificationCount={unreadNotifications.length}
+        seenNotificationIds={studentState.seenNotificationIds || []}
+        onOpenNotification={handleOpenNotification}
+        onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
       />
 
       {/* KHÔNG GIAN NỘI DUNG CHÍNH (Main Content Area) */}
@@ -835,6 +910,8 @@ export default function App() {
                 onSelectTheory={(thId) => setActiveFlow({ type: 'theory', theoryId: thId })}
                 onSelectHomework={(hwId) => setActiveFlow({ type: 'homework', homeworkQuizId: hwId })}
                 onNavigateTab={(tab) => setCurrentTab(tab)}
+                latestNotification={unreadNotifications[0] || null}
+                onOpenNotification={handleOpenNotification}
               />
             )}
 

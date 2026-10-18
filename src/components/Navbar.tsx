@@ -1,9 +1,13 @@
-import React from 'react';
-import { Home, BookOpen, Sprout, Gift, User, Flame, Clock, Palette, TrendingUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { Home, BookOpen, Sprout, Gift, User, Flame, Clock, Palette, TrendingUp, Bell, PlayCircle, FileQuestion } from 'lucide-react';
 import { APP_NAME, MASCOT_NAME } from '../config.ts';
 import { StudentState } from '../types.ts';
 import { THEMES_LIST } from '../data/themes.ts';
 import { BrandHeaderLockup } from './MamVanLogo.tsx';
+import {
+  StudentNotification,
+  formatRelativeTime,
+} from '../logic/studentNotifications.ts';
 
 export type NavTab = 'home' | 'learn' | 'tree' | 'results' | 'rewards' | 'profile';
 
@@ -14,7 +18,123 @@ interface NavbarProps {
   topicsCount?: number;
   onOpenDevPanel?: () => void;
   onOpenThemeSelector?: () => void;
+  notifications?: StudentNotification[];
+  unreadNotificationCount?: number;
+  seenNotificationIds?: string[];
+  onOpenNotification?: (n: StudentNotification) => void;
+  onMarkAllNotificationsRead?: () => void;
 }
+
+
+/** Chuông thông báo bài mới của học sinh (dùng cho cả thanh trên di động và thanh bên) */
+const NotificationBell: React.FC<{
+  notifications: StudentNotification[];
+  unreadCount: number;
+  seenIds: string[];
+  onOpen: (n: StudentNotification) => void;
+  onMarkAllRead: () => void;
+  align?: 'left' | 'right';
+}> = ({ notifications, unreadCount, seenIds, onOpen, onMarkAllRead, align = 'right' }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="relative p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-indigo-50 hover:text-[#4F46E5] text-slate-500 transition-all hover:scale-105"
+        title="Thông báo bài học mới"
+      >
+        <Bell className="w-4 h-4" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className={`absolute top-full mt-2 w-80 max-w-[86vw] bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden ${
+              align === 'right' ? 'right-0' : 'left-0'
+            }`}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <span className="text-xs font-extrabold text-[#1E1B4B]">Thông báo</span>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMarkAllRead();
+                    setOpen(false);
+                  }}
+                  className="text-[11px] font-bold text-[#4F46E5] hover:underline"
+                >
+                  Đánh dấu đã đọc
+                </button>
+              )}
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <p className="px-4 py-6 text-center text-xs text-slate-400">
+                  Chưa có thông báo mới. Khi thầy/cô đăng bài mới, em sẽ thấy ở đây nhé!
+                </p>
+              ) : (
+                notifications.map((n) => {
+                  const unread = !seenIds.includes(n.id);
+                  return (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        onOpen(n);
+                      }}
+                      className={`w-full text-left px-4 py-3 flex gap-3 border-b border-slate-50 transition-colors hover:bg-indigo-50/50 ${
+                        unread ? 'bg-indigo-50/30' : ''
+                      }`}
+                    >
+                      <span
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          n.kind === 'video'
+                            ? 'bg-rose-50 text-rose-500'
+                            : n.kind === 'theory'
+                              ? 'bg-violet-50 text-violet-500'
+                              : 'bg-emerald-50 text-emerald-600'
+                        }`}
+                      >
+                        {n.kind === 'video' ? (
+                          <PlayCircle className="w-4 h-4" />
+                        ) : n.kind === 'theory' ? (
+                          <BookOpen className="w-4 h-4" />
+                        ) : (
+                          <FileQuestion className="w-4 h-4" />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-[#E2704A] uppercase tracking-wide">
+                            {n.kindLabel}
+                          </span>
+                          {unread && <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />}
+                        </span>
+                        <span className="block text-xs font-bold text-[#1E1B4B] truncate">{n.title}</span>
+                        <span className="block text-[11px] text-slate-400 truncate">
+                          {n.topicTitle ? `${n.topicTitle} · ` : ''}
+                          {formatRelativeTime(n.publishedAt)}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
@@ -22,6 +142,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   state,
   topicsCount,
   onOpenThemeSelector,
+  notifications = [],
+  unreadNotificationCount = 0,
+  seenNotificationIds = [],
+  onOpenNotification,
+  onMarkAllNotificationsRead,
 }) => {
   const navItems = [
     { key: 'home' as NavTab, label: 'Trang chủ', icon: Home, badge: null },
@@ -53,6 +178,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onOpenNotification && (
+            <NotificationBell
+              notifications={notifications}
+              unreadCount={unreadNotificationCount}
+              seenIds={seenNotificationIds}
+              onOpen={onOpenNotification}
+              onMarkAllRead={onMarkAllNotificationsRead || (() => {})}
+            />
+          )}
           {onOpenThemeSelector && (
             <button
               type="button"
@@ -82,6 +216,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Action buttons (Theme switcher) */}
             <div className="flex items-center gap-1.5">
+              {onOpenNotification && (
+                <NotificationBell
+                  notifications={notifications}
+                  unreadCount={unreadNotificationCount}
+                  seenIds={seenNotificationIds}
+                  onOpen={onOpenNotification}
+                  onMarkAllRead={onMarkAllNotificationsRead || (() => {})}
+                  align="left"
+                />
+              )}
               {onOpenThemeSelector && (
                 <button
                   type="button"

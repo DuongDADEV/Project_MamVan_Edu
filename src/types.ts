@@ -369,6 +369,8 @@ export interface StudentState {
   soundEnabled: boolean;
   animationsEnabled: boolean;
   fontSizePreference: 'normal' | 'large' | 'larger';
+  // Id các thông báo "có bài mới" học sinh đã xem (đồng bộ theo tài khoản)
+  seenNotificationIds?: string[];
   themePreference?: ThemeId;
   
   // Đang học dở (để nút "Học tiếp" dẫn đến đúng chỗ)

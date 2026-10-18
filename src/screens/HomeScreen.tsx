@@ -3,6 +3,7 @@ import { StudentState, Topic } from '../types.ts';
 import { TOPICS, VIDEOS, REWARDS_CATALOG, QUIZZES } from '../data/mockData.ts';
 import { getCurrentDailyXpCap } from '../logic/xpEngine.ts';
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
+import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
@@ -37,6 +38,8 @@ import {
 interface HomeScreenProps {
   state: StudentState;
   topics?: Topic[];
+  latestNotification?: StudentNotification | null;
+  onOpenNotification?: (n: StudentNotification) => void;
   onCheckIn: () => void;
   onResumeLearning: (targetVideoId?: string) => void;
   onSelectTopic: (topicId: string) => void;
@@ -56,6 +59,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectTheory,
   onSelectHomework,
   onNavigateTab,
+  latestNotification,
+  onOpenNotification,
 }) => {
   const [wateringTrigger, setWateringTrigger] = useState(false);
   const activeTopics = topics ?? [];
@@ -226,19 +231,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     },
   ];
 
-  // Lắng nghe thông báo bài học mới từ giáo viên
-  const { data: rawAnnouncements } = useLiveQuery<any[]>(
-    () => {
-      try {
-        const raw = localStorage.getItem('mam_van_announcements');
-        return Promise.resolve(raw ? JSON.parse(raw) : []);
-      } catch {
-        return Promise.resolve([]);
+  // Thông báo bài mới mới nhất chưa đọc (App suy ra từ nội dung vừa xuất bản)
+  const activeAnnouncement = latestNotification
+    ? {
+        title: `${latestNotification.kindLabel}: ${latestNotification.title}`,
+        content: latestNotification.topicTitle
+          ? `Thuộc chủ đề "${latestNotification.topicTitle}" — bấm "Vào làm ngay" để bắt đầu nhé!`
+          : 'Thầy/cô vừa đăng nội dung mới — bấm "Vào làm ngay" để bắt đầu nhé!',
       }
-    },
-    ['content']
-  );
-  const activeAnnouncement = (rawAnnouncements || [])[0];
+    : null;
 
   return (
     <div className="w-full max-w-5xl mx-auto py-6 px-4 sm:px-8 space-y-7">
@@ -259,10 +260,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
           <button
-            onClick={() => onNavigateTab('learn')}
+            onClick={() => {
+              if (latestNotification && onOpenNotification) {
+                onOpenNotification(latestNotification);
+              } else {
+                onNavigateTab('learn');
+              }
+            }}
             className="px-3.5 py-1.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shrink-0 transition-colors shadow-2xs"
           >
-            Học ngay
+            Vào làm ngay
           </button>
         </div>
       )}

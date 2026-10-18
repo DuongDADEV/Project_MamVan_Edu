@@ -1,5 +1,10 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Thông báo bài mới cho học sinh
+- Khi thầy/cô xuất bản (hoặc xuất bản lại) video / lý thuyết / bài tập cho lớp, học sinh nhận thông báo kiểu tin nhắn: chuông thông báo trên thanh điều hướng (cả máy tính và điện thoại) có huy hiệu đỏ đếm số chưa đọc; mở ra thấy danh sách bài mới kèm chủ đề và thời gian; bấm vào là vào làm bài đó ngay.
+- Trang chủ học sinh hiện biểu ngữ bài mới nhất chưa đọc với nút "Vào làm ngay".
+- Thông báo được suy ra từ mốc xuất bản của chính nội dung (trong vòng 14 ngày, đúng lớp được giao); trạng thái đã đọc lưu theo tài khoản học sinh nên đồng bộ mọi thiết bị — thay cho cơ chế cũ chỉ lưu trong trình duyệt của máy thầy/cô, học sinh ở máy khác không bao giờ nhận được.
+
 ## [2026-10-18] - Thẻ chủ đề ở trang chủ học sinh cao đều nhau
 - Thẻ chủ đề nào tên dài xuống 2 dòng hoặc có mô tả thì cao hơn thẻ khác, chân thẻ ("X bài giảng · Vào học") lệch hàng. Nay tiêu đề và mô tả giữ sẵn chiều cao cố định 2 dòng (thiếu mô tả vẫn giữ chỗ), chân thẻ ghim xuống đáy — mọi thẻ cao bằng nhau, thẳng hàng.
 
