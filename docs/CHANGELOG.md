@@ -1,5 +1,8 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Bỏ 2 thẻ tổng quan ở Kết quả học tập
+- Bỏ thẻ "Câu hỏi đã làm" và thẻ "Điểm trung bình" khỏi hàng tổng quan đầu màn Kết quả học tập; còn lại thẻ "Tổng XP tích lũy" và "Huy hiệu đạt được" dàn đều 2 cột.
+
 ## [2026-10-18] - Làm lại biểu đồ tiến bộ của học sinh theo kiểu đường mốc tuần
 - Biểu đồ cũ (cột + đường, 2 trục tung) khó đọc: cột màu be nhạt gần như tàng hình, nhãn tuần kiểu "-5 tuần", tuần không làm bài trống trơn và điểm trung bình chỉ còn một chấm lơ lửng — nhìn như hỏng.
 - Nay là đường tiến bộ nối 6 mốc tuần: mỗi mốc là vòng tròn chứa điểm trung bình của tuần; tuần này to nhất, viền cam nổi bật; tuần chưa học hiện mốc xám ghi "Chưa học" thay vì biến mất; dưới mỗi mốc có nhãn tuần dễ hiểu ("Tuần trước", "2 tuần trước"...) và số câu đã làm; góc phải thẻ có tổng số câu và điểm tuần này.

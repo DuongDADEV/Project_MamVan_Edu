@@ -120,7 +120,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
       </div>
 
       {/* Thẻ tổng quan */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-2xl border border-[#E8DFD1] p-4 shadow-xs">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
             <Zap className="w-3.5 h-3.5 text-amber-500" /> Tổng XP tích lũy
@@ -129,25 +129,6 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
             {state.totalXp} <span className="text-xs font-bold text-slate-400">XP</span>
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5">Hôm nay +{state.xpToday} XP</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-[#E8DFD1] p-4 shadow-xs">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
-            <BookOpenCheck className="w-3.5 h-3.5 text-emerald-500" /> Câu hỏi đã làm
-          </div>
-          <div className="text-2xl font-black text-[#1E1B4B]">{overview.total}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
-            {countLearningSteps(state.completedSteps)} hoạt động học đã hoàn thành
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl border border-[#E8DFD1] p-4 shadow-xs">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
-            <Target className="w-3.5 h-3.5 text-sky-500" /> Điểm trung bình
-          </div>
-          <div className="text-2xl font-black text-[#1E1B4B]">
-            {overview.total > 0 ? overview.avgScore : '—'}
-            {overview.total > 0 && <span className="text-xs font-bold text-slate-400"> /10</span>}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Tỉ lệ đúng {overview.correctRate}%</div>
         </div>
         <div className="bg-white rounded-2xl border border-[#E8DFD1] p-4 shadow-xs">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
