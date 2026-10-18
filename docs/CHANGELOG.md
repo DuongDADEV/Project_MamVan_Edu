@@ -1,5 +1,11 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Mầm AI Studio: bản nháp bền + duyệt lý thuyết trước khi lưu
+- Bộ câu hỏi AI tạo xong nay là BẢN NHÁP được tự lưu lại: đóng xưởng, chuyển màn hình hay tải lại trang rồi quay lại vẫn còn nguyên để duyệt tiếp; trên xưởng có thanh "BẢN NHÁP" báo số câu + giờ lưu nháp, bấm vào là duyệt tiếp.
+- Lưu vào Ngân hàng chỉ lưu những câu đã tích chọn; các câu chưa chọn ở lại bản nháp chờ duyệt sau — không còn cảnh chưa duyệt vội là mất. Có nút xóa bản nháp (hỏi xác nhận).
+- Lý thuyết AI tạo xong không áp dụng ngay nữa: mở màn DUYỆT LÝ THUYẾT xem trước toàn bộ nội dung đúng dạng học sinh sẽ đọc, ưng ý mới bấm "Lưu lý thuyết vào học liệu". Bản nháp lý thuyết cũng được tự lưu như bộ câu hỏi.
+- Bỏ chữ "Thật" khỏi các nhãn trong xưởng: nút tạo nay là "Tạo bản nháp với Mầm AI", trạng thái "Mầm AI (AI-2.5-flash)".
+
 ## [2026-10-18] - Khối chủ đề ở Kết quả học tập: bỏ chấm màu, nhuộm màu như phía giáo viên
 - Bỏ chấm tròn màu trước tên chủ đề trong mục "Điểm theo từng chủ đề".
 - Khối của mỗi chủ đề nhuộm nền + viền theo đúng màu chủ đề đó, giống cách hiển thị ở phía giáo viên.
