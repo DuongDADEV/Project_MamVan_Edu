@@ -1265,6 +1265,16 @@ export class SupabaseEssayRepository implements EssayRepository {
         };
         merged = merged.map(canonicalize);
 
+        // Lớp gộp thứ hai: các định danh KHÔNG có trong bảng students (dữ liệu
+        // cũ còn sót trên máy) nhưng trùng tên + lớp thì vẫn là cùng một người.
+        const nameClassKey = new Map<string, string>();
+        merged = merged.map((sub) => {
+          const k = `${norm(sub.studentName)}|${norm(sub.className)}`;
+          if (!nameClassKey.has(k)) nameClassKey.set(k, sub.studentId);
+          const canon = nameClassKey.get(k) as string;
+          return canon === sub.studentId ? sub : { ...sub, studentId: canon };
+        });
+
         const seen = new Set<string>();
         merged = merged.filter((sub) => {
           const fingerprint = `${sub.studentId}|${sub.questionId}|${(sub.content || '')
