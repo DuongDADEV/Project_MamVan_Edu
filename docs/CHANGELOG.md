@@ -1,5 +1,10 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Hàng đợi chấm bài gom theo học sinh
+- Trước đây mỗi bài nộp là một dòng riêng — một học sinh nộp 4 bài chiếm 4 dòng trùng tên. Nay hàng đợi gom theo học sinh: mỗi em đúng 1 dòng tổng hợp (tổng số bài đã nộp, bao nhiêu bài chờ chấm / có gợi ý AI / đã chốt, tổng số từ, lần nộp gần nhất, thời gian chờ lâu nhất).
+- Bấm "Xem chi tiết" (hoặc bấm vào dòng) mở trang chi tiết của học sinh với danh sách từng bài; "Chấm ngay" mở thẳng bài chờ lâu nhất chưa chấm của em.
+- Nhãn "Mô hình Gemini AI" trong Cài đặt đổi thành "Mô hình Mầm AI" cho đồng bộ thương hiệu.
+
 ## [2026-10-18] - Đậm màu tiêu đề 3 khối trong Mầm AI Studio
 - Tiêu đề 3 khối (Nguồn tài liệu, Trò chuyện & Tra cứu tài liệu, Xưởng tạo đầu ra) chuyển sang màu mực đậm nhất, cỡ chữ lớn hơn một nấc và in đậm hơn; dòng phụ đề dưới tiêu đề cũng đậm hơn để dễ đọc.
 

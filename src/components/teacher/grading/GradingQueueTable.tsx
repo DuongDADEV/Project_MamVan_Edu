@@ -94,6 +94,38 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
     return result;
   }, [submissions, classFilter, statusFilter, searchTerm, sortBy]);
 
+  // GOM THEO HỌC SINH: mỗi em chỉ 1 dòng tổng hợp trong hàng đợi —
+  // bấm "Xem chi tiết" mới vào danh sách từng bài của em.
+  const groupedStudents = useMemo(() => {
+    const map = new Map<string, EssaySubmission[]>();
+    filteredSubmissions.forEach((sub) => {
+      const key = sub.studentId || sub.studentName || sub.id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(sub);
+    });
+    return Array.from(map.values()).map((subs) => {
+      const ungraded = subs.filter((x) => x.status !== 'GRADED');
+      const nextToGrade = [...ungraded].sort((a, b) => a.submittedAt - b.submittedAt)[0];
+      const latest = [...subs].sort((a, b) => b.submittedAt - a.submittedAt)[0];
+      const maxHours = ungraded.reduce(
+        (mx, x) =>
+          Math.max(mx, x.hoursWaiting ?? Math.max(0, Math.floor((Date.now() - x.submittedAt) / 3600000))),
+        0
+      );
+      return {
+        subs,
+        rep: subs[0],
+        ungradedCount: ungraded.length,
+        aiCount: subs.filter((x) => x.status === 'AI_SUGGESTED').length,
+        gradedCount: subs.length - ungraded.length,
+        nextToGrade,
+        latest,
+        maxHours,
+        totalWords: subs.reduce((t, x) => t + (x.wordCount || 0), 0),
+      };
+    });
+  }, [filteredSubmissions]);
+
   return (
     <div className="space-y-6">
       {/* 1. THẺ THỐNG KÊ NHANH */}
@@ -265,23 +297,26 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSubmissions.length === 0 ? (
+              {groupedStudents.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400 text-sm">
                     Không có bài viết nào phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>
               ) : (
-                filteredSubmissions.map((sub) => {
-                  const hours =
-                    sub.hoursWaiting ?? Math.max(0, Math.floor((Date.now() - sub.submittedAt) / 3600000));
-                  const isUrgent = hours >= 24 && sub.status !== 'GRADED';
+                groupedStudents.map((g) => {
+                  const sub = g.rep;
+                  const isUrgent = g.ungradedCount > 0 && g.maxHours >= 24;
                   const skillLevel = sub.skillLevel || 'VAN_DUNG';
+                  const summaryParts: string[] = [];
+                  if (g.ungradedCount > 0) summaryParts.push(`${g.ungradedCount} chờ chấm`);
+                  if (g.aiCount > 0) summaryParts.push(`${g.aiCount} có gợi ý AI`);
+                  if (g.gradedCount > 0) summaryParts.push(`${g.gradedCount} đã chốt`);
 
                   return (
                     <tr
-                      key={sub.id}
-                      onClick={() => onSelectSubmission(sub)}
+                      key={sub.studentId || sub.id}
+                      onClick={() => (onViewStudent ? onViewStudent(sub) : onSelectSubmission(g.nextToGrade || g.latest))}
                       className="hover:bg-[#FAF8F3] transition-colors cursor-pointer group"
                     >
                       {/* Học sinh & Lớp */}
@@ -295,23 +330,23 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
                               {sub.studentName || 'Học sinh'}
                             </div>
                             <div className="text-[11px] font-semibold text-slate-500">
-                              Lớp {sub.className || '7A2'}
+                              Lớp {sub.className || '—'}
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Đề bài / Bài tập */}
+                      {/* Tổng số bài của học sinh */}
                       <td className="py-3.5 px-4 max-w-xs">
-                        <div className="font-semibold text-slate-800 line-clamp-1">
-                          {sub.promptTitle || 'Cảm nghĩ về đoạn văn/thơ'}
+                        <div className="font-semibold text-slate-800">
+                          {g.subs.length} bài đã nộp
                         </div>
                         <div className="text-[11px] text-slate-500 line-clamp-1">
-                          {sub.quizTitle || 'Kiểm tra năng lực văn bản'}
+                          {summaryParts.join(' • ')}
                         </div>
                       </td>
 
-                      {/* Mức năng lực */}
+                      {/* Mức năng lực (của bài ưu tiên nhất) */}
                       <td className="py-3.5 px-4 text-center">
                         <span
                           className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
@@ -324,14 +359,14 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
                         </span>
                       </td>
 
-                      {/* Số từ */}
+                      {/* Tổng số từ */}
                       <td className="py-3.5 px-4 text-center font-medium text-slate-700 text-xs">
-                        {sub.wordCount} từ
+                        {g.totalWords} từ
                       </td>
 
-                      {/* Thời điểm nộp */}
+                      {/* Lần nộp gần nhất */}
                       <td className="py-3.5 px-4 text-xs text-slate-500">
-                        {new Date(sub.submittedAt).toLocaleString('vi-VN', {
+                        {new Date(g.latest.submittedAt).toLocaleString('vi-VN', {
                           day: '2-digit',
                           month: '2-digit',
                           hour: '2-digit',
@@ -339,36 +374,32 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
                         })}
                       </td>
 
-                      {/* Thời gian chờ (Cảnh báo vàng nếu >= 24h) */}
+                      {/* Thời gian chờ lâu nhất trong các bài chưa chấm */}
                       <td className="py-3.5 px-4 text-center">
-                        {sub.status === 'GRADED' ? (
+                        {g.ungradedCount === 0 ? (
                           <span className="text-xs text-slate-400">—</span>
                         ) : isUrgent ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
                             <Clock className="w-3 h-3 text-amber-700" />
-                            {hours}h (Quá hẹn)
+                            {g.maxHours}h (Quá hẹn)
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-semibold px-2 py-0.5 rounded-full bg-slate-100">
                             <Clock className="w-3 h-3 text-slate-400" />
-                            {hours}h
+                            {g.maxHours}h
                           </span>
                         )}
                       </td>
 
-                      {/* Trạng thái */}
+                      {/* Trạng thái tổng hợp */}
                       <td className="py-3.5 px-4 text-center">
-                        {sub.status === 'GRADED' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3" /> Đã chốt ({formatScore(sub.finalScore ?? sub.totalScore)}đ)
-                          </span>
-                        ) : sub.status === 'AI_SUGGESTED' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                            <Sparkles className="w-3 h-3 text-purple-500" /> Gợi ý {formatScore(sub.aiSuggestion?.suggestedTotalScore)}đ
+                        {g.ungradedCount === 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                            <CheckCircle2 className="w-3 h-3" /> Đã chốt hết
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                            Chờ chấm
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                            Chờ chấm ({g.ungradedCount})
                           </span>
                         )}
                       </td>
@@ -382,7 +413,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
                               e.stopPropagation();
                               onViewStudent(sub);
                             }}
-                            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white border border-slate-200 text-slate-600 hover:border-[#4F46E5] hover:text-[#4F46E5] transition-colors inline-flex items-center gap-1"
+                            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white border border-slate-200 text-slate-600 hover:border-[#4F46E5] hover:text-[#4F46E5] transition-colors inline-flex items-center gap-1 whitespace-nowrap"
                             title="Xem chi tiết các bài học sinh này đã làm"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -392,15 +423,15 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onSelectSubmission(sub);
+                            onSelectSubmission(g.nextToGrade || g.latest);
                           }}
-                          className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1 ${
-                            sub.status === 'GRADED'
+                          className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1 whitespace-nowrap ${
+                            g.ungradedCount === 0
                               ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                               : 'bg-[#4F46E5] text-white hover:bg-indigo-700 shadow-xs'
                           }`}
                         >
-                          {sub.status === 'GRADED' ? 'Xem lại' : 'Chấm ngay'}
+                          {g.ungradedCount === 0 ? 'Xem lại' : 'Chấm ngay'}
                           <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                         </div>

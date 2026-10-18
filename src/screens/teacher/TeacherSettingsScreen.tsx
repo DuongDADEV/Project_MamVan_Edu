@@ -1462,7 +1462,7 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
               {/* CHỌN MODEL */}
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-[#2F3E6B]">
-                  Mô hình Gemini AI
+                  Mô hình Mầm AI
                 </label>
                 <select
                   value={geminiModelInput}
