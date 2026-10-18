@@ -1,5 +1,10 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Ba tinh chỉnh giao diện giáo viên theo phản hồi trực tiếp
+- Thẻ lớp: dòng mô tả nay luôn chiếm đúng 1 dòng cố định (kể cả khi trống) — trước đây lớp không có mô tả bị khối "Sĩ số / Hoạt động 7 ngày" đẩy lên cao, các thẻ trong cùng hàng lệch nhau.
+- Đặt lại mật khẩu học sinh: Thầy/Cô được TỰ ĐẶT mật khẩu theo ý mình ngay trong hộp thoại xác nhận (tối thiểu 6 ký tự); để trống thì hệ thống mới sinh ngẫu nhiên như cũ. Tầng xử lý đã hỗ trợ sẵn mật khẩu tùy chỉnh, nay mới có ô nhập.
+- Bảng danh sách học sinh: tiêu đề cột giữ trên 1 dòng (không ngắt 2 dòng như trước).
+
 ## [2026-10-18] - Dứt điểm vòng focus đen bám trên nút menu sau khi bấm
 - Người dùng phản ánh: bấm sang trang khác là một vòng đen dày bám lại quanh mục menu vừa bấm (vòng focus mặc định của trình duyệt — mỗi trình duyệt/thiết bị vẽ một kiểu nên môi trường kiểm tra không tái hiện được, nhưng luật CSS chống viền focus sẵn có không phủ được trạng thái :focus-visible sau chạm/bấm).
 - Xử lý dứt điểm ở tầng hành vi: mọi nút điều hướng trong Navbar (thanh bên, thanh dưới di động, nút Hồ sơ) tự nhả focus (blur) ngay sau khi bấm — không còn phần tử nào giữ focus để trình duyệt vẽ vòng. Đổi lại: điều hướng bằng phím Enter trên menu sẽ cần Tab lại từ đầu; chấp nhận được với ứng dụng học tập dùng chuột/cảm ứng là chính.

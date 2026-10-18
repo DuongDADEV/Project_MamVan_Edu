@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Users,
   UserPlus,
@@ -87,6 +87,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   const [drawerStudentId, setDrawerStudentId] = useState<string | null>(null);
 
   // Dialog xác nhận thao tác
+  const resetCustomPasswordRef = useRef('');
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -146,10 +147,12 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
 
   // --- CÁC HÀNH ĐỘNG HỌC SINH ---
 
-  // Đặt lại mật khẩu (sinh mật khẩu mới 8 ký tự, hiện 1 lần)
+  // Đặt lại mật khẩu: Thầy/Cô TỰ ĐẶT theo ý mình, hoặc để trống để hệ thống
+  // sinh ngẫu nhiên — phiếu tài khoản hiện 1 lần sau khi đặt
   const handleResetPassword = async (studentId: string) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
+    resetCustomPasswordRef.current = '';
 
     setConfirmDialog({
       isOpen: true,
@@ -158,15 +161,41 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
         <div>
           Bạn có chắc chắn muốn đặt lại mật khẩu cho học sinh{' '}
           <strong className="text-[#2F3E6B]">{student.name}</strong> ({student.username})?
+          <div className="mt-3 text-left">
+            <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5">
+              Mật khẩu mới (Thầy/Cô tự đặt)
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              placeholder="Để trống = hệ thống sinh ngẫu nhiên"
+              onChange={(e) => {
+                resetCustomPasswordRef.current = e.target.value;
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-indigo-100 outline-none text-sm text-[#1E1B4B] font-medium transition-all"
+            />
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Nếu tự đặt, mật khẩu cần tối thiểu 6 ký tự.
+            </p>
+          </div>
           <p className="mt-2 text-xs text-amber-800 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
-            Hệ thống sẽ sinh một mật khẩu ngẫu nhiên mới và hiển thị phiếu tài khoản 1 lần để Thầy/Cô gửi cho em.
+            Sau khi đặt, hệ thống sẽ hiển thị phiếu tài khoản 1 lần để Thầy/Cô gửi cho em.
           </p>
         </div>
       ),
       confirmLabel: 'Đặt lại mật khẩu',
       variant: 'warning',
       action: async () => {
-        const res = await studentService.resetPassword(studentId, teacherId);
+        const custom = resetCustomPasswordRef.current.trim();
+        if (custom && custom.length < 6) {
+          alert('Mật khẩu tự đặt cần tối thiểu 6 ký tự. Thầy/Cô nhập lại nhé.');
+          return;
+        }
+        const res = await studentService.resetPassword(
+          studentId,
+          teacherId,
+          custom || undefined
+        );
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         setVoucherModalData({
           isOpen: true,
@@ -773,11 +802,11 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                         />
                       </div>
 
-                      {cls.description && (
-                        <p className="text-xs text-[#4B5563] mb-4 line-clamp-2">
-                          {cls.description}
-                        </p>
-                      )}
+                      {/* Dòng mô tả luôn chiếm đúng 1 dòng cố định (kể cả khi
+                          trống) để khối số liệu của mọi thẻ lớp thẳng hàng nhau */}
+                      <p className="text-xs text-[#4B5563] mb-4 h-4 line-clamp-1">
+                        {cls.description || ''}
+                      </p>
 
                       <div className="grid grid-cols-2 gap-2 p-3 bg-[#FAF5EB] rounded-xl border border-[#E6DCC8]/70 text-xs mb-4">
                         <div>

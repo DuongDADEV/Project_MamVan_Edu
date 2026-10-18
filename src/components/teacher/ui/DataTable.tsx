@@ -228,7 +228,7 @@ export function DataTable<T extends Record<string, any>>({
                   <th
                     key={col.key}
                     onClick={() => col.sortable && handleSort(col.key)}
-                    className={`py-3.5 px-4 font-semibold tracking-wide ${
+                    className={`py-3.5 px-4 font-semibold tracking-wide whitespace-nowrap ${
                       col.sortable ? 'cursor-pointer select-none hover:text-[#E2704A]' : ''
                     } ${col.className || ''}`}
                   >
