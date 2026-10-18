@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Gọn thanh công cụ hàng đợi chấm bài
+- Hai ô "Trạng thái" và "Sắp xếp" gộp thành 1 ô duy nhất (hai nhóm lựa chọn: Trạng thái / Sắp xếp); bỏ lựa chọn "Nộp trước nhất".
+- Bỏ nút "Chấm bài kế tiếp" trên thanh công cụ.
+
 ## [2026-10-18] - Khu vực chấm bài theo đúng mẫu Figma (chi tiết học sinh + thẻ thống kê hàng đợi)
 - Trang "Xem chi tiết" học sinh dựng lại theo mẫu: thẻ tên "Họ tên · Lớp", thanh tổng kết đậm (x/y bài kiểm tra đã làm, số bài chờ chấm, số bài quá hạn, ĐTB, công tắc "Chỉ hiện bài chưa chấm"), bảng đầu cam gom theo bài kiểm tra với dòng nhóm "… - bài chờ chấm: N" / "… - (Hoàn thành)", cột Điểm hiện "Gợi ý Xđ" cho bài AI đã gợi ý.
 - Hàng đợi chấm bài: 4 thẻ thống kê gom thành 2 thẻ theo mẫu — "Cần chấm" (gộp chờ chấm + đã có gợi ý AI, kèm nút lọc riêng gợi ý AI bên trong) và "Chờ > 24 giờ" màu đỏ nổi bật nhất (bấm vào là sắp xếp bài chờ lâu nhất lên đầu).

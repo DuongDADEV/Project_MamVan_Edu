@@ -35,6 +35,13 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'AI_SUGGESTED' | 'GRADED' | 'UNGRADED'>('ALL');
   const [classFilter, setClassFilter] = useState<string>(selectedClassId);
   const [sortBy, setSortBy] = useState<'waiting_desc' | 'submitted_desc' | 'submitted_asc'>('waiting_desc');
+  // Ô chọn GỘP trạng thái + sắp xếp (1 ô duy nhất): 'status:X' hoặc 'sort:Y'
+  const [toolbarPick, setToolbarPick] = useState<string>('status:ALL');
+  const handleToolbarPick = (v: string) => {
+    setToolbarPick(v);
+    if (v.startsWith('status:')) setStatusFilter(v.slice('status:'.length) as any);
+    else if (v.startsWith('sort:')) setSortBy(v.slice('sort:'.length) as any);
+  };
 
   // Thống kê nhanh
   const stats = useMemo(() => {
@@ -134,7 +141,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         {/* Cần chấm */}
         <div
-          onClick={() => setStatusFilter(statusFilter === 'UNGRADED' ? 'ALL' : 'UNGRADED')}
+          onClick={() => handleToolbarPick(statusFilter === 'UNGRADED' ? 'status:ALL' : 'status:UNGRADED')}
           className={`cursor-pointer p-4 rounded-2xl border transition-all ${
             statusFilter === 'UNGRADED'
               ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400'
@@ -153,7 +160,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setStatusFilter(statusFilter === 'AI_SUGGESTED' ? 'ALL' : 'AI_SUGGESTED');
+              handleToolbarPick(statusFilter === 'AI_SUGGESTED' ? 'status:ALL' : 'status:AI_SUGGESTED');
             }}
             className={`mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold transition-colors ${
               statusFilter === 'AI_SUGGESTED'
@@ -168,7 +175,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
 
         {/* Chờ > 24 giờ — màu đỏ, nổi nhất */}
         <div
-          onClick={() => setSortBy('waiting_desc')}
+          onClick={() => handleToolbarPick('sort:waiting_desc')}
           className="cursor-pointer p-4 rounded-2xl border-2 border-rose-400 bg-rose-50 shadow-xs transition-all hover:shadow-sm"
           title="Sắp xếp hàng đợi theo thời gian chờ lâu nhất"
         >
@@ -218,41 +225,24 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
             ))}
           </select>
 
-          {/* Lọc Trạng thái */}
+          {/* Ô GỘP: Lọc trạng thái + Sắp xếp trong 1 ô (đã bỏ lựa chọn "Nộp trước nhất") */}
           <select
-            value={statusFilter === 'UNGRADED' ? 'ALL' : statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
+            value={toolbarPick}
+            onChange={(e) => handleToolbarPick(e.target.value)}
             className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-[#2F3E6B]"
+            title="Lọc trạng thái hoặc sắp xếp hàng đợi"
           >
-            <option value="ALL">Mọi trạng thái</option>
-            <option value="PENDING">Chờ chấm ({stats.pending})</option>
-            <option value="AI_SUGGESTED">Đã có gợi ý AI ({stats.aiSuggested})</option>
-            <option value="GRADED">Đã chốt ({stats.graded})</option>
+            <optgroup label="Trạng thái">
+              <option value="status:ALL">Mọi trạng thái</option>
+              <option value="status:PENDING">Chờ chấm ({stats.pending})</option>
+              <option value="status:AI_SUGGESTED">Đã có gợi ý AI ({stats.aiSuggested})</option>
+              <option value="status:GRADED">Đã chốt ({stats.graded})</option>
+            </optgroup>
+            <optgroup label="Sắp xếp">
+              <option value="sort:waiting_desc">Chờ lâu nhất (ưu tiên)</option>
+              <option value="sort:submitted_desc">Mới nộp gần đây</option>
+            </optgroup>
           </select>
-
-          {/* Sắp xếp */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-[#2F3E6B]"
-          >
-            <option value="waiting_desc">Chờ lâu nhất (ưu tiên)</option>
-            <option value="submitted_desc">Mới nộp gần đây</option>
-            <option value="submitted_asc">Nộp trước nhất</option>
-          </select>
-
-          {/* Nút chấm bài ưu tiên đầu tiên */}
-          {filteredSubmissions.some((s) => s.status !== 'GRADED') && (
-            <button
-              onClick={() => {
-                const first = filteredSubmissions.find((s) => s.status !== 'GRADED');
-                if (first) onSelectSubmission(first);
-              }}
-              className="px-4 py-2 bg-[#E2704A] hover:bg-[#D05F39] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-            >
-              <Flame className="w-3.5 h-3.5" /> Chấm bài kế tiếp
-            </button>
-          )}
         </div>
       </div>
 
