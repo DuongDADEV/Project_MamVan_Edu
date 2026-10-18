@@ -75,9 +75,11 @@ export const StudentProfileTab: React.FC<StudentProfileTabProps> = ({
       selectedStudentId,
       studentStates,
       students,
-      topics as any
+      topics as any,
+      undefined,
+      classes
     );
-  }, [selectedStudentId, studentStates, students, topics]);
+  }, [selectedStudentId, studentStates, students, topics, classes]);
 
   // Lấy các bài viết của học sinh này
   const studentEssays = useMemo(() => {
@@ -136,7 +138,7 @@ export const StudentProfileTab: React.FC<StudentProfileTabProps> = ({
             >
               {students.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.student_code || s.id}) - Lớp {classes.find((c) => c.id === s.class_id)?.name || '7A2'}
+                  {s.name} ({s.student_code || s.id}) - Lớp {classes.find((c) => c.id === s.class_id)?.name || '—'}
                 </option>
               ))}
             </select>

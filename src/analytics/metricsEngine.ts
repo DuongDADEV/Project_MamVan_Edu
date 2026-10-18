@@ -153,7 +153,7 @@ export function detectStudentsNeedingAttention(
     if (!state) return;
 
     const matchedClass = allClasses?.find((c) => c.id === st.class_id);
-    const className = matchedClass?.name || (st.class_id === 'class_7a2' ? '7A2' : st.class_id || '7A3');
+    const className = matchedClass?.name || '—';
 
     const hasLastActive = Boolean(st.last_active_at);
     const lastActive = typeof st.last_active_at === 'number'

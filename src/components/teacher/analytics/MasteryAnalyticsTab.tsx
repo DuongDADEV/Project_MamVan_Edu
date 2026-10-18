@@ -16,7 +16,7 @@ import {
   User,
 } from 'lucide-react';
 import { AnalyticsFilter, HeatmapCell, RadarMasteryItem, WeakSkillRecommendation } from '../../../analytics/types.ts';
-import { StudentAccount } from '../../../services/types.ts';
+import { ClassItem, StudentAccount } from '../../../services/types.ts';
 import { StudentState } from '../../../types.ts';
 import { AccessibleChartWrapper } from './AccessibleChartWrapper.tsx';
 import {
@@ -26,6 +26,7 @@ import {
 } from '../../../analytics/masteryAnalytics.ts';
 
 interface MasteryAnalyticsTabProps {
+  classes: ClassItem[];
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
   topics: Array<{ id: string; title: string }>;
@@ -41,6 +42,7 @@ const PALETTE = {
 };
 
 export const MasteryAnalyticsTab: React.FC<MasteryAnalyticsTabProps> = ({
+  classes,
   students,
   studentStates,
   topics,
@@ -63,7 +65,7 @@ export const MasteryAnalyticsTab: React.FC<MasteryAnalyticsTabProps> = ({
 
   // 2. Heatmap dữ liệu học sinh × chủ đề
   const heatmapData: HeatmapCell[] = useMemo(() => {
-    return computeStudentTopicHeatmap(studentStates, students, topics as any, filters);
+    return computeStudentTopicHeatmap(studentStates, students, topics as any, filters, classes);
   }, [studentStates, students, topics, filters]);
 
   // 3. Gợi ý hành động mức yếu nhất

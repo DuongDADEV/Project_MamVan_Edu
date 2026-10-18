@@ -65,7 +65,8 @@ export function computeStudentTopicHeatmap(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
   topics: TopicWithMeta[],
-  filter: AnalyticsFilter
+  filter: AnalyticsFilter,
+  allClasses?: { id: string; name: string }[]
 ): HeatmapCell[] {
   const students = filterStudents(allStudents, filter);
   const cells: HeatmapCell[] = [];
@@ -73,7 +74,7 @@ export function computeStudentTopicHeatmap(
   students.forEach((s) => {
     const state = allStates[s.id];
     const qList = state?.questionResults || [];
-    const className = s.class_id === 'class_7a2' ? '7A2' : '7A3';
+    const className = allClasses?.find((c) => c.id === s.class_id)?.name || '—';
 
     topics.forEach((top) => {
       // Bỏ qua nếu lọc riêng 1 topic khác

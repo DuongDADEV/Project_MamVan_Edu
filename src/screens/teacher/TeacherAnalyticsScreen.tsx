@@ -164,6 +164,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
 
         {activeTab === 'mastery' && (
           <MasteryAnalyticsTab
+            classes={classes}
             students={students}
             studentStates={studentStates}
             topics={topics}

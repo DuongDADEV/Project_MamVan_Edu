@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Vá hiển thị tên lớp trong phân tích giáo viên + chốt phạm vi Tổng quan theo lớp của giáo viên
+- Danh sách "Học sinh cần quan tâm" từng in MÃ UUID của lớp thay vì tên lớp (học sinh lớp 7a4 hiện thành "Lớp d4036e4a-..."): hàm phân tích nay tra tên lớp theo danh sách lớp thật, không tra được thì hiện "—" — tuyệt đối không in mã UUID, không bịa tên "7A2/7A3" như các fallback thời demo (đã sửa ở cả 3 nơi: metricsEngine, hồ sơ học sinh, bản đồ nhiệt).
+- Màn Tổng quan giáo viên: kho dữ liệu trả học sinh toàn hệ thống trong khi lớp chỉ nạp lớp của giáo viên đang đăng nhập — tổng quan nay chỉ tính học sinh thuộc lớp của mình (đúng phân quyền, hết lẫn học sinh lớp khác).
+
 ## [2026-10-18] - Gỡ nốt 2 nút "Đặt lại dữ liệu demo" khỏi giao diện khách thật
 - Màn Hồ sơ học sinh: bỏ nút "Đặt lại dữ liệu demo của tài khoản" — nút này ghi đè tiến độ thật của học sinh bằng dữ liệu mẫu, tuyệt đối không được tồn tại ở bản khách dùng.
 - Màn Cài đặt giáo viên: bỏ cả khu vực "Khôi phục & Đặt lại dữ liệu thử nghiệm (Demo)" cùng hộp thoại xác nhận và hàm xử lý — tránh khôi phục nhầm 28 học sinh seed + 6 tuần điểm số mẫu đè lên dữ liệu thật.

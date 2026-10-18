@@ -15,13 +15,14 @@ export function computeStudentProfileData(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
   topics: TopicWithMeta[],
-  filter?: AnalyticsFilter
+  filter?: AnalyticsFilter,
+  allClasses?: { id: string; name: string }[]
 ): StudentProfileFullData | null {
   const account = allStudents.find((s) => s.id === studentId);
   const state = allStates[studentId];
   if (!account || !state) return null;
 
-  const className = account.class_id === 'class_7a2' ? '7A2' : '7A3';
+  const className = allClasses?.find((c) => c.id === account.class_id)?.name || '—';
   const classStudents = allStudents.filter((s) => s.class_id === account.class_id);
 
   // Tính xếp hạng trong lớp

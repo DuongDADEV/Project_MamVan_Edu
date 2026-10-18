@@ -115,15 +115,25 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
     handleUpdateFilters(DEFAULT_FILTERS);
   };
 
+  // Phạm vi của giáo viên này: chỉ học sinh thuộc các lớp của mình.
+  // (Kho dữ liệu trả học sinh toàn hệ thống; tổng quan của từng giáo viên
+  // không được lẫn học sinh lớp người khác — vừa sai phạm vi, vừa không tra
+  // được tên lớp của các em.)
+  const scopedStudents = useMemo(() => {
+    const myClassIds = new Set((classes || []).map((c) => c.id));
+    if (myClassIds.size === 0) return students;
+    return students.filter((st) => myClassIds.has(st.class_id));
+  }, [students, classes]);
+
   // 1. Tính toán 6 thẻ số liệu tổng quan với so sánh kỳ trước (+/- %)
   const overviewMetrics = useMemo(() => {
-    return computeOverviewMetrics(studentStates, students, filters, essays, rewards);
-  }, [students, studentStates, filters, essays, rewards]);
+    return computeOverviewMetrics(studentStates, scopedStudents, filters, essays, rewards);
+  }, [scopedStudents, studentStates, filters, essays, rewards]);
 
   // 2. Tự động nhận diện học sinh cần quan tâm sư phạm
   const attentionStudents = useMemo(() => {
-    return detectStudentsNeedingAttention(studentStates, students, topics as any, filters, classes);
-  }, [studentStates, students, topics, filters, classes]);
+    return detectStudentsNeedingAttention(studentStates, scopedStudents, topics as any, filters, classes);
+  }, [studentStates, scopedStudents, topics, filters, classes]);
 
   // 3. Tự động sinh nhận xét sư phạm 3-5 câu
   const pedagogicalInsights = useMemo(() => {
