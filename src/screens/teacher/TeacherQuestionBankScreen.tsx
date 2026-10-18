@@ -13,6 +13,7 @@ import {
   FileQuestion,
   Layers,
   ChevronDown,
+  ChevronUp,
   Quote,
   Check,
   X,
@@ -108,6 +109,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   // 3. BỘ LỌC KHO CÂU HỎI
   const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
+  const [openFilterGroups, setOpenFilterGroups] = useState({ type: true, level: true, difficulty: true });
   const [selectedContentType, setSelectedContentType] = useState<
     'all' | 'single' | 'multi' | 'fill' | 'essay' | 'video' | 'theory'
   >('all');
@@ -699,7 +701,20 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
             {/* BỘ LỌC DẠNG DANH SÁCH (LIST) — 3 nhóm theo Figma */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-[#E6DCC8]/60">
               <div>
-                <p className="text-xs font-bold text-[#2F3E6B] mb-1.5">1. Dạng học liệu</p>
+                <button
+                  type="button"
+                  onClick={() => setOpenFilterGroups((prev) => ({ ...prev, type: !prev.type }))}
+                  className="w-full flex items-center justify-between text-xs font-bold text-[#2F3E6B] mb-1.5 hover:text-[#E2704A] transition-colors"
+                >
+                  <span>
+                    1. Dạng học liệu
+                    {!openFilterGroups.type && (
+                      <span className="ml-1.5 font-semibold text-[#E2704A]">· {({ all: 'Tất cả', single: 'Trắc nghiệm đơn', multi: 'Nhiều đáp án', fill: 'Điền từ', essay: 'Tự luận', video: 'Video & Ý trọng tâm', theory: 'Lý thuyết chi tiết' } as Record<string, string>)[selectedContentType]}</span>
+                    )}
+                  </span>
+                  {openFilterGroups.type ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                {openFilterGroups.type && (
                 <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
                   {[
                     { id: 'all', label: 'Tất cả' },
@@ -726,10 +741,24 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     </li>
                   ))}
                 </ul>
+                )}
               </div>
 
               <div>
-                <p className="text-xs font-bold text-[#2F3E6B] mb-1.5">2. Năng lực</p>
+                <button
+                  type="button"
+                  onClick={() => setOpenFilterGroups((prev) => ({ ...prev, level: !prev.level }))}
+                  className="w-full flex items-center justify-between text-xs font-bold text-[#2F3E6B] mb-1.5 hover:text-[#E2704A] transition-colors"
+                >
+                  <span>
+                    2. Năng lực
+                    {!openFilterGroups.level && (
+                      <span className="ml-1.5 font-semibold text-[#E2704A]">· {({ all: 'Tất cả', NHAN_BIET: 'Nhận biết', THONG_HIEU: 'Thông hiểu', PHAN_TICH: 'Phân tích', VAN_DUNG: 'Vận dụng' } as Record<string, string>)[selectedLevel]}</span>
+                    )}
+                  </span>
+                  {openFilterGroups.level ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                {openFilterGroups.level && (
                 <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
                   {([
                     { id: 'all', label: 'Tất cả' },
@@ -754,10 +783,24 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     </li>
                   ))}
                 </ul>
+                )}
               </div>
 
               <div>
-                <p className="text-xs font-bold text-[#2F3E6B] mb-1.5">3. Độ khó</p>
+                <button
+                  type="button"
+                  onClick={() => setOpenFilterGroups((prev) => ({ ...prev, difficulty: !prev.difficulty }))}
+                  className="w-full flex items-center justify-between text-xs font-bold text-[#2F3E6B] mb-1.5 hover:text-[#E2704A] transition-colors"
+                >
+                  <span>
+                    3. Độ khó
+                    {!openFilterGroups.difficulty && (
+                      <span className="ml-1.5 font-semibold text-[#E2704A]">· {({ all: 'Tất cả', DE: 'Dễ', TB: 'Trung bình', KHO: 'Khó' } as Record<string, string>)[selectedDifficulty]}</span>
+                    )}
+                  </span>
+                  {openFilterGroups.difficulty ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                {openFilterGroups.difficulty && (
                 <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
                   {([
                     { id: 'all', label: 'Tất cả' },
@@ -781,6 +824,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     </li>
                   ))}
                 </ul>
+                )}
               </div>
             </div>
           </div>

@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Bộ lọc Ngân hàng câu hỏi gập/mở được
+- 3 nhóm lọc dạng danh sách (Dạng học liệu, Năng lực, Độ khó) nay bấm vào tiêu đề nhóm là thu gọn hoặc mở ra được — hết cảnh lúc nào cũng trải dài chiếm chỗ.
+- Khi nhóm đang thu gọn, tiêu đề hiện kèm lựa chọn đang áp dụng (ví dụ "2. Năng lực · Thông hiểu") để vẫn biết mình đang lọc theo gì.
+
 ## [2026-10-18] - Gọn nhãn ở Ngân hàng câu hỏi
 - Tab "Kho ngân hàng (98 câu hỏi, ... video, ... bài)" bỏ phần ngoặc đơn thống kê — chỉ còn "Kho ngân hàng".
 - Thẻ lọc "Tự luận / Rubric" bỏ chữ Rubric — chỉ còn "Tự luận".
