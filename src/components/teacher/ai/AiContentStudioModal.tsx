@@ -295,7 +295,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     return [
       {
         role: 'assistant',
-        text: 'Xin chào thầy/cô! Tôi là trợ lý Mầm AI Studio. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
+        text: 'Xin chào thầy/cô! Tôi là trợ lý Mầm AI. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
       },
     ];
   });
@@ -462,7 +462,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
       const initialChat = [
         {
           role: 'assistant' as const,
-          text: 'Xin chào thầy/cô! Tôi là trợ lý Mầm AI Studio. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
+          text: 'Xin chào thầy/cô! Tôi là trợ lý Mầm AI. Tôi đã đọc các tài liệu nguồn bên trái. Thầy/cô có thể đặt câu hỏi hoặc chọn các câu hỏi gợi ý bên dưới để tra cứu chi tiết.',
         },
       ];
       setChatMessages(initialChat);
@@ -716,17 +716,14 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-lora font-bold text-lg text-[#2F3E6B]">
-                Xưởng Sáng Tạo AI Mầm Văn
+                Xưởng Sáng Tạo Mầm AI Studio
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF5EB] text-[#E2704A] border border-[#E2704A]/30">
-                Mầm AI Studio
-              </span>
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#0D9488]/10 text-[#0D9488]">
                 Chủ đề: {topicTitle}
               </span>
             </div>
             <p className="text-xs text-[#8C7E6A]">
-              Tải lên nguồn ngữ liệu, đối chiếu trích dẫn và sinh bản nháp chuẩn sư phạm Ngữ văn 7
+              Tải lên nguồn ngữ liệu, đối chiếu trích dẫn và sinh bản nháp chuẩn sư phạm
             </p>
           </div>
         </div>
@@ -746,7 +743,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
               title="Cấu hình Google AI Studio API Key"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-              <span>🟢 Gemini AI Thật ({activeModel})</span>
+              <span>🟢 Mầm AI Thật ({activeModel.replace(/^gemini/i, 'AI')})</span>
             </button>
           ) : (
             <button
@@ -999,7 +996,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                 <span>1. Nguồn tài liệu ({sources.length})</span>
               </h3>
               <p className="text-[11px] text-[#8C7E6A] mt-0.5">
-                Đã bật {sources.filter((s) => s.isEnabled).length}/{sources.length} nguồn ({totalEnabledWords} từ)
+                Đã bật {sources.filter((s) => s.isEnabled).length}/{sources.length} nguồn ({totalEnabledWords})
               </p>
             </div>
             <button
@@ -1161,7 +1158,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-[#2F3E6B] truncate">{src.title}</p>
                       <p className="text-[10px] text-[#8C7E6A] flex items-center gap-1.5 mt-0.5">
-                        <span>{src.wordCount} từ</span>
+                        <span>{src.wordCount}</span>
                         <span>•</span>
                         <span className="capitalize">{src.type === 'transcript' ? 'Bản ghi' : src.type}</span>
                       </p>
@@ -1221,7 +1218,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-[#0D9488]" />
               <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B]">
-                2. Trò chuyện & Tra cứu tài liệu (RAG Grounding)
+                2. Trò chuyện & Tra cứu tài liệu
               </h3>
             </div>
             <div className="flex items-center gap-2">
@@ -1504,7 +1501,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Tạo bản nháp với Gemini AI Thật</span>
+                    <span>Tạo bản nháp với Mầm AI Thật</span>
                   </>
                 )}
               </button>
@@ -1574,12 +1571,12 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                   onChange={(e) => setModalModelInput(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
                 >
-                  <option value="gemini-flash-latest">gemini-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định & Thông minh)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn)</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Ngữ văn phân tích sâu)</option>
+                  <option value="gemini-flash-latest">Mầm AI-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
+                  <option value="gemini-2.5-flash">Mầm AI-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
+                  <option value="gemini-2.0-flash">Mầm AI-2.0-flash (Ổn định & Thông minh)</option>
+                  <option value="gemini-1.5-flash">Mầm AI-1.5-flash (Bản tiêu chuẩn)</option>
+                  <option value="gemini-2.5-pro">Mầm AI-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
+                  <option value="gemini-1.5-pro">Mầm AI-1.5-pro (Ngữ văn phân tích sâu)</option>
                 </select>
               </div>
 
@@ -1654,7 +1651,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                 </div>
                 <div>
                   <h3 className="font-lora font-bold text-sm">{previewingSource.title}</h3>
-                  <p className="text-[10px] text-[#8C7E6A]">{previewingSource.wordCount} từ • Loại: {previewingSource.type}</p>
+                  <p className="text-[10px] text-[#8C7E6A]">{previewingSource.wordCount} • Loại: {previewingSource.type}</p>
                 </div>
               </div>
               <button

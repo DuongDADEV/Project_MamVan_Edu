@@ -535,7 +535,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         <div className="flex items-center gap-2 min-w-0">
           <span className={`w-2 h-2 rounded-full shrink-0 ${hasApiKey ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
           <span className="text-xs font-semibold text-[#2F3E6B] truncate">
-            {hasApiKey ? `Gemini AI đang kích hoạt (${activeModel})` : 'Chưa cấu hình Google AI Studio API Key'}
+            {hasApiKey ? `Mầm AI đang kích hoạt (${activeModel.replace(/^gemini/i, 'AI')})` : 'Chưa cấu hình Google AI Studio API Key'}
           </span>
         </div>
         <button
@@ -1439,7 +1439,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                 </div>
                 <div>
                   <h3 className="font-lora font-bold text-base">Cấu hình Google AI Studio API Key</h3>
-                  <p className="text-[11px] text-[#8C7E6A]">Kích hoạt Gemini AI thật cho toàn hệ thống Mầm Văn</p>
+                  <p className="text-[11px] text-[#8C7E6A]">Kích hoạt Mầm AI thật cho toàn hệ thống Mầm Văn</p>
                 </div>
               </div>
               <button
@@ -1486,12 +1486,12 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                   onChange={(e) => setModalModelInput(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
                 >
-                  <option value="gemini-flash-latest">gemini-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định & Thông minh)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn)</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Ngữ văn phân tích sâu)</option>
+                  <option value="gemini-flash-latest">Mầm AI-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
+                  <option value="gemini-2.5-flash">Mầm AI-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
+                  <option value="gemini-2.0-flash">Mầm AI-2.0-flash (Ổn định & Thông minh)</option>
+                  <option value="gemini-1.5-flash">Mầm AI-1.5-flash (Bản tiêu chuẩn)</option>
+                  <option value="gemini-2.5-pro">Mầm AI-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
+                  <option value="gemini-1.5-pro">Mầm AI-1.5-pro (Ngữ văn phân tích sâu)</option>
                 </select>
               </div>
 

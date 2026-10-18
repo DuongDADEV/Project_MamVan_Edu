@@ -1,5 +1,11 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Đổi thương hiệu hiển thị trong Mầm AI Studio theo yêu cầu
+- Tiêu đề "Xưởng Sáng Tạo AI Mầm Văn" → "Xưởng Sáng Tạo Mầm AI Studio"; bỏ nhãn "Mầm AI Studio" thừa bên cạnh tiêu đề.
+- Mọi chữ "Gemini AI" hiển thị → "Mầm AI" (nút trạng thái, nút tạo bản nháp, thanh trạng thái ở Ngân hàng câu hỏi); tên model trong ngoặc và trong danh sách chọn model hiển thị dạng "AI-2.5-flash" / "Mầm AI-..." — giá trị model thật gửi lên API giữ nguyên.
+- Phụ đề xưởng bỏ chữ "Ngữ văn 7"; tiêu đề mục trò chuyện bỏ "(RAG Grounding)"; số đếm ở thẻ nguồn bỏ chữ "từ".
+- Lời chào của trợ lý: "Tôi là trợ lý Mầm AI Studio" → "Tôi là trợ lý Mầm AI".
+
 ## [2026-10-18] - Bộ lọc Ngân hàng câu hỏi gập/mở được
 - 3 nhóm lọc dạng danh sách (Dạng học liệu, Năng lực, Độ khó) nay bấm vào tiêu đề nhóm là thu gọn hoặc mở ra được — hết cảnh lúc nào cũng trải dài chiếm chỗ.
 - Khi nhóm đang thu gọn, tiêu đề hiện kèm lựa chọn đang áp dụng (ví dụ "2. Năng lực · Thông hiểu") để vẫn biết mình đang lọc theo gì.
