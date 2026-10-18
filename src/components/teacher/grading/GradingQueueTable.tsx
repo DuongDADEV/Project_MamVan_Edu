@@ -32,7 +32,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
   onViewStudent,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'AI_SUGGESTED' | 'GRADED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'AI_SUGGESTED' | 'GRADED' | 'UNGRADED'>('ALL');
   const [classFilter, setClassFilter] = useState<string>(selectedClassId);
   const [sortBy, setSortBy] = useState<'waiting_desc' | 'submitted_desc' | 'submitted_asc'>('waiting_desc');
 
@@ -64,6 +64,8 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
       result = result.filter((s) => s.status === 'AI_SUGGESTED');
     } else if (statusFilter === 'GRADED') {
       result = result.filter((s) => s.status === 'GRADED');
+    } else if (statusFilter === 'UNGRADED') {
+      result = result.filter((s) => s.status !== 'GRADED');
     }
 
     // Tìm kiếm từ khóa
@@ -128,87 +130,61 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 1. THẺ THỐNG KÊ NHANH */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        {/* Chờ chấm hoặc AI gợi ý */}
+      {/* 1. THẺ THỐNG KÊ NHANH — 2 thẻ theo mẫu: Cần chấm (gộp gợi ý AI) + Chờ > 24 giờ màu đỏ nổi nhất */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        {/* Cần chấm */}
         <div
-          onClick={() => setStatusFilter(statusFilter === 'PENDING' ? 'ALL' : 'PENDING')}
+          onClick={() => setStatusFilter(statusFilter === 'UNGRADED' ? 'ALL' : 'UNGRADED')}
           className={`cursor-pointer p-4 rounded-2xl border transition-all ${
-            statusFilter === 'PENDING'
+            statusFilter === 'UNGRADED'
               ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400'
               : 'bg-white border-[#E8DFD1] hover:border-amber-200 hover:shadow-xs'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500">Chờ giáo viên chấm</span>
+            <span className="text-sm font-bold text-slate-700">Cần chấm</span>
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-[#1E1B4B]">{stats.pending}</span>
+            <span className="text-3xl font-black text-[#1E1B4B]">{stats.pending + stats.aiSuggested}</span>
             <span className="text-xs text-slate-400">bài</span>
           </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setStatusFilter(statusFilter === 'AI_SUGGESTED' ? 'ALL' : 'AI_SUGGESTED');
+            }}
+            className={`mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold transition-colors ${
+              statusFilter === 'AI_SUGGESTED'
+                ? 'bg-purple-600 border-purple-600 text-white'
+                : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
+            }`}
+            title="Lọc riêng các bài đã có gợi ý AI"
+          >
+            <Sparkles className="w-3 h-3" /> Đã có gợi ý AI · {stats.aiSuggested}
+          </button>
         </div>
 
-        {/* Đã có gợi ý AI */}
+        {/* Chờ > 24 giờ — màu đỏ, nổi nhất */}
         <div
-          onClick={() => setStatusFilter(statusFilter === 'AI_SUGGESTED' ? 'ALL' : 'AI_SUGGESTED')}
-          className={`cursor-pointer p-4 rounded-2xl border transition-all ${
-            statusFilter === 'AI_SUGGESTED'
-              ? 'bg-purple-50/80 border-purple-300 ring-2 ring-purple-400'
-              : 'bg-white border-[#E8DFD1] hover:border-purple-200 hover:shadow-xs'
-          }`}
+          onClick={() => setSortBy('waiting_desc')}
+          className="cursor-pointer p-4 rounded-2xl border-2 border-rose-400 bg-rose-50 shadow-xs transition-all hover:shadow-sm"
+          title="Sắp xếp hàng đợi theo thời gian chờ lâu nhất"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-purple-700 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-purple-500" /> Đã có gợi ý AI
+            <span className="text-sm font-bold text-rose-700 flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-rose-600" /> Chờ &gt; 24 giờ
             </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+            {stats.urgent > 0 && <span className="animate-ping w-2.5 h-2.5 rounded-full bg-rose-500" />}
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-purple-900">{stats.aiSuggested}</span>
-            <span className="text-xs text-purple-600">sẵn sàng chốt</span>
+            <span className="text-3xl font-black text-rose-600">{stats.urgent}</span>
+            <span className="text-xs font-semibold text-rose-500">cần ưu tiên</span>
           </div>
-        </div>
-
-        {/* Cảnh báo quá hạn SLA */}
-        <div className="p-4 rounded-2xl border bg-white border-[#E8DFD1]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-rose-600 flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> Chờ &gt; 24 giờ
-            </span>
-            {stats.urgent > 0 && <span className="animate-ping w-2 h-2 rounded-full bg-rose-500" />}
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span
-              className={`text-2xl font-black ${
-                stats.urgent > 0 ? 'text-rose-600' : 'text-slate-700'
-              }`}
-            >
-              {stats.urgent}
-            </span>
-            <span className="text-xs text-slate-400">cần ưu tiên</span>
-          </div>
-        </div>
-
-        {/* Đã chốt điểm */}
-        <div
-          onClick={() => setStatusFilter(statusFilter === 'GRADED' ? 'ALL' : 'GRADED')}
-          className={`cursor-pointer p-4 rounded-2xl border transition-all ${
-            statusFilter === 'GRADED'
-              ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-400'
-              : 'bg-white border-[#E8DFD1] hover:border-emerald-200 hover:shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Đã chốt điểm
-            </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-900">{stats.graded}</span>
-            <span className="text-xs text-emerald-600">hoàn thành</span>
-          </div>
+          <p className="mt-3 text-[11px] font-medium text-rose-500">
+            Bấm để đưa các bài chờ lâu nhất lên đầu hàng đợi
+          </p>
         </div>
       </div>
 
@@ -244,7 +220,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
 
           {/* Lọc Trạng thái */}
           <select
-            value={statusFilter}
+            value={statusFilter === 'UNGRADED' ? 'ALL' : statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
             className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-[#2F3E6B]"
           >

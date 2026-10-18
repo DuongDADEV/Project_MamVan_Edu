@@ -1,5 +1,10 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Khu vực chấm bài theo đúng mẫu Figma (chi tiết học sinh + thẻ thống kê hàng đợi)
+- Trang "Xem chi tiết" học sinh dựng lại theo mẫu: thẻ tên "Họ tên · Lớp", thanh tổng kết đậm (x/y bài kiểm tra đã làm, số bài chờ chấm, số bài quá hạn, ĐTB, công tắc "Chỉ hiện bài chưa chấm"), bảng đầu cam gom theo bài kiểm tra với dòng nhóm "… - bài chờ chấm: N" / "… - (Hoàn thành)", cột Điểm hiện "Gợi ý Xđ" cho bài AI đã gợi ý.
+- Hàng đợi chấm bài: 4 thẻ thống kê gom thành 2 thẻ theo mẫu — "Cần chấm" (gộp chờ chấm + đã có gợi ý AI, kèm nút lọc riêng gợi ý AI bên trong) và "Chờ > 24 giờ" màu đỏ nổi bật nhất (bấm vào là sắp xếp bài chờ lâu nhất lên đầu).
+- Màn chấm bài: chỉnh 2 câu chữ theo mẫu Giao diện 3 ("Gợi ý chấm tự động bởi AI", "Tiêu chí đánh giá & Chấm điểm") — bố cục vốn đã khớp mẫu.
+
 ## [2026-10-18] - Hàng đợi chấm bài gom theo học sinh
 - Trước đây mỗi bài nộp là một dòng riêng — một học sinh nộp 4 bài chiếm 4 dòng trùng tên. Nay hàng đợi gom theo học sinh: mỗi em đúng 1 dòng tổng hợp (tổng số bài đã nộp, bao nhiêu bài chờ chấm / có gợi ý AI / đã chốt, tổng số từ, lần nộp gần nhất, thời gian chờ lâu nhất).
 - Bấm "Xem chi tiết" (hoặc bấm vào dòng) mở trang chi tiết của học sinh với danh sách từng bài; "Chấm ngay" mở thẳng bài chờ lâu nhất chưa chấm của em.

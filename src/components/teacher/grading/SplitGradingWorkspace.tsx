@@ -401,7 +401,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                     <Sparkles className="w-4 h-4" />
                   </span>
                   <span className="font-extrabold text-purple-950 text-sm">
-                    Gợi ý chấm tự động từ AI (Chuẩn GDPT 2018)
+                    Gợi ý chấm tự động bởi AI (Chuẩn GDPT 2018)
                   </span>
                 </div>
                 <p className="text-xs text-purple-800">
@@ -437,7 +437,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
           <div className="p-6 space-y-6 flex-1">
             <div className="flex items-center justify-between">
               <h4 className="font-extrabold text-sm text-[#1E1B4B] flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-[#4F46E5]" /> Tiêu chí đánh giá & Cho điểm
+                <Layers className="w-4 h-4 text-[#4F46E5]" /> Tiêu chí đánh giá & Chấm điểm
               </h4>
               <span className="text-xs font-semibold text-slate-500">
                 Kéo thanh trượt hoặc gõ trực tiếp
