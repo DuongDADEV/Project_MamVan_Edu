@@ -235,6 +235,78 @@ async function main() {
   }
   check('OPENED -> APPROVED (hồi sinh): bị chặn', threw);
 
+  console.log('=== 6. Đổi quà TRỪ XP tuần + hoàn khi bị từ chối (mock repo) ===');
+  const attemptRepo2 = new MockAttemptRepository();
+  const rewardRepo2 = new MockRewardRepository();
+  // Môi trường test không chạy bootstrap nên tự gieo danh mục quà (app thật lấy từ REWARDS_CATALOG)
+  await rewardRepo2.saveReward({
+    id: 'reward_bookmark',
+    name: 'Bookmark Mầm Văn',
+    requiredXp: 280,
+    requiredAttendanceDays: 3,
+    tierKey: 'HAT',
+    teaserDescription: 'Rương Hạt',
+    secret: { name: 'Bookmark', description: 'Bookmark giấy' },
+    stock: 10,
+    isActive: true,
+  } as any);
+  await rewardRepo2.saveReward({
+    id: 'reward_pen',
+    name: 'Bút Mầm Văn',
+    requiredXp: 450,
+    requiredAttendanceDays: 4,
+    tierKey: 'LA',
+    teaserDescription: 'Rương Lá',
+    secret: { name: 'Bút', description: 'Bút mực' },
+    stock: 10,
+    isActive: true,
+  } as any);
+  const st2 = fresh();
+  st2.xpWeek = 300; // đủ rương bookmark 280, không đủ bút 450
+  st2.totalXp = 1000;
+  await attemptRepo2.saveStudentState('hs_test', st2);
+
+  const req1 = await rewardRepo2.createRequest('hs_test', 'reward_bookmark');
+  check('Tạo yêu cầu: deductedXp = 280', req1.deductedXp === 280);
+  const afterReq = await attemptRepo2.getStudentState('hs_test');
+  check(
+    'XP tuần bị trừ 300 -> 20, totalXp giữ nguyên 1000',
+    afterReq.xpWeek === 20 && afterReq.totalXp === 1000,
+    `xpWeek=${afterReq.xpWeek}, totalXp=${afterReq.totalXp}`
+  );
+
+  let threwIns = false;
+  try {
+    await rewardRepo2.createRequest('hs_test', 'reward_pen');
+  } catch {
+    threwIns = true;
+  }
+  check('Xin quà vượt số dư XP tuần: bị chặn', threwIns);
+  const afterIns = await attemptRepo2.getStudentState('hs_test');
+  check('Lần xin bị chặn không trừ thêm XP', afterIns.xpWeek === 20);
+
+  await rewardRepo2.updateRequestStatus(req1.id, 'REJECTED', 'Tuần sau cố gắng thêm nhé');
+  const afterRej = await attemptRepo2.getStudentState('hs_test');
+  check(
+    'Bị từ chối: hoàn lại XP tuần 20 -> 300',
+    afterRej.xpWeek === 300,
+    `xpWeek=${afterRej.xpWeek}`
+  );
+  const reqAfterRej = afterRej.rewardRequests.find((r) => r.id === req1.id);
+  check('Yêu cầu đã hoàn: deductedXp về 0 (không hoàn 2 lần)', (reqAfterRej?.deductedXp || 0) === 0);
+
+  // Xin lại -> duyệt -> trao -> mở: không trừ thêm, không hoàn
+  const req2 = await rewardRepo2.createRequest('hs_test', 'reward_bookmark');
+  await rewardRepo2.updateRequestStatus(req2.id, 'APPROVED');
+  await rewardRepo2.updateRequestStatus(req2.id, 'GIVEN');
+  await rewardRepo2.updateRequestStatus(req2.id, 'OPENED');
+  const afterOpen = await attemptRepo2.getStudentState('hs_test');
+  check(
+    'Duyệt/trao/mở rương: XP tuần ở mức đã trừ (20), không trừ thêm',
+    afterOpen.xpWeek === 20,
+    `xpWeek=${afterOpen.xpWeek}`
+  );
+
   console.log(`\nKẾT QUẢ: ${passed} đạt, ${failed} lỗi`);
   if (failed > 0) process.exit(1);
 }

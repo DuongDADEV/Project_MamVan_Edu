@@ -60,6 +60,7 @@ import { getLocalTodayStr } from '../../logic/studentStateUtils.ts';
 import { syncEventBus } from '../mock/eventBus.ts';
 import { QuestionType } from '../../types.ts';
 import { QUESTIONS_BANK } from '../../data/mockData.ts';
+import { REWARDS_CATALOG } from '../../data/rewards.ts';
 import {
   PayloadItem,
   readLocalList,
@@ -1679,7 +1680,9 @@ export class SupabaseRewardRepository implements RewardRepository {
     }
 
     const rewards = await this.getRewards();
-    const reward = rewards.find((r) => r.id === rewardId);
+    const reward =
+      rewards.find((r) => r.id === rewardId) ||
+      REWARDS_CATALOG.find((r) => r.id === rewardId);
     const tierRaw = (reward?.tierKey || rewardId.replace('tier_', '') || 'hat').toLowerCase();
     const chestType = ['hat', 'la', 'hoa', 'vang'].includes(tierRaw) ? tierRaw : 'hat';
 
@@ -1701,6 +1704,14 @@ export class SupabaseRewardRepository implements RewardRepository {
       xpWeekSnapshot = 0;
     }
 
+    // Đổi quà TRỪ XP tuần: kiểm tra số dư TRƯỚC khi tạo yêu cầu
+    const requiredXp = reward?.requiredXp || 0;
+    if (requiredXp > 0 && xpWeekSnapshot < requiredXp) {
+      throw new Error(
+        `Chưa đủ XP tuần để xin phần quà này (cần ${requiredXp} XP, hiện có ${xpWeekSnapshot} XP)`
+      );
+    }
+
     const payload = {
       student_id: studentId,
       chest_type: chestType,
@@ -1713,13 +1724,70 @@ export class SupabaseRewardRepository implements RewardRepository {
       console.error('[SupabaseReward] Lỗi tạo yêu cầu quà, chuyển sang kho local:', error?.message);
       return mockRewardRepo.createRequest(studentId, rewardId);
     }
+
+    // Trừ XP tuần trong state của học sinh và ghi số đã trừ vào bản sao yêu cầu
+    let deductedXp = 0;
+    if (requiredXp > 0) {
+      try {
+        const st = await supabaseAttemptRepo.getStudentState(studentId);
+        st.xpWeek = Math.max(0, (st.xpWeek || 0) - requiredXp);
+        st.rewardRequests = (st.rewardRequests || []).map((r) =>
+          r.id === data.id ? { ...r, deductedXp: requiredXp } : r
+        );
+        // Yêu cầu vừa tạo ở DB có thể chưa có trong state — gắn bản sao để hoàn XP khi bị từ chối
+        if (!st.rewardRequests.some((r) => r.id === data.id)) {
+          st.rewardRequests = [
+            {
+              id: data.id,
+              rewardId,
+              requestedAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
+              status: 'PENDING_APPROVAL' as const,
+              deductedXp: requiredXp,
+            },
+            ...st.rewardRequests,
+          ];
+        }
+        await supabaseAttemptRepo.saveStudentState(studentId, st);
+        deductedXp = requiredXp;
+      } catch (e) {
+        console.error('[SupabaseReward] Không trừ được XP tuần cho yêu cầu quà:', e);
+      }
+    }
+
     syncEventBus.emit('reward');
     return {
       id: data.id,
       rewardId,
       requestedAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
       status: 'PENDING_APPROVAL',
+      deductedXp,
     };
+  }
+
+  // Hoàn XP tuần cho yêu cầu bị TỪ CHỐI (bản sao yêu cầu trong state học sinh
+  // mang deductedXp; trạng thái ở bản sao cũng được cập nhật theo)
+  private async refundIfRejected(requestId: string): Promise<void> {
+    try {
+      const states = await supabaseAttemptRepo.getAllStates();
+      for (const [sId, st] of Object.entries(states)) {
+        const req = (st.rewardRequests || []).find((r) => r.id === requestId);
+        if (!req) continue;
+        let changed = false;
+        if ((req.deductedXp || 0) > 0) {
+          st.xpWeek = (st.xpWeek || 0) + (req.deductedXp || 0);
+          req.deductedXp = 0;
+          changed = true;
+        }
+        if (req.status !== 'REJECTED') {
+          req.status = 'REJECTED';
+          changed = true;
+        }
+        if (changed) await supabaseAttemptRepo.saveStudentState(sId, st);
+        return;
+      }
+    } catch (e) {
+      console.error('[SupabaseReward] Không hoàn được XP tuần cho yêu cầu bị từ chối:', e);
+    }
   }
 
   async updateRequestStatus(
@@ -1753,6 +1821,10 @@ export class SupabaseRewardRepository implements RewardRepository {
       console.error('[SupabaseReward] Lỗi cập nhật trạng thái yêu cầu quà:', error.message);
     }
 
+    if (status === 'REJECTED') {
+      await this.refundIfRejected(requestId);
+    }
+
     syncEventBus.emit('reward');
     const rewards = await this.getRewards();
     const tierKey = (existing?.chest_type || 'hat').toUpperCase();
@@ -1782,6 +1854,11 @@ export class SupabaseRewardRepository implements RewardRepository {
       .in('id', requestIds);
     if (error) {
       console.error('[SupabaseReward] Lỗi cập nhật hàng loạt trạng thái quà:', error.message);
+    }
+    if (status === 'REJECTED') {
+      for (const id of requestIds) {
+        await this.refundIfRejected(id);
+      }
     }
     syncEventBus.emit('reward');
   }

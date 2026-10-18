@@ -287,6 +287,10 @@ export interface RewardRequest {
   rewardId: string;
   requestedAt: number;
   status: RewardStatus;
+  // XP tuần đã TRỪ khi gửi yêu cầu (quyết định 18/10/2026: đổi quà trừ XP tuần).
+  // > 0 nghĩa là đang giữ số XP này; khi bị TỪ CHỐI sẽ hoàn lại và đặt về 0.
+  // totalXp (tích lũy trọn đời, nuôi Cây) không bao giờ bị trừ.
+  deductedXp?: number;
   rejectReason?: string;
   approvedAt?: number;
   givenAt?: number;

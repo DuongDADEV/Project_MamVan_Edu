@@ -1,5 +1,13 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Chốt 5 quyết định sau QA vòng 2: XP phẳng theo hoàn thành, đổi quà TRỪ XP tuần, tạo tài khoản hs001 thật
+### Đã chốt & thực hiện:
+- **XP giữ nguyên tính phẳng theo hoàn thành** (không gắn điểm số) — xác nhận đây là thiết kế có chủ đích, không sửa.
+- **Đổi quà nay TRỪ XP tuần** (trước đây XP tuần dùng lại vô hạn cho nhiều quà): trừ ngay khi học sinh gửi yêu cầu (giữ đúng số XP của mốc quà, ghi vào trường mới `deductedXp` của yêu cầu), **bị từ chối thì hoàn lại đầy đủ**, duyệt/trao/mở không trừ thêm. Chỉ trừ XP tuần (ví chi tiêu) — `totalXp` tích lũy trọn đời và tiến độ Cây không bị trừ. Chặn gửi yêu cầu khi XP tuần không đủ. Áp dụng đồng nhất ở App và cả 2 kho dữ liệu (mock + Supabase, gồm hoàn XP khi từ chối hàng loạt). Giá XP tra theo danh mục học sinh nhìn thấy (`REWARDS_CATALOG`), kho GV tùy biến là nguồn dự phòng. Test tự động bổ sung: mục 6 trong `scripts/test_round2_logic.ts` (tổng 34/34 đạt).
+- **Tạo tài khoản học sinh mẫu `hs001` thật trên Supabase** (trước đây chỉ là thẻ tĩnh trên màn đăng nhập, không tồn tại trên máy chủ nên không đăng nhập được): Nguyễn Minh Anh, lớp 7a1 của gv004, mã HS001, mật khẩu theo tài liệu hướng dẫn dự án; đã kiểm chứng khớp đúng điều kiện đăng nhập của app.
+- **Migration 003 + 004:** đã thử chạy từ máy trạm nhưng kết nối TLS trực tiếp tới database bị proxy chặn — **vẫn cần chủ dự án dán 2 file SQL vào Supabase SQL Editor** (app đang chạy chế độ tương thích an toàn trong lúc chờ).
+- **Đổi mật khẩu database:** để sau theo ý chủ dự án, chưa thực hiện.
+
 ## [2026-10-18] - QA vòng 2: Đổi tên "Mầm AI Studio", sửa triệt để XP/điểm danh qua ngày, khóa cửa hậu bảo mật, gỡ số liệu bịa
 ### Đổi tên thương hiệu:
 - **"NotebookLM AI Studio" → "Mầm AI Studio"** ở toàn bộ giao diện và tài liệu trong app (23 vị trí, 8 file). Kiểm chứng trên bản build production: "NotebookLM" còn 0 chỗ.

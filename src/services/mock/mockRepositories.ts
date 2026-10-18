@@ -65,6 +65,7 @@ import {
   SkillLevel,
 } from '../../types.ts';
 import { createInitialStateHs001, QUESTIONS_BANK } from '../../data/mockData.ts';
+import { REWARDS_CATALOG } from '../../data/rewards.ts';
 import { generateDemoSeedData } from './demoSeedHistory.ts';
 
 export const STORAGE_SCHEMA_VERSION = 'mam_van_v4_real_data';
@@ -2397,14 +2398,33 @@ export class MockRewardRepository implements RewardRepository {
   }
 
   async createRequest(studentId: string, rewardId: string): Promise<RewardRequest> {
+    const state = await attemptRepo.getStudentState(studentId);
+    const rewards = await this.getRewards();
+    const reward =
+      rewards.find((r) => r.id === rewardId) ||
+      REWARDS_CATALOG.find((r) => r.id === rewardId);
+
+    // Đổi quà TRỪ XP tuần (không trừ totalXp): giữ số XP ngay khi gửi yêu cầu
+    // để cùng một tuần XP không tiêu hai lần; bị từ chối sẽ hoàn lại.
+    let deductedXp = 0;
+    if (reward) {
+      if ((state.xpWeek || 0) < reward.requiredXp) {
+        throw new Error(
+          `Chưa đủ XP tuần để xin phần quà này (cần ${reward.requiredXp} XP, hiện có ${state.xpWeek || 0} XP)`
+        );
+      }
+      deductedXp = reward.requiredXp;
+      state.xpWeek = (state.xpWeek || 0) - deductedXp;
+    }
+
     const newReq: RewardRequest = {
       id: 'req_' + generateUUID(),
       rewardId,
       requestedAt: Date.now(),
       status: 'PENDING_APPROVAL',
+      deductedXp,
     };
 
-    const state = await attemptRepo.getStudentState(studentId);
     state.rewardRequests = [newReq, ...(state.rewardRequests || [])];
     await attemptRepo.saveStudentState(studentId, state);
 
@@ -2441,9 +2461,16 @@ export class MockRewardRepository implements RewardRepository {
           );
         }
         const now = Date.now();
+        // Bị TỪ CHỐI -> hoàn lại XP tuần đã giữ khi gửi yêu cầu
+        let refundedXp = 0;
+        if (status === 'REJECTED' && (cur.deductedXp || 0) > 0) {
+          refundedXp = cur.deductedXp || 0;
+          st.xpWeek = (st.xpWeek || 0) + refundedXp;
+        }
         updatedReq = {
           ...cur,
           status,
+          deductedXp: refundedXp > 0 ? 0 : cur.deductedXp,
           rejectReason: reason || cur.rejectReason,
           approvedAt: status === 'APPROVED' ? now : cur.approvedAt,
           givenAt: status === 'GIVEN' ? now : cur.givenAt,

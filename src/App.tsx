@@ -15,6 +15,7 @@ import {
   QUIZZES,
   QUESTIONS_BANK,
 } from './data/mockData.ts';
+import { REWARDS_CATALOG } from './data/rewards.ts';
 import { XP_CONFIG, ATTENDANCE_CONFIG, TIME_CONFIG } from './config.ts';
 import { awardXP } from './logic/xpEngine.ts';
 import { getLocalTodayStr, rolloverStudentState } from './logic/studentStateUtils.ts';
@@ -33,6 +34,7 @@ import {
   attemptService,
   contentService,
   quizService,
+  rewardService,
   essayRepository,
   QuizWithMeta,
   QuestionWithMeta,
@@ -557,8 +559,10 @@ export default function App() {
     setActiveFlow({ type: 'video', videoId: firstVidId });
   };
 
-  // 11. Xin nhận quà (mở rương)
-  const handleRequestReward = (rewardId: string) => {
+  // 11. Xin nhận quà (mở rương) — đổi quà TRỪ XP tuần ngay khi gửi yêu cầu
+  // (quyết định 18/10/2026); bị thầy/cô từ chối sẽ được hoàn lại XP tuần.
+  // totalXp tích lũy trọn đời (nuôi Cây) không bị trừ.
+  const handleRequestReward = async (rewardId: string) => {
     const existing = (studentStateRef.current.rewardRequests || []).find(
       (r) => r.rewardId === rewardId && r.status !== 'REJECTED'
     );
@@ -566,19 +570,47 @@ export default function App() {
       showToast('Em đã có yêu cầu cho phần quà này rồi — chờ thầy/cô duyệt nhé!');
       return;
     }
-    setStudentState((prev) => ({
-      ...prev,
-      rewardRequests: [
-        {
-          id: 'req_' + Date.now(),
-          rewardId,
-          requestedAt: Date.now(),
-          status: 'PENDING_APPROVAL',
-        },
-        ...prev.rewardRequests,
-      ],
-    }));
-    showToast('Đã gửi yêu cầu mở rương tới thầy/cô!');
+
+    // Giá XP lấy theo danh mục học sinh NHÌN THẤY (REWARDS_CATALOG tĩnh);
+    // danh mục GV tùy biến trong kho là nguồn dự phòng
+    let requiredXp = REWARDS_CATALOG.find((r) => r.id === rewardId)?.requiredXp || 0;
+    if (!requiredXp) {
+      try {
+        const rewards = await rewardService.getRewards();
+        requiredXp = rewards.find((r) => r.id === rewardId)?.requiredXp || 0;
+      } catch {}
+    }
+
+    const base = rolloverStudentState(studentStateRef.current);
+    if (requiredXp > 0 && (base.xpWeek || 0) < requiredXp) {
+      showToast(
+        `Chưa đủ XP tuần để xin phần quà này (cần ${requiredXp} XP, em đang có ${base.xpWeek || 0} XP tuần)`
+      );
+      return;
+    }
+
+    setStudentState((prev) => {
+      const rolled = rolloverStudentState(prev);
+      return {
+        ...rolled,
+        xpWeek: Math.max(0, (rolled.xpWeek || 0) - requiredXp),
+        rewardRequests: [
+          {
+            id: 'req_' + Date.now(),
+            rewardId,
+            requestedAt: Date.now(),
+            status: 'PENDING_APPROVAL' as const,
+            deductedXp: requiredXp,
+          },
+          ...rolled.rewardRequests,
+        ],
+      };
+    });
+    showToast(
+      requiredXp > 0
+        ? `Đã gửi yêu cầu mở rương tới thầy/cô! (Giữ ${requiredXp} XP tuần — nếu bị từ chối sẽ hoàn lại)`
+        : 'Đã gửi yêu cầu mở rương tới thầy/cô!'
+    );
   };
 
   // 11b. Mở rương và thu thập vào bộ sưu tập
