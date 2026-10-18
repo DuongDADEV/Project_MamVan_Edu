@@ -1,5 +1,13 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Vá rò rỉ state mẫu lên DB + ghi nhận rà soát thư viện nội dung
+### Lỗi nghiêm trọng đã vá (phát hiện khi kiểm chứng sau dọn dẹp):
+- Học sinh thật chưa có dòng state trên DB bị thừa kế TOÀN BỘ tiến độ từ bản local (vốn là state mẫu: 310 XP, log học bài cũ, huy hiệu sẵn) — chỉ riêng hồ sơ được thay bằng hồ sơ thật; khi app lưu ngược lên, DB bị ô nhiễm số liệu mẫu và lời chào hiện sai lớp. Nay: học sinh mới bắt đầu TRẮNG với hồ sơ thật, DB là nguồn sự thật duy nhất.
+- Hiệu ứng lưu state trong App chạy đua với hiệu ứng nạp: bản khởi tạo có thể bị ghi lên DB trong 300ms đầu trước khi dữ liệu thật về. Đã thêm cổng chặn — chỉ ghi sau khi state thật của đúng học sinh đó đã nạp xong.
+- Đã xoá dòng state ô nhiễm của hs001 để tài khoản bắt đầu lại từ 0 thật.
+### Rà soát thư viện nội dung (video/lý thuyết/quiz):
+- Trong lúc rà soát, các hàng quiz từng bị xoá nhầm do tiêu chí kiểm tra nội dung chưa đúng cấu trúc dữ liệu (quiz liên kết câu hỏi qua `questionIds`); **toàn bộ 33 quiz đã được khôi phục nguyên vẹn từ bản sao lưu** và kiểm đếm lại (23 bản có câu hỏi thật, 10 bản trống). 16 video nháp cũng đã khôi phục đủ 19 bản sau khi rà soát lại: chúng là bản nháp ĐANG LÀM của giáo viên (có bản chứa link video thật/quiz liên kết), không phải dữ liệu mẫu thuần — giữ nguyên để giáo viên tự dọn trong giao diện. Lưu ý chất lượng: nhiều bản nháp còn tiêu đề mặc định "Bài giảng Video mới"/"Bài Lý thuyết mới" và vài ý trọng tâm chứa ký tự rác — nên dọn tay khi rảnh.
+
 ## [2026-10-18] - Tổng kiểm tra "sẵn sàng cho khách thật": gỡ toàn bộ scaffolding demo, dọn dữ liệu test trong DB
 ### UI/UX:
 - Sửa 5 nút thừa dấu "+" trong nhãn (đã có sẵn icon +): "+ Tạo mới" (Nội dung học), "+ Tạo lớp mới", "+ Thêm câu hỏi thủ công", "+ Thêm câu bằng AI", "+ Chèn ngữ liệu/đoạn trích".
