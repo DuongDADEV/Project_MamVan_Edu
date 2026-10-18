@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Làm lại biểu đồ tiến bộ của học sinh theo kiểu đường mốc tuần
+- Biểu đồ cũ (cột + đường, 2 trục tung) khó đọc: cột màu be nhạt gần như tàng hình, nhãn tuần kiểu "-5 tuần", tuần không làm bài trống trơn và điểm trung bình chỉ còn một chấm lơ lửng — nhìn như hỏng.
+- Nay là đường tiến bộ nối 6 mốc tuần: mỗi mốc là vòng tròn chứa điểm trung bình của tuần; tuần này to nhất, viền cam nổi bật; tuần chưa học hiện mốc xám ghi "Chưa học" thay vì biến mất; dưới mỗi mốc có nhãn tuần dễ hiểu ("Tuần trước", "2 tuần trước"...) và số câu đã làm; góc phải thẻ có tổng số câu và điểm tuần này.
+
 ## [2026-10-18] - Sửa lỗi không nộp được bài (có câu điền khuyết)
 - Nguyên nhân: đáp án câu điền khuyết trong database có thể là một chuỗi đơn (vd "Hà Nội") trong khi code chấm bài luôn coi đáp án là danh sách — lúc bấm nộp, việc chấm văng lỗi ngay giữa chừng: hộp thoại đóng, không thông báo, không thoát, nút nộp khoá cứng, bài không tới tay giáo viên. Mọi bài có câu điền khuyết kiểu này (BTVN, bài trong video/lý thuyết) đều dính.
 - Chuẩn hoá đáp án về đúng dạng danh sách ngay tại tầng đọc dữ liệu cho câu điền khuyết và chọn nhiều.

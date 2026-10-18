@@ -1,19 +1,9 @@
 import React, { useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from 'recharts';
 import { Trophy, Target, Zap, BookOpenCheck, Award, Lock, TrendingUp } from 'lucide-react';
 import { StudentState, Topic } from '../types.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
 import { countLearningSteps } from '../logic/studentStateUtils.ts';
+import { formatScore } from '../utils/scoreFormat.ts';
 import { BADGES_CATALOG } from '../data/mockData.ts';
 
 interface LearningResultsScreenProps {
@@ -105,7 +95,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
             10
           : null;
       weeks.push({
-        weekLabel: w === 0 ? 'Tuần này' : `-${w} tuần`,
+        weekLabel: w === 0 ? 'Tuần này' : w === 1 ? 'Tuần trước' : `${w} tuần trước`,
         diemTB: avg,
         soCau: inWeek.length,
       });
@@ -235,37 +225,67 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
         )}
       </div>
 
-      {/* Biểu đồ tiến bộ theo tuần */}
+      {/* Tiến bộ theo tuần: đường mốc nối 6 tuần (tuần này nổi bật nhất;
+          tuần chưa làm bài hiện mốc xám thay vì biến mất khỏi biểu đồ) */}
       <div className="bg-white rounded-2xl border border-[#E8DFD1] shadow-xs p-5">
-        <h3 className="font-lora font-bold text-base text-[#1E1B4B] mb-3">
-          Biểu đồ tiến bộ (6 tuần gần nhất)
-        </h3>
+        <div className="flex items-start justify-between gap-3 mb-5">
+          <h3 className="font-lora font-bold text-base text-[#1E1B4B]">
+            Biểu đồ tiến bộ (6 tuần gần nhất)
+          </h3>
+          {hasWeeklyData && (
+            <div className="text-right shrink-0">
+              <p className="text-[11px] font-semibold text-slate-400">
+                Tổng {weeklyData.reduce((acc, w) => acc + w.soCau, 0)} câu · Tuần này:{' '}
+                {weeklyData[5].soCau} câu
+                {weeklyData[5].diemTB !== null && ` · ĐTB ${formatScore(weeklyData[5].diemTB)}`}
+              </p>
+            </div>
+          )}
+        </div>
         {hasWeeklyData ? (
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={weeklyData} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8DFD1" />
-              <XAxis dataKey="weekLabel" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="score" domain={[0, 10]} tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11 }} />
-              <Tooltip
-                formatter={(value: any, name: any) =>
-                  name === 'Điểm trung bình' ? [`${value}/10`, name] : [value, name]
-                }
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar yAxisId="count" dataKey="soCau" name="Số câu đã làm" fill="#E6DCC8" radius={[6, 6, 0, 0]} />
-              <Line
-                yAxisId="score"
-                type="monotone"
-                dataKey="diemTB"
-                name="Điểm trung bình"
-                stroke="#E2704A"
-                strokeWidth={2.5}
-                connectNulls={false}
-                dot={{ r: 3.5 }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
+          <div className="relative px-1 pt-1 pb-1">
+            {/* Đường nối các mốc tuần */}
+            <div className="absolute left-[8%] right-[8%] top-[27px] h-1.5 rounded-full bg-slate-100" />
+            <div
+              className="absolute left-[8%] top-[27px] h-1.5 rounded-full bg-gradient-to-r from-indigo-200 via-indigo-300 to-[#E2704A]"
+              style={{ width: '84%' }}
+            />
+            <div className="relative flex items-start">
+              {weeklyData.map((w, i) => {
+                const isCurrent = i === weeklyData.length - 1;
+                const hasData = w.soCau > 0 && w.diemTB !== null;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center text-center min-w-0">
+                    <div
+                      className={`rounded-full flex items-center justify-center font-extrabold border-4 border-white shadow-sm ${
+                        isCurrent
+                          ? 'w-14 h-14 text-sm text-white bg-gradient-to-br from-[#E2704A] to-[#F59E0B] ring-4 ring-orange-100'
+                          : hasData
+                            ? 'w-11 h-11 mt-[5px] text-xs text-white bg-gradient-to-br from-[#4F46E5] to-[#7C3AED]'
+                            : 'w-11 h-11 mt-[5px] text-xs text-slate-300 bg-slate-100'
+                      }`}
+                      title={hasData ? `ĐTB ${formatScore(w.diemTB)} — ${w.soCau} câu` : 'Chưa làm bài'}
+                    >
+                      {hasData ? formatScore(w.diemTB) : '—'}
+                    </div>
+                    <p
+                      className={`mt-2 text-[11px] leading-tight ${
+                        isCurrent ? 'font-extrabold text-[#1E1B4B]' : 'font-semibold text-slate-500'
+                      }`}
+                    >
+                      {w.weekLabel}
+                    </p>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      {w.soCau > 0 ? `${w.soCau} câu` : 'Chưa học'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-4 text-[11px] text-slate-400 text-center">
+              Số trong mỗi mốc là điểm trung bình của tuần đó (thang 10).
+            </p>
+          </div>
         ) : (
           <p className="text-sm text-slate-400 text-center py-8">
             Em chưa làm bài trong 6 tuần gần đây. Làm vài câu hỏi hôm nay để biểu đồ tiến bộ bắt đầu
