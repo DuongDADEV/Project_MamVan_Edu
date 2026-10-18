@@ -329,17 +329,14 @@ export default function App() {
     ['quiz', 'content']
   );
 
-  // Đồng bộ Cỡ chữ hiển thị lên toàn bộ giao diện thông qua thẻ html gốc
+  // Đồng bộ Cỡ chữ hiển thị: phóng toàn cục bằng zoom để MỌI chữ đều lớn lên.
+  // (Cách cũ đổi font-size của thẻ html chỉ tác động chữ cỡ rem, trong khi phần
+  // lớn giao diện dùng cỡ px cố định nên chọn "Lớn" mà chữ không nhúc nhích.)
   useEffect(() => {
     const pref = studentState.fontSizePreference || 'normal';
     document.documentElement.setAttribute('data-font-size', pref);
-    if (pref === 'larger') {
-      document.documentElement.style.fontSize = '20px';
-    } else if (pref === 'large') {
-      document.documentElement.style.fontSize = '18px';
-    } else {
-      document.documentElement.style.fontSize = '16px';
-    }
+    const zoom = pref === 'larger' ? '1.25' : pref === 'large' ? '1.12' : '1';
+    document.body.style.setProperty('zoom', zoom);
   }, [studentState.fontSizePreference]);
 
   // 3. Quản lý Điều hướng màn hình học sinh

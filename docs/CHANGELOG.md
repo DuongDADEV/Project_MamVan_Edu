@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Cỡ chữ hiển thị phóng lớn thật sự
+- Tùy chọn Cỡ chữ (Chuẩn / Lớn 112% / Rất lớn 125%) trước đây chỉ đổi cỡ chữ gốc của trang — phần lớn chữ trong giao diện dùng cỡ px cố định nên chọn "Lớn" mà chữ không hề lớn lên.
+- Nay chuyển sang phóng toàn cục theo đúng tỉ lệ đã ghi (112% / 125%): mọi chữ và thành phần giao diện đều phóng theo, áp dụng ngay khi chọn.
+
 ## [2026-10-18] - Gọn thanh công cụ hàng đợi chấm bài
 - Hai ô "Trạng thái" và "Sắp xếp" gộp thành 1 ô duy nhất (hai nhóm lựa chọn: Trạng thái / Sắp xếp); bỏ lựa chọn "Nộp trước nhất".
 - Bỏ nút "Chấm bài kế tiếp" trên thanh công cụ.
