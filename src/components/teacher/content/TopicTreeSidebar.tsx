@@ -120,20 +120,20 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   return (
     <div className="w-full md:w-72 lg:w-80 flex flex-col bg-[#FFFDF8] border-r border-[#E6DCC8] rounded-2xl md:rounded-r-none overflow-hidden shrink-0 shadow-xs">
       {/* Top Header */}
-      <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-[#2F3E6B]" />
-          <h3 className="font-lora font-bold text-sm text-[#2F3E6B]">
-            Cây chủ đề & Học liệu
+      <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Layers className="w-4 h-4 text-[#2F3E6B] shrink-0" />
+          <h3 className="font-lora font-bold text-sm text-[#2F3E6B] whitespace-nowrap">
+            Cây chủ đề
           </h3>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-bold font-mono">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-bold font-mono shrink-0">
             {topics.length}
           </span>
         </div>
 
         <button
           onClick={onOpenCreateTopic}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs hover:shadow-xs"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs hover:shadow-xs whitespace-nowrap shrink-0"
           title="Thêm chủ đề học mới"
         >
           <FolderPlus className="w-3.5 h-3.5 text-[#E2704A]" />
@@ -220,10 +220,6 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: topic.colorScheme || '#2F3E6B' }}
-                        />
                         <h4 className="text-base font-lora font-bold text-[#2F3E6B] leading-snug">
                           {topic.title}
                         </h4>
