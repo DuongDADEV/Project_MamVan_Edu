@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Tạo chủ đề mới xong mở sẵn trình soạn video đầu tiên
+- Trước đây lưu chủ đề mới xong màn hình chính vẫn trống trơn (không chọn chủ đề, không mở trình soạn) khiến giáo viên không biết làm gì tiếp.
+- Nay: vừa tạo chủ đề là app tự chọn chủ đề đó, tự tạo sẵn 1 bản nháp "Bài giảng Video mới" gắn vào chủ đề và mở ngay trình soạn video để Thầy/Cô nhập nội dung luôn. Nhánh "+ Tạo mới → Bài giảng Video" dùng chung một hàm tạo nháp với luồng này.
+
 ## [2026-10-18] - Thay toàn bộ hộp thoại xác nhận mặc định của trình duyệt bằng hộp thoại giữa màn hình
 - 6 chỗ từng dùng hộp thoại mặc định của trình duyệt (hiện trên đầu trang, kèm chữ tên miền) đã chuyển sang hộp thoại xác nhận của app (giữa màn hình, có lớp phủ): xóa video / lý thuyết / bài tập trong cây nội dung, xóa chủ đề, xóa câu hỏi khỏi ngân hàng, lưu trữ lớp học.
 - Nội dung hỏi rõ ràng hơn: "Bạn có chắc chắn muốn xóa ... không? Hành động này không thể hoàn tác." kèm nút Xóa màu đỏ.

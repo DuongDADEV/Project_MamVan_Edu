@@ -144,10 +144,47 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   };
 
   const handleSaveTopic = async (topicData: Partial<TopicWithMeta>) => {
-    await contentService.saveTopic({
+    const isCreating = !topicData.id;
+    const saved = await contentService.saveTopic({
       ...topicData,
       class_ids: topicData.class_ids || ['all', 'class_7a2'],
     });
+    // VỪA TẠO CHỦ ĐỀ MỚI: chọn ngay chủ đề đó và mở sẵn trình soạn bài giảng
+    // video đầu tiên để Thầy/Cô nhập nội dung luôn — thay vì rơi vào màn hình
+    // trống không biết làm gì tiếp.
+    if (isCreating && saved?.id) {
+      setSelectedItem({ type: 'topic', id: saved.id });
+      await createVideoDraftInTopic(saved.id, saved);
+    }
+  };
+
+  // Tạo 1 bản nháp video trong chủ đề chỉ định, gắn vào chủ đề và mở trình soạn
+  const createVideoDraftInTopic = async (targetTopicId: string, topicOverride?: TopicWithMeta) => {
+    const newVid = await contentService.saveVideoLesson({
+      topicId: targetTopicId,
+      title: 'Bài giảng Video mới',
+      durationSec: 600,
+      subtopics: [],
+      summaryPoints: [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
+      practiceQuizId: '',
+      quickTestId: '',
+      masteryCheckId: '',
+      status: 'draft',
+      class_ids: ['all', 'class_7a2'],
+    });
+    // Tự động gắn vào topic một cách an toàn
+    const topic = topicOverride || topics.find((t) => t.id === targetTopicId);
+    if (topic) {
+      const currentVideoIds = Array.isArray(topic.videoIds) ? topic.videoIds : [];
+      if (!currentVideoIds.includes(newVid.id)) {
+        await contentService.saveTopic({
+          ...topic,
+          videoIds: [...currentVideoIds, newVid.id],
+        });
+      }
+    }
+    setSelectedItem({ type: 'video', id: newVid.id });
+    return newVid;
   };
 
   const handleDeleteTopic = async (topicId: string) => {
@@ -219,30 +256,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
     try {
       if (type === 'video') {
-        const newVid = await contentService.saveVideoLesson({
-          topicId: targetTopicId,
-          title: 'Bài giảng Video mới',
-          durationSec: 600,
-          subtopics: [],
-          summaryPoints: [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
-          practiceQuizId: '',
-          quickTestId: '',
-          masteryCheckId: '',
-          status: 'draft',
-          class_ids: ['all', 'class_7a2'],
-        });
-        // Tự động gắn vào topic một cách an toàn
-        const topic = topics.find((t) => t.id === targetTopicId);
-        if (topic) {
-          const currentVideoIds = Array.isArray(topic.videoIds) ? topic.videoIds : [];
-          if (!currentVideoIds.includes(newVid.id)) {
-            await contentService.saveTopic({
-              ...topic,
-              videoIds: [...currentVideoIds, newVid.id],
-            });
-          }
-        }
-        setSelectedItem({ type: 'video', id: newVid.id });
+        await createVideoDraftInTopic(targetTopicId);
       } else if (type === 'theory') {
         const newTheory = await contentService.saveTheoryLesson({
           topicId: targetTopicId,
