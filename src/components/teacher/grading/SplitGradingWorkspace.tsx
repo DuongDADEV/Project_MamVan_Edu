@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatScore } from '../../../utils/scoreFormat.ts';
 import { EssaySubmission, RubricTemplate, RubricCriterion, GradedSampleEssay } from '../../../types.ts';
 import {
   ArrowLeft,
@@ -135,9 +136,12 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
     return Math.min(10, Math.max(0, Math.round(sum * 10) / 10));
   }, [criterionScores, initialRubric]);
 
-  // Điểm AI gợi ý
-  const aiTotalScore = submission.aiSuggestion?.suggestedTotalScore ?? 8.0;
-  const aiDiff = Math.round(Math.abs(totalTeacherScore - aiTotalScore) * 10) / 10;
+  // Điểm AI gợi ý (không có gợi ý thì không so lệch — trước đây mặc định bịa 8.0)
+  const aiTotalScore = submission.aiSuggestion?.suggestedTotalScore;
+  const aiDiff =
+    aiTotalScore !== undefined
+      ? Math.round(Math.abs(totalTeacherScore - aiTotalScore) * 10) / 10
+      : 0;
 
   // Hành động: Chấp nhận toàn bộ gợi ý AI
   const handleAcceptAllAI = () => {
@@ -403,7 +407,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                 <p className="text-xs text-purple-800">
                   AI đã phân tích ngữ nghĩa, cấu trúc và đề xuất mức điểm{' '}
                   <strong className="text-purple-950 text-sm font-black underline">
-                    {aiTotalScore} / 10
+                    {formatScore(aiTotalScore)} / 10
                   </strong>
                   . Thầy/cô có toàn quyền điều chỉnh.
                 </p>
@@ -615,7 +619,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
               {/* So sánh với điểm AI */}
               <div className="text-xs text-slate-600">
                 <div>
-                  AI gợi ý: <strong className="text-purple-700">{aiTotalScore}đ</strong>
+                  AI gợi ý: <strong className="text-purple-700">{formatScore(aiTotalScore)}đ</strong>
                 </div>
                 <div className="text-[11px] text-slate-400">
                   Chênh lệch: {aiDiff === 0 ? 'Trùng khớp 100%' : `±${aiDiff} điểm`}

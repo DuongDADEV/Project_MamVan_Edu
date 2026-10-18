@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { formatScore } from '../../../utils/scoreFormat.ts';
 import { EssaySubmission, ClassItem } from '../../../types.ts';
 import {
   Clock,
@@ -359,11 +360,11 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
                       <td className="py-3.5 px-4 text-center">
                         {sub.status === 'GRADED' ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3" /> Đã chốt ({sub.finalScore ?? sub.totalScore}đ)
+                            <CheckCircle2 className="w-3 h-3" /> Đã chốt ({formatScore(sub.finalScore ?? sub.totalScore)}đ)
                           </span>
                         ) : sub.status === 'AI_SUGGESTED' ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                            <Sparkles className="w-3 h-3 text-purple-500" /> Gợi ý {sub.aiSuggestion?.suggestedTotalScore || 8}đ
+                            <Sparkles className="w-3 h-3 text-purple-500" /> Gợi ý {formatScore(sub.aiSuggestion?.suggestedTotalScore)}đ
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
