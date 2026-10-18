@@ -932,11 +932,13 @@ export class SupabaseAttemptRepository implements AttemptRepository {
         .maybeSingle();
 
       if (error || !data) {
-        // Chưa có dòng state trên DB (học sinh mới): giữ tiến độ local (nếu có)
-        // nhưng hồ sơ phải là hồ sơ THẬT — tên/lớp đúng của em
+        // Chưa có dòng state trên DB (học sinh mới): bắt đầu TRẮNG với hồ sơ
+        // THẬT của em. KHÔNG thừa kế tiến độ từ bản local — bản local có thể là
+        // dữ liệu mẫu/đệm cũ của trình duyệt và sẽ làm ô nhiễm DB khi được lưu
+        // ngược lên (đã gặp thực tế: state mẫu 310 XP ghi đè học sinh mới).
         const freshReal = await this.buildFreshFromAccount(studentId);
         if (freshReal) {
-          return { ...localFallback, profile: freshReal.profile };
+          return freshReal;
         }
         return localFallback;
       }

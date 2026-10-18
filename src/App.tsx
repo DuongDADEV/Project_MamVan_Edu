@@ -195,6 +195,9 @@ export default function App() {
 
   const lastSavedStateJsonRef = useRef<string>('');
   const saveTimeoutRef = useRef<any>(null);
+  // Học sinh mà state của em đã được nạp xong từ kho dữ liệu (cổng chống ghi
+  // bản khởi tạo/mẫu lên DB trước khi nạp xong)
+  const stateLoadedForRef = useRef<string>('');
 
   // Nạp lại State khi đổi học sinh
   useEffect(() => {
@@ -203,6 +206,9 @@ export default function App() {
         const rolled = rolloverStudentState(st);
         const currentJson = JSON.stringify(studentStateRef.current);
         const freshJson = JSON.stringify(rolled);
+        // Đánh dấu đã nạp xong cho học sinh này — hiệu ứng lưu chỉ được ghi
+        // SAU mốc này, tránh ghi bản khởi tạo/mẫu lên DB trong lúc chờ nạp
+        stateLoadedForRef.current = currentSession.user.id;
         if (currentJson !== freshJson) {
           lastSavedStateJsonRef.current = freshJson;
           setStudentState(rolled);
@@ -214,6 +220,13 @@ export default function App() {
   // Lưu state vào repository & localStorage khi học sinh thao tác
   useEffect(() => {
     if (studentState) {
+      // Chưa nạp xong state thật của học sinh hiện tại thì TUYỆT ĐỐI không ghi
+      if (
+        currentSession?.role === 'student' &&
+        stateLoadedForRef.current !== currentSession.user.id
+      ) {
+        return;
+      }
       const stateJson = JSON.stringify(studentState);
       // Nếu trạng thái chưa hề thay đổi so với bản đã lưu -> bỏ qua hoàn toàn!
       if (stateJson === lastSavedStateJsonRef.current) {
