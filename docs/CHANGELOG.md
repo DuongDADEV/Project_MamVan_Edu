@@ -1,5 +1,8 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Thẻ thống kê thanh bên học sinh hiện Tổng XP tích lũy
+- Thẻ dưới chân thanh điều hướng học sinh trước đây hiện "XP hôm nay" làm số chính. Nay số chính là "Tổng XP tích lũy" của tài khoản; XP hôm nay chuyển xuống dòng nhỏ bên dưới.
+
 ## [2026-10-18] - Bỏ 2 thẻ tổng quan ở Kết quả học tập
 - Bỏ thẻ "Câu hỏi đã làm" và thẻ "Điểm trung bình" khỏi hàng tổng quan đầu màn Kết quả học tập; còn lại thẻ "Tổng XP tích lũy" và "Huy hiệu đạt được" dàn đều 2 cột.
 

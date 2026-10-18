@@ -296,11 +296,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="flex items-center justify-between text-[#1E1B4B]">
               <span className="flex items-center gap-1.5 font-medium text-slate-600">
                 <Flame className="w-3.5 h-3.5 text-[#F59E0B]" />
-                XP hôm nay:
+                Tổng XP tích lũy:
               </span>
               <span className="font-mono font-bold text-[#4F46E5] bg-white px-2 py-0.5 rounded-lg border border-slate-100">
-                {state.xpToday} XP
+                {state.totalXp} XP
               </span>
+            </div>
+
+            <div className="text-right text-[10px] font-medium text-slate-400">
+              Hôm nay +{state.xpToday} XP
             </div>
           </div>
 
