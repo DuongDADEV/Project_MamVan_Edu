@@ -900,6 +900,24 @@ export const supabaseStudentRepo = new SupabaseStudentRepository();
 // 4. SUPABASE ATTEMPT REPOSITORY (TIẾN ĐỘ & XP)
 // ==============================================================================
 export class SupabaseAttemptRepository implements AttemptRepository {
+  // Dựng state trắng từ HỒ SƠ THẬT của học sinh (đúng tên + đúng lớp) —
+  // tránh hồ sơ mẫu chung chung "Học sinh / Lớp 7A2" cho tài khoản mới
+  private async buildFreshFromAccount(studentId: string): Promise<StudentState | null> {
+    try {
+      const students = await supabaseStudentRepo.getStudents();
+      const student = students.find((st) => st.id === studentId);
+      if (!student) return null;
+      let className: string | undefined;
+      try {
+        const cls = await supabaseClassRepo.getClassById(student.class_id);
+        if (cls?.name) className = cls.name.startsWith('Lớp') ? cls.name : `Lớp ${cls.name}`;
+      } catch {}
+      return createFreshStudentState(student, className);
+    } catch {
+      return null;
+    }
+  }
+
   async getStudentState(studentId: string): Promise<StudentState> {
     const localFallback = await mockAttemptRepo.getStudentState(studentId);
     if (!isSupabaseReady() || !isUUID(studentId)) {
@@ -914,23 +932,31 @@ export class SupabaseAttemptRepository implements AttemptRepository {
         .maybeSingle();
 
       if (error || !data) {
+        // Chưa có dòng state trên DB (học sinh mới): giữ tiến độ local (nếu có)
+        // nhưng hồ sơ phải là hồ sơ THẬT — tên/lớp đúng của em
+        const freshReal = await this.buildFreshFromAccount(studentId);
+        if (freshReal) {
+          return { ...localFallback, profile: freshReal.profile };
+        }
         return localFallback;
       }
 
       const students = await supabaseStudentRepo.getStudents();
       const student = students.find((s) => s.id === studentId);
-      const fresh = createFreshStudentState(
-        student || {
-          id: studentId,
-          name: 'Học sinh',
-          username: studentId,
-          class_id: DEFAULT_CLASS_UUID,
-          status: 'active',
-          has_logged_in: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-      );
+      const fresh =
+        (await this.buildFreshFromAccount(studentId)) ||
+        createFreshStudentState(
+          student || {
+            id: studentId,
+            name: 'Học sinh',
+            username: studentId,
+            class_id: DEFAULT_CLASS_UUID,
+            status: 'active',
+            has_logged_in: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        );
 
       const todayStr = getLocalTodayStr();
       const effectiveAttendanceDate =

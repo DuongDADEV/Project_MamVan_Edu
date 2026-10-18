@@ -7,6 +7,7 @@
 - **Tạo tài khoản học sinh mẫu `hs001` thật trên Supabase** (trước đây chỉ là thẻ tĩnh trên màn đăng nhập, không tồn tại trên máy chủ nên không đăng nhập được): Nguyễn Minh Anh, lớp 7a1 của gv004, mã HS001, mật khẩu theo tài liệu hướng dẫn dự án; đã kiểm chứng khớp đúng điều kiện đăng nhập của app.
 - **Migration 003 + 004:** đã thử chạy từ máy trạm nhưng kết nối TLS trực tiếp tới database bị proxy chặn — **vẫn cần chủ dự án dán 2 file SQL vào Supabase SQL Editor** (app đang chạy chế độ tương thích an toàn trong lúc chờ).
 - **Đổi mật khẩu database:** để sau theo ý chủ dự án, chưa thực hiện.
+- **Sửa kèm khi kiểm chứng hs001:** học sinh mới (chưa có dòng state trên Supabase) bị chào bằng tên mẫu chung chung "Học sinh" và lớp mặc định — nay state lần đầu được dựng từ hồ sơ thật (đúng tên + đúng lớp) ở cả hai nhánh đọc state.
 
 ## [2026-10-18] - QA vòng 2: Đổi tên "Mầm AI Studio", sửa triệt để XP/điểm danh qua ngày, khóa cửa hậu bảo mật, gỡ số liệu bịa
 ### Đổi tên thương hiệu:
