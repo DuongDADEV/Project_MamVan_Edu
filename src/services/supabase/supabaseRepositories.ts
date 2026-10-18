@@ -1231,6 +1231,52 @@ export class SupabaseEssayRepository implements EssayRepository {
           (e) => e.quizId === filter.quizId || e.questionId === filter.quizId
         );
       }
+
+      // HỢP NHẤT ĐỊNH DANH HỌC SINH + KHỬ TRÙNG BÀI:
+      // Cùng một học sinh có thể mang nhiều studentId khác nhau giữa các nguồn
+      // local (bản trong state của học sinh, bản độc lập, dữ liệu cũ) khiến hàng
+      // đợi chấm hiện em đó thành 2 người khác nhau. Quy mọi bài về ĐÚNG MỘT
+      // học sinh trong bảng students (khớp theo id, else khớp duy nhất theo tên
+      // + lớp), rồi khử các bản sao của cùng một bài (cùng học sinh + câu hỏi +
+      // nội dung + mốc nộp gần nhau) chỉ giữ một bản.
+      try {
+        const { data: studentRows } = await supabase
+          .from('students')
+          .select('id, name, class_id');
+        const { data: classRows } = await supabase.from('classes').select('id, name');
+        const classNameById = new Map<string, string>(
+          (classRows || []).map((c: any) => [c.id, (c.name || '').toLowerCase()])
+        );
+        const norm = (x?: string) => (x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const studentIds = new Set((studentRows || []).map((st: any) => st.id));
+        const canonicalize = (sub: EssaySubmission): EssaySubmission => {
+          if (studentIds.has(sub.studentId)) return sub;
+          const candidates = (studentRows || []).filter(
+            (st: any) => norm(st.name) === norm(sub.studentName)
+          );
+          if (candidates.length === 0) return sub;
+          const byClass = candidates.find(
+            (st: any) =>
+              classNameById.get(st.class_id) &&
+              norm(sub.className).includes(classNameById.get(st.class_id) as string)
+          );
+          const picked = byClass || (candidates.length === 1 ? candidates[0] : null);
+          return picked ? { ...sub, studentId: picked.id } : sub;
+        };
+        merged = merged.map(canonicalize);
+
+        const seen = new Set<string>();
+        merged = merged.filter((sub) => {
+          const fingerprint = `${sub.studentId}|${sub.questionId}|${(sub.content || '')
+            .trim()
+            .slice(0, 120)}|${Math.round((sub.submittedAt || 0) / 60000)}`;
+          if (seen.has(fingerprint)) return false;
+          seen.add(fingerprint);
+          return true;
+        });
+      } catch (canonErr) {
+        console.warn('[SupabaseEssay] Bỏ qua hợp nhất định danh học sinh:', canonErr);
+      }
       return merged;
     } catch {
       return cleanLocalList;

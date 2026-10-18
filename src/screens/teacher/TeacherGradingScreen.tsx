@@ -11,7 +11,15 @@ import {
   AIGradingConfig,
   ClassItem,
 } from '../../types.ts';
-import { essayRepository, syncEventBus } from '../../services/index.ts';
+import {
+  essayRepository,
+  syncEventBus,
+  contentService,
+  quizService,
+  TopicWithMeta,
+  QuizWithMeta,
+  QuestionWithMeta,
+} from '../../services/index.ts';
 import {
   PenTool,
   Sparkles,
@@ -38,6 +46,10 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
 
   // Dữ liệu bài viết
   const [submissions, setSubmissions] = useState<EssaySubmission[]>([]);
+  // Dữ liệu tham chiếu để gom bài theo CHỦ ĐỀ (bài nộp chỉ mang quizId/questionId)
+  const [topics, setTopics] = useState<TopicWithMeta[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizWithMeta[]>([]);
+  const [questionsMap, setQuestionsMap] = useState<Record<string, QuestionWithMeta>>({});
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(true);
@@ -64,14 +76,21 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
   // Tải toàn bộ dữ liệu
   const loadData = useCallback(async () => {
     try {
-      const [subs, rubrics, samples, cfg, metrics] = await Promise.all([
-        essayRepository.getSubmissions({ classId: selectedClassId }),
-        essayRepository.getRubricTemplates(),
-        essayRepository.getGradedSamples(),
-        essayRepository.getGradingConfig(),
-        essayRepository.getAIAccuracyMetrics(),
-      ]);
+      const [subs, rubrics, samples, cfg, metrics, topicList, quizList, questionMap] =
+        await Promise.all([
+          essayRepository.getSubmissions({ classId: selectedClassId }),
+          essayRepository.getRubricTemplates(),
+          essayRepository.getGradedSamples(),
+          essayRepository.getGradingConfig(),
+          essayRepository.getAIAccuracyMetrics(),
+          contentService.getTopics().catch(() => [] as TopicWithMeta[]),
+          quizService.getQuizzes().catch(() => [] as QuizWithMeta[]),
+          quizService.getQuestions().catch(() => ({}) as Record<string, QuestionWithMeta>),
+        ]);
       setSubmissions(subs);
+      setTopics(topicList || []);
+      setQuizzes(quizList || []);
+      setQuestionsMap(questionMap || {});
       setRubricTemplates(rubrics);
       setGradedSamples(samples);
       setAiConfig(cfg);
@@ -260,6 +279,9 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
         <StudentGradingDetail
           studentId={detailStudentId}
           submissions={submissions}
+          topics={topics}
+          quizzes={quizzes}
+          questionsMap={questionsMap}
           onBack={() => setDetailStudentId(null)}
           onSelectSubmission={(sub) => setSelectedSubmissionId(sub.id)}
         />
@@ -267,6 +289,9 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
         /* HÀNG ĐỢI BÀI CHỜ CHỐT */
         <GradingQueueTable
           submissions={submissions}
+          topics={topics}
+          quizzes={quizzes}
+          questionsMap={questionsMap}
           classes={classes}
           selectedClassId={selectedClassId}
           onSelectSubmission={(sub) => setSelectedSubmissionId(sub.id)}

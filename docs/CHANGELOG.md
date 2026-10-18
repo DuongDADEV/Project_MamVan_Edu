@@ -1,5 +1,15 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Mục Bản nháp ở Ngân hàng câu hỏi
+- Thêm tab "Bản nháp" (có huy hiệu đếm số mục chờ) ở màn Ngân hàng câu hỏi: mọi bộ câu hỏi và lý thuyết Mầm AI tạo ra mà chưa duyệt đều nằm tại đây.
+- Mỗi bộ câu hỏi nháp mở ra xem từng câu, tích chọn những câu đã duyệt rồi "Đưa vào Ngân hàng"; câu chưa chọn ở lại nháp. Có nút mở sang Studio để duyệt ở màn hình duyệt đầy đủ, và xóa nháp (hỏi xác nhận). Lý thuyết nháp cũng duyệt qua Studio từ mục này.
+- Nguyên tắc xuyên suốt: chưa duyệt thì chưa vào Ngân hàng.
+
+## [2026-10-18] - Chấm bài: hết trùng học sinh + bảng theo mẫu thiết kế
+- Sửa lỗi một học sinh hiện 2 dòng trong hàng đợi chấm: cùng một em mang nhiều định danh khác nhau giữa các nguồn dữ liệu local nên bị tính thành 2 người, và cùng một bài có thể có bản sao. Nay mọi bài được quy về đúng một học sinh trong danh sách thật (khớp theo tên + lớp khi lệch định danh) và khử trùng bài theo nội dung trước khi hiển thị — mỗi học sinh chỉ còn 1 dòng duy nhất.
+- Bảng hàng đợi làm lại theo mẫu: đầu bảng cam, cột Học sinh | Lớp | Chủ đề đã làm (x/y) | Bài chờ chấm (0 thì làm mờ) | Chờ lâu nhất (đỏ khi quá hẹn) | Xem chi tiết.
+- Màn chi tiết học sinh: gom bài theo CHỦ ĐỀ (dòng nhóm "Thơ - bài chờ chấm: 2" / "- (Hoàn thành)"), thanh tổng kết tính "chủ đề đã làm"; mốc quá hẹn thống nhất là chờ trên 24 giờ (đúng mẫu: 24h chưa tính quá hẹn, 40h thì có) và chữ trong bảng là "(quá hẹn)".
+
 ## [2026-10-18] - Mầm AI Studio: bản nháp bền + duyệt lý thuyết trước khi lưu
 - Bộ câu hỏi AI tạo xong nay là BẢN NHÁP được tự lưu lại: đóng xưởng, chuyển màn hình hay tải lại trang rồi quay lại vẫn còn nguyên để duyệt tiếp; trên xưởng có thanh "BẢN NHÁP" báo số câu + giờ lưu nháp, bấm vào là duyệt tiếp.
 - Lưu vào Ngân hàng chỉ lưu những câu đã tích chọn; các câu chưa chọn ở lại bản nháp chờ duyệt sau — không còn cảnh chưa duyệt vội là mất. Có nút xóa bản nháp (hỏi xác nhận).

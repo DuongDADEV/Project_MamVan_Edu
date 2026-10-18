@@ -50,6 +50,8 @@ interface AiContentStudioModalProps {
   topicId?: string;
   topicTitle?: string;
   isEmbedded?: boolean;
+  autoOpenDraftKind?: 'questions' | 'theory' | null;
+  autoOpenDraftNonce?: number;
   onApplyDraft: (payload: {
     type: 'video' | 'theory' | 'quiz';
     data: any;
@@ -186,6 +188,8 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   topicTitle = 'Thơ bốn chữ, năm chữ',
   isEmbedded = false,
   onApplyDraft,
+  autoOpenDraftKind,
+  autoOpenDraftNonce,
 }) => {
   // 1. TRẠNG THÁI API KEY & AI THẬT
   const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!getGeminiApiKey());
@@ -477,6 +481,18 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     setIsTheoryReviewOpen(false);
     onClose();
   };
+
+  // Mở thẳng màn duyệt khi thầy/cô bấm "Duyệt" từ mục Bản nháp ở Ngân hàng
+  useEffect(() => {
+    if (!autoOpenDraftNonce) return;
+    if (autoOpenDraftKind === 'questions' && reviewDraftQuestions?.length) {
+      setIsReviewOpen(true);
+    }
+    if (autoOpenDraftKind === 'theory' && reviewTheoryDraft?.blocks?.length) {
+      setIsTheoryReviewOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenDraftNonce]);
 
   const handleDiscardDraft = () => {
     setReviewDraftQuestions(null);

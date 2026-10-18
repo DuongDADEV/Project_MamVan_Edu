@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { formatScore } from '../../../utils/scoreFormat.ts';
 import { EssaySubmission, ClassItem } from '../../../types.ts';
+import { TopicWithMeta, QuizWithMeta, QuestionWithMeta } from '../../../services/index.ts';
 import {
   Clock,
   Sparkles,
@@ -18,6 +19,9 @@ import {
 
 interface GradingQueueTableProps {
   submissions: EssaySubmission[];
+  topics?: TopicWithMeta[];
+  quizzes?: QuizWithMeta[];
+  questionsMap?: Record<string, QuestionWithMeta>;
   classes: ClassItem[];
   selectedClassId?: string;
   onSelectSubmission: (submission: EssaySubmission) => void;
@@ -26,6 +30,9 @@ interface GradingQueueTableProps {
 
 export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
   submissions,
+  topics = [],
+  quizzes = [],
+  questionsMap = {},
   classes,
   selectedClassId = 'all',
   onSelectSubmission,
@@ -121,9 +128,19 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
           Math.max(mx, x.hoursWaiting ?? Math.max(0, Math.floor((Date.now() - x.submittedAt) / 3600000))),
         0
       );
+      const topicIds = new Set<string>();
+      subs.forEach((x) => {
+        const byQuiz = quizzes.find((q) => q.id === x.quizId);
+        const tid =
+          byQuiz?.topicId ||
+          questionsMap[x.questionId]?.topicId ||
+          quizzes.find((q) => q.id === x.questionId)?.topicId;
+        if (tid) topicIds.add(tid);
+      });
       return {
         subs,
         rep: subs[0],
+        topicsDone: topicIds.size,
         ungradedCount: ungraded.length,
         aiCount: subs.filter((x) => x.status === 'AI_SUGGESTED').length,
         gradedCount: subs.length - ungraded.length,
@@ -133,7 +150,7 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
         totalWords: subs.reduce((t, x) => t + (x.wordCount || 0), 0),
       };
     });
-  }, [filteredSubmissions]);
+  }, [filteredSubmissions, quizzes, questionsMap]);
 
   return (
     <div className="space-y-6">
@@ -246,161 +263,75 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
         </div>
       </div>
 
-      {/* 3. BẢNG HÀNG ĐỢI BÀI CHẤM */}
+      {/* 3. BẢNG HÀNG ĐỢI THEO HỌC SINH (mẫu thiết kế: đầu bảng cam, 6 cột) */}
       <div className="bg-white rounded-2xl border border-[#E8DFD1] overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[#FAF5EB] text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-[#E8DFD1]">
-              <tr>
-                <th className="py-3.5 px-4">Học sinh & Lớp</th>
-                <th className="py-3.5 px-4">Bài tập / Câu hỏi</th>
-                <th className="py-3.5 px-4 text-center">Năng lực</th>
-                <th className="py-3.5 px-4 text-center">Số từ</th>
-                <th className="py-3.5 px-4">Thời điểm nộp</th>
-                <th className="py-3.5 px-4 text-center">Thời gian chờ</th>
-                <th className="py-3.5 px-4 text-center">Trạng thái</th>
-                <th className="py-3.5 px-4 text-right">Thao tác</th>
+            <thead>
+              <tr className="bg-[#F59E0B] text-[#1E1B4B] text-xs font-extrabold uppercase tracking-wide">
+                <th className="py-3 px-4">Học sinh</th>
+                <th className="py-3 px-4">Lớp</th>
+                <th className="py-3 px-4 text-center">Chủ đề đã làm</th>
+                <th className="py-3 px-4 text-center">Bài chờ chấm</th>
+                <th className="py-3 px-4 text-center">Chờ lâu nhất</th>
+                <th className="py-3 px-4 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {groupedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={6} className="py-12 text-center text-slate-400 text-sm">
                     Không có bài viết nào phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>
               ) : (
                 groupedStudents.map((g) => {
                   const sub = g.rep;
-                  const isUrgent = g.ungradedCount > 0 && g.maxHours >= 24;
-                  const skillLevel = sub.skillLevel || 'VAN_DUNG';
-                  const summaryParts: string[] = [];
-                  if (g.ungradedCount > 0) summaryParts.push(`${g.ungradedCount} chờ chấm`);
-                  if (g.aiCount > 0) summaryParts.push(`${g.aiCount} có gợi ý AI`);
-                  if (g.gradedCount > 0) summaryParts.push(`${g.gradedCount} đã chốt`);
-
+                  const isOverdue = g.ungradedCount > 0 && g.maxHours > 24;
+                  const totalTopics = Math.max(topics.length, g.topicsDone);
                   return (
                     <tr
                       key={sub.studentId || sub.id}
                       onClick={() => (onViewStudent ? onViewStudent(sub) : onSelectSubmission(g.nextToGrade || g.latest))}
-                      className="hover:bg-[#FAF8F3] transition-colors cursor-pointer group"
+                      className="hover:bg-[#FAF8F3] transition-colors cursor-pointer"
                     >
-                      {/* Học sinh & Lớp */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-200 text-[#4F46E5] font-bold text-xs flex items-center justify-center shrink-0">
-                            {sub.studentName?.slice(0, 1) || 'H'}
-                          </div>
-                          <div>
-                            <div className="font-bold text-[#1E1B4B] group-hover:text-[#4F46E5] transition-colors">
-                              {sub.studentName || 'Học sinh'}
-                            </div>
-                            <div className="text-[11px] font-semibold text-slate-500">
-                              Lớp {sub.className || '—'}
-                            </div>
-                          </div>
-                        </div>
+                      <td className="py-3.5 px-4 font-bold text-[#1E1B4B]">
+                        {sub.studentName || 'Học sinh'}
                       </td>
-
-                      {/* Tổng số bài của học sinh */}
-                      <td className="py-3.5 px-4 max-w-xs">
-                        <div className="font-semibold text-slate-800">
-                          {g.subs.length} bài đã nộp
-                        </div>
-                        <div className="text-[11px] text-slate-500 line-clamp-1">
-                          {summaryParts.join(' • ')}
-                        </div>
+                      <td className="py-3.5 px-4 text-slate-600 font-semibold whitespace-nowrap">
+                        {(sub.className || '—').replace(/^Lớp\s*/i, '')}
                       </td>
-
-                      {/* Mức năng lực (của bài ưu tiên nhất) */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                            skillLevel === 'PHAN_TICH'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-indigo-50 text-[#4F46E5] border border-indigo-200'
-                          }`}
-                        >
-                          {skillLevel === 'PHAN_TICH' ? 'Phân tích' : 'Vận dụng'}
-                        </span>
+                      <td className="py-3.5 px-4 text-center font-semibold text-slate-700">
+                        {totalTopics > 0 ? `${g.topicsDone}/${totalTopics}` : '—'}
                       </td>
-
-                      {/* Tổng số từ */}
-                      <td className="py-3.5 px-4 text-center font-medium text-slate-700 text-xs">
-                        {g.totalWords} từ
-                      </td>
-
-                      {/* Lần nộp gần nhất */}
-                      <td className="py-3.5 px-4 text-xs text-slate-500">
-                        {new Date(g.latest.submittedAt).toLocaleString('vi-VN', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </td>
-
-                      {/* Thời gian chờ lâu nhất trong các bài chưa chấm */}
                       <td className="py-3.5 px-4 text-center">
                         {g.ungradedCount === 0 ? (
-                          <span className="text-xs text-slate-400">—</span>
-                        ) : isUrgent ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
-                            <Clock className="w-3 h-3 text-amber-700" />
-                            {g.maxHours}h (Quá hẹn)
-                          </span>
+                          <span className="text-slate-300 font-semibold">0</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-slate-600 font-semibold px-2 py-0.5 rounded-full bg-slate-100">
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            {g.maxHours}h
-                          </span>
+                          <span className="font-bold text-[#1E1B4B]">{g.ungradedCount}</span>
                         )}
                       </td>
-
-                      {/* Trạng thái tổng hợp */}
-                      <td className="py-3.5 px-4 text-center">
-                        {g.ungradedCount === 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-                            <CheckCircle2 className="w-3 h-3" /> Đã chốt hết
-                          </span>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        {g.ungradedCount === 0 || g.maxHours <= 0 ? (
+                          <span className="text-slate-300">—</span>
+                        ) : isOverdue ? (
+                          <span className="font-extrabold text-rose-600">{g.maxHours}h</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
-                            Chờ chấm ({g.ungradedCount})
-                          </span>
+                          <span className="font-semibold text-slate-600">{g.maxHours}h</span>
                         )}
                       </td>
-
-                      {/* Thao tác */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                        {onViewStudent && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onViewStudent(sub);
-                            }}
-                            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white border border-slate-200 text-slate-600 hover:border-[#4F46E5] hover:text-[#4F46E5] transition-colors inline-flex items-center gap-1 whitespace-nowrap"
-                            title="Xem chi tiết các bài học sinh này đã làm"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Xem chi tiết
-                          </button>
-                        )}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onSelectSubmission(g.nextToGrade || g.latest);
+                            if (onViewStudent) onViewStudent(sub);
+                            else onSelectSubmission(g.nextToGrade || g.latest);
                           }}
-                          className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1 whitespace-nowrap ${
-                            g.ungradedCount === 0
-                              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                              : 'bg-[#4F46E5] text-white hover:bg-indigo-700 shadow-xs'
-                          }`}
+                          className="text-xs font-bold text-[#4F46E5] hover:text-[#E2704A] transition-colors"
                         >
-                          {g.ungradedCount === 0 ? 'Xem lại' : 'Chấm ngay'}
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          Xem chi tiết
                         </button>
-                        </div>
                       </td>
                     </tr>
                   );

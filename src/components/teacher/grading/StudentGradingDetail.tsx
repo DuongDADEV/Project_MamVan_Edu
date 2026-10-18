@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { formatScore } from '../../../utils/scoreFormat.ts';
 import { EssaySubmission } from '../../../types.ts';
+import { TopicWithMeta, QuizWithMeta, QuestionWithMeta } from '../../../services/index.ts';
 import { ArrowLeft } from 'lucide-react';
 
 interface StudentGradingDetailProps {
   studentId: string;
   submissions: EssaySubmission[];
+  topics?: TopicWithMeta[];
+  quizzes?: QuizWithMeta[];
+  questionsMap?: Record<string, QuestionWithMeta>;
   onBack: () => void;
   onSelectSubmission: (submission: EssaySubmission) => void;
 }
@@ -30,9 +34,26 @@ const waitingHours = (s: EssaySubmission) =>
 export const StudentGradingDetail: React.FC<StudentGradingDetailProps> = ({
   studentId,
   submissions,
+  topics = [],
+  quizzes = [],
+  questionsMap = {},
   onBack,
   onSelectSubmission,
 }) => {
+  // Suy chủ đề của một bài nộp: quizId -> quiz.topicId, else questionId -> question.topicId
+  const topicIdOf = (s: EssaySubmission): string | null => {
+    const byQuiz = quizzes.find((q) => q.id === s.quizId);
+    if (byQuiz?.topicId) return byQuiz.topicId;
+    const byQuestion = questionsMap[s.questionId];
+    if (byQuestion?.topicId) return byQuestion.topicId;
+    const quizByQuestionId = quizzes.find((q) => q.id === s.questionId);
+    return quizByQuestionId?.topicId || null;
+  };
+  const topicTitleOf = (s: EssaySubmission): string => {
+    const tid = topicIdOf(s);
+    const t = tid ? topics.find((x) => x.id === tid) : null;
+    return t?.title || s.quizTitle || 'Chủ đề khác';
+  };
   const [onlyUnmarked, setOnlyUnmarked] = useState(false);
 
   const own = useMemo(
@@ -46,11 +67,11 @@ export const StudentGradingDetail: React.FC<StudentGradingDetailProps> = ({
   const studentName = own[0]?.studentName || 'Học sinh';
   const className = own[0]?.className || '—';
 
-  // Nhóm theo bài kiểm tra (quizTitle)
+  // Nhóm theo CHỦ ĐỀ (đúng mẫu thiết kế: "Thơ - bài chờ chấm: 2")
   const groups = useMemo(() => {
     const map = new Map<string, EssaySubmission[]>();
     own.forEach((s) => {
-      const key = s.quizTitle || 'Bài kiểm tra / Bài tập';
+      const key = topicTitleOf(s);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(s);
     });
@@ -59,19 +80,22 @@ export const StudentGradingDetail: React.FC<StudentGradingDetailProps> = ({
       items,
       pendingCount: items.filter((i) => i.status !== 'GRADED').length,
     }));
-  }, [own]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [own, topics, quizzes, questionsMap]);
 
   const stats = useMemo(() => {
     const graded = own.filter((s) => s.status === 'GRADED');
     const pending = own.length - graded.length;
-    const overdue = own.filter((s) => s.status !== 'GRADED' && waitingHours(s) >= 24).length;
+    const overdue = own.filter((s) => s.status !== 'GRADED' && waitingHours(s) > 24).length;
     const scores = graded
       .map((s) => s.finalScore ?? s.totalScore)
       .filter((v): v is number => typeof v === 'number');
     const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    const doneGroups = groups.filter((g) => g.pendingCount === 0).length;
-    return { pending, overdue, avg, doneGroups, totalGroups: groups.length };
-  }, [own, groups]);
+    // "Chủ đề đã làm" = số chủ đề học sinh đã có bài nộp / tổng số chủ đề
+    const doneTopics = groups.length;
+    const totalTopics = Math.max(topics.length, groups.length);
+    return { pending, overdue, avg, doneTopics, totalTopics };
+  }, [own, groups, topics]);
 
   const visibleGroups = useMemo(() => {
     if (!onlyUnmarked) return groups;
@@ -105,7 +129,7 @@ export const StudentGradingDetail: React.FC<StudentGradingDetailProps> = ({
         {/* Thanh tổng kết đậm */}
         <div className="mt-4 rounded-xl bg-[#1E1B4B] text-white px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs font-semibold">
           <span>
-            {stats.doneGroups}/{stats.totalGroups} bài kiểm tra đã làm
+            {stats.doneTopics}/{stats.totalTopics} chủ đề đã làm
           </span>
           <span className="text-amber-300">{stats.pending} bài chờ chấm</span>
           <span className="text-rose-300">{stats.overdue} bài quá hạn</span>
@@ -150,7 +174,7 @@ export const StudentGradingDetail: React.FC<StudentGradingDetailProps> = ({
                 ) : (
                   visibleGroups.map((group) => (
                     <React.Fragment key={group.quizTitle}>
-                      {/* Dòng nhóm bài kiểm tra */}
+                      {/* Dòng nhóm chủ đề */}
                       <tr className="bg-[#FEF3C7]">
                         <td colSpan={5} className="py-2 px-4 text-xs text-[#1E1B4B]">
                           <span className="font-bold">{group.quizTitle}</span>
@@ -163,7 +187,7 @@ export const StudentGradingDetail: React.FC<StudentGradingDetailProps> = ({
                       </tr>
                       {group.items.map((sub) => {
                         const hours = waitingHours(sub);
-                        const isOverdue = sub.status !== 'GRADED' && hours >= 24;
+                        const isOverdue = sub.status !== 'GRADED' && hours > 24;
                         return (
                           <tr
                             key={sub.id}
@@ -171,17 +195,17 @@ export const StudentGradingDetail: React.FC<StudentGradingDetailProps> = ({
                             className="border-t border-slate-100 hover:bg-[#FAF8F3] transition-colors cursor-pointer"
                           >
                             <td className="py-3 px-4 font-semibold text-slate-800">
-                              {sub.promptTitle || 'Cảm nghĩ về đoạn văn/thơ'}
+                              {sub.quizTitle || sub.promptTitle || 'Bài kiểm tra'}
                             </td>
                             <td className="py-3 px-4 text-xs text-slate-500 whitespace-nowrap">
                               {formatSubmittedAt(sub.submittedAt)}
                             </td>
                             <td className="py-3 px-4 text-xs whitespace-nowrap">
-                              {sub.status === 'GRADED' ? (
+                              {hours <= 0 ? (
                                 <span className="text-slate-400">–</span>
                               ) : isOverdue ? (
                                 <span className="font-bold text-rose-600">
-                                  {hours}h (quá hạn)
+                                  {hours}h (quá hẹn)
                                 </span>
                               ) : (
                                 <span className="text-slate-600 font-semibold">{hours}h</span>

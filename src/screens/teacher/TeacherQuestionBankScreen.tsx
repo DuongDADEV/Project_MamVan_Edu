@@ -21,6 +21,7 @@ import {
   Award,
   RefreshCw,
   FolderOpen,
+  NotebookPen,
   BookOpenCheck,
   Eye,
   Copy,
@@ -59,6 +60,78 @@ interface TeacherQuestionBankScreenProps {
   onRefreshData?: () => void;
 }
 
+// ============================
+// MỤC BẢN NHÁP (nội dung AI chưa duyệt)
+// Bản nháp do Mầm AI Studio tự lưu (localStorage theo chủ đề). Chưa duyệt thì
+// nằm ở đây; duyệt xong mới được đẩy vào Ngân hàng câu hỏi / học liệu.
+// ============================
+const QUESTION_DRAFT_PREFIX = 'mamvan_ai_question_draft_';
+const THEORY_DRAFT_PREFIX = 'mamvan_ai_theory_draft_';
+
+interface QuestionDraftSet {
+  key: string;
+  topicId: string;
+  topicTitle: string;
+  questions: Question[];
+  selectedIds: string[];
+  savedAt: string;
+}
+
+interface TheoryDraftItem {
+  key: string;
+  topicId: string;
+  title: string;
+  blocksCount: number;
+  savedAt: string;
+}
+
+function readQuestionDraftSets(): QuestionDraftSet[] {
+  const out: QuestionDraftSet[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(QUESTION_DRAFT_PREFIX)) continue;
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+      if (Array.isArray(parsed?.questions) && parsed.questions.length > 0) {
+        out.push({
+          key,
+          topicId: key.slice(QUESTION_DRAFT_PREFIX.length),
+          topicTitle: parsed.topicTitle || '',
+          questions: parsed.questions,
+          selectedIds: Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [],
+          savedAt: parsed.savedAt || '',
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Lỗi đọc mục nháp câu hỏi:', e);
+  }
+  return out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+}
+
+function readTheoryDrafts(): TheoryDraftItem[] {
+  const out: TheoryDraftItem[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(THEORY_DRAFT_PREFIX)) continue;
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+      if (parsed?.data?.blocks?.length > 0) {
+        out.push({
+          key,
+          topicId: key.slice(THEORY_DRAFT_PREFIX.length),
+          title: parsed.data.title || 'Lý thuyết chưa đặt tên',
+          blocksCount: parsed.data.blocks.length,
+          savedAt: parsed.savedAt || '',
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Lỗi đọc mục nháp lý thuyết:', e);
+  }
+  return out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+}
+
 export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps> = ({
   teacher,
   classes = [],
@@ -92,7 +165,93 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   const theories = rawTheories ?? [];
 
   // 2. TABS ĐIỀU HƯỚNG CHÍNH: 'bank' (Kho câu hỏi) HOẶC 'ai_studio' (Mầm AI Studio)
-  const [activeMainTab, setActiveMainTab] = useState<'bank' | 'ai_studio'>('bank');
+  const [activeMainTab, setActiveMainTab] = useState<'bank' | 'ai_studio' | 'drafts'>('bank');
+
+  // MỤC BẢN NHÁP: đọc lại mỗi khi đổi tab / sau mỗi thao tác xử lý nháp
+  const [draftsVersion, setDraftsVersion] = useState(0);
+  const questionDraftSets = useMemo(
+    () => readQuestionDraftSets(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draftsVersion, activeMainTab]
+  );
+  const theoryDraftItems = useMemo(
+    () => readTheoryDrafts(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draftsVersion, activeMainTab]
+  );
+  const pendingDraftCount =
+    questionDraftSets.reduce((acc, set) => acc + set.questions.length, 0) + theoryDraftItems.length;
+  const [expandedDraftKey, setExpandedDraftKey] = useState<string | null>(null);
+  const [draftSelections, setDraftSelections] = useState<Record<string, string[]>>({});
+  const [draftToDelete, setDraftToDelete] = useState<{ key: string; label: string } | null>(null);
+  const [draftOpenRequest, setDraftOpenRequest] = useState<{
+    kind: 'questions' | 'theory';
+    nonce: number;
+  } | null>(null);
+
+  const getDraftSelection = (set: QuestionDraftSet): string[] =>
+    draftSelections[set.key] ?? set.selectedIds.filter((id) => set.questions.some((q) => q.id === id));
+
+  const handleReviewDraftInStudio = (topicId: string, kind: 'questions' | 'theory') => {
+    if (topicId && topicId !== 'global' && topics.some((t) => t.id === topicId)) {
+      setFormTopicId(topicId);
+    }
+    setDraftOpenRequest({ kind, nonce: Date.now() });
+    setActiveMainTab('ai_studio');
+  };
+
+  // Đẩy các câu ĐÃ DUYỆT (đã tích chọn) từ bản nháp vào Ngân hàng
+  const handlePushDraftQuestions = async (set: QuestionDraftSet) => {
+    const ids = getDraftSelection(set);
+    const toPush = set.questions.filter((q) => ids.includes(q.id));
+    if (toPush.length === 0) {
+      alert('Thầy/cô hãy tích chọn ít nhất 1 câu đã duyệt để đưa vào Ngân hàng.');
+      return;
+    }
+    try {
+      for (const q of toPush) {
+        await quizService.saveQuestion({
+          ...q,
+          topicId: set.topicId !== 'global' ? set.topicId : q.topicId || formTopicId,
+          isAiGenerated: true,
+          isTeacherReviewed: true,
+        });
+      }
+      const remaining = set.questions.filter((q) => !ids.includes(q.id));
+      if (remaining.length > 0) {
+        localStorage.setItem(
+          set.key,
+          JSON.stringify({
+            questions: remaining,
+            selectedIds: remaining.map((q) => q.id),
+            savedAt: new Date().toISOString(),
+            topicTitle: set.topicTitle,
+          })
+        );
+      } else {
+        localStorage.removeItem(set.key);
+      }
+      setNewlyCreatedQuestionIds(toPush.map((q) => q.id));
+      showToast(`🎉 Đã đưa ${toPush.length} câu từ bản nháp vào Ngân hàng!`);
+      onRefreshData?.();
+      setDraftsVersion((v) => v + 1);
+    } catch (e) {
+      alert('Không thể đưa câu hỏi vào Ngân hàng. Vui lòng thử lại.');
+    }
+  };
+
+  const handleDeleteDraft = () => {
+    if (!draftToDelete) return;
+    try {
+      localStorage.removeItem(draftToDelete.key);
+    } catch (e) {
+      /* bỏ qua */
+    }
+    setDraftToDelete(null);
+    setDraftsVersion((v) => v + 1);
+    showToast('Đã xóa bản nháp.');
+  };
+
 
   // Trạng thái AI Key & Model
   const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!getGeminiApiKey());
@@ -120,6 +279,23 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   // 4. TOAST THÔNG BÁO
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const fmtDraftTime = (iso: string) =>
+    iso
+      ? new Date(iso).toLocaleString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          day: '2-digit',
+          month: '2-digit',
+        })
+      : '';
+  const DRAFT_QTYPE_LABELS: Record<string, string> = {
+    single: 'Trắc nghiệm',
+    multi: 'Chọn nhiều',
+    fill: 'Điền khuyết',
+    essay: 'Tự luận',
+  };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -573,6 +749,26 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         </button>
         <button
           type="button"
+          onClick={() => {
+            setDraftsVersion((v) => v + 1);
+            setActiveMainTab('drafts');
+          }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            activeMainTab === 'drafts'
+              ? 'bg-amber-500 text-white shadow-xs'
+              : 'text-[#8C7E6A] hover:text-amber-600 hover:bg-amber-50'
+          }`}
+        >
+          <NotebookPen className="w-4 h-4" />
+          <span>Bản nháp</span>
+          {pendingDraftCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">
+              {pendingDraftCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveMainTab('ai_studio')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeMainTab === 'ai_studio'
@@ -615,6 +811,8 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
             isOpen={true}
             isEmbedded={true}
             onClose={() => setActiveMainTab('bank')}
+            autoOpenDraftKind={draftOpenRequest?.kind ?? null}
+            autoOpenDraftNonce={draftOpenRequest?.nonce ?? 0}
             topicId={formTopicId}
             topicTitle={topics.find((t) => t.id === formTopicId)?.title || 'Ngữ văn 7'}
             onApplyDraft={handleApplyDraftFromAi}
@@ -1576,7 +1774,199 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         </div>
       )}
 
+
+      {/* ========================================================================= */}
+      {/* PHÂN HỆ 3: MỤC BẢN NHÁP — nội dung AI chưa duyệt, duyệt xong mới vào Ngân hàng */}
+      {/* ========================================================================= */}
+      {activeMainTab === 'drafts' && (
+        <div className="space-y-4 animate-in fade-in duration-150">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+            <h3 className="text-sm font-extrabold text-amber-800 flex items-center gap-2">
+              <NotebookPen className="w-4 h-4" /> Bản nháp chưa duyệt
+            </h3>
+            <p className="text-xs text-amber-700 mt-1">
+              Mọi nội dung Mầm AI tạo ra đều nằm ở đây trước. Thầy/cô duyệt từng câu, tích chọn
+              những câu đạt rồi bấm đẩy vào Ngân hàng — chưa duyệt thì chưa vào Ngân hàng.
+            </p>
+          </div>
+
+          {questionDraftSets.length === 0 && theoryDraftItems.length === 0 && (
+            <div className="p-10 text-center bg-white border border-[#E6DCC8] rounded-2xl">
+              <NotebookPen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-500">Chưa có bản nháp nào đang chờ.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Khi Mầm AI Studio tạo bộ câu hỏi hoặc lý thuyết mà thầy/cô chưa duyệt ngay, bản
+                nháp sẽ xuất hiện tại đây.
+              </p>
+            </div>
+          )}
+
+          {questionDraftSets.map((set) => {
+            const selection = getDraftSelection(set);
+            const isExpanded = expandedDraftKey === set.key;
+            const topicTitle =
+              set.topicTitle ||
+              topics.find((t) => t.id === set.topicId)?.title ||
+              'Chưa gắn chủ đề';
+            return (
+              <div key={set.key} className="bg-white border border-[#E6DCC8] rounded-2xl overflow-hidden shadow-2xs">
+                <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E8D5]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-700 text-[10px] font-extrabold shrink-0">
+                      BỘ CÂU HỎI NHÁP
+                    </span>
+                    <span className="text-sm font-bold text-[#1E1B4B] truncate">{topicTitle}</span>
+                    <span className="text-[11px] text-slate-400 shrink-0">
+                      {set.questions.length} câu · Lưu nháp {fmtDraftTime(set.savedAt)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleReviewDraftInStudio(set.topicId, 'questions')}
+                      className="px-3 py-1.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold transition-colors"
+                    >
+                      Duyệt trong Studio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDraftToDelete({ key: set.key, label: `bộ câu hỏi nháp của "${topicTitle}"` })}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 text-xs font-bold text-rose-600 transition-colors"
+                    >
+                      Xóa nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedDraftKey(isExpanded ? null : set.key)}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-[#FAF5EB] text-xs font-bold text-[#2F3E6B] transition-colors flex items-center gap-1"
+                    >
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      {isExpanded ? 'Thu gọn' : 'Xem & chọn câu'}
+                    </button>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <>
+                    <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
+                      {set.questions.map((q, idx) => {
+                        const checked = selection.includes(q.id);
+                        return (
+                          <label
+                            key={q.id || idx}
+                            className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-[#FAF8F3] transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setDraftSelections((prev) => ({
+                                  ...prev,
+                                  [set.key]: checked
+                                    ? selection.filter((id) => id !== q.id)
+                                    : [...selection, q.id],
+                                }))
+                              }
+                              className="mt-0.5 w-4 h-4 accent-[#E2704A] cursor-pointer shrink-0"
+                            />
+                            <span className="min-w-0">
+                              <span className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-[#4F46E5] border border-indigo-100">
+                                  {DRAFT_QTYPE_LABELS[q.type] || q.type}
+                                </span>
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                                  Câu {idx + 1}
+                                </span>
+                              </span>
+                              <span className="block text-xs text-slate-700 line-clamp-2">{q.prompt}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="px-4 py-3 bg-[#FAF5EB]/60 border-t border-[#F1E8D5] flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs text-slate-500">
+                        Đã chọn <strong className="text-[#E2704A]">{selection.length}</strong>/{set.questions.length} câu
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftSelections((prev) => ({
+                              ...prev,
+                              [set.key]:
+                                selection.length === set.questions.length
+                                  ? []
+                                  : set.questions.map((q) => q.id),
+                            }))
+                          }
+                          className="px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-[#FAF5EB] text-xs font-bold text-[#2F3E6B] transition-colors"
+                        >
+                          {selection.length === set.questions.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={selection.length === 0}
+                          onClick={() => handlePushDraftQuestions(set)}
+                          className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#E2704A] to-[#D45E36] disabled:opacity-40 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Đưa {selection.length} câu đã duyệt vào Ngân hàng
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+
+          {theoryDraftItems.map((item) => (
+            <div key={item.key} className="bg-white border border-[#E6DCC8] rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="px-2 py-0.5 rounded-full bg-violet-100 border border-violet-200 text-violet-700 text-[10px] font-extrabold shrink-0">
+                  LÝ THUYẾT NHÁP
+                </span>
+                <span className="text-sm font-bold text-[#1E1B4B] truncate">{item.title}</span>
+                <span className="text-[11px] text-slate-400 shrink-0">
+                  {item.blocksCount} khối nội dung · Lưu nháp {fmtDraftTime(item.savedAt)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleReviewDraftInStudio(item.topicId, 'theory')}
+                  className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-colors"
+                >
+                  Duyệt trong Studio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftToDelete({ key: item.key, label: `bản nháp lý thuyết "${item.title}"` })}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 text-xs font-bold text-rose-600 transition-colors"
+                >
+                  Xóa nháp
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Hộp thoại xác nhận xóa câu hỏi — giữa màn hình */}
+      <ConfirmDialog
+        isOpen={!!draftToDelete}
+        title="Xóa bản nháp?"
+        message={
+          draftToDelete
+            ? `Toàn bộ nội dung trong ${draftToDelete.label} sẽ bị xóa và không khôi phục được. Nội dung đã vào Ngân hàng không bị ảnh hưởng.`
+            : ''
+        }
+        confirmLabel="Xóa bản nháp"
+        variant="danger"
+        onConfirm={handleDeleteDraft}
+        onCancel={() => setDraftToDelete(null)}
+      />
       <ConfirmDialog
         isOpen={!!questionToDelete}
         title="Xóa câu hỏi"
