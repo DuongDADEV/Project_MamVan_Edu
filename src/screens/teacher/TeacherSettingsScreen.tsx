@@ -12,7 +12,6 @@ import {
   auditService,
   authService,
   teacherService,
-  resetAllDemoData,
   useLiveQuery,
   DEFAULT_SYSTEM_SETTINGS,
 } from '../../services/index.ts';
@@ -93,7 +92,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
   const [passwordSuccess, setPasswordSuccess] = useState<boolean>(false);
 
   // Confirm dialogs
-  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState<boolean>(false);
   const [resetGroupTarget, setResetGroupTarget] = useState<'general' | 'mastery' | 'xp' | 'time' | 'notifications' | null>(null);
   const [isResetGroupConfirmOpen, setIsResetGroupConfirmOpen] = useState<boolean>(false);
 
@@ -237,16 +235,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
     } catch (err: any) {
       showToast(err?.message || 'Lỗi khôi phục nhóm', 'error');
     }
-  };
-
-  // Đặt lại toàn bộ dữ liệu demo
-  const handleResetDemoData = () => {
-    resetAllDemoData();
-    setIsResetConfirmOpen(false);
-    showToast('Đã đặt lại toàn bộ dữ liệu demo (28 học sinh, 6 tuần điểm số, 4 chuyên đề) về trạng thái ban đầu!');
-    refreshSettings();
-    refreshLogs();
-    if (onRefreshData) onRefreshData();
   };
 
   // Đổi mật khẩu giáo viên (mock + ghi audit an toàn)
@@ -1563,31 +1551,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
               </div>
             </div>
           </div>
-
-          {/* KHU VỰC ĐẶT LẠI DỮ LIỆU DEMO */}
-          <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <RotateCcw className="w-5 h-5 text-[#E2704A]" />
-                <h3 className="font-lora font-bold text-base text-[#2F3E6B]">
-                  Khôi phục & Đặt lại dữ liệu thử nghiệm (Demo)
-                </h3>
-              </div>
-              <p className="text-xs text-[#6B7280] mt-1 max-w-xl">
-                Bấm nút bên dưới để khôi phục toàn bộ danh sách 28 học sinh seed chuẩn, 6 tuần lịch sử điểm số,
-                4 chuyên đề Ngữ văn 7 và cài đặt mặc định ban đầu.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsResetConfirmOpen(true)}
-              className="px-5 py-2.5 rounded-2xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-all shadow-xs flex items-center gap-2 shrink-0"
-            >
-              <RotateCcw className="w-4 h-4 text-rose-600" />
-              <span>Đặt lại dữ liệu demo</span>
-            </button>
-          </div>
         </div>
       )}
 
@@ -1739,16 +1702,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
         onConfirm={handleConfirmResetGroup}
       />
 
-      {/* CONFIRM DIALOG ĐẶT LẠI TOÀN BỘ DEMO */}
-      <ConfirmDialog
-        isOpen={isResetConfirmOpen}
-        title="Đặt lại toàn bộ dữ liệu thử nghiệm (Demo)?"
-        message="Hành động này sẽ khôi phục danh sách học sinh, bài tập, điểm số 6 tuần và cài đặt về trạng thái chuẩn ban đầu. Bạn có chắc chắn muốn thực hiện?"
-        confirmLabel="Đặt lại ngay"
-        variant="danger"
-        onCancel={() => setIsResetConfirmOpen(false)}
-        onConfirm={async () => handleResetDemoData()}
-      />
     </div>
   );
 };

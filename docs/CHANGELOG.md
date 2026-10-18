@@ -1,5 +1,10 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Gỡ nốt 2 nút "Đặt lại dữ liệu demo" khỏi giao diện khách thật
+- Màn Hồ sơ học sinh: bỏ nút "Đặt lại dữ liệu demo của tài khoản" — nút này ghi đè tiến độ thật của học sinh bằng dữ liệu mẫu, tuyệt đối không được tồn tại ở bản khách dùng.
+- Màn Cài đặt giáo viên: bỏ cả khu vực "Khôi phục & Đặt lại dữ liệu thử nghiệm (Demo)" cùng hộp thoại xác nhận và hàm xử lý — tránh khôi phục nhầm 28 học sinh seed + 6 tuần điểm số mẫu đè lên dữ liệu thật.
+- Công cụ đặt lại chỉ còn trong DevPanel của bản development (không có ở production).
+
 ## [2026-10-18] - Vá rò rỉ state mẫu lên DB + ghi nhận rà soát thư viện nội dung
 ### Lỗi nghiêm trọng đã vá (phát hiện khi kiểm chứng sau dọn dẹp):
 - Học sinh thật chưa có dòng state trên DB bị thừa kế TOÀN BỘ tiến độ từ bản local (vốn là state mẫu: 310 XP, log học bài cũ, huy hiệu sẵn) — chỉ riêng hồ sơ được thay bằng hồ sơ thật; khi app lưu ngược lên, DB bị ô nhiễm số liệu mẫu và lời chào hiện sai lớp. Nay: học sinh mới bắt đầu TRẮNG với hồ sơ thật, DB là nguồn sự thật duy nhất.

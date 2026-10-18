@@ -886,7 +886,6 @@ export default function App() {
               <ProfileScreen
                 state={studentState}
                 onUpdateState={setStudentState}
-                onResetData={() => handleResetData()}
                 onLogout={handleLogout}
               />
             )}

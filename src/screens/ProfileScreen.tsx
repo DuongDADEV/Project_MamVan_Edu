@@ -9,7 +9,6 @@ import {
   VolumeX,
   Sparkles,
   Type,
-  RotateCcw,
   LogOut,
   CheckCircle2,
   BookOpen,
@@ -22,14 +21,12 @@ import {
 interface ProfileScreenProps {
   state: StudentState;
   onUpdateState: (updater: (prev: StudentState) => StudentState) => void;
-  onResetData: () => void;
   onLogout: () => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   state,
   onUpdateState,
-  onResetData,
   onLogout,
 }) => {
   const currentTheme = state.themePreference || 'creative_edtech';
@@ -293,13 +290,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {/* HÀNH ĐỘNG DỮ LIỆU & ĐĂNG XUẤT */}
       <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-3">
-        <button
-          onClick={onResetData}
-          className="w-full py-3 rounded-2xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4 text-slate-500" />
-          <span>Đặt lại dữ liệu demo của tài khoản</span>
-        </button>
 
         <button
           onClick={onLogout}
