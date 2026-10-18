@@ -356,7 +356,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <div
                   key={topic.id}
                   onClick={() => onSelectTopic(topic.id)}
-                  className={`relative overflow-hidden rounded-3xl p-5 text-white bg-gradient-to-br ${visual.gradient} shadow-md shadow-indigo-950/10 cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:shadow-xl group`}
+                  className={`relative overflow-hidden rounded-3xl p-5 text-white bg-gradient-to-br ${visual.gradient} shadow-md shadow-indigo-950/10 cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:shadow-xl group flex flex-col h-full`}
                 >
                   {/* Light reflection glow */}
                   <div className="absolute top-0 right-0 w-24 h-24 bg-white/15 rounded-full blur-xl pointer-events-none -mr-8 -mt-8 group-hover:scale-125 transition-transform" />
@@ -370,15 +370,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </div>
                   </div>
 
-                  <h4 className="font-extrabold text-base mb-1.5 leading-snug line-clamp-2">
+                  {/* Tiêu đề + mô tả giữ chiều cao cố định 2 dòng để mọi thẻ
+                      cao bằng nhau, chân thẻ thẳng hàng (kể cả khi thiếu mô tả) */}
+                  <h4 className="font-extrabold text-base mb-1.5 leading-snug line-clamp-2 min-h-[44px]">
                     {topic.title}
                   </h4>
 
-                  <p className="text-[11px] text-white/80 line-clamp-2 leading-relaxed mb-4">
-                    {topic.shortDesc}
+                  <p className="text-[11px] text-white/80 line-clamp-2 leading-relaxed mb-4 min-h-[34px]">
+                    {topic.shortDesc || ''}
                   </p>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs font-semibold">
+                  <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs font-semibold mt-auto">
                     <span>{(topic.videoIds || []).length} bài giảng</span>
                     <div className="flex items-center gap-1 text-white group-hover:translate-x-1 transition-transform">
                       <span>Vào học</span>

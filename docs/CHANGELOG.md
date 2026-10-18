@@ -1,5 +1,8 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Thẻ chủ đề ở trang chủ học sinh cao đều nhau
+- Thẻ chủ đề nào tên dài xuống 2 dòng hoặc có mô tả thì cao hơn thẻ khác, chân thẻ ("X bài giảng · Vào học") lệch hàng. Nay tiêu đề và mô tả giữ sẵn chiều cao cố định 2 dòng (thiếu mô tả vẫn giữ chỗ), chân thẻ ghim xuống đáy — mọi thẻ cao bằng nhau, thẳng hàng.
+
 ## [2026-10-18] - Cỡ chữ hiển thị phóng lớn thật sự
 - Tùy chọn Cỡ chữ (Chuẩn / Lớn 112% / Rất lớn 125%) trước đây chỉ đổi cỡ chữ gốc của trang — phần lớn chữ trong giao diện dùng cỡ px cố định nên chọn "Lớn" mà chữ không hề lớn lên.
 - Nay chuyển sang phóng toàn cục theo đúng tỉ lệ đã ghi (112% / 125%): mọi chữ và thành phần giao diện đều phóng theo, áp dụng ngay khi chọn.
