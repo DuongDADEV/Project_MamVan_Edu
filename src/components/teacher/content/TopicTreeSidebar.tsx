@@ -6,6 +6,7 @@ import {
   QuizWithMeta,
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
+import { ConfirmDialog } from '../ui/ConfirmDialog.tsx';
 import {
   ChevronRight,
   ChevronDown,
@@ -60,6 +61,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   onDuplicateItem,
   onDeleteItem,
 }) => {
+  const [pendingDelete, setPendingDelete] = useState<{ type: ContentItemType; id: string; label: string; title: string } | null>(null);
   // Trạng thái thu gọn/mở rộng từng chủ đề
   const [expandedTopicIds, setExpandedTopicIds] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -320,9 +322,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (window.confirm(`Xóa video "${vid.title}"?`)) {
-                                  onDeleteItem('video', vid.id);
-                                }
+                                setPendingDelete({ type: 'video', id: vid.id, label: 'video', title: vid.title });
                               }}
                               className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
                               title="Xóa video"
@@ -371,9 +371,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Xóa lý thuyết "${topicTheory.title}"?`)) {
-                                onDeleteItem('theory', topicTheory.id);
-                              }
+                              setPendingDelete({ type: 'theory', id: topicTheory.id, label: 'lý thuyết', title: topicTheory.title });
                             }}
                             className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
                             title="Xóa lý thuyết"
@@ -428,9 +426,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (window.confirm(`Xóa bài tập "${quiz.title}"?`)) {
-                                  onDeleteItem('quiz', quiz.id);
-                                }
+                                setPendingDelete({ type: 'quiz', id: quiz.id, label: 'bài tập', title: quiz.title });
                               }}
                               className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
                               title="Xóa bài tập"
@@ -454,6 +450,24 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
           })
         )}
       </div>
+
+      {/* Hộp thoại xác nhận xóa — giữa màn hình (thay hộp thoại mặc định của trình duyệt) */}
+      <ConfirmDialog
+        isOpen={!!pendingDelete}
+        title={pendingDelete ? `Xóa ${pendingDelete.label}` : ''}
+        message={
+          pendingDelete
+            ? `Bạn có chắc chắn muốn xóa ${pendingDelete.label} "${pendingDelete.title}" không? Hành động này không thể hoàn tác.`
+            : ''
+        }
+        confirmLabel="Xóa"
+        variant="danger"
+        onConfirm={() => {
+          if (pendingDelete) onDeleteItem(pendingDelete.type, pendingDelete.id);
+          setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

@@ -47,6 +47,7 @@ import {
 } from '../../services/ai/index.ts';
 import { QuestionType, SkillLevel, Difficulty, Question } from '../../types.ts';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
+import { ConfirmDialog } from '../../components/teacher/ui/ConfirmDialog.tsx';
 import { AiContentStudioModal } from '../../components/teacher/ai/AiContentStudioModal.tsx';
 import { MamMuc } from '../../components/MamMuc.tsx';
 
@@ -203,17 +204,23 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     setIsQuestionModalOpen(true);
   };
 
-  // Xóa câu hỏi
-  const handleDeleteQuestion = async (id: string) => {
-    if (window.confirm('Thầy/cô có chắc chắn muốn xóa câu hỏi này khỏi ngân hàng không?')) {
-      try {
-        await quizService.deleteQuestion(id, teacherId);
-        showToast('Đã xóa câu hỏi khỏi ngân hàng.');
-        onRefreshData?.();
-      } catch (e) {
-        showToast('Lỗi khi xóa câu hỏi.');
-      }
+  // Xóa câu hỏi (hỏi xác nhận bằng hộp thoại giữa màn hình của app)
+  const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
+
+  const handleDeleteQuestion = (id: string) => {
+    setQuestionToDelete(id);
+  };
+
+  const confirmDeleteQuestion = async () => {
+    if (!questionToDelete) return;
+    try {
+      await quizService.deleteQuestion(questionToDelete, teacherId);
+      showToast('Đã xóa câu hỏi khỏi ngân hàng.');
+      onRefreshData?.();
+    } catch (e) {
+      showToast('Lỗi khi xóa câu hỏi.');
     }
+    setQuestionToDelete(null);
   };
 
   // Lưu câu hỏi thủ công
@@ -1524,6 +1531,17 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           </div>
         </div>
       )}
+
+      {/* Hộp thoại xác nhận xóa câu hỏi — giữa màn hình */}
+      <ConfirmDialog
+        isOpen={!!questionToDelete}
+        title="Xóa câu hỏi"
+        message="Thầy/cô có chắc chắn muốn xóa câu hỏi này khỏi ngân hàng không?"
+        confirmLabel="Xóa câu hỏi"
+        variant="danger"
+        onConfirm={confirmDeleteQuestion}
+        onCancel={() => setQuestionToDelete(null)}
+      />
     </div>
   );
 };

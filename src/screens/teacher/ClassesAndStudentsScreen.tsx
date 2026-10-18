@@ -848,11 +848,25 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
 
                         <button
                           type="button"
-                          onClick={async () => {
-                            if (confirm(`Bạn muốn lưu trữ lớp ${cls.name}?`)) {
-                              await classService.archiveClass(cls.id);
-                              onRefreshData();
-                            }
+                          onClick={() => {
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: 'Lưu trữ lớp học',
+                              message: (
+                                <span>
+                                  Bạn muốn lưu trữ lớp{' '}
+                                  <strong className="text-[#2F3E6B]">{cls.name}</strong>?
+                                  Lớp sẽ ẩn khỏi danh sách đang mở nhưng dữ liệu học sinh và điểm số vẫn được giữ nguyên.
+                                </span>
+                              ),
+                              confirmLabel: 'Lưu trữ lớp',
+                              variant: 'warning',
+                              action: async () => {
+                                await classService.archiveClass(cls.id);
+                                setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+                                onRefreshData();
+                              },
+                            });
                           }}
                           className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#6B7280] hover:bg-[#FAF5EB] transition-colors"
                           title="Lưu trữ lớp"

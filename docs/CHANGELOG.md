@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Thay toàn bộ hộp thoại xác nhận mặc định của trình duyệt bằng hộp thoại giữa màn hình
+- 6 chỗ từng dùng hộp thoại mặc định của trình duyệt (hiện trên đầu trang, kèm chữ tên miền) đã chuyển sang hộp thoại xác nhận của app (giữa màn hình, có lớp phủ): xóa video / lý thuyết / bài tập trong cây nội dung, xóa chủ đề, xóa câu hỏi khỏi ngân hàng, lưu trữ lớp học.
+- Nội dung hỏi rõ ràng hơn: "Bạn có chắc chắn muốn xóa ... không? Hành động này không thể hoàn tác." kèm nút Xóa màu đỏ.
+
 ## [2026-10-18] - Ba tinh chỉnh giao diện giáo viên theo phản hồi trực tiếp
 - Thẻ lớp: dòng mô tả nay luôn chiếm đúng 1 dòng cố định (kể cả khi trống) — trước đây lớp không có mô tả bị khối "Sĩ số / Hoạt động 7 ngày" đẩy lên cao, các thẻ trong cùng hàng lệch nhau.
 - Đặt lại mật khẩu học sinh: Thầy/Cô được TỰ ĐẶT mật khẩu theo ý mình ngay trong hộp thoại xác nhận (tối thiểu 6 ký tự); để trống thì hệ thống mới sinh ngẫu nhiên như cũ. Tầng xử lý đã hỗ trợ sẵn mật khẩu tùy chỉnh, nay mới có ô nhập.

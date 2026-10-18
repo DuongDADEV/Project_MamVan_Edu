@@ -14,6 +14,7 @@ import {
 } from '../../services/index.ts';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
 import { TopicTreeSidebar, SelectedContentItem, ContentItemType } from '../../components/teacher/content/TopicTreeSidebar.tsx';
+import { ConfirmDialog } from '../../components/teacher/ui/ConfirmDialog.tsx';
 import { VideoLessonEditor } from '../../components/teacher/content/VideoLessonEditor.tsx';
 import { TheoryLessonEditor } from '../../components/teacher/content/TheoryLessonEditor.tsx';
 import { QuizBuilder } from '../../components/teacher/content/QuizBuilder.tsx';
@@ -96,6 +97,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
   // 3. Quản lý các Modal
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+  const [topicToDelete, setTopicToDelete] = useState<{ id: string; warn: string } | null>(null);
   const [editingTopic, setEditingTopic] = useState<TopicWithMeta | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -157,12 +159,16 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       childCount > 0
         ? `Chủ đề này đang có ${childCount} bài học/bài tập liên quan — chúng sẽ bị gỡ khỏi chủ đề khi xóa. `
         : '';
-    if (window.confirm(`${warn}Bạn có chắc chắn muốn xóa chủ đề này?`)) {
-      await contentService.deleteTopic(topicId, teacherId);
-      if (selectedItem?.id === topicId) {
-        setSelectedItem(null);
-      }
+    setTopicToDelete({ id: topicId, warn });
+  };
+
+  const confirmDeleteTopic = async () => {
+    if (!topicToDelete) return;
+    await contentService.deleteTopic(topicToDelete.id, teacherId);
+    if (selectedItem?.id === topicToDelete.id) {
+      setSelectedItem(null);
     }
+    setTopicToDelete(null);
   };
 
   // Kéo-thả đổi thứ tự: sidebar trả về danh sách id đã sắp xếp lại
@@ -828,6 +834,17 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         theoryData={previewModal.theory}
         quizData={previewModal.quiz}
         quizQuestions={previewModal.quizQuestions}
+      />
+
+      {/* Hộp thoại xác nhận xóa chủ đề — giữa màn hình */}
+      <ConfirmDialog
+        isOpen={!!topicToDelete}
+        title="Xóa chủ đề"
+        message={topicToDelete ? `${topicToDelete.warn}Bạn có chắc chắn muốn xóa chủ đề này?` : ''}
+        confirmLabel="Xóa chủ đề"
+        variant="danger"
+        onConfirm={confirmDeleteTopic}
+        onCancel={() => setTopicToDelete(null)}
       />
     </div>
   );
