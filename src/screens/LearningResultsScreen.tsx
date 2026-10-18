@@ -156,7 +156,14 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
             {topicRows.map(({ topic, mastery, avg, avgScore, attempts, status }) => {
               const meta = STATUS_META[status];
               return (
-                <div key={topic.id} className="border border-slate-100 rounded-2xl p-4 bg-[#FFFEFA]">
+                <div
+                  key={topic.id}
+                  className="border rounded-2xl p-4"
+                  style={{
+                    backgroundColor: `${topic.colorScheme || '#2F3E6B'}0F`,
+                    borderColor: `${topic.colorScheme || '#2F3E6B'}59`,
+                  }}
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
                     <button
                       type="button"
@@ -164,10 +171,6 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                       className="font-bold text-sm text-[#1E1B4B] hover:text-[#E2704A] transition-colors text-left"
                       title="Tới bài học của chủ đề này"
                     >
-                      <span
-                        className="inline-block w-2.5 h-2.5 rounded-full mr-2"
-                        style={{ backgroundColor: topic.colorScheme || '#2F3E6B' }}
-                      />
                       {topic.title}
                     </button>
                     <div className="flex items-center gap-2">

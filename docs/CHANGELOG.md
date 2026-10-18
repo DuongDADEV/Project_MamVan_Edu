@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Khối chủ đề ở Kết quả học tập: bỏ chấm màu, nhuộm màu như phía giáo viên
+- Bỏ chấm tròn màu trước tên chủ đề trong mục "Điểm theo từng chủ đề".
+- Khối của mỗi chủ đề nhuộm nền + viền theo đúng màu chủ đề đó, giống cách hiển thị ở phía giáo viên.
+
 ## [2026-10-18] - Thẻ thống kê thanh bên học sinh hiện Tổng XP tích lũy
 - Thẻ dưới chân thanh điều hướng học sinh trước đây hiện "XP hôm nay" làm số chính. Nay số chính là "Tổng XP tích lũy" của tài khoản; XP hôm nay chuyển xuống dòng nhỏ bên dưới.
 
