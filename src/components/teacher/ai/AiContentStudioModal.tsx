@@ -991,11 +991,11 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
             <>
           <div className="p-4 border-b border-[#E6DCC8] flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
+              <h3 className="font-extrabold text-[13px] uppercase tracking-wider text-[#1E1B4B] flex items-center gap-1.5">
                 <FileText className="w-4 h-4 text-[#E2704A]" />
                 <span>1. Nguồn tài liệu ({sources.length})</span>
               </h3>
-              <p className="text-[11px] text-[#8C7E6A] mt-0.5">
+              <p className="text-[11px] text-[#6B5D4F] mt-0.5">
                 Đã bật {sources.filter((s) => s.isEnabled).length}/{sources.length} nguồn ({totalEnabledWords})
               </p>
             </div>
@@ -1217,12 +1217,12 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           <div className="p-4 border-b border-[#E6DCC8] flex items-center justify-between bg-[#FAF5EB]/30">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-[#0D9488]" />
-              <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B]">
+              <h3 className="font-extrabold text-[13px] uppercase tracking-wider text-[#1E1B4B]">
                 2. Trò chuyện & Tra cứu tài liệu
               </h3>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-[#8C7E6A] italic hidden sm:inline">
+              <span className="text-[10px] text-[#6B5D4F] italic hidden sm:inline">
                 AI trả lời từ nguồn đã bật
               </span>
               <button
@@ -1364,11 +1364,11 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           ) : (
             <>
           <div className="p-4 border-b border-[#E6DCC8]">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
+            <h3 className="font-extrabold text-[13px] uppercase tracking-wider text-[#1E1B4B] flex items-center gap-1.5">
               <Wand2 className="w-4 h-4 text-[#E2704A]" />
               <span>3. Xưởng tạo đầu ra</span>
             </h3>
-            <p className="text-[11px] text-[#8C7E6A] mt-0.5">
+            <p className="text-[11px] text-[#6B5D4F] mt-0.5">
               Cấu hình định dạng và tiêu chí sinh tự động
             </p>
           </div>

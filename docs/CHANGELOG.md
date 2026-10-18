@@ -1,5 +1,8 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Đậm màu tiêu đề 3 khối trong Mầm AI Studio
+- Tiêu đề 3 khối (Nguồn tài liệu, Trò chuyện & Tra cứu tài liệu, Xưởng tạo đầu ra) chuyển sang màu mực đậm nhất, cỡ chữ lớn hơn một nấc và in đậm hơn; dòng phụ đề dưới tiêu đề cũng đậm hơn để dễ đọc.
+
 ## [2026-10-18] - Đổi thương hiệu hiển thị trong Mầm AI Studio theo yêu cầu
 - Tiêu đề "Xưởng Sáng Tạo AI Mầm Văn" → "Xưởng Sáng Tạo Mầm AI Studio"; bỏ nhãn "Mầm AI Studio" thừa bên cạnh tiêu đề.
 - Mọi chữ "Gemini AI" hiển thị → "Mầm AI" (nút trạng thái, nút tạo bản nháp, thanh trạng thái ở Ngân hàng câu hỏi); tên model trong ngoặc và trong danh sách chọn model hiển thị dạng "AI-2.5-flash" / "Mầm AI-..." — giá trị model thật gửi lên API giữ nguyên.
