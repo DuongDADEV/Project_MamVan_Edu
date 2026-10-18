@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Dứt điểm vòng focus đen bám trên nút menu sau khi bấm
+- Người dùng phản ánh: bấm sang trang khác là một vòng đen dày bám lại quanh mục menu vừa bấm (vòng focus mặc định của trình duyệt — mỗi trình duyệt/thiết bị vẽ một kiểu nên môi trường kiểm tra không tái hiện được, nhưng luật CSS chống viền focus sẵn có không phủ được trạng thái :focus-visible sau chạm/bấm).
+- Xử lý dứt điểm ở tầng hành vi: mọi nút điều hướng trong Navbar (thanh bên, thanh dưới di động, nút Hồ sơ) tự nhả focus (blur) ngay sau khi bấm — không còn phần tử nào giữ focus để trình duyệt vẽ vòng. Đổi lại: điều hướng bằng phím Enter trên menu sẽ cần Tab lại từ đầu; chấp nhận được với ứng dụng học tập dùng chuột/cảm ứng là chính.
+
 ## [2026-10-18] - Vá hiển thị tên lớp trong phân tích giáo viên + chốt phạm vi Tổng quan theo lớp của giáo viên
 - Danh sách "Học sinh cần quan tâm" từng in MÃ UUID của lớp thay vì tên lớp (học sinh lớp 7a4 hiện thành "Lớp d4036e4a-..."): hàm phân tích nay tra tên lớp theo danh sách lớp thật, không tra được thì hiện "—" — tuyệt đối không in mã UUID, không bịa tên "7A2/7A3" như các fallback thời demo (đã sửa ở cả 3 nơi: metricsEngine, hồ sơ học sinh, bản đồ nhiệt).
 - Màn Tổng quan giáo viên: kho dữ liệu trả học sinh toàn hệ thống trong khi lớp chỉ nạp lớp của giáo viên đang đăng nhập — tổng quan nay chỉ tính học sinh thuộc lớp của mình (đúng phân quyền, hết lẫn học sinh lớp khác).

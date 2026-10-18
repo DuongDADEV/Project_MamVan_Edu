@@ -104,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               return (
                 <button
                   key={item.key}
-                  onClick={() => onTabChange(item.key)}
+                  onClick={(e) => { onTabChange(item.key); e.currentTarget.blur(); }}
                   className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-semibold transition-all group focus:outline-none focus:ring-0 outline-none select-none ${
                     isActive
                       ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-[#4F46E5] border border-indigo-200/60 shadow-xs'
@@ -162,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Student Profile Pill */}
           <button
-            onClick={() => onTabChange('profile')}
+            onClick={(e) => { onTabChange('profile'); e.currentTarget.blur(); }}
             className="w-full flex items-center gap-3 p-2 rounded-2xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all text-left group"
           >
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#8B5CF6] to-[#22D3EE] p-0.5 shadow-xs shrink-0">
@@ -196,7 +196,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           return (
             <button
               key={item.key}
-              onClick={() => onTabChange(item.key)}
+              onClick={(e) => { onTabChange(item.key); e.currentTarget.blur(); }}
               className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] py-1 px-2 rounded-2xl transition-all focus:outline-none focus:ring-0 outline-none select-none ${
                 isActive ? 'text-[#4F46E5]' : 'text-slate-500 hover:text-[#1E1B4B]'
               }`}
