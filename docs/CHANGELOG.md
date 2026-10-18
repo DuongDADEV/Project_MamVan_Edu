@@ -1,5 +1,8 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Nút thêm ở trang chủ đề thành menu thêm tổng hợp
+- Nút "+ Thêm video vào chủ đề" ở trang chi tiết chủ đề khóa cứng vào video — đã đổi thành nút "Thêm vào chủ đề" mở menu đủ 5 loại như menu Tạo mới (Bài giảng Video, Lý thuyết, Bài luyện tập, Bài kiểm tra, Bài tập về nhà; tạo thủ công hoặc Tạo với AI), mọi mục tạo ra đều gắn đúng vào chủ đề đang mở.
+
 ## [2026-10-18] - Nút "Quay lại" trong trình tạo bài tập trở về đúng bài gốc
 - Từ trình soạn video/lý thuyết bấm "+ Tạo mới ngay" để tạo bài tập liên kết, rồi bấm "Quay lại" trong trình tạo bài tập: trước đây luôn văng về trang chủ đề, mất bài đang soạn.
 - Nay app ghi nhớ bài gốc (video hoặc lý thuyết) khi tạo bài tập liên kết — Quay lại là trở về đúng bài đó. Nếu mở bài tập trực tiếp từ cây nội dung, Quay lại vẫn về trang chủ đề như cũ; chọn mục khác trên cây thì ghi nhớ được xóa.

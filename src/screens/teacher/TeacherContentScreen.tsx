@@ -101,6 +101,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   // Bài gốc (video/lý thuyết) vừa rời khỏi để vào trình tạo bài tập liên kết —
   // nút "Quay lại" trong trình tạo bài tập phải trở về đúng bài này.
   const [quizReturnTo, setQuizReturnTo] = useState<SelectedContentItem | null>(null);
+  const [isTopicAddMenuOpen, setIsTopicAddMenuOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState<TopicWithMeta | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -801,13 +802,64 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               >
                 Chỉnh sửa chủ đề
               </button>
-              <button
-                type="button"
-                onClick={() => handleCreateNewManual('video')}
-                className="px-4 py-2 rounded-xl bg-[#E2704A] text-white text-xs font-bold"
-              >
-                + Thêm video vào chủ đề
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsTopicAddMenuOpen((prev) => !prev)}
+                  className="px-4 py-2 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Thêm vào chủ đề</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {isTopicAddMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setIsTopicAddMenuOpen(false)}
+                    />
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl shadow-xl z-30 p-2 space-y-1 text-left">
+                      {[
+                        { type: 'video' as const, label: 'Bài giảng Video', icon: Video, color: 'text-[#E2704A]', hover: 'hover:text-[#E2704A]', ai: 'Video bài giảng' },
+                        { type: 'theory' as const, label: 'Lý thuyết', icon: BookOpen, color: 'text-[#7C3AED]', hover: 'hover:text-[#7C3AED]', ai: 'Lý thuyết' },
+                        { type: 'practice' as const, label: 'Bài luyện tập', icon: FileQuestion, color: 'text-[#0D9488]', hover: 'hover:text-[#0D9488]', ai: 'Bài luyện tập' },
+                        { type: 'quick' as const, label: 'Bài kiểm tra', icon: FileQuestion, color: 'text-[#2563EB]', hover: 'hover:text-[#2563EB]', ai: 'Bài kiểm tra' },
+                        { type: 'homework' as const, label: 'Bài tập về nhà', icon: Calendar, color: 'text-[#E2704A]', hover: 'hover:text-[#E2704A]', ai: 'Bài tập về nhà' },
+                      ].map((row) => (
+                        <div key={row.type} className="p-2 rounded-xl hover:bg-[#FAF5EB] transition-colors">
+                          <div className="flex items-center gap-2 mb-1">
+                            <row.icon className={`w-3.5 h-3.5 ${row.color}`} />
+                            <span className="text-xs font-bold text-[#2F3E6B]">{row.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2 pl-5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsTopicAddMenuOpen(false);
+                                handleCreateNewManual(row.type);
+                              }}
+                              className={`text-[11px] text-[#2F3E6B] ${row.hover} hover:underline font-medium`}
+                            >
+                              • Tạo thủ công
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsTopicAddMenuOpen(false);
+                                handleOpenAiModal(row.ai);
+                              }}
+                              className="text-[11px] text-[#4F46E5] hover:underline font-bold flex items-center gap-1"
+                            >
+                              <Sparkles className="w-2.5 h-2.5" />
+                              <span>Tạo với AI (sắp có)</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ) : (
