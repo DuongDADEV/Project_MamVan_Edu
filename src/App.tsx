@@ -559,9 +559,9 @@ export default function App() {
     setActiveFlow({ type: 'video', videoId: firstVidId });
   };
 
-  // 11. Xin nhận quà (mở rương) — đổi quà TRỪ XP tuần ngay khi gửi yêu cầu
-  // (quyết định 18/10/2026); bị thầy/cô từ chối sẽ được hoàn lại XP tuần.
-  // totalXp tích lũy trọn đời (nuôi Cây) không bị trừ.
+  // 11. Xin nhận quà (mở rương) — đổi quà TRỪ vào TỔNG XP của tài khoản
+  // (chốt 18/10/2026: XP của acc là XP vĩnh viễn, chỉ giảm khi xin quà);
+  // bị thầy/cô từ chối sẽ được hoàn lại đầy đủ vào tổng XP.
   const handleRequestReward = async (rewardId: string) => {
     const existing = (studentStateRef.current.rewardRequests || []).find(
       (r) => r.rewardId === rewardId && r.status !== 'REJECTED'
@@ -582,9 +582,9 @@ export default function App() {
     }
 
     const base = rolloverStudentState(studentStateRef.current);
-    if (requiredXp > 0 && (base.xpWeek || 0) < requiredXp) {
+    if (requiredXp > 0 && (base.totalXp || 0) < requiredXp) {
       showToast(
-        `Chưa đủ XP tuần để xin phần quà này (cần ${requiredXp} XP, em đang có ${base.xpWeek || 0} XP tuần)`
+        `Chưa đủ XP để xin phần quà này (cần ${requiredXp} XP, em đang có ${base.totalXp || 0} XP)`
       );
       return;
     }
@@ -593,7 +593,7 @@ export default function App() {
       const rolled = rolloverStudentState(prev);
       return {
         ...rolled,
-        xpWeek: Math.max(0, (rolled.xpWeek || 0) - requiredXp),
+        totalXp: Math.max(0, (rolled.totalXp || 0) - requiredXp),
         rewardRequests: [
           {
             id: 'req_' + Date.now(),
@@ -608,7 +608,7 @@ export default function App() {
     });
     showToast(
       requiredXp > 0
-        ? `Đã gửi yêu cầu mở rương tới thầy/cô! (Giữ ${requiredXp} XP tuần — nếu bị từ chối sẽ hoàn lại)`
+        ? `Đã gửi yêu cầu mở rương tới thầy/cô! (Trừ ${requiredXp} XP — nếu bị từ chối sẽ hoàn lại)`
         : 'Đã gửi yêu cầu mở rương tới thầy/cô!'
     );
   };

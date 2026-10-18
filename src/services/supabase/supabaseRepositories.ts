@@ -1712,12 +1712,14 @@ export class SupabaseRewardRepository implements RewardRepository {
     const tierRaw = (reward?.tierKey || rewardId.replace('tier_', '') || 'hat').toLowerCase();
     const chestType = ['hat', 'la', 'hoa', 'vang'].includes(tierRaw) ? tierRaw : 'hat';
 
-    // Snapshot XP tuần THẬT của học sinh (DB trước, local dự phòng) — không bịa số
+    // Snapshot XP tuần THẬT của học sinh (DB trước, local dự phòng) — không bịa số.
+    // Đồng thời đọc TỔNG XP của tài khoản: đó là ví chi tiêu khi đổi quà.
     let xpWeekSnapshot = 0;
+    let totalXpBalance = 0;
     try {
       const { data: st } = await supabase
         .from('student_states')
-        .select('xp_week')
+        .select('xp_week, total_xp')
         .eq('student_id', studentId)
         .maybeSingle();
       if (st && typeof st.xp_week === 'number') {
@@ -1726,15 +1728,21 @@ export class SupabaseRewardRepository implements RewardRepository {
         const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
         xpWeekSnapshot = allStates[studentId]?.xpWeek ?? 0;
       }
+      if (st && typeof st.total_xp === 'number') {
+        totalXpBalance = st.total_xp;
+      } else {
+        const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
+        totalXpBalance = allStates[studentId]?.totalXp ?? 0;
+      }
     } catch {
       xpWeekSnapshot = 0;
     }
 
-    // Đổi quà TRỪ XP tuần: kiểm tra số dư TRƯỚC khi tạo yêu cầu
+    // Đổi quà TRỪ vào TỔNG XP của tài khoản (XP vĩnh viễn): kiểm tra số dư TRƯỚC
     const requiredXp = reward?.requiredXp || 0;
-    if (requiredXp > 0 && xpWeekSnapshot < requiredXp) {
+    if (requiredXp > 0 && totalXpBalance < requiredXp) {
       throw new Error(
-        `Chưa đủ XP tuần để xin phần quà này (cần ${requiredXp} XP, hiện có ${xpWeekSnapshot} XP)`
+        `Chưa đủ XP để xin phần quà này (cần ${requiredXp} XP, hiện có ${totalXpBalance} XP)`
       );
     }
 
@@ -1751,12 +1759,12 @@ export class SupabaseRewardRepository implements RewardRepository {
       return mockRewardRepo.createRequest(studentId, rewardId);
     }
 
-    // Trừ XP tuần trong state của học sinh và ghi số đã trừ vào bản sao yêu cầu
+    // Trừ vào TỔNG XP trong state của học sinh, ghi số đã trừ vào bản sao yêu cầu
     let deductedXp = 0;
     if (requiredXp > 0) {
       try {
         const st = await supabaseAttemptRepo.getStudentState(studentId);
-        st.xpWeek = Math.max(0, (st.xpWeek || 0) - requiredXp);
+        st.totalXp = Math.max(0, (st.totalXp || 0) - requiredXp);
         st.rewardRequests = (st.rewardRequests || []).map((r) =>
           r.id === data.id ? { ...r, deductedXp: requiredXp } : r
         );
@@ -1776,7 +1784,7 @@ export class SupabaseRewardRepository implements RewardRepository {
         await supabaseAttemptRepo.saveStudentState(studentId, st);
         deductedXp = requiredXp;
       } catch (e) {
-        console.error('[SupabaseReward] Không trừ được XP tuần cho yêu cầu quà:', e);
+        console.error('[SupabaseReward] Không trừ được XP cho yêu cầu quà:', e);
       }
     }
 
@@ -1790,8 +1798,8 @@ export class SupabaseRewardRepository implements RewardRepository {
     };
   }
 
-  // Hoàn XP tuần cho yêu cầu bị TỪ CHỐI (bản sao yêu cầu trong state học sinh
-  // mang deductedXp; trạng thái ở bản sao cũng được cập nhật theo)
+  // Hoàn vào TỔNG XP cho yêu cầu bị TỪ CHỐI (bản sao yêu cầu trong state học
+  // sinh mang deductedXp; trạng thái ở bản sao cũng được cập nhật theo)
   private async refundIfRejected(requestId: string): Promise<void> {
     try {
       const states = await supabaseAttemptRepo.getAllStates();
@@ -1800,7 +1808,7 @@ export class SupabaseRewardRepository implements RewardRepository {
         if (!req) continue;
         let changed = false;
         if ((req.deductedXp || 0) > 0) {
-          st.xpWeek = (st.xpWeek || 0) + (req.deductedXp || 0);
+          st.totalXp = (st.totalXp || 0) + (req.deductedXp || 0);
           req.deductedXp = 0;
           changed = true;
         }
@@ -1812,7 +1820,7 @@ export class SupabaseRewardRepository implements RewardRepository {
         return;
       }
     } catch (e) {
-      console.error('[SupabaseReward] Không hoàn được XP tuần cho yêu cầu bị từ chối:', e);
+      console.error('[SupabaseReward] Không hoàn được XP cho yêu cầu bị từ chối:', e);
     }
   }
 

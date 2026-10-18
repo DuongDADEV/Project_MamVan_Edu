@@ -2404,17 +2404,18 @@ export class MockRewardRepository implements RewardRepository {
       rewards.find((r) => r.id === rewardId) ||
       REWARDS_CATALOG.find((r) => r.id === rewardId);
 
-    // Đổi quà TRỪ XP tuần (không trừ totalXp): giữ số XP ngay khi gửi yêu cầu
-    // để cùng một tuần XP không tiêu hai lần; bị từ chối sẽ hoàn lại.
+    // Đổi quà TRỪ vào TỔNG XP của tài khoản (XP vĩnh viễn, chỉ giảm khi xin
+    // quà): giữ số XP ngay khi gửi yêu cầu để không tiêu hai lần; bị từ chối
+    // sẽ hoàn lại. Mốc mở rương vẫn xét theo XP tuần như thiết kế.
     let deductedXp = 0;
     if (reward) {
-      if ((state.xpWeek || 0) < reward.requiredXp) {
+      if ((state.totalXp || 0) < reward.requiredXp) {
         throw new Error(
-          `Chưa đủ XP tuần để xin phần quà này (cần ${reward.requiredXp} XP, hiện có ${state.xpWeek || 0} XP)`
+          `Chưa đủ XP để xin phần quà này (cần ${reward.requiredXp} XP, hiện có ${state.totalXp || 0} XP)`
         );
       }
       deductedXp = reward.requiredXp;
-      state.xpWeek = (state.xpWeek || 0) - deductedXp;
+      state.totalXp = (state.totalXp || 0) - deductedXp;
     }
 
     const newReq: RewardRequest = {
@@ -2461,11 +2462,11 @@ export class MockRewardRepository implements RewardRepository {
           );
         }
         const now = Date.now();
-        // Bị TỪ CHỐI -> hoàn lại XP tuần đã giữ khi gửi yêu cầu
+        // Bị TỪ CHỐI -> hoàn lại vào TỔNG XP số đã trừ khi gửi yêu cầu
         let refundedXp = 0;
         if (status === 'REJECTED' && (cur.deductedXp || 0) > 0) {
           refundedXp = cur.deductedXp || 0;
-          st.xpWeek = (st.xpWeek || 0) + refundedXp;
+          st.totalXp = (st.totalXp || 0) + refundedXp;
         }
         updatedReq = {
           ...cur,
