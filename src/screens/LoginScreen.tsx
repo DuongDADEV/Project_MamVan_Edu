@@ -12,8 +12,6 @@ import {
   User,
   ArrowRight,
   ArrowLeft,
-  Sparkles,
-  ShieldCheck,
   Shield,
   AlertCircle,
 } from 'lucide-react';
@@ -24,8 +22,8 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [selectedRole, setSelectedRole] = useState<Role>('student');
-  const [username, setUsername] = useState('hs001');
-  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -34,16 +32,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setSelectedRole(role);
     setErrorMsg('');
     setShowComingSoon(false);
-    if (role === 'admin') {
-      setUsername('admin');
-      setPassword('123456');
-    } else if (role === 'teacher') {
-      setUsername('gv001');
-      setPassword('123456');
-    } else if (role === 'student') {
-      setUsername('hs001');
-      setPassword('123456');
-    } else {
+    setUsername('');
+    setPassword('');
+    if (role === 'parent') {
       setShowComingSoon(true);
     }
   };
@@ -73,14 +64,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const fillDemoAccount = (u: string, p = '123456', r: Role = 'student') => {
-    setUsername(u);
-    setPassword(p);
-    setSelectedRole(r);
-    setErrorMsg('');
-    setShowComingSoon(false);
   };
 
   return (
@@ -232,13 +215,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={
-                      selectedRole === 'admin'
-                        ? 'Ví dụ: admin'
-                        : selectedRole === 'teacher'
-                        ? 'Ví dụ: gv001'
-                        : 'Ví dụ: hs001 hoặc anhnm27'
-                    }
+                    placeholder="Nhập tên đăng nhập"
                     className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-indigo-100 outline-none text-sm text-[#1E1B4B] font-medium transition-all"
                   />
                 </div>
@@ -255,7 +232,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mặc định: 123456"
+                    placeholder="Nhập mật khẩu"
                     className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-indigo-100 outline-none text-sm text-[#1E1B4B] font-medium transition-all"
                   />
                 </div>
@@ -288,123 +265,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               </button>
             </form>
 
-            {/* TÀI KHOẢN DEMO GỢI Ý BẤM-ĐỂ-ĐIỀN */}
+            {/* FOOTER THƯƠNG HIỆU */}
             <div className="mt-8 pt-6 border-t border-slate-100">
-              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold mb-3">
-                <Sparkles className="w-3.5 h-3.5 text-[#FBBF24]" />
-                <span>Tài khoản demo sẵn có (Bấm để điền nhanh):</span>
-              </div>
-
-              {selectedRole === 'admin' ? (
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => fillDemoAccount('admin', '123456', 'admin')}
-                    className="w-full p-3 rounded-2xl border border-[#7C3AED] bg-purple-50/60 shadow-xs text-left transition-all text-xs"
-                  >
-                    <p className="font-bold text-[#1E1B4B] flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Shield className="w-3.5 h-3.5 text-[#7C3AED]" />
-                        <span>admin</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-[#7C3AED] font-semibold">
-                        Quản trị viên Hệ thống
-                      </span>
-                    </p>
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      Quản lý tài khoản giáo viên toàn hệ thống (MK: 123456)
-                    </p>
-                  </button>
-                </div>
-              ) : selectedRole === 'teacher' ? (
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => fillDemoAccount('gv001', '123456', 'teacher')}
-                    className={`w-full p-3 rounded-2xl border text-left transition-all text-xs ${
-                      username === 'gv001'
-                        ? 'border-[#8B5CF6] bg-purple-50/60 shadow-xs'
-                        : 'border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-bold text-[#1E1B4B] flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <GraduationCap className="w-3.5 h-3.5 text-[#8B5CF6]" />
-                        <span>gv001</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-purple-100 text-[#8B5CF6] font-semibold">
-                        Giáo viên 7A2, 7A3
-                      </span>
-                    </p>
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      Thầy Nguyễn Văn An • THCS Giấy & Mực (MK: 123456)
-                    </p>
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => fillDemoAccount('hs001', '123456', 'student')}
-                    className={`p-3 rounded-2xl border text-left transition-all text-xs ${
-                      username === 'hs001'
-                        ? 'border-[#4F46E5] bg-indigo-50/60 shadow-xs'
-                        : 'border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-bold text-[#1E1B4B] flex items-center justify-between">
-                      <span>hs001</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-[#4F46E5] font-semibold">
-                        Đã học
-                      </span>
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1 truncate">
-                      Nguyễn Minh Anh
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => fillDemoAccount('hs002', '123456', 'student')}
-                    className={`p-3 rounded-2xl border text-left transition-all text-xs ${
-                      username === 'hs002'
-                        ? 'border-[#4F46E5] bg-indigo-50/60 shadow-xs'
-                        : 'border-slate-200 bg-slate-50/70 hover:bg-slate-100 hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-bold text-[#1E1B4B] flex items-center justify-between">
-                      <span>hs002</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">
-                        Mới
-                      </span>
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1 truncate">
-                      Trần Gia Bảo
-                    </p>
-                  </button>
-                </div>
-              )}
-
-              {/* Lối tắt Admin khi đang ở tab học sinh/giáo viên */}
-              {selectedRole !== 'admin' && (
-                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-3 pt-2.5 border-t border-slate-100">
-                  <span>Cổng Quản trị viên:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRoleSelect('admin')}
-                    className="font-bold text-[#7C3AED] hover:underline flex items-center gap-1"
-                  >
-                    <Shield className="w-3.5 h-3.5 text-[#7C3AED]" />
-                    <span>Đăng nhập Admin (admin/123456)</span>
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 mt-4 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Mật khẩu mặc định tài khoản mẫu: 123456</span>
-              </div>
-
               <div className="flex flex-col items-center justify-center gap-0.5 mt-5 pt-4 border-t border-slate-100">
                 <BrandWordmark size="xs" align="center" showSlogan={false} />
                 <span className="text-[10px] text-slate-400 font-medium">

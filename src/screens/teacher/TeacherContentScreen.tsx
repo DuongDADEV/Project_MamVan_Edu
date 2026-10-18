@@ -518,7 +518,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               className="px-4 py-2.5 rounded-2xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Tạo mới</span>
+              <span>Tạo mới</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
 

@@ -714,7 +714,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                 className="px-5 py-2.5 rounded-2xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-[#E2704A]/25 transition-all active:scale-[0.98]"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>+ Tạo lớp mới</span>
+                <span>Tạo lớp mới</span>
               </button>
             }
           />

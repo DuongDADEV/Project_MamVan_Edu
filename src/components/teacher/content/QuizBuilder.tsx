@@ -990,7 +990,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-[#E2704A] to-[#D45E36] hover:from-[#D45E36] hover:to-[#C34F28] text-white text-xs font-bold shadow-xs transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>+ Thêm câu bằng AI</span>
+                  <span>Thêm câu bằng AI</span>
                 </button>
 
                 <button
@@ -1145,7 +1145,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                             className="hover:underline flex items-center gap-1 font-medium"
                           >
                             <Quote className="w-3 h-3 text-[#E2704A]" />
-                            <span>{q.passage ? 'Bỏ ngữ liệu trích' : '+ Chèn ngữ liệu/đoạn trích'}</span>
+                            <span>{q.passage ? 'Bỏ ngữ liệu trích' : 'Chèn ngữ liệu/đoạn trích'}</span>
                           </button>
                         </div>
                       </div>

@@ -66,7 +66,6 @@ import {
 } from '../../types.ts';
 import { createInitialStateHs001, QUESTIONS_BANK } from '../../data/mockData.ts';
 import { REWARDS_CATALOG } from '../../data/rewards.ts';
-import { generateDemoSeedData } from './demoSeedHistory.ts';
 
 export const STORAGE_SCHEMA_VERSION = 'mam_van_v4_real_data';
 

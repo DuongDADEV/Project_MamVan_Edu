@@ -1,5 +1,17 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Tổng kiểm tra "sẵn sàng cho khách thật": gỡ toàn bộ scaffolding demo, dọn dữ liệu test trong DB
+### UI/UX:
+- Sửa 5 nút thừa dấu "+" trong nhãn (đã có sẵn icon +): "+ Tạo mới" (Nội dung học), "+ Tạo lớp mới", "+ Thêm câu hỏi thủ công", "+ Thêm câu bằng AI", "+ Chèn ngữ liệu/đoạn trích".
+### Gỡ demo/mock khỏi bản chạy thật:
+- Màn hình đăng nhập: bỏ điền sẵn tài khoản/mật khẩu mẫu, bỏ toàn bộ khu "Tài khoản demo sẵn có (bấm để điền nhanh)" (gồm các thẻ admin/gv001/hs001/hs002 và dòng in mật khẩu mẫu), bỏ lối tắt in sẵn thông tin Admin; placeholder chuyển thành trung tính. Người dùng thật tự nhập tài khoản được cấp.
+- Xoá `src/services/mock/demoSeedHistory.ts` (máy sinh lịch sử học tập giả — vốn đã không còn được gọi) cùng script test phụ thuộc vào nó `scripts/test_prompt4_flow.ts` và import mồ côi trong mockRepositories.
+### Dữ liệu (Supabase):
+- Sao lưu toàn bộ 12 bảng ra file ngoài repo trước khi dọn. Đã xoá 21 tài khoản học sinh test (tên rác/trùng) + 15 bài nộp test + toàn bộ state test; giữ lại: hs001 (tài khoản mẫu chính thức), 5 giáo viên, 4 lớp, và toàn bộ nội dung học thật (6 chủ đề, 97 câu hỏi, 33 quiz, 19 video, 6 lý thuyết).
+### Tồn đọng đã ghi nhận (cần chủ dự án quyết):
+- Đăng nhập Admin vẫn là thông tin cứng trong mã nguồn (repo công khai) — nên chuyển sang tài khoản quản trị lưu trong DB/biến môi trường trước khi mở cho khách thật.
+- Lớp kho mock (localStorage) vẫn tồn tại làm đường dự phòng khi mất kết nối DB; dữ liệu vận hành chính đã ở Supabase.
+
 ## [2026-10-18] - Chốt 5 quyết định sau QA vòng 2: XP phẳng theo hoàn thành, đổi quà TRỪ vào TỔNG XP của tài khoản, tạo tài khoản hs001 thật
 ### Đã chốt & thực hiện:
 - **XP giữ nguyên tính phẳng theo hoàn thành** (không gắn điểm số) — xác nhận đây là thiết kế có chủ đích, không sửa.

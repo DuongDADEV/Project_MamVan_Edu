@@ -495,7 +495,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               className="px-4 py-2 rounded-2xl bg-white border border-[#E6DCC8] hover:bg-[#FAF5EB] text-[#2F3E6B] font-bold text-xs flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4 text-[#E2704A]" />
-              <span>+ Thêm câu hỏi thủ công</span>
+              <span>Thêm câu hỏi thủ công</span>
             </button>
             <button
               type="button"
