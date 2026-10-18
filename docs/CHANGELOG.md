@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Gọn nhãn ở Ngân hàng câu hỏi
+- Tab "Kho ngân hàng (98 câu hỏi, ... video, ... bài)" bỏ phần ngoặc đơn thống kê — chỉ còn "Kho ngân hàng".
+- Thẻ lọc "Tự luận / Rubric" bỏ chữ Rubric — chỉ còn "Tự luận".
+
 ## [2026-10-18] - Gọn giao diện cây nội dung: nhãn trạng thái, bỏ chấm màu, đầu cây không xuống dòng
 - Nhãn trạng thái "Có chỉnh sửa chưa xuất bản" dài nên bị xuống 2 dòng — rút gọn thành "Có sửa chưa đăng" và khóa không xuống dòng cho mọi nhãn trạng thái.
 - Bỏ chấm màu tròn ở đầu mỗi thẻ chủ đề trong cây nội dung (thừa, gây rối mắt).

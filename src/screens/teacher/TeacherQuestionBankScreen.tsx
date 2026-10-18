@@ -567,7 +567,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           }`}
         >
           <FolderOpen className="w-4 h-4" />
-          <span>Kho ngân hàng ({countStats.totalQuestions} câu hỏi, {countStats.videos} video, {countStats.theories} bài)</span>
+          <span>Kho ngân hàng</span>
         </button>
         <button
           type="button"
@@ -644,7 +644,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               <span className="text-xl font-bold font-lora text-[#2F3E6B]">{countStats.fill}</span>
             </div>
             <div className="bg-[#FFFDF8] border border-[#E6DCC8] p-3.5 rounded-2xl shadow-2xs">
-              <span className="text-[11px] font-bold text-[#E2704A] block">Tự luận / Rubric</span>
+              <span className="text-[11px] font-bold text-[#E2704A] block">Tự luận</span>
               <span className="text-xl font-bold font-lora text-[#2F3E6B]">{countStats.essay}</span>
             </div>
             <div className="bg-[#FFFDF8] border border-[#E6DCC8] p-3.5 rounded-2xl shadow-2xs">
