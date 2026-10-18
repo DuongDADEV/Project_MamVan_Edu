@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Nút "Quay lại" trong trình tạo bài tập trở về đúng bài gốc
+- Từ trình soạn video/lý thuyết bấm "+ Tạo mới ngay" để tạo bài tập liên kết, rồi bấm "Quay lại" trong trình tạo bài tập: trước đây luôn văng về trang chủ đề, mất bài đang soạn.
+- Nay app ghi nhớ bài gốc (video hoặc lý thuyết) khi tạo bài tập liên kết — Quay lại là trở về đúng bài đó. Nếu mở bài tập trực tiếp từ cây nội dung, Quay lại vẫn về trang chủ đề như cũ; chọn mục khác trên cây thì ghi nhớ được xóa.
+
 ## [2026-10-18] - Tạo chủ đề mới xong mở sẵn trình soạn video đầu tiên
 - Trước đây lưu chủ đề mới xong màn hình chính vẫn trống trơn (không chọn chủ đề, không mở trình soạn) khiến giáo viên không biết làm gì tiếp.
 - Nay: vừa tạo chủ đề là app tự chọn chủ đề đó, tự tạo sẵn 1 bản nháp "Bài giảng Video mới" gắn vào chủ đề và mở ngay trình soạn video để Thầy/Cô nhập nội dung luôn. Nhánh "+ Tạo mới → Bài giảng Video" dùng chung một hàm tạo nháp với luồng này.

@@ -98,6 +98,9 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   // 3. Quản lý các Modal
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [topicToDelete, setTopicToDelete] = useState<{ id: string; warn: string } | null>(null);
+  // Bài gốc (video/lý thuyết) vừa rời khỏi để vào trình tạo bài tập liên kết —
+  // nút "Quay lại" trong trình tạo bài tập phải trở về đúng bài này.
+  const [quizReturnTo, setQuizReturnTo] = useState<SelectedContentItem | null>(null);
   const [editingTopic, setEditingTopic] = useState<TopicWithMeta | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -353,6 +356,9 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       console.error('Lỗi ghi liên kết quiz vào bài gốc:', err);
     }
 
+    // Ghi nhớ bài gốc để nút Quay lại trong trình tạo bài tập trở về đúng bài đó
+    if (sourceVideo) setQuizReturnTo({ type: 'video', id: sourceVideo.id });
+    else if (sourceTheory) setQuizReturnTo({ type: 'theory', id: sourceTheory.id });
     setSelectedItem({ type: 'quiz', id: newQuiz.id });
   };
 
@@ -691,7 +697,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           theories={theories}
           quizzes={quizzes}
           selectedItem={selectedItem}
-          onSelectItem={setSelectedItem}
+          onSelectItem={(item) => {
+            setQuizReturnTo(null);
+            setSelectedItem(item);
+          }}
           onOpenCreateTopic={handleOpenCreateTopic}
           onEditTopic={handleEditTopic}
           onDeleteTopic={handleDeleteTopic}
@@ -749,7 +758,14 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onPreviewStudent={(draftQuiz, draftQuestions) =>
               handlePreviewStudent('quiz', draftQuiz, draftQuestions)
             }
-            onBack={() => setSelectedItem({ type: 'topic', id: currentQuiz.topicId })}
+            onBack={() => {
+              if (quizReturnTo) {
+                setSelectedItem(quizReturnTo);
+                setQuizReturnTo(null);
+              } else {
+                setSelectedItem({ type: 'topic', id: currentQuiz.topicId });
+              }
+            }}
           />
         ) : currentTopic ? (
           /* Khối thông tin chi tiết của chủ đề đang chọn */
