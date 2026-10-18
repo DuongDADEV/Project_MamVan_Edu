@@ -44,6 +44,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   const [practiceChecked, setPracticeChecked] = useState<Record<string, boolean>>({});
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const submittedRef = useRef(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const submitLatestRef = useRef<() => void>(() => {});
 
   // Đồng hồ đếm ngược nếu là bài test có time limit
@@ -90,6 +91,18 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     if (submittedRef.current) return;
     submittedRef.current = true;
     setIsSubmitModalOpen(false);
+    setSubmitError(null);
+    try {
+      handleSubmitScoring();
+    } catch (err) {
+      // Không để bài nộp chết im lặng: mở lại nút nộp và báo lỗi cho học sinh
+      console.error('Lỗi khi nộp bài:', err);
+      submittedRef.current = false;
+      setSubmitError('Đã xảy ra lỗi khi nộp bài. Em kiểm tra lại đáp án rồi bấm "Nộp bài thi" để nộp lại nhé!');
+    }
+  };
+
+  const handleSubmitScoring = () => {
 
     const results: QuestionResult[] = [];
     const essaySubs: EssaySubmission[] = [];
@@ -112,8 +125,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'multi') {
-        const correctArray = (q.answer as string[]) || [];
-        const chosenArray = (ans as string[]) || [];
+        const correctArray = Array.isArray(q.answer)
+          ? (q.answer as string[])
+          : q.answer != null && q.answer !== ''
+            ? [String(q.answer)]
+            : [];
+        const chosenArray = Array.isArray(ans)
+          ? (ans as string[])
+          : ans != null && ans !== ''
+            ? [String(ans)]
+            : [];
         const matches = chosenArray.filter((c) => correctArray.includes(c)).length;
         const extraWrong = chosenArray.filter((c) => !correctArray.includes(c)).length;
         const ratio = Math.max(0, (matches - extraWrong * 0.5) / Math.max(1, correctArray.length));
@@ -128,8 +149,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'fill') {
-        const correctArray = (q.answer as string[]) || [];
-        const fillAns = (ans as string[]) || [];
+        const correctArray = Array.isArray(q.answer)
+          ? (q.answer as string[])
+          : q.answer != null && q.answer !== ''
+            ? [String(q.answer)]
+            : [];
+        const fillAns = Array.isArray(ans)
+          ? (ans as string[])
+          : ans != null && ans !== ''
+            ? [String(ans)]
+            : [];
         let matchCount = 0;
         correctArray.forEach((cWord, i) => {
           if (fillAns[i] && fillAns[i].trim().toLowerCase() === cWord.trim().toLowerCase()) {
@@ -219,8 +248,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
         correctArr.length === userArr.length &&
         correctArr.every((c) => userArr.includes(c));
     } else if (currentQ.type === 'fill') {
-      const correctArr = (currentQ.answer as string[]) || [];
-      const userArr = (userAnswers[currentQ.id] as string[]) || [];
+      const correctArr = Array.isArray(currentQ.answer)
+        ? (currentQ.answer as string[])
+        : currentQ.answer != null && currentQ.answer !== ''
+          ? [String(currentQ.answer)]
+          : [];
+      const userArr = Array.isArray(userAnswers[currentQ.id])
+        ? (userAnswers[currentQ.id] as string[])
+        : userAnswers[currentQ.id] != null && userAnswers[currentQ.id] !== ''
+          ? [String(userAnswers[currentQ.id])]
+          : [];
       isAnswerCorrectInPractice = correctArr.every(
         (c, idx) => userArr[idx] && userArr[idx].trim().toLowerCase() === c.trim().toLowerCase()
       );
@@ -238,6 +275,11 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
 
   return (
     <div className="w-full max-w-2xl mx-auto py-6 px-4 text-[#1E1B4B]">
+      {submitError && (
+        <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+          <span>⚠️ {submitError}</span>
+        </div>
+      )}
       {/* HEADER BÀI QUIZ: Tên + Bộ đếm + Tiến độ */}
       <div className="flex items-center justify-between gap-4 mb-4">
         <div>

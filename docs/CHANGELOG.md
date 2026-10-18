@@ -1,5 +1,11 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-18] - Sửa lỗi không nộp được bài (có câu điền khuyết)
+- Nguyên nhân: đáp án câu điền khuyết trong database có thể là một chuỗi đơn (vd "Hà Nội") trong khi code chấm bài luôn coi đáp án là danh sách — lúc bấm nộp, việc chấm văng lỗi ngay giữa chừng: hộp thoại đóng, không thông báo, không thoát, nút nộp khoá cứng, bài không tới tay giáo viên. Mọi bài có câu điền khuyết kiểu này (BTVN, bài trong video/lý thuyết) đều dính.
+- Chuẩn hoá đáp án về đúng dạng danh sách ngay tại tầng đọc dữ liệu cho câu điền khuyết và chọn nhiều.
+- Màn hình làm bài cũng tự chịu được đáp án dạng chuỗi ở cả bước chấm khi nộp lẫn bước kiểm tra tức thời.
+- Bọc toàn bộ xử lý nộp bài: nếu có lỗi lạ phát sinh, học sinh được báo lỗi rõ ràng và nút nộp mở lại để nộp lại — không còn chết im lặng.
+
 ## [2026-10-18] - Thông báo bài mới cho học sinh
 - Khi thầy/cô xuất bản (hoặc xuất bản lại) video / lý thuyết / bài tập cho lớp, học sinh nhận thông báo kiểu tin nhắn: chuông thông báo trên thanh điều hướng (cả máy tính và điện thoại) có huy hiệu đỏ đếm số chưa đọc; mở ra thấy danh sách bài mới kèm chủ đề và thời gian; bấm vào là vào làm bài đó ngay.
 - Trang chủ học sinh hiện biểu ngữ bài mới nhất chưa đọc với nút "Vào làm ngay".

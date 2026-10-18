@@ -2124,6 +2124,21 @@ function toSupabaseType(type?: string): string {
   }
 }
 
+/**
+ * Chuẩn hoá đáp án theo loại câu: câu điền khuyết / chọn nhiều lưu trong DB
+ * có thể là CHUỖI đơn (vd đáp án điền 1 chỗ trống "Hà Nội") trong khi code
+ * chấm bài luôn coi đáp án là MẢNG. Không chuẩn hoá ở đây thì lúc nộp bài
+ * sẽ văng lỗi "forEach is not a function" và bài nộp chết im lặng.
+ */
+function normalizeAnswerForType(type: QuestionType, answer: any): any {
+  if (type === 'fill' || type === 'multi') {
+    if (Array.isArray(answer)) return answer;
+    if (answer === null || answer === undefined || answer === '') return [];
+    return [String(answer)];
+  }
+  return answer;
+}
+
 function fromSupabaseType(type?: string): QuestionType {
   switch (type) {
     case 'single_choice':
@@ -2252,7 +2267,7 @@ export class SupabaseQuizRepository implements QuizRepository {
           difficulty: row.level === 'NHAN_BIET' ? 'DE' : row.level === 'THONG_HIEU' ? 'TB' : 'KHO',
           prompt: row.prompt || '',
           options: optionsList.length > 0 ? optionsList : undefined,
-          answer: row.correct_answer,
+          answer: normalizeAnswerForType(fromSupabaseType(row.type), row.correct_answer),
           explanation: row.explanation || 'Giải thích chi tiết chuẩn sách giáo khoa.',
           points: 10,
           isAiGenerated: row.id.includes('ai'),
@@ -2315,7 +2330,7 @@ export class SupabaseQuizRepository implements QuizRepository {
         difficulty: row.level === 'NHAN_BIET' ? 'DE' : row.level === 'THONG_HIEU' ? 'TB' : 'KHO',
         prompt: row.prompt,
         options: Array.isArray(row.options) ? row.options : undefined,
-        answer: row.correct_answer,
+        answer: normalizeAnswerForType(fromSupabaseType(row.type), row.correct_answer),
         explanation: row.explanation || '',
         points: 10,
         isAiGenerated: row.id.includes('ai'),
