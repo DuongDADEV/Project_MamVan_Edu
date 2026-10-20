@@ -218,8 +218,20 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
             onLogout={onLogout}
           />
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#FAF5EB]">
-            <div className="max-w-7xl mx-auto w-full min-w-0">
+          <main
+            className={
+              currentTab === 'content'
+                ? 'flex-1 overflow-hidden flex flex-col p-4 sm:p-6 lg:p-8 bg-[#FAF5EB]'
+                : 'flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#FAF5EB]'
+            }
+          >
+            <div
+              className={
+                currentTab === 'content'
+                  ? 'max-w-7xl mx-auto w-full min-w-0 flex-1 min-h-0 flex flex-col'
+                  : 'max-w-7xl mx-auto w-full min-w-0'
+              }
+            >
               {currentTab === 'overview' && (
                 <TeacherOverviewScreen
                   teacherName={teacher.name}

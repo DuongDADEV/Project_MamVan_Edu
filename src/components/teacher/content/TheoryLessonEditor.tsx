@@ -277,9 +277,9 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   const topicQuizzes = quizzes.filter((q) => !topicId || q.topicId === topicId);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 max-w-full bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-hidden shadow-xs">
-      {/* Top Header */}
-      <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 max-w-full bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
+      {/* Top Header — dính chặt phía trên khi thân trình soạn cuộn */}
+      <div className="sticky top-0 z-20 shrink-0 p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           {onBack && (
             <button

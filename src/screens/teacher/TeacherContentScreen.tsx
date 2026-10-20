@@ -532,7 +532,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     selectedItem?.type === 'topic' ? topics.find((t) => t.id === selectedItem.id) : null;
 
   return (
-    <div className="space-y-6 w-full max-w-full min-w-0">
+    <div className="flex flex-col gap-6 flex-1 min-h-0 w-full max-w-full min-w-0">
       {/* Page Header with Main "+ Tạo mới" Dropdown */}
       <PageHeader
         title="Nội dung học"
@@ -690,7 +690,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       />
 
       {/* Main Two-Pane Area: Left (Topic Tree) + Right (Editor) */}
-      <div className="flex flex-col md:flex-row gap-0 items-stretch min-h-[680px] w-full max-w-full min-w-0 overflow-hidden">
+      <div className="flex flex-col md:flex-row gap-0 items-stretch flex-1 min-h-0 w-full max-w-full min-w-0 overflow-hidden">
         {/* Left Pane: Topic Tree Sidebar */}
         <TopicTreeSidebar
           topics={topics}
@@ -771,7 +771,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         ) : currentTopic ? (
           /* Khối thông tin chi tiết của chủ đề đang chọn */
           <div
-            className="flex-1 p-8 rounded-2xl md:rounded-l-none border shadow-xs flex flex-col items-center justify-center text-center space-y-4"
+            className="flex-1 min-h-0 overflow-y-auto p-8 rounded-2xl md:rounded-l-none border shadow-xs flex flex-col items-center justify-center text-center space-y-4"
             style={{
               backgroundColor: `${currentTopic.colorScheme || '#2F3E6B'}0F`,
               borderColor: `${currentTopic.colorScheme || '#2F3E6B'}59`,
@@ -864,7 +864,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           </div>
         ) : (
           /* Empty State khi chưa chọn mục nào */
-          <div className="flex-1 p-8 bg-[#FFFDF8] rounded-2xl md:rounded-l-none border border-[#E6DCC8] shadow-xs flex flex-col items-center justify-center text-center space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto p-8 bg-[#FFFDF8] rounded-2xl md:rounded-l-none border border-[#E6DCC8] shadow-xs flex flex-col items-center justify-center text-center space-y-3">
             <MamMuc mood="waiting" size="md" />
             <h4 className="font-lora font-bold text-base text-[#2F3E6B]">
               Chọn một bài giảng hoặc bài tập ở cây bên trái

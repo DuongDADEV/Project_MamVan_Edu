@@ -1,5 +1,10 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-20] - Màn Nội dung học: khung cây chủ đề đứng yên, hai khung cuộn độc lập
+- Theo yêu cầu của chủ dự án: khung "Cây chủ đề" nay đứng yên tại chỗ, danh sách chủ đề tự cuộn bên trong khung; khung trình soạn bên phải cuộn riêng phần thân, thanh công cụ (Quay lại / Xem trước / Lưu nháp / Cập nhật lên web học sinh) dính chặt ở phía trên — cuộn khung này không kéo theo khung kia và cả trang không còn cuộn theo.
+- Áp dụng cho cả 3 trình soạn: Video, Lý thuyết và Trình tạo bài tập. Riêng tab Nội dung học dùng khung chiều cao cố định theo màn hình; các tab khác giữ nguyên cách cuộn trang như cũ.
+- Trên điện thoại: cây chủ đề thu gọn tối đa 45% chiều cao, phần soạn thảo cuộn độc lập bên dưới.
+
 ## [2026-10-18] - Mục Bản nháp ở Ngân hàng câu hỏi
 - Thêm tab "Bản nháp" (có huy hiệu đếm số mục chờ) ở màn Ngân hàng câu hỏi: mọi bộ câu hỏi và lý thuyết Mầm AI tạo ra mà chưa duyệt đều nằm tại đây.
 - Mỗi bộ câu hỏi nháp mở ra xem từng câu, tích chọn những câu đã duyệt rồi "Đưa vào Ngân hàng"; câu chưa chọn ở lại nháp. Có nút mở sang Studio để duyệt ở màn hình duyệt đầy đủ, và xóa nháp (hỏi xác nhận). Lý thuyết nháp cũng duyệt qua Studio từ mục này.
