@@ -1,5 +1,10 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-21] - Ngân hàng câu hỏi: bỏ thanh trạng thái Mầm AI
+- Theo yêu cầu của chủ dự án: gỡ hẳn thanh "Mầm AI đang kích hoạt (AI-2.5-flash)" + nút Cấu hình khỏi đầu màn Ngân hàng câu hỏi, kèm modal nhập API Key riêng của thanh này (không còn nơi nào mở nữa).
+- Cấu hình API Key / model Gemini vẫn còn nguyên ở tab Cài đặt và ngay trong Mầm AI Studio (mở bằng nút "Mở Mầm AI Studio" trên cùng màn hình) — không mất chức năng nào.
+- Sơ đồ hệ thống đã cập nhật tương ứng: bỏ mục "Thanh trạng thái Mầm AI thu gọn 1 dòng" khỏi nhánh 1.4 (còn 262 mục).
+
 ## [2026-10-21] - Mầm AI Studio: xóa nguồn "Cây dừa" là xóa hẳn, không tự mọc lại khi tải lại trang
 - Bài thơ "Cây dừa" (Trần Đăng Khoa) là nguồn mẫu mặc định viết sẵn trong xưởng AI để giáo viên có sẵn tài liệu thử nghiệm. Trước đây: xóa hết nguồn rồi tải lại trang thì bài thơ tự xuất hiện lại — vì code đọc localStorage coi danh sách rỗng như "chưa từng có dữ liệu" nên nạp lại bài mẫu.
 - Nay phân biệt rõ: đã có dữ liệu lưu (kể cả danh sách rỗng do GV chủ động xóa hết) thì tôn trọng trạng thái đó; chỉ nạp bài mẫu ở lần mở xưởng đầu tiên khi chưa từng có dữ liệu. Muốn lấy lại bài mẫu thì bấm nút "Khôi phục bài thơ Cây dừa" ở trạng thái trống.
