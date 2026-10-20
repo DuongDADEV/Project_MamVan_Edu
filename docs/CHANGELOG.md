@@ -1,5 +1,9 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-21] - Mầm AI Studio: xóa nguồn "Cây dừa" là xóa hẳn, không tự mọc lại khi tải lại trang
+- Bài thơ "Cây dừa" (Trần Đăng Khoa) là nguồn mẫu mặc định viết sẵn trong xưởng AI để giáo viên có sẵn tài liệu thử nghiệm. Trước đây: xóa hết nguồn rồi tải lại trang thì bài thơ tự xuất hiện lại — vì code đọc localStorage coi danh sách rỗng như "chưa từng có dữ liệu" nên nạp lại bài mẫu.
+- Nay phân biệt rõ: đã có dữ liệu lưu (kể cả danh sách rỗng do GV chủ động xóa hết) thì tôn trọng trạng thái đó; chỉ nạp bài mẫu ở lần mở xưởng đầu tiên khi chưa từng có dữ liệu. Muốn lấy lại bài mẫu thì bấm nút "Khôi phục bài thơ Cây dừa" ở trạng thái trống.
+
 ## [2026-10-20] - Màn Nội dung học: khung cây chủ đề đứng yên, hai khung cuộn độc lập
 - Theo yêu cầu của chủ dự án: khung "Cây chủ đề" nay đứng yên tại chỗ, danh sách chủ đề tự cuộn bên trong khung; khung trình soạn bên phải cuộn riêng phần thân, thanh công cụ (Quay lại / Xem trước / Lưu nháp / Cập nhật lên web học sinh) dính chặt ở phía trên — cuộn khung này không kéo theo khung kia và cả trang không còn cuộn theo.
 - Áp dụng cho cả 3 trình soạn: Video, Lý thuyết và Trình tạo bài tập. Riêng tab Nội dung học dùng khung chiều cao cố định theo màn hình; các tab khác giữ nguyên cách cuộn trang như cũ.

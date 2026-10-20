@@ -238,7 +238,9 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
       const saved = localStorage.getItem(`mamvan_ai_sources_${topicId}`);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        // Đã có dữ liệu lưu (kể cả danh sách RỖNG) = GV đã chủ động xóa hết
+        // nguồn — phải tôn trọng; chỉ nạp bài mẫu khi CHƯA TỪNG có dữ liệu.
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       }
@@ -263,7 +265,8 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
       const saved = localStorage.getItem(`mamvan_ai_sources_${topicId}`);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        // Như trên: danh sách rỗng đã lưu = GV đã xóa hết — không nạp lại bài mẫu
+        if (Array.isArray(parsed)) {
           setSources(parsed);
           return;
         }
