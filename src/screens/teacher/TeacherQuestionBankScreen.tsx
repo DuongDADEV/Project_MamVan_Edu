@@ -642,7 +642,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      {/* 1. THANH TIÊU ĐỀ TRANG */}
+      {/* 1. KHỐI ĐẦU TRANG GỘP (theo yêu cầu chủ dự án): tiêu đề + nút hành
+          động + thanh TAB nằm chung MỘT khối trên cùng, thay cho tiêu đề một
+          nơi, tab một nơi như trước */}
+      <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl px-5 pt-4 pb-4 shadow-2xs">
+      <div className="[&>*]:mb-0 [&>*]:pb-3">
       <PageHeader
         title="Ngân hàng câu hỏi & Kho học liệu"
         subtitle="Quản lý toàn bộ câu hỏi trắc nghiệm, tự luận, video bài giảng và lý thuyết; tích hợp Mầm AI Studio đối chiếu trực tiếp từ ngữ liệu."
@@ -677,6 +681,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           </div>
         }
       />
+      </div>
 
       {/* TOAST THÔNG BÁO NỔI */}
       {toastMessage && (
@@ -687,8 +692,8 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
       )}
 
 
-      {/* 2. TAB SWITCHER CHÍNH */}
-      <div className="flex items-center gap-2 p-1.5 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl w-fit shadow-2xs">
+      {/* 2. TAB SWITCHER CHÍNH — nay nằm TRONG khối đầu trang gộp */}
+      <div className="flex items-center gap-2 p-1.5 bg-[#FAF5EB] border border-[#E6DCC8] rounded-2xl w-fit">
         <button
           type="button"
           onClick={() => setActiveMainTab('bank')}
@@ -734,6 +739,8 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           <span>Mầm AI Studio</span>
           <span className="px-1.5 py-0.5 rounded text-[10px] bg-white/20 font-bold">RAG Studio</span>
         </button>
+      </div>
+
       </div>
 
       {/* ========================================================================= */}

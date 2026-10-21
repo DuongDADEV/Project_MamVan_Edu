@@ -1,3 +1,6 @@
+## 2026-10-22 (gộp khối đầu trang Ngân hàng câu hỏi)
+
+- **Ngân hàng câu hỏi & Kho học liệu:** tiêu đề trang + 2 nút hành động (Thêm câu hỏi thủ công / Mở Mầm AI Studio) + thanh tab (Kho ngân hàng / Bản nháp / Mầm AI Studio) **gộp vào MỘT khối đầu trang duy nhất** (trước: tiêu đề một nơi, tab một nơi) — cùng đợt đồng bộ với màn Chấm bài.
 ## 2026-10-22 (đợt sửa theo kiểm chứng luồng học + đồng bộ màn Chấm bài)
 
 - **Bổ sung XUẤT BẢN CHỦ ĐỀ:** trang chi tiết chủ đề có nút "Cập nhật lên web học sinh" mở PublishModal dùng chung (nhánh topic trong `handleOpenPublishModalForCurrent`). Trước đây cơ chế xuất bản chỉ có cho Video/Lý thuyết/Bài tập — chủ đề mới tạo kẹt ở Bản nháp vĩnh viễn, học sinh không thấy (phát hiện khi kiểm chứng luồng học bước 5–6).
