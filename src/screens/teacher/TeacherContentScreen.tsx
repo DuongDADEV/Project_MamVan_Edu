@@ -19,7 +19,13 @@ import { VideoLessonEditor } from '../../components/teacher/content/VideoLessonE
 import { TheoryLessonEditor } from '../../components/teacher/content/TheoryLessonEditor.tsx';
 import { QuizBuilder } from '../../components/teacher/content/QuizBuilder.tsx';
 import { TopicModal } from '../../components/teacher/content/TopicModal.tsx';
-import { AssignmentBuilderModal } from '../../components/teacher/content/AssignmentBuilderModal.tsx';
+import { AssignmentEditor } from '../../components/teacher/content/AssignmentEditor.tsx';
+import {
+  TeacherAssignmentSummary,
+  createEmptyAssignment,
+  deleteAssignmentCompletely,
+  getTeacherAssignments,
+} from '../../services/supabase/biRepository.ts';
 import { TopicFlowStrip } from '../../components/teacher/content/TopicFlowStrip.tsx';
 import {
   FlowItemType,
@@ -106,7 +112,34 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
   // 3. Quản lý các Modal
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
-  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  // Bài tập & đánh giá: các MỤC RIÊNG ngang hàng chủ đề trong cây
+  const [assignmentSummaries, setAssignmentSummaries] = useState<TeacherAssignmentSummary[]>([]);
+  const loadAssignmentSummaries = async () => {
+    if (!teacher?.id) return;
+    try {
+      setAssignmentSummaries(await getTeacherAssignments(teacher.id));
+    } catch (e) {
+      console.error('Không tải được danh sách bài tập & đánh giá:', e);
+    }
+  };
+  useEffect(() => {
+    loadAssignmentSummaries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacher?.id]);
+
+  // Bấm "Thêm bài tập & đánh giá" = tạo NGAY một mục nháp mới ngang hàng chủ
+  // đề rồi mở màn soạn bài kiểm tra của mục đó (như thêm chủ đề).
+  const handleAddAssignment = async () => {
+    if (!teacher?.id) return;
+    try {
+      const id = await createEmptyAssignment(teacher.id);
+      await loadAssignmentSummaries();
+      setSelectedItem({ type: 'assignment', id });
+    } catch (e) {
+      console.error('Không tạo được bài tập & đánh giá:', e);
+      alert('Không tạo được bài tập & đánh giá mới. Vui lòng thử lại!');
+    }
+  };
   // Tab mở đầu của QuizBuilder: 'settings' khi vừa tạo Bài tập mới (Cài đặt trước)
   const [quizInitialTab, setQuizInitialTab] = useState<'questions' | 'settings'>('questions');
   // Thứ tự luồng hiển thị tức thời theo chủ đề (kéo–thả trên dải) trước khi dữ liệu kịp nạp lại
@@ -251,6 +284,12 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   };
 
   const handleDeleteItem = async (type: ContentItemType, id: string) => {
+    if (type === 'assignment') {
+      await deleteAssignmentCompletely(id);
+      await loadAssignmentSummaries();
+      if (selectedItem?.type === 'assignment' && selectedItem.id === id) setSelectedItem(null);
+      return;
+    }
     const ownerTopicId =
       type === 'video'
         ? videos.find((v) => v.id === id)?.topicId
@@ -729,6 +768,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           videos={videos}
           theories={theories}
           quizzes={quizzes}
+          assignments={assignmentSummaries}
           selectedItem={selectedItem}
           onSelectItem={(item) => {
             setQuizReturnTo(null);
@@ -737,7 +777,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           }}
           onCreateItemInTopic={(topicId, kind) => handleCreateNewManual(kind, topicId)}
           onOpenCreateTopic={handleOpenCreateTopic}
-          onAddAssignment={() => setIsAssignmentModalOpen(true)}
+          onAddAssignment={handleAddAssignment}
           onEditTopic={handleEditTopic}
           onDeleteTopic={handleDeleteTopic}
           onReorderTopics={handleReorderTopics}
@@ -760,7 +800,16 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               onReorder={handleFlowReorder}
             />
           )}
-        {currentVideo ? (
+        {selectedItem?.type === 'assignment' && teacher ? (
+          <AssignmentEditor
+            key={selectedItem.id}
+            assignmentId={selectedItem.id}
+            teacher={teacher}
+            classes={classes}
+            onChanged={loadAssignmentSummaries}
+            onDeleted={() => setSelectedItem(null)}
+          />
+        ) : currentVideo ? (
           <VideoLessonEditor
             video={currentVideo}
             topics={topics}
@@ -926,14 +975,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       </div>
 
       {/* Modals */}
-      {isAssignmentModalOpen && teacher && (
-        <AssignmentBuilderModal
-          teacher={teacher}
-          classes={propClasses || []}
-          onClose={() => setIsAssignmentModalOpen(false)}
-        />
-      )}
-
       <TopicModal
         isOpen={isTopicModalOpen}
         onClose={() => setIsTopicModalOpen(false)}

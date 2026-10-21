@@ -1,3 +1,12 @@
+## 2026-10-22 (đợt BÀI TẬP & ĐÁNH GIÁ NGANG HÀNG CHỦ ĐỀ) — mục riêng trong cây + màn soạn bài kiểm tra
+
+Theo yêu cầu chủ dự án: "Thêm bài tập & đánh giá" phải ngang vai trò với "Thêm chủ đề"; mỗi bài là một mục riêng như một bài kiểm tra có nhiều câu hỏi.
+
+- **Cây chủ đề (TopicTreeSidebar):** hai nút "Thêm chủ đề" và "Thêm bài tập & đánh giá" nay đứng cùng một hàng ở đầu cây, cùng kích cỡ. Danh sách cây hiện thêm **thẻ mục riêng cho từng bài tập & đánh giá** (màu hổ phách, dưới các chủ đề): tiêu đề, nhãn Bản nháp/Đã giao, số câu hỏi · số học sinh · đã nộp; bấm thẻ mở màn soạn, nút thùng rác xóa qua hộp thoại xác nhận.
+- **Tạo mục như tạo chủ đề:** bấm "Thêm bài tập & đánh giá" → tạo ngay bản nháp "Bài kiểm tra mới" trong DB rồi chọn luôn mục đó (không còn form bật lên làm-một-lần; `AssignmentBuilderModal` đã gỡ bỏ).
+- **Màn soạn mới `AssignmentEditor`** (khung phải): tiêu đề, trạng thái, cài đặt (hạn nộp, giới hạn thời gian), chọn lớp + tích từng học sinh (mặc định cả lớp), **đề gồm** (thêm/bớt/đổi thứ tự câu), ngân hàng câu hỏi có tìm kiếm + cảnh báo câu trắc nghiệm chưa có nội dung đáp án. "Lưu nháp" = học sinh chưa thấy; "Giao bài" = chốt giao cho học sinh đã chọn.
+- **Dữ liệu (biRepository):** thêm `getTeacherAssignments / createEmptyAssignment / getAssignmentForEdit / updateAssignment / deleteAssignmentCompletely`. Đồng bộ đối tượng khi cập nhật: thêm học sinh mới, gỡ học sinh bị bỏ chọn **chỉ khi em chưa có lượt làm**. Khóa an toàn phía học sinh: `getStudentAssignments` chỉ trả bài **có published_at** (nháp không lộ dù đã chọn sẵn đối tượng), và màn "Tiến độ bài làm" chỉ tính bài đã giao.
+
 ## 2026-10-22 (hotfix) — Panel Mầm AI hết nhảy lên/xuống khi đổi loại nội dung
 
 - Nguyên nhân: trong panel phải (Xưởng tạo đầu ra) của `AiContentStudioModal`, chỉ loại "Bộ câu hỏi" có khối cấu hình cao ~330px; đổi sang "Ý trọng tâm video"/"Lý thuyết chi tiết" là khối biến mất → chiều cao panel sụt → vị trí cuộn bị kẹp lại → toàn bộ nội dung nhảy lên/xuống mỗi lần bấm đổi loại.

@@ -198,6 +198,7 @@ export async function getAssignmentsProgress(
     .from('assignments')
     .select('*')
     .eq('teacher_id', teacherId)
+    .not('published_at', 'is', null)
     .order('published_at', { ascending: true });
   if (!asgs?.length) return [];
   const asgIds = asgs.map((a: any) => a.id);
@@ -545,6 +546,230 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<st
   return id;
 }
 
+/* ===== Bài tập & đánh giá NHƯ MỘT MỤC RIÊNG ngang hàng chủ đề =====
+ * Giáo viên bấm "Thêm bài tập & đánh giá" → tạo ngay một bản nháp (chưa có
+ * published_at, chưa có học sinh nào được giao) rồi soạn trong màn riêng:
+ * tiêu đề, hạn nộp, câu hỏi, đối tượng — bấm Giao bài mới chốt published_at
+ * + ghi assignment_targets. Học sinh chỉ thấy bài ĐÃ giao. */
+
+export interface TeacherAssignmentSummary {
+  id: string;
+  title: string;
+  published: boolean;
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  questionCount: number;
+  targetCount: number;
+  submittedCount: number;
+  createdAt: string | null;
+}
+
+/** Danh sách bài tập & đánh giá của giáo viên cho cây nội dung (kèm đếm nhanh). */
+export async function getTeacherAssignments(
+  teacherId: string
+): Promise<TeacherAssignmentSummary[]> {
+  if (!isSupabaseReady()) return [];
+  const { data: asgs } = await supabase
+    .from('assignments')
+    .select('*')
+    .eq('teacher_id', teacherId)
+    .order('created_at', { ascending: true });
+  if (!asgs?.length) return [];
+  const ids = asgs.map((a: any) => a.id);
+  const [{ data: aqs }, { data: targets }] = await Promise.all([
+    supabase.from('assignment_questions').select('assignment_id').in('assignment_id', ids),
+    supabase
+      .from('assignment_targets')
+      .select('assignment_id, submission_status')
+      .in('assignment_id', ids),
+  ]);
+  const qCount = new Map<string, number>();
+  for (const r of aqs || []) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
+  const tCount = new Map<string, number>();
+  const sCount = new Map<string, number>();
+  for (const t of targets || []) {
+    tCount.set(t.assignment_id, (tCount.get(t.assignment_id) || 0) + 1);
+    if (t.submission_status === 'SUBMITTED')
+      sCount.set(t.assignment_id, (sCount.get(t.assignment_id) || 0) + 1);
+  }
+  return asgs.map((a: any) => ({
+    id: a.id,
+    title: a.title,
+    published: !!a.published_at,
+    dueAt: a.due_at,
+    isTimed: !!a.is_timed,
+    timeLimitMinutes: a.time_limit_minutes,
+    questionCount: qCount.get(a.id) || 0,
+    targetCount: tCount.get(a.id) || 0,
+    submittedCount: sCount.get(a.id) || 0,
+    createdAt: a.created_at,
+  }));
+}
+
+/** Tạo ngay một bài tập & đánh giá NHÁP rỗng (mục riêng trong cây). */
+export async function createEmptyAssignment(teacherId: string): Promise<string> {
+  const id = genId('asg_');
+  const { error } = await supabase.from('assignments').insert({
+    id,
+    title: 'Bài kiểm tra mới',
+    activity_type: 'ASSIGNMENT',
+    display_location: 'HOMEWORK',
+    teacher_id: teacherId,
+    published_at: null,
+    due_at: null,
+    is_timed: false,
+    time_limit_minutes: null,
+  });
+  if (error) throw new Error(error.message);
+  return id;
+}
+
+export interface AssignmentForEdit {
+  id: string;
+  title: string;
+  classId: string | null;
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  published: boolean;
+  questionIds: string[];
+  studentIds: string[];
+}
+
+/** Đọc toàn bộ nội dung một bài để mở màn soạn. */
+export async function getAssignmentForEdit(id: string): Promise<AssignmentForEdit | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: a } = await supabase.from('assignments').select('*').eq('id', id).maybeSingle();
+  if (!a) return null;
+  const [{ data: aqs }, { data: targets }] = await Promise.all([
+    supabase
+      .from('assignment_questions')
+      .select('question_id, position')
+      .eq('assignment_id', id)
+      .order('position', { ascending: true }),
+    supabase.from('assignment_targets').select('student_id').eq('assignment_id', id),
+  ]);
+  return {
+    id: a.id,
+    title: a.title,
+    classId: a.target_class_id,
+    dueAt: a.due_at,
+    isTimed: !!a.is_timed,
+    timeLimitMinutes: a.time_limit_minutes,
+    published: !!a.published_at,
+    questionIds: (aqs || []).map((r: any) => r.question_id),
+    studentIds: (targets || []).map((t: any) => t.student_id),
+  };
+}
+
+export interface UpdateAssignmentInput {
+  title: string;
+  classId: string | null;
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  questionIds: string[];
+  studentIds: string[];
+  publish: boolean;
+}
+
+/** Lưu bài (nháp hoặc giao): thay toàn bộ câu hỏi, đồng bộ đối tượng được giao.
+ *  Học sinh đã có lượt làm thì KHÔNG bị gỡ khỏi danh sách giao. */
+export async function updateAssignment(id: string, input: UpdateAssignmentInput): Promise<void> {
+  const { data: cur } = await supabase
+    .from('assignments')
+    .select('published_at')
+    .eq('id', id)
+    .maybeSingle();
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('assignments')
+    .update({
+      title: input.title,
+      target_class_id: input.classId,
+      due_at: input.dueAt,
+      is_timed: input.isTimed,
+      time_limit_minutes: input.isTimed ? input.timeLimitMinutes : null,
+      published_at: input.publish ? cur?.published_at || now : cur?.published_at || null,
+      updated_at: now,
+    })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+
+  await supabase.from('assignment_questions').delete().eq('assignment_id', id);
+  if (input.questionIds.length) {
+    const { error: e2 } = await supabase.from('assignment_questions').insert(
+      input.questionIds.map((qid, i) => ({ assignment_id: id, question_id: qid, position: i + 1 }))
+    );
+    if (e2) throw new Error(e2.message);
+  }
+
+  const { data: existing } = await supabase
+    .from('assignment_targets')
+    .select('target_id, student_id')
+    .eq('assignment_id', id);
+  const existingIds = new Set((existing || []).map((t: any) => t.student_id));
+  const wanted = new Set(input.studentIds);
+  const toAdd = input.studentIds.filter((sid) => !existingIds.has(sid));
+  if (toAdd.length) {
+    const { error: e3 } = await supabase.from('assignment_targets').insert(
+      toAdd.map((sid) => ({
+        target_id: genId('tgt_') + sid.slice(0, 4),
+        assignment_id: id,
+        student_id: sid,
+        assigned_at: now,
+        due_at: input.dueAt,
+        submission_status: 'NOT_SUBMITTED',
+      }))
+    );
+    if (e3) throw new Error(e3.message);
+  }
+  const extras = (existing || []).filter((t: any) => !wanted.has(t.student_id));
+  if (extras.length) {
+    const { data: atts } = await supabase
+      .from('attempts')
+      .select('student_id')
+      .eq('assignment_id', id)
+      .in(
+        'student_id',
+        extras.map((t: any) => t.student_id)
+      );
+    const attempted = new Set((atts || []).map((a: any) => a.student_id));
+    const removable = extras.filter((t: any) => !attempted.has(t.student_id));
+    if (removable.length) {
+      await supabase
+        .from('assignment_targets')
+        .delete()
+        .in(
+          'target_id',
+          removable.map((t: any) => t.target_id)
+        );
+    }
+  }
+  await supabase.from('assignment_targets').update({ due_at: input.dueAt }).eq('assignment_id', id);
+}
+
+/** Xóa hẳn một bài tập & đánh giá cùng mọi dữ liệu con (đúng thứ tự FK). */
+export async function deleteAssignmentCompletely(id: string): Promise<void> {
+  const { data: atts } = await supabase.from('attempts').select('id').eq('assignment_id', id);
+  const attIds = (atts || []).map((a: any) => a.id);
+  if (attIds.length) {
+    const { data: answers } = await supabase
+      .from('attempt_answers')
+      .select('answer_id')
+      .in('attempt_id', attIds);
+    const ansIds = (answers || []).map((a: any) => a.answer_id);
+    if (ansIds.length) await supabase.from('answer_reviews').delete().in('answer_id', ansIds);
+    await supabase.from('attempt_answers').delete().in('attempt_id', attIds);
+    await supabase.from('attempts').delete().in('id', attIds);
+  }
+  await supabase.from('assignment_targets').delete().eq('assignment_id', id);
+  await supabase.from('assignment_questions').delete().eq('assignment_id', id);
+  const { error } = await supabase.from('assignments').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 export interface AssignmentDetailQuestion {
   id: string;
   prompt: string;
@@ -773,8 +998,12 @@ export async function getStudentAssignments(studentId: string) {
   const qCount = new Map<string, number>();
   for (const r of aqs || []) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
   const asgMap = new Map((asgs || []).map((a: any) => [a.id, a]));
-  return targets.map((t: any) => {
-    const a = asgMap.get(t.assignment_id) || {};
+  // Học sinh chỉ thấy bài ĐÃ GIAO (có published_at) — bản nháp dù đã chọn
+  // sẵn đối tượng lúc soạn cũng không lộ ra phía học sinh.
+  return targets
+    .filter((t: any) => asgMap.get(t.assignment_id)?.published_at)
+    .map((t: any) => {
+      const a = asgMap.get(t.assignment_id) || {};
     return {
       targetId: t.target_id,
       assignmentId: t.assignment_id,

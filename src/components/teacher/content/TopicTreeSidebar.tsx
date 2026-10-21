@@ -8,6 +8,7 @@ import {
 import { StatusBadge } from './StatusBadge.tsx';
 import { ConfirmDialog } from '../ui/ConfirmDialog.tsx';
 import { deriveFlowItems } from '../../../logic/flowOrder.ts';
+import { TeacherAssignmentSummary } from '../../../services/supabase/biRepository.ts';
 import {
   ChevronRight,
   ChevronDown,
@@ -21,13 +22,14 @@ import {
   GripVertical,
   FolderPlus,
   ClipboardPlus,
+  ClipboardList,
   Layers,
   Sparkles,
   Copy,
   FileEdit,
 } from 'lucide-react';
 
-export type ContentItemType = 'topic' | 'video' | 'theory' | 'quiz';
+export type ContentItemType = 'topic' | 'video' | 'theory' | 'quiz' | 'assignment';
 
 export interface SelectedContentItem {
   type: ContentItemType;
@@ -39,6 +41,7 @@ interface TopicTreeSidebarProps {
   videos: VideoLessonWithMeta[];
   theories: TheoryLessonWithMeta[];
   quizzes: QuizWithMeta[];
+  assignments?: TeacherAssignmentSummary[];
   selectedItem: SelectedContentItem | null;
   onSelectItem: (item: SelectedContentItem) => void;
   onOpenCreateTopic: () => void;
@@ -56,6 +59,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   videos,
   theories,
   quizzes,
+  assignments = [],
   selectedItem,
   onSelectItem,
   onOpenCreateTopic,
@@ -126,50 +130,51 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
 
   return (
     <div className="w-full md:w-72 lg:w-80 flex flex-col min-h-0 max-h-[45%] md:max-h-none bg-[#FFFDF8] border-r border-[#E6DCC8] rounded-2xl md:rounded-r-none overflow-hidden shrink-0 shadow-xs">
-      {/* Top Header */}
-      <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center justify-between gap-2">
+      {/* Top Header — "Thêm chủ đề" và "Thêm bài tập & đánh giá" NGANG HÀNG
+          nhau (cùng một hàng, cùng kích cỡ): mỗi bài tập & đánh giá là một
+          mục riêng ngang cấp chủ đề trong cây bên dưới */}
+      <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8]">
         <div className="flex items-center gap-2 min-w-0">
           <Layers className="w-4 h-4 text-[#2F3E6B] shrink-0" />
           <h3 className="font-lora font-bold text-sm text-[#2F3E6B] whitespace-nowrap">
             Cây chủ đề
           </h3>
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-bold font-mono shrink-0">
-            {topics.length}
+            {topics.length + assignments.length}
           </span>
         </div>
 
-        <button
-          onClick={onOpenCreateTopic}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs hover:shadow-xs whitespace-nowrap shrink-0"
-          title="Thêm chủ đề học mới"
-        >
-          <FolderPlus className="w-3.5 h-3.5 text-[#E2704A]" />
-          <span>Thêm chủ đề</span>
-        </button>
-      </div>
-
-      {/* Thêm bài tập & đánh giá: tạo bài tập độc lập giao từng học sinh */}
-      {onAddAssignment && (
-        <div className="px-3 pt-3">
+        <div className="flex gap-2 mt-3">
           <button
-            onClick={onAddAssignment}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-[#2F3E6B] hover:bg-[#28355c] text-white text-xs font-black transition-all shadow-xs"
-            title="Tạo bài tập độc lập và giao cho học sinh"
+            onClick={onOpenCreateTopic}
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-[11px] leading-tight font-bold transition-all shadow-2xs hover:shadow-xs"
+            title="Thêm chủ đề học mới"
           >
-            <ClipboardPlus className="w-4 h-4" />
-            <span>Thêm bài tập & đánh giá</span>
+            <FolderPlus className="w-3.5 h-3.5 text-[#E2704A] shrink-0" />
+            <span>Thêm chủ đề</span>
           </button>
+          {onAddAssignment && (
+            <button
+              onClick={onAddAssignment}
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-[#2F3E6B] hover:bg-[#28355c] text-white text-[11px] leading-tight font-black transition-all shadow-xs"
+              title="Thêm bài tập & đánh giá mới — tạo một mục riêng ngang hàng chủ đề rồi soạn như một bài kiểm tra"
+            >
+              <ClipboardPlus className="w-3.5 h-3.5 shrink-0" />
+              <span>Thêm bài tập & đánh giá</span>
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Topics Tree List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {topics.length === 0 ? (
+        {topics.length === 0 && assignments.length === 0 ? (
           <div className="p-6 text-center text-xs text-[#8C7E6A] italic">
             Chưa có chủ đề nào. Hãy bấm "Thêm chủ đề" để bắt đầu!
           </div>
         ) : (
-          topics.map((topic, index) => {
+          <>
+          {topics.map((topic, index) => {
             const isExpanded = expandedTopicIds[topic.id] !== false;
             const topicVideos = videos.filter((v) => v.topicId === topic.id);
             const topicTheories = theories.filter((th) => th.topicId === topic.id);
@@ -439,7 +444,70 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                 )}
               </div>
             );
-          })
+          })}
+
+          {/* Bài tập & đánh giá — MỤC RIÊNG ngang hàng chủ đề */}
+          {assignments.map((a) => {
+            const isSelected =
+              selectedItem?.type === 'assignment' && selectedItem?.id === a.id;
+            return (
+              <div
+                key={a.id}
+                onClick={() => onSelectItem({ type: 'assignment', id: a.id })}
+                className={`rounded-2xl border overflow-hidden cursor-pointer transition-all ${
+                  isSelected
+                    ? 'border-[#B45309] ring-1 ring-[#B45309]/40 bg-[#F59E0B]/10'
+                    : 'border-[#B45309]/30 bg-[#F59E0B]/5 hover:bg-[#F59E0B]/10'
+                }`}
+                title="Bài tập & đánh giá — bấm để mở màn soạn bài kiểm tra"
+              >
+                <div className="px-3 py-2.5 flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-[#B45309]/15 text-[#B45309] flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-lora font-bold text-[#2F3E6B] leading-snug truncate">
+                      {a.title}
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] text-[#8C7E6A]">Bài tập & đánh giá</span>
+                      <span className="text-[10px] text-slate-300">•</span>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-px rounded-full ${
+                          a.published
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {a.published ? 'Đã giao' : 'Bản nháp'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#8C7E6A] mt-0.5">
+                      {a.questionCount} câu hỏi · {a.targetCount} học sinh
+                      {a.published ? ` · đã nộp ${a.submittedCount}/${a.targetCount}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDelete({
+                        type: 'assignment',
+                        id: a.id,
+                        label: 'bài tập & đánh giá',
+                        title: a.title,
+                      });
+                    }}
+                    className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] hover:text-red-600 transition-colors shrink-0"
+                    title="Xóa bài tập & đánh giá"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          </>
         )}
       </div>
 
