@@ -160,6 +160,9 @@ export interface Topic {
   colorScheme: string;
   /** Thứ tự luồng học hỗn hợp trong chủ đề: các khóa "video:<id>" | "theory:<id>" | "quiz:<id>". */
   flowOrder?: string[];
+  /** Quỹ XP giáo viên đặt cho chủ đề: học sinh nhận đủ một lần khi hoàn
+      thành TOÀN BỘ chủ đề (xem 100% video, xong lý thuyết, đúng hết bài tập). */
+  xpReward?: number;
 }
 
 export interface QuestionResult {

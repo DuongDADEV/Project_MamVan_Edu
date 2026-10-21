@@ -11,6 +11,8 @@ interface AssignmentAttemptScreenProps {
   assignmentId: string;
   studentId: string;
   onBack: () => void;
+  /** Báo về App sau khi nộp thành công để trao XP của bài (nếu có cấu hình). */
+  onSubmitted?: (info: { assignmentId: string; title: string; xpReward: number }) => void;
 }
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -19,6 +21,7 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
   assignmentId,
   studentId,
   onBack,
+  onSubmitted,
 }) => {
   const [detail, setDetail] = useState<AssignmentDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -56,6 +59,9 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
         responses,
       });
       setResult(r);
+      if (detail && onSubmitted) {
+        onSubmitted({ assignmentId, title: detail.title, xpReward: detail.xpReward || 0 });
+      }
     } catch (e: any) {
       submittedRef.current = false;
       setSubmitError('Nộp bài thất bại: ' + (e?.message || 'lỗi không rõ') + '. Em bấm nộp lại nhé.');

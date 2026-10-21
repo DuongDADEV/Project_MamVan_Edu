@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { StudentState, EssaySubmission, RewardRequest, ThemeId } from '../types.ts';
 import { REWARDS_CATALOG, QUESTIONS_BANK } from '../data/mockData.ts';
 import { THEMES_LIST } from '../data/themes.ts';
-import { getCurrentDailyXpCap } from '../logic/xpEngine.ts';
 import { getChestTierConfig } from '../config.ts';
 import { Wrench, X, Play, FastForward, Calendar, CheckSquare, Gift, RotateCcw, ListFilter, Palette, Sparkles, AlertCircle } from 'lucide-react';
 
@@ -135,7 +134,6 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
   };
 
   const activeMinutes = Math.floor(state.activeSecondsToday / 60);
-  const currentDailyCap = getCurrentDailyXpCap(activeMinutes);
 
   return (
     <>
@@ -186,7 +184,7 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
               <div>
                 <span className="text-slate-500 block text-[10px] font-medium">XP / Trần ngày</span>
                 <span className="font-extrabold text-[#4F46E5] font-mono">
-                  {state.xpToday}/{currentDailyCap}
+                  {state.xpToday}
                 </span>
               </div>
               <div>
@@ -315,7 +313,7 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
                       }
                       className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold hover:bg-emerald-100 transition-colors"
                     >
-                      +40 XP hôm nay (Thử chạm trần {currentDailyCap} XP)
+                      +40 XP hôm nay
                     </button>
                   </div>
 

@@ -71,6 +71,7 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
   const [dueAt, setDueAt] = useState('');
   const [isTimed, setIsTimed] = useState(false);
   const [minutes, setMinutes] = useState('30');
+  const [xpReward, setXpReward] = useState('0');
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -100,6 +101,7 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
         setDueAt(toLocalInput(rec.dueAt));
         setIsTimed(rec.isTimed);
         setMinutes(rec.timeLimitMinutes ? String(rec.timeLimitMinutes) : '30');
+        setXpReward(String(rec.xpReward ?? 0));
         // Chưa từng chọn đối tượng (bản nháp mới) → mặc định chọn cả lớp
         setPickedStudents(
           rec.studentIds.length
@@ -169,6 +171,7 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
         isTimed,
         timeLimitMinutes: isTimed ? Math.max(1, parseInt(minutes || '30', 10) || 30) : null,
+        xpReward: Math.max(0, parseInt(xpReward || '0', 10) || 0),
         questionIds: pickedQuestions,
         studentIds: [...pickedStudents],
         publish,
@@ -299,6 +302,24 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
                 <span className="text-xs text-[#8C7E6A]">phút — hết giờ hệ thống tự nộp bài</span>
               </div>
             )}
+            <div>
+              <label className="text-xs font-bold text-[#2F3E6B] block mb-1">
+                XP thưởng khi nộp bài
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  value={xpReward}
+                  onChange={(e) => setXpReward(e.target.value)}
+                  className="w-24 bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-[#B45309]"
+                />
+                <span className="text-xs font-bold text-[#8C7E6A]">XP</span>
+                <span className="text-[11px] text-[#8C7E6A] leading-snug">
+                  Học sinh nộp bài là nhận (1 lần), không cần làm đúng hết. Để 0 = không thưởng.
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="bg-white border border-[#E6DCC8] rounded-2xl p-4">

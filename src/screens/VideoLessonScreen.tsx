@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
 import { VIDEOS, QUIZZES, QUESTIONS_BANK } from '../data/mockData.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
-import { awardXP } from '../logic/xpEngine.ts';
+import { recordStepCompletion } from '../logic/xpEngine.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
@@ -268,12 +268,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   // 1. Chuyển sang bước tiếp theo sau khi xem video
   const handleProceedFromVideo = () => {
     onUpdateState((prev) => {
-      const xpRes = awardXP(
-        prev,
-        `video_watch:${videoId}`,
-        XP_CONFIG.VIDEO_WATCH_80_PERCENT_XP,
-        `Xem >= 80% bài giảng: ${video.title}`
-      );
+      const xpRes = { updatedState: recordStepCompletion(prev, `video_watch:${videoId}`) };
       return {
         ...prev,
         ...xpRes.updatedState,
@@ -293,12 +288,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   // 2. Chuyển sang bước tiếp theo sau khi đọc tóm tắt
   const handleProceedFromSummary = () => {
     onUpdateState((prev) => {
-      const xpRes = awardXP(
-        prev,
-        `summary_read:${videoId}`,
-        XP_CONFIG.VIDEO_SUMMARY_READ_XP,
-        `Đọc tóm tắt kiến thức trọng tâm: ${video.title}`
-      );
+      const xpRes = { updatedState: recordStepCompletion(prev, `summary_read:${videoId}`) };
       return {
         ...prev,
         ...xpRes.updatedState,
@@ -346,35 +336,25 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
 
     const isNextComplete = currentStepIndex + 2 >= dynamicSteps.length;
 
-    const res1 = awardXP(
-      state,
-      `quiz_completed:${qId}`,
-      step.xpBonus,
-      `${step.label}: ${video.title}`
-    );
+    // Mô hình XP mới: các bước trong luồng video KHÔNG cộng XP lẻ nữa —
+    // chỉ ghi nhận hoàn thành (XP nằm ở quỹ chủ đề + XP của từng bài tập).
+    const rec1 = recordStepCompletion(state, `quiz_completed:${qId}`);
 
     let nextState: StudentState = {
       ...state,
-      ...res1.updatedState,
+      ...rec1,
       questionResults: [...results, ...state.questionResults],
       essaySubmissions: [...essays, ...(state.essaySubmissions || [])],
     };
 
-    let xpAwarded = res1.actualXp;
-    let cappedNotice = res1.cappedNotice;
+    const xpAwarded = 0;
+    const cappedNotice = undefined;
 
     if (isNextComplete) {
-      const resBonus = awardXP(
-        nextState,
-        `video_flow_completed:${videoId}`,
-        XP_CONFIG.VIDEO_FULL_COMPLETION_XP,
-        `🎉 Thưởng hoàn thành trọn vẹn luồng học video: ${video.title}`
-      );
-      xpAwarded += resBonus.actualXp;
-      cappedNotice = resBonus.cappedNotice || cappedNotice;
+      const recBonus = recordStepCompletion(nextState, `video_flow_completed:${videoId}`);
       nextState = {
         ...nextState,
-        ...resBonus.updatedState,
+        ...recBonus,
         currentProgress: undefined,
       };
     } else {
@@ -653,8 +633,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               >
                 <span>
                   {dynamicSteps[currentStepIndex + 1]?.label
-                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label} (+${dynamicSteps[currentStepIndex + 1].xpBonus} XP)`
-                    : 'Hoàn thành bài giảng (+20 XP)'}
+                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label}`
+                    : 'Hoàn thành bài giảng'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -723,8 +703,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                   {summarySecondsLeft > 0
                     ? `Đọc kĩ thêm (${summarySecondsLeft}s)`
                     : dynamicSteps[currentStepIndex + 1]?.label
-                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label} (+${dynamicSteps[currentStepIndex + 1].xpBonus} XP)`
-                    : 'Hoàn thành bài giảng (+20 XP)'}
+                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label}`
+                    : 'Hoàn thành bài giảng'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -840,10 +820,10 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               {/* Bảng tổng kết XP nhận được */}
               <div className="p-5 rounded-3xl gradient-soft-indigo border border-indigo-100 max-w-sm mx-auto mb-8 text-center shadow-xs">
                 <span className="text-xs font-bold text-slate-500 block mb-1">
-                  Tổng điểm thưởng nhận được
+                  Bạn đã hoàn thành trọn vẹn luồng học này
                 </span>
                 <span className="text-4xl font-black text-[#4F46E5] font-mono tabular-nums">
-                  +{dynamicSteps.reduce((acc: number, s: FlowStep) => acc + (s.xpBonus || 0), 0)} XP
+                  🎉
                 </span>
                 <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
                   Hoàn thành {dynamicSteps.length - 1} chặng học tập xuất sắc!

@@ -50,6 +50,7 @@ export interface BiAssignment {
   dueAt: string | null;
   isTimed: boolean;
   timeLimitMinutes: number | null;
+  xpReward: number;
   questionCount: number;
   targets: BiTarget[];
   submittedCount: number;
@@ -251,7 +252,8 @@ export async function getAssignmentsProgress(
       dueAt: a.due_at,
       isTimed: !!a.is_timed,
       timeLimitMinutes: a.time_limit_minutes,
-      questionCount: qCount.get(a.id) || 0,
+      xpReward: a.xp_reward ?? 0,
+    questionCount: qCount.get(a.id) || 0,
       targets: tlist,
       submittedCount: tlist.filter((t) => t.status === 'SUBMITTED').length,
     };
@@ -559,6 +561,7 @@ export interface TeacherAssignmentSummary {
   dueAt: string | null;
   isTimed: boolean;
   timeLimitMinutes: number | null;
+  xpReward: number;
   questionCount: number;
   targetCount: number;
   submittedCount: number;
@@ -600,6 +603,7 @@ export async function getTeacherAssignments(
     dueAt: a.due_at,
     isTimed: !!a.is_timed,
     timeLimitMinutes: a.time_limit_minutes,
+    xpReward: a.xp_reward ?? 0,
     questionCount: qCount.get(a.id) || 0,
     targetCount: tCount.get(a.id) || 0,
     submittedCount: sCount.get(a.id) || 0,
@@ -632,6 +636,7 @@ export interface AssignmentForEdit {
   dueAt: string | null;
   isTimed: boolean;
   timeLimitMinutes: number | null;
+  xpReward: number;
   published: boolean;
   questionIds: string[];
   studentIds: string[];
@@ -657,6 +662,7 @@ export async function getAssignmentForEdit(id: string): Promise<AssignmentForEdi
     dueAt: a.due_at,
     isTimed: !!a.is_timed,
     timeLimitMinutes: a.time_limit_minutes,
+    xpReward: a.xp_reward ?? 0,
     published: !!a.published_at,
     questionIds: (aqs || []).map((r: any) => r.question_id),
     studentIds: (targets || []).map((t: any) => t.student_id),
@@ -669,6 +675,7 @@ export interface UpdateAssignmentInput {
   dueAt: string | null;
   isTimed: boolean;
   timeLimitMinutes: number | null;
+  xpReward: number;
   questionIds: string[];
   studentIds: string[];
   publish: boolean;
@@ -691,6 +698,7 @@ export async function updateAssignment(id: string, input: UpdateAssignmentInput)
       due_at: input.dueAt,
       is_timed: input.isTimed,
       time_limit_minutes: input.isTimed ? input.timeLimitMinutes : null,
+      xp_reward: Math.max(0, Math.floor(input.xpReward || 0)),
       published_at: input.publish ? cur?.published_at || now : cur?.published_at || null,
       updated_at: now,
     })
@@ -784,6 +792,7 @@ export interface AssignmentDetail {
   title: string;
   isTimed: boolean;
   timeLimitMinutes: number | null;
+  xpReward: number;
   dueAt: string | null;
   questions: AssignmentDetailQuestion[];
 }
@@ -800,7 +809,7 @@ export async function getAssignmentDetail(assignmentId: string): Promise<Assignm
     .order('position', { ascending: true });
   const qIds = (links || []).map((l: any) => l.question_id);
   if (!qIds.length)
-    return { id: a.id, title: a.title, isTimed: !!a.is_timed, timeLimitMinutes: a.time_limit_minutes, dueAt: a.due_at, questions: [] };
+    return { id: a.id, title: a.title, isTimed: !!a.is_timed, timeLimitMinutes: a.time_limit_minutes, xpReward: a.xp_reward ?? 0, dueAt: a.due_at, questions: [] };
   const { data: qs } = await supabase.from('questions').select('id, payload').in('id', qIds);
   const qMap = new Map((qs || []).map((q: any) => [q.id, q.payload || {}]));
   return {
@@ -808,6 +817,7 @@ export async function getAssignmentDetail(assignmentId: string): Promise<Assignm
     title: a.title,
     isTimed: !!a.is_timed,
     timeLimitMinutes: a.time_limit_minutes,
+    xpReward: a.xp_reward ?? 0,
     dueAt: a.due_at,
     questions: qIds.map((qid) => {
       const p = qMap.get(qid) || {};

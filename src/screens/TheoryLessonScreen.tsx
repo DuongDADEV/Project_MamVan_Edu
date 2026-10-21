@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
 import { THEORIES, QUIZZES, QUESTIONS_BANK } from '../data/mockData.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
-import { awardXP } from '../logic/xpEngine.ts';
+import { recordStepCompletion } from '../logic/xpEngine.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
@@ -184,21 +184,13 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   const handleUnderstood = () => {
     const landsOnComplete = currentStepIndex + 2 >= dynamicSteps.length;
     onUpdateState((prev) => {
-      const xpRes = awardXP(
-        prev,
-        `theory_understood:${theoryId}`,
-        XP_CONFIG.THEORY_READ_UNDERSTOOD_XP,
-        `Đọc lý thuyết và Đã hiểu: ${theory.title}`
-      );
-      let finalUpdated = xpRes.updatedState;
+      // Mô hình XP mới: không cộng XP lẻ — chỉ ghi nhận hoàn thành bước.
+      let finalUpdated = recordStepCompletion(prev, `theory_understood:${theoryId}`);
       if (landsOnComplete) {
-        const flowRes = awardXP(
-          { ...prev, ...xpRes.updatedState },
-          `theory_flow_completed:${theoryId}`,
-          XP_CONFIG.THEORY_FULL_COMPLETION_XP,
-          `Hoàn thành luồng lý thuyết: ${theory.title}`
+        finalUpdated = recordStepCompletion(
+          { ...prev, ...finalUpdated },
+          `theory_flow_completed:${theoryId}`
         );
-        finalUpdated = flowRes.updatedState;
       }
       const updatedFlagged = prev.flaggedNeedReviewTopicIds.filter((t) => t !== theory.topicId);
 
@@ -271,27 +263,16 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
 
     const isNextComplete = currentStepIndex + 2 >= dynamicSteps.length;
 
-    const xpRes = awardXP(
-      state,
-      `quiz_completed:${qId}`,
-      step.xpBonus,
-      `${step.label}: ${theory.title}`
-    );
-
-    // Thưởng hoàn thành trọn luồng lý thuyết khi bước tới là bước Hoàn thành
-    let finalUpdated = xpRes.updatedState;
-    let xpAwarded = xpRes.actualXp;
-    let cappedNotice = xpRes.cappedNotice;
+    // Mô hình XP mới: không cộng XP lẻ — chỉ ghi nhận hoàn thành bước;
+    // XP nằm ở quỹ chủ đề + XP của từng bài tập.
+    let finalUpdated = recordStepCompletion(state, `quiz_completed:${qId}`);
+    const xpAwarded = 0;
+    const cappedNotice = undefined;
     if (isNextComplete) {
-      const flowRes = awardXP(
-        { ...state, ...xpRes.updatedState },
-        `theory_flow_completed:${theoryId}`,
-        XP_CONFIG.THEORY_FULL_COMPLETION_XP,
-        `Hoàn thành luồng lý thuyết: ${theory.title}`
+      finalUpdated = recordStepCompletion(
+        { ...state, ...finalUpdated },
+        `theory_flow_completed:${theoryId}`
       );
-      finalUpdated = flowRes.updatedState;
-      xpAwarded += flowRes.actualXp;
-      cappedNotice = flowRes.cappedNotice || cappedNotice;
     }
 
     onUpdateState(() => ({
@@ -668,7 +649,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                     ? `Đọc kỹ thêm (${secondsLeft}s) để xác nhận`
                     : dynamicSteps[currentStepIndex + 1]?.label
                     ? `Đã hiểu bài · Sang ${dynamicSteps[currentStepIndex + 1].label}`
-                    : 'Đã hiểu bài · Hoàn thành (+10 XP)'}
+                    : 'Đã hiểu bài · Hoàn thành'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -782,10 +763,10 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
               {/* Bảng tổng kết XP */}
               <div className="p-5 rounded-3xl gradient-soft-indigo border border-indigo-100 max-w-sm mx-auto mb-8 text-center shadow-xs">
                 <span className="text-xs font-bold text-slate-500 block mb-1">
-                  Tổng XP nhận trọn vẹn chuyên đề
+                  Bạn đã hoàn thành trọn vẹn chuyên đề này
                 </span>
                 <span className="text-4xl font-black text-[#8B5CF6] font-mono tabular-nums">
-                  +{dynamicSteps.reduce((acc: number, s: FlowStep) => acc + (s.xpBonus || 0), 0)} XP
+                  🎉
                 </span>
                 <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
                   Hoàn thành {dynamicSteps.length - 1} nội dung xuất sắc!

@@ -163,9 +163,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
   const handleSaveSettings = async () => {
     // 0. Chặn giá trị rỗng/0/âm (xóa trắng ô số thành 0) và thứ tự ngưỡng mastery
     const numericFields: [string, number][] = [
-      ['Trần XP tuần', settingsForm.xp.weeklyCap],
-      ['Trần XP ngày tối đa', settingsForm.xp.dailyCapTotal],
-      ['Trần XP dưới 45 phút', settingsForm.xp.dailyCapUnder45Min],
       ['XP điểm danh/ngày', settingsForm.xp.attendanceDailyXp],
       ['Ngưỡng Cần ôn lại', settingsForm.mastery.thresholdNeedsReview],
       ['Ngưỡng Đang tiến bộ', settingsForm.mastery.thresholdProgressing],
@@ -195,16 +192,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
       settingsForm.mastery.weightDecayFactor > 1
     ) {
       showToast('Lỗi: Hệ số suy giảm phải nằm trong khoảng (0, 1]!', 'error');
-      return;
-    }
-
-    // 1. Kiểm tra validation trần XP
-    if (settingsForm.xp.weeklyCap < settingsForm.xp.dailyCapTotal) {
-      showToast('Lỗi: Trần XP tuần không thể nhỏ hơn trần XP ngày tối đa!', 'error');
-      return;
-    }
-    if (settingsForm.xp.dailyCapTotal < settingsForm.xp.dailyCapUnder45Min) {
-      showToast('Lỗi: Trần XP ngày tối đa không thể nhỏ hơn trần XP dưới 45 phút!', 'error');
       return;
     }
 
@@ -377,17 +364,8 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
     showToast('Đã xuất file nhật ký kiểm toán thành công!');
   };
 
-  // Cảnh báo bất hợp lý XP
-  const xpWarning = useMemo(() => {
-    const { dailyCapUnder45Min, dailyCapTotal, weeklyCap } = settingsForm.xp;
-    if (weeklyCap < dailyCapTotal) {
-      return `Trần XP tuần (${weeklyCap}) nhỏ hơn trần XP ngày tối đa (${dailyCapTotal})! Học sinh sẽ nhanh chóng chạm trần tuần.`;
-    }
-    if (dailyCapTotal < dailyCapUnder45Min) {
-      return `Trần XP ngày tối đa (${dailyCapTotal}) nhỏ hơn trần ngày dưới 45 phút (${dailyCapUnder45Min})!`;
-    }
-    return null;
-  }, [settingsForm.xp]);
+  // Mô hình XP mới: không còn trần XP — không còn cảnh báo bất hợp lý.
+  const xpWarning: string | null = null;
 
   return (
     <div className="space-y-6">
@@ -940,122 +918,19 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
             </div>
           )}
 
-          {/* KHỐI 1: CÁC TRẦN XP (CAPS) */}
-          <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E6DCC8]/70">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#E2704A]/10 text-[#E2704A] flex items-center justify-center font-bold">
-                  <Sliders className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-lora font-bold text-sm text-[#2F3E6B]">
-                    Trần giới hạn XP Ngày & Tuần
-                  </h3>
-                  <p className="text-[11px] text-[#6B7280]">
-                    Tránh cày cuốc quá sức, đảm bảo thói quen học tập bền vững
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setResetGroupTarget('xp');
-                  setIsResetGroupConfirmOpen(true);
-                }}
-                className="text-xs text-[#8C7E6A] hover:text-[#2F3E6B] flex items-center gap-1 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Khôi phục nhóm XP</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div className="p-4 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                  Trần ngày (&lt;45 phút học tích cực)
-                </label>
-                <div className="relative mt-2">
-                  <input
-                    type="number"
-                    min={50}
-                    max={500}
-                    step={10}
-                    value={settingsForm.xp.dailyCapUnder45Min}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, dailyCapUnder45Min: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-sm text-[#2F3E6B] font-bold focus:outline-none focus:border-[#2F3E6B]"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A] font-bold">XP</span>
-                </div>
-                <p className="text-[11px] text-[#6B7280] mt-1.5">
-                  Mặc định: 130 XP. Học dưới 45 phút tối đa đạt mức này.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                  Trần ngày tối đa (45-90 phút)
-                </label>
-                <div className="relative mt-2">
-                  <input
-                    type="number"
-                    min={60}
-                    max={600}
-                    step={10}
-                    value={settingsForm.xp.dailyCapTotal}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, dailyCapTotal: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-sm text-[#2F3E6B] font-bold focus:outline-none focus:border-[#2F3E6B]"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A] font-bold">XP</span>
-                </div>
-                <p className="text-[11px] text-[#6B7280] mt-1.5">
-                  Mặc định: 150 XP. Học thêm sau 45 phút tích lũy thêm tối đa 20 XP.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                  Trần tuần tích lũy (Đổi quà)
-                </label>
-                <div className="relative mt-2">
-                  <input
-                    type="number"
-                    min={300}
-                    max={2500}
-                    step={50}
-                    value={settingsForm.xp.weeklyCap}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, weeklyCap: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-sm text-[#2F3E6B] font-bold focus:outline-none focus:border-[#2F3E6B]"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A] font-bold">XP</span>
-                </div>
-                <p className="text-[11px] text-[#6B7280] mt-1.5">
-                  Mặc định: 900 XP. Khống chế mức quà đổi tối đa trong tuần.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* KHỐI 2: BẢNG XP THEO HÀNH ĐỘNG HỌC TẬP */}
+          {/* KHỐI 2: ĐIỂM DANH NGÀY — mục XP duy nhất còn cấu hình tại đây.
+              XP của chủ đề đặt trong cửa sổ Chỉnh sửa chủ đề; XP của bài
+              kiểm tra/bài được giao đặt ngay trong màn soạn bài đó. */}
           <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs space-y-4">
             <h3 className="font-lora font-bold text-sm text-[#2F3E6B] pb-2 border-b border-[#E6DCC8]/70">
-              Bảng điểm XP cho từng hành động học tập
+              Điểm danh ngày
             </h3>
+            <p className="text-[11px] text-[#6B7280] leading-relaxed">
+              Hệ thống không còn trần XP ngày/tuần và không cộng XP theo từng hành động lẻ.
+              Học sinh nhận XP từ 3 nguồn: điểm danh ngày (mục này), hoàn thành toàn bộ
+              chủ đề (số XP đặt trong cửa sổ &quot;Chỉnh sửa chủ đề&quot;) và nộp bài kiểm tra /
+              bài được giao (số XP đặt trong màn soạn của từng bài).
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
@@ -1078,165 +953,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Xem video đạt 80%</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.videoWatchXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoWatchXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Đọc tóm tắt trọng tâm</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={settingsForm.xp.videoSummaryReadXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoSummaryReadXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Luyện tập video</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.videoPracticeXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoPracticeXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Kiểm tra nhanh video</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.videoQuickTestXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoQuickTestXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Kiểm tra năng lực Mastery</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={40}
-                    value={settingsForm.xp.videoMasteryCheckXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoMasteryCheckXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Đọc hiểu lý thuyết</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.theoryReadXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, theoryReadXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Luyện tập lý thuyết</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.theoryPracticeXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, theoryPracticeXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Hoàn thành bài tập về nhà</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={5}
-                    max={50}
-                    value={settingsForm.xp.homeworkCompletedXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, homeworkCompletedXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1249,7 +965,7 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
               className="px-6 py-3 rounded-2xl bg-[#2F3E6B] hover:bg-[#23325B] disabled:opacity-50 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Đang lưu...' : 'Lưu cấu hình XP & Giới hạn'}</span>
+              <span>{isSaving ? 'Đang lưu...' : 'Lưu cấu hình XP'}</span>
             </button>
           </div>
         </div>

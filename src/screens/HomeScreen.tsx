@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { StudentState, Topic } from '../types.ts';
 import { TOPICS, VIDEOS, REWARDS_CATALOG, QUIZZES } from '../data/mockData.ts';
-import { getCurrentDailyXpCap } from '../logic/xpEngine.ts';
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
@@ -124,7 +123,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const hasCheckedInToday = state.lastAttendanceDate === todayStr;
 
   const activeMinutes = Math.floor(state.activeSecondsToday / 60);
-  const currentDailyCap = getCurrentDailyXpCap(activeMinutes);
 
   // Xác định câu nói của Mầm Mực
   let mascotText = `Chào ${state.profile.name}! Hôm nay chúng mình cùng khám phá những áng văn thật hay nhé!`;
@@ -136,8 +134,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   } else if (state.currentProgress) {
     mascotText = `Chúng mình đang học dở bài thơ, bấm "Học tiếp" để cùng hoàn thành nhé!`;
     mascotMood = 'cheer';
-  } else if (state.xpToday >= currentDailyCap) {
-    mascotText = `Hôm nay bạn học xuất sắc lắm, đạt trần ${currentDailyCap} XP rồi! Vẫn có thể học để nuôi Cây lớn nha!`;
+  } else if (state.xpToday >= 100) {
+    mascotText = `Hôm nay bạn học xuất sắc lắm, tích được rất nhiều XP rồi! Tiếp tục hoàn thành các chủ đề để nhận thêm XP nhé!`;
     mascotMood = 'proud';
   }
 
@@ -303,7 +301,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               {/* Stars / XP */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 text-xs font-bold">
                 <Star className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-                <span>{state.xpToday}/{currentDailyCap} XP</span>
+                <span>{state.xpToday} XP hôm nay</span>
               </div>
 
               {/* Time */}
@@ -555,7 +553,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="text-right">
               <span className="text-xs text-slate-500 block">XP hôm nay:</span>
               <span className="text-lg font-black text-[#4F46E5] font-mono tabular-nums">
-                {state.xpToday} / {currentDailyCap} XP
+                {state.xpToday} XP
               </span>
             </div>
           </div>
@@ -565,14 +563,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden p-0.5">
           <div
             className="h-full rounded-full gradient-primary transition-all duration-500"
-            style={{ width: `${Math.min(100, (state.xpToday / currentDailyCap) * 100)}%` }}
+            style={{ width: `${Math.min(100, state.xpToday)}%` }}
           />
         </div>
 
         <div className="flex justify-between items-center text-[11px] text-slate-500 mt-2 font-medium">
           <span>0 XP</span>
-          <span>Trần ngày: {currentDailyCap} XP (0–45p: 130 XP · 45–90p: 150 XP)</span>
-          <span>{currentDailyCap} XP</span>
+          <span>XP từ điểm danh, hoàn thành chủ đề và nộp bài kiểm tra — không giới hạn mỗi ngày</span>
+          <span></span>
         </div>
       </div>
 

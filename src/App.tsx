@@ -16,8 +16,9 @@ import {
   QUESTIONS_BANK,
 } from './data/mockData.ts';
 import { REWARDS_CATALOG } from './data/rewards.ts';
-import { XP_CONFIG, ATTENDANCE_CONFIG, TIME_CONFIG } from './config.ts';
-import { awardXP } from './logic/xpEngine.ts';
+import { XP_CONFIG, ATTENDANCE_CONFIG, TIME_CONFIG, getEffectiveXpConfig } from './config.ts';
+import { awardXP, XP_KEYS } from './logic/xpEngine.ts';
+import { tryAwardTopicCompletion } from './logic/topicCompletion.ts';
 import { getLocalTodayStr, rolloverStudentState } from './logic/studentStateUtils.ts';
 import { useActiveLearningTimer } from './logic/useActiveLearningTimer.ts';
 import { Navbar, NavTab } from './components/Navbar.tsx';
@@ -326,6 +327,33 @@ export default function App() {
   );
   const publishedTopics = rawTopics ?? [];
 
+  // MÔ HÌNH XP MỚI — QUỸ XP CHỦ ĐỀ: mỗi khi tiến độ học thay đổi (xem xong
+  // video, xong lý thuyết, nộp bài…), rà soát các chủ đề đã xuất bản: chủ đề
+  // nào vừa hoàn thành TOÀN BỘ và chưa trao quỹ XP thì trao ngay + chúc mừng.
+  const topicXpToastRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!studentState?.profile?.id) return;
+    for (const topic of publishedTopics || []) {
+      const out = tryAwardTopicCompletion(
+        studentStateRef.current,
+        topic as any,
+        (rawQuizzes || []) as any,
+        (rawQuestions || {}) as any
+      );
+      if (out) {
+        setStudentState(out.state);
+        if (!topicXpToastRef.current.has(topic.id)) {
+          topicXpToastRef.current.add(topic.id);
+          showToast(
+            `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — nhận +${out.awardedXp} XP!`
+          );
+        }
+        break;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentState.completedSteps, studentState.questionResults, publishedTopics]);
+
   // Nạp video & lý thuyết đã xuất bản (phục vụ cả thông báo bài mới)
   const { data: rawVideos } = useLiveQuery<VideoLessonWithMeta[]>(
     () => contentService.getVideoLessons(studentState.profile.grade, true),
@@ -568,7 +596,7 @@ export default function App() {
     const xpRes = awardXP(
       baseState,
       `attendance:${todayStr}`,
-      XP_CONFIG.ATTENDANCE_DAILY_XP,
+      getEffectiveXpConfig().ATTENDANCE_DAILY_XP,
       'Điểm danh hằng ngày',
       true
     );
@@ -837,7 +865,7 @@ export default function App() {
               .map((id) => (rawQuestions ? rawQuestions[id] : null) || (QUESTIONS_BANK as any)[id])
               .filter(Boolean);
 
-            const xpEarned = targetQuiz.xp || XP_CONFIG.HOMEWORK_COMPLETED_XP || 20;
+            const xpEarned = Math.max(0, Math.floor(targetQuiz.xp || 0));
 
             return (
               <div className="w-full max-w-2xl mx-auto py-6 px-4">
@@ -865,22 +893,32 @@ export default function App() {
                       });
                     }
 
-                    const xpRes = awardXP(
-                      studentStateRef.current,
-                      `quiz_completed:${targetQuiz.id}`,
-                      xpEarned,
-                      `BTVN: ${targetQuiz.title}`
-                    );
-                    setStudentState((prev) => ({
-                      ...prev,
-                      ...xpRes.updatedState,
-                      questionResults: [...results, ...(prev.questionResults || [])],
-                      essaySubmissions: [...(essays || []), ...(prev.essaySubmissions || [])],
-                    }));
-                    if (xpRes.actualXp > 0) {
-                      showToast(`🎉 Xuất sắc! Em đã hoàn thành BTVN và nhận +${xpRes.actualXp} XP!`);
+                    // Mô hình XP mới: nộp bài là nhận đúng số XP đã cấu hình
+                    // trên bài (không mặc định, không trần). XP = 0 thì chỉ
+                    // ghi nhận hoàn thành — vẫn tính cho quỹ XP của chủ đề.
+                    const base = studentStateRef.current;
+                    const xpRes =
+                      xpEarned > 0
+                        ? awardXP(base, XP_KEYS.quizCompleted(targetQuiz.id), xpEarned, `Hoàn thành bài: ${targetQuiz.title}`)
+                        : null;
+                    setStudentState((prev) => {
+                      const withXp = xpRes ? { ...prev, ...xpRes.updatedState } : prev;
+                      const steps = withXp.completedSteps.includes(`quiz_completed:${targetQuiz.id}`)
+                        ? withXp.completedSteps
+                        : [...withXp.completedSteps, `quiz_completed:${targetQuiz.id}`];
+                      return {
+                        ...withXp,
+                        completedSteps: steps,
+                        questionResults: [...results, ...(prev.questionResults || [])],
+                        essaySubmissions: [...(essays || []), ...(prev.essaySubmissions || [])],
+                      };
+                    });
+                    if (xpRes && xpRes.actualXp > 0) {
+                      showToast(`🎉 Xuất sắc! Em đã hoàn thành bài và nhận +${xpRes.actualXp} XP!`);
+                    } else if (xpEarned > 0) {
+                      showToast('🎉 Em đã hoàn thành bài! (XP của bài này em đã nhận ở lần làm trước)');
                     } else {
-                      showToast('🎉 Em đã hoàn thành BTVN! (Lần này không cộng thêm XP — đã nhận trước đó hoặc đã đạt trần hôm nay)');
+                      showToast('🎉 Em đã hoàn thành bài!');
                     }
                     setActiveFlow(null);
                   }}
@@ -895,6 +933,20 @@ export default function App() {
             assignmentId={activeFlow.assignmentId}
             studentId={currentStudentId}
             onBack={() => setActiveFlow(null)}
+            onSubmitted={(info) => {
+              if (info.xpReward > 0) {
+                const res = awardXP(
+                  studentStateRef.current,
+                  XP_KEYS.assignmentSubmitted(info.assignmentId),
+                  info.xpReward,
+                  `Nộp bài: ${info.title}`
+                );
+                if (res.actualXp > 0) {
+                  setStudentState((prev) => ({ ...prev, ...res.updatedState }));
+                  showToast(`🎉 Đã nộp bài "${info.title}" — nhận +${res.actualXp} XP!`);
+                }
+              }
+            }}
           />
         ) : (
           /* CÁC TAB CHÍNH */

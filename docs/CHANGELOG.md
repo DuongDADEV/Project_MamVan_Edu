@@ -1,3 +1,13 @@
+## 2026-10-22 (MÔ HÌNH XP MỚI — theo chủ đề & bài kiểm tra, chủ dự án duyệt)
+
+Đổi toàn bộ mô hình XP theo yêu cầu chủ dự án (kế hoạch: KE-HOACH-XP-THEO-CHU-DE-VA-BAI-KIEM-TRA.md):
+
+- **3 nguồn XP duy nhất:** (1) **Điểm danh ngày** — mức XP giáo viên chỉnh ở Cài đặt (nay điểm danh dùng đúng mức đã cấu hình thay vì hằng số cứng); (2) **Quỹ XP của chủ đề** — giáo viên nhập trong cửa sổ Chỉnh sửa chủ đề (`xpReward`, lưu trong payload chủ đề), học sinh nhận đủ 1 lần khi hoàn thành toàn bộ chủ đề: xem trọn luồng video + xong lý thuyết + **làm đúng hết** phần chấm tự động của mọi bài trong luồng (tự luận không chặn); bộ đánh giá mới `src/logic/topicCompletion.ts` chạy ở App sau mỗi thay đổi tiến độ; (3) **XP của bài kiểm tra/bài được giao** — nộp bài là nhận, không xét đúng sai: bài độc lập dùng cột mới `xp_reward` (migration_010, nhập ngay trong màn soạn AssignmentEditor), bài trong chủ đề dùng ô "Điểm thưởng XP khi hoàn thành" sẵn có của QuizBuilder.
+- **Bỏ toàn bộ trần XP:** `xpEngine.awardXP` viết lại — không còn trần ngày theo phút học (130/150), không trần tuần (900), không chặn sau 90 phút; giữ lật ngày/tuần theo giờ địa phương + mỗi khóa XP chỉ trả 1 lần. Trang chủ học sinh và DevPanel bỏ hiển thị trần.
+- **Bỏ cộng XP lẻ theo hành động:** luồng Video/Lý thuyết không cộng XP từng bước nữa — các bước chỉ ghi nhận hoàn thành qua `recordStepCompletion` (vẫn phục vụ Cây/Năng lực và điều kiện quỹ chủ đề); chữ "(+N XP)" trên nút chuyển bước và hộp tổng kết cuối luồng đã gỡ.
+- **Màn Cài đặt XP rút gọn:** xóa thẻ "Trần giới hạn XP Ngày & Tuần" và "Bảng điểm XP cho từng hành động học tập" — chỉ còn **Điểm danh ngày** + ghi chú nơi đặt XP chủ đề/bài kiểm tra; bỏ luôn validation/cảnh báo trần khi lưu.
+- Kiểm chứng: tsc sạch; bộ test logic cập nhật theo mô hình mới 34/34 đạt; test riêng bộ đánh giá hoàn thành chủ đề 4/4 (chưa đúng hết → không trao; đúng hết + có tự luận → trao đủ; trao lần 2 → không; thiếu xem video → chưa hoàn thành).
+
 ## 2026-10-22 (cụm nút đầu trang Ngân hàng — theo yêu cầu chủ dự án)
 
 - **Ngân hàng câu hỏi:** 4 nút [Kho ngân hàng] [Bản nháp] [Mầm AI Studio] [+ Thêm câu hỏi thủ công] **gom thành một cụm sát nhau ở góc phải đầu trang** (đúng vị trí nút Thêm câu hỏi trước đây); **xóa hẳn nút cam "Mở Mầm AI Studio"** (trùng chức năng với tab Mầm AI Studio).

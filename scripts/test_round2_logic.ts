@@ -129,33 +129,31 @@ async function main() {
   const a2 = awardXP(s1After, 'quiz_completed:q1', 15, 'Quiz 1');
   check('Làm lại cùng một mục: 0 XP (chống farm)', a2.actualXp === 0 && a2.isFirstTime === false);
 
-  // Trần theo phút học: >= 90 phút -> không cộng NHƯNG không được "đốt" bước
+  // MÔ HÌNH XP MỚI (22/10/2026): KHÔNG còn trần theo phút học/ngày/tuần —
+  // học bao lâu cũng cộng đủ, mỗi khóa vẫn chỉ trả đúng 1 lần.
   const sBusy = fresh();
   sBusy.lastXpResetDate = today;
   sBusy.xpWeekKey = weekKey;
   sBusy.activeSecondsToday = 95 * 60;
   const aBusy = awardXP(sBusy, 'video_watch:v9', 10, 'Video 9');
-  check('Học >= 90 phút: actualXp = 0', aBusy.actualXp === 0);
+  check('Học >= 90 phút: vẫn cộng đủ 10 XP (đã bỏ trần phút học)', aBusy.actualXp === 10);
   check(
-    'Học >= 90 phút: tiến độ VẪN ghi vào completedSteps (Cây/Năng lực tính bình thường)',
+    'Học >= 90 phút: tiến độ ghi vào completedSteps (Cây/Năng lực tính bình thường)',
     aBusy.updatedState.completedSteps.includes('video_watch:v9')
   );
   check(
-    'Học >= 90 phút: bước CHƯA vào xpAwardedSteps (chưa được trả)',
-    !aBusy.updatedState.xpAwardedSteps.includes('video_watch:v9')
+    'Học >= 90 phút: bước vào xpAwardedSteps ngay (đã trả XP)',
+    aBusy.updatedState.xpAwardedSteps.includes('video_watch:v9')
   );
 
-  // Hôm sau làm lại bước đó (phút học đã lật về 0): được trả XP đúng 1 lần
+  // Hôm sau làm lại bước đó: đã trả rồi nên không trả nữa
   const sNextDay: StudentState = {
     ...sBusy,
     ...aBusy.updatedState,
     activeSecondsToday: 0,
   };
   const aNext = awardXP(sNextDay, 'video_watch:v9', 10, 'Video 9');
-  check('Hôm sau làm lại bước chạm trần: được trả 10 XP', aNext.actualXp === 10);
-  const sNextAfter: StudentState = { ...sNextDay, ...aNext.updatedState };
-  const aThird = awardXP(sNextAfter, 'video_watch:v9', 10, 'Video 9');
-  check('Làm thêm lần nữa: 0 XP (đã trả rồi)', aThird.actualXp === 0);
+  check('Hôm sau làm lại bước đã trả: 0 XP (mỗi khóa trả đúng 1 lần)', aNext.actualXp === 0);
 
   // X1: state từ hôm qua chưa lật — vẫn phải cộng được XP hôm nay
   const sStale = fresh();
@@ -175,15 +173,15 @@ async function main() {
     aStale.updatedState.xpToday === 20 && aStale.updatedState.xpWeek === 20
   );
 
-  // Trần ngày: gần đầy trần thì chỉ cộng phần còn lại
+  // Không còn trần ngày: XP hôm nay đã cao vẫn cộng đủ
   const sCap = fresh();
   sCap.lastXpResetDate = today;
   sCap.xpWeekKey = weekKey;
-  sCap.xpToday = 125; // trần <45 phút là 130
+  sCap.xpToday = 125;
   sCap.activeSecondsToday = 10 * 60;
   const aCap = awardXP(sCap, 'theory_understood:t1', 10, 'Lý thuyết');
-  check('Sát trần ngày: chỉ cộng phần còn lại (5/10)', aCap.actualXp === 5, `actualXp=${aCap.actualXp}`);
-  check('Sát trần: vẫn ghi bước (XP đã được cộng một phần)', aCap.updatedState.completedSteps.includes('theory_understood:t1'));
+  check('Không trần ngày: cộng đủ 10/10 dù XP hôm nay đã cao', aCap.actualXp === 10, `actualXp=${aCap.actualXp}`);
+  check('Không trần: vẫn ghi bước đã hoàn thành', aCap.updatedState.completedSteps.includes('theory_understood:t1'));
 
   console.log('=== 5. Máy trạng thái yêu cầu quà (mock repo) ===');
   const attemptRepo = new MockAttemptRepository();
