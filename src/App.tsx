@@ -932,6 +932,7 @@ export default function App() {
                 focusTopicId={learnFocusTopicId}
                 onSelectVideo={(vId) => setActiveFlow({ type: 'video', videoId: vId })}
                 onSelectTheory={(thId) => setActiveFlow({ type: 'theory', theoryId: thId })}
+                onSelectQuiz={(qId) => setActiveFlow({ type: 'homework', homeworkQuizId: qId })}
               />
             )}
 

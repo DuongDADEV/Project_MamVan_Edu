@@ -20,6 +20,13 @@ import { TheoryLessonEditor } from '../../components/teacher/content/TheoryLesso
 import { QuizBuilder } from '../../components/teacher/content/QuizBuilder.tsx';
 import { TopicModal } from '../../components/teacher/content/TopicModal.tsx';
 import { AssignmentBuilderModal } from '../../components/teacher/content/AssignmentBuilderModal.tsx';
+import { TopicFlowStrip } from '../../components/teacher/content/TopicFlowStrip.tsx';
+import {
+  FlowItemType,
+  deriveFlowItems,
+  flowKeyOf,
+  flowKeys,
+} from '../../logic/flowOrder.ts';
 import { PublishModal } from '../../components/teacher/content/PublishModal.tsx';
 import { AiContentStudioModal } from '../../components/teacher/ai/AiContentStudioModal.tsx';
 import { StudentPreviewModal } from '../../components/teacher/content/StudentPreviewModal.tsx';
@@ -99,6 +106,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   // 3. Quản lý các Modal
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  // Tab mở đầu của QuizBuilder: 'settings' khi vừa tạo Bài tập mới (Cài đặt trước)
+  const [quizInitialTab, setQuizInitialTab] = useState<'questions' | 'settings'>('questions');
+  // Thứ tự luồng hiển thị tức thời theo chủ đề (kéo–thả trên dải) trước khi dữ liệu kịp nạp lại
+  const [localFlow, setLocalFlow] = useState<Record<string, string[]>>({});
   const [topicToDelete, setTopicToDelete] = useState<{ id: string; warn: string } | null>(null);
   // Bài gốc (video/lý thuyết) vừa rời khỏi để vào trình tạo bài tập liên kết —
   // nút "Quay lại" trong trình tạo bài tập phải trở về đúng bài này.
@@ -155,12 +166,11 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       ...topicData,
       class_ids: topicData.class_ids || ['all', 'class_7a2'],
     });
-    // VỪA TẠO CHỦ ĐỀ MỚI: chọn ngay chủ đề đó và mở sẵn trình soạn bài giảng
-    // video đầu tiên để Thầy/Cô nhập nội dung luôn — thay vì rơi vào màn hình
-    // trống không biết làm gì tiếp.
+    // VỪA TẠO CHỦ ĐỀ MỚI: chủ đề TRỐNG (không tự sinh video nháp như trước —
+    // theo yêu cầu chủ dự án 22/10). Chỉ chọn chủ đề vừa tạo; giáo viên bấm
+    // "Thêm vào chủ đề" / nút + trên dải luồng để tạo bài đầu tiên.
     if (isCreating && saved?.id) {
       setSelectedItem({ type: 'topic', id: saved.id });
-      await createVideoDraftInTopic(saved.id, saved);
     }
   };
 
@@ -186,6 +196,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         await contentService.saveTopic({
           ...topic,
           videoIds: [...currentVideoIds, newVid.id],
+          flowOrder: [
+            ...(Array.isArray(topic.flowOrder) ? topic.flowOrder : []),
+            flowKeyOf('video', newVid.id),
+          ],
         });
       }
     }
@@ -234,6 +248,12 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   };
 
   const handleDeleteItem = async (type: ContentItemType, id: string) => {
+    const ownerTopicId =
+      type === 'video'
+        ? videos.find((v) => v.id === id)?.topicId
+        : type === 'theory'
+          ? theories.find((th) => th.id === id)?.topicId
+          : quizzes.find((q) => q.id === id)?.topicId;
     if (type === 'video') {
       await contentService.deleteVideoLesson(id, teacherId);
     } else if (type === 'theory') {
@@ -241,24 +261,62 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     } else if (type === 'quiz') {
       await quizService.deleteQuiz(id, teacherId);
     }
+    // Gỡ mục khỏi thứ tự luồng của chủ đề chứa nó
+    const ownerTopic = ownerTopicId ? topics.find((t) => t.id === ownerTopicId) : null;
+    if (ownerTopic && Array.isArray(ownerTopic.flowOrder)) {
+      const key = flowKeyOf(type as FlowItemType, id);
+      if (ownerTopic.flowOrder.includes(key)) {
+        await contentService.saveTopic({
+          ...ownerTopic,
+          flowOrder: ownerTopic.flowOrder.filter((k) => k !== key),
+        });
+      }
+    }
     if (selectedItem?.id === id) {
       setSelectedItem(null);
     }
   };
 
-  // Tạo mới thủ công từng loại
+  // Gắn một mục mới vào CUỐI thứ tự luồng của chủ đề chứa nó
+  const appendToFlowOrder = async (topicId: string, type: FlowItemType, itemId: string) => {
+    const topic = topics.find((t) => t.id === topicId);
+    if (!topic) return;
+    const key = flowKeyOf(type, itemId);
+    const current = Array.isArray(topic.flowOrder) ? topic.flowOrder : [];
+    if (current.includes(key)) return;
+    await contentService.saveTopic({ ...topic, flowOrder: [...current, key] });
+  };
+
+  // Tạo mới thủ công từng loại. Menu đã hợp nhất còn 3 mục (Video / Lý thuyết /
+  // Bài tập): 'quiz' = tạo Bài tập mặc định dạng Luyện tập — loại cụ thể đổi
+  // trong màn Cài đặt bài của QuizBuilder (mở trước khi tạo mới).
   const handleCreateNewManual = async (
-    type: 'video' | 'theory' | 'practice' | 'quick' | 'mastery' | 'reading' | 'final' | 'homework'
+    rawType:
+      | 'video'
+      | 'theory'
+      | 'quiz'
+      | 'practice'
+      | 'quick'
+      | 'mastery'
+      | 'reading'
+      | 'final'
+      | 'homework',
+    topicIdOverride?: string
   ) => {
+    const type = rawType === 'quiz' ? 'practice' : rawType;
     setIsCreateDropdownOpen(false);
     if (topics.length === 0) {
       alert('Thầy/Cô vui lòng tạo Chủ đề trước khi tạo bài giảng hoặc câu hỏi nhé!');
       setIsTopicModalOpen(true);
       return;
     }
-    // Ưu tiên topic đang được chọn, nếu không thì lấy topic đầu tiên
+    // Ưu tiên chủ đề được chỉ định (từ cây/dải luồng), rồi chủ đề đang chọn,
+    // cuối cùng là chủ đề đầu tiên
     const targetTopicId =
-      selectedItem?.type === 'topic' ? selectedItem.id : topics[0]?.id || '';
+      topicIdOverride ||
+      (selectedItem?.type === 'topic' ? selectedItem.id : '') ||
+      topics[0]?.id ||
+      '';
 
     try {
       if (type === 'video') {
@@ -279,6 +337,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           status: 'draft',
           class_ids: ['all', 'class_7a2'],
         });
+        await appendToFlowOrder(targetTopicId, 'theory', newTheory.id);
         setSelectedItem({ type: 'theory', id: newTheory.id });
       } else {
         // Quiz
@@ -312,6 +371,9 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           status: 'draft',
           class_ids: ['all', 'class_7a2'],
         });
+        await appendToFlowOrder(targetTopicId, 'quiz', newQuiz.id);
+        // Tạo Bài tập mới → QuizBuilder mở thẳng màn CÀI ĐẶT BÀI trước
+        setQuizInitialTab('settings');
         setSelectedItem({ type: 'quiz', id: newQuiz.id });
       }
     } catch (err) {
@@ -533,6 +595,69 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   const currentTopic =
     selectedItem?.type === 'topic' ? topics.find((t) => t.id === selectedItem.id) : null;
 
+  // ===== DẢI LUỒNG HỌC: chủ đề của mục đang mở + các bài theo đúng thứ tự =====
+  const stripTopic =
+    currentTopic ||
+    (currentVideo ? topics.find((t) => t.id === currentVideo.topicId) : null) ||
+    (currentTheory ? topics.find((t) => t.id === currentTheory.topicId) : null) ||
+    (currentQuiz ? topics.find((t) => t.id === currentQuiz.topicId) : null) ||
+    null;
+  const stripItems = stripTopic
+    ? deriveFlowItems(
+        localFlow[stripTopic.id] ?? stripTopic.flowOrder,
+        [
+          ...(stripTopic.videoIds || []).filter((id) => videos.some((v) => v.id === id)),
+          ...videos
+            .filter((v) => v.topicId === stripTopic.id && !(stripTopic.videoIds || []).includes(v.id))
+            .map((v) => v.id),
+        ],
+        theories.filter((th) => th.topicId === stripTopic.id).map((th) => th.id),
+        quizzes.filter((q) => q.topicId === stripTopic.id).map((q) => q.id)
+      ).map((item) => {
+        const src =
+          item.type === 'video'
+            ? videos.find((v) => v.id === item.id)
+            : item.type === 'theory'
+              ? theories.find((th) => th.id === item.id)
+              : quizzes.find((q) => q.id === item.id);
+        return {
+          key: flowKeyOf(item.type, item.id),
+          type: item.type,
+          id: item.id,
+          title: (src as any)?.title || 'Bài học',
+          status: (src as any)?.status as string | undefined,
+        };
+      })
+    : [];
+  const activeFlowKey =
+    selectedItem && selectedItem.type !== 'topic'
+      ? flowKeyOf(selectedItem.type as FlowItemType, selectedItem.id)
+      : null;
+
+  const handleFlowReorder = async (keys: string[]) => {
+    if (!stripTopic) return;
+    setLocalFlow((prev) => ({ ...prev, [stripTopic.id]: keys }));
+    await contentService.saveTopic({ ...stripTopic, flowOrder: keys });
+  };
+
+  // Dọn bản thứ tự tạm khi dữ liệu nạp lại đã khớp
+  useEffect(() => {
+    setLocalFlow((prev) => {
+      const ids = Object.keys(prev);
+      if (!ids.length) return prev;
+      const next = { ...prev };
+      let changed = false;
+      for (const id of ids) {
+        const t = topics.find((x) => x.id === id);
+        if (t && (t.flowOrder || []).join('|') === prev[id].join('|')) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [topics]);
+
   return (
     <div className="flex flex-col gap-6 flex-1 min-h-0 w-full max-w-full min-w-0">
       {/* Page Header with Main "+ Tạo mới" Dropdown */}
@@ -610,23 +735,23 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
                   </div>
                 </div>
 
-                {/* 3. Bài luyện tập */}
+                {/* 3. Bài tập (hợp nhất: loại cụ thể chọn trong Cài đặt bài) */}
                 <div className="p-2 rounded-xl hover:bg-[#FAF5EB] transition-colors">
                   <div className="flex items-center gap-2 mb-1">
                     <FileQuestion className="w-3.5 h-3.5 text-[#0D9488]" />
-                    <span className="text-xs font-bold text-[#2F3E6B]">Bài luyện tập</span>
+                    <span className="text-xs font-bold text-[#2F3E6B]">Bài tập</span>
                   </div>
                   <div className="flex items-center gap-2 pl-5">
                     <button
                       type="button"
-                      onClick={() => handleCreateNewManual('practice')}
+                      onClick={() => handleCreateNewManual('quiz')}
                       className="text-[11px] text-[#2F3E6B] hover:text-[#0D9488] hover:underline font-medium"
                     >
                       • Tạo thủ công
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleOpenAiModal('Bài luyện tập')}
+                      onClick={() => handleOpenAiModal('Bài tập')}
                       className="text-[11px] text-[#4F46E5] hover:underline font-bold flex items-center gap-1"
                     >
                       <Sparkles className="w-2.5 h-2.5" />
@@ -635,55 +760,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
                   </div>
                 </div>
 
-                {/* 4. Bài kiểm tra */}
-                <div className="p-2 rounded-xl hover:bg-[#FAF5EB] transition-colors">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FileQuestion className="w-3.5 h-3.5 text-[#2563EB]" />
-                    <span className="text-xs font-bold text-[#2F3E6B]">Bài kiểm tra</span>
-                  </div>
-                  <div className="flex items-center gap-2 pl-5">
-                    <button
-                      type="button"
-                      onClick={() => handleCreateNewManual('quick')}
-                      className="text-[11px] text-[#2F3E6B] hover:text-[#2563EB] hover:underline font-medium"
-                    >
-                      • Tạo thủ công
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAiModal('Bài kiểm tra')}
-                      className="text-[11px] text-[#4F46E5] hover:underline font-bold flex items-center gap-1"
-                    >
-                      <Sparkles className="w-2.5 h-2.5" />
-                      <span>Tạo với AI (sắp có)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 5. Bài tập về nhà */}
-                <div className="p-2 rounded-xl hover:bg-[#FAF5EB] transition-colors">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Calendar className="w-3.5 h-3.5 text-[#E2704A]" />
-                    <span className="text-xs font-bold text-[#2F3E6B]">Bài tập về nhà</span>
-                  </div>
-                  <div className="flex items-center gap-2 pl-5">
-                    <button
-                      type="button"
-                      onClick={() => handleCreateNewManual('homework')}
-                      className="text-[11px] text-[#2F3E6B] hover:text-[#E2704A] hover:underline font-medium"
-                    >
-                      • Tạo thủ công
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAiModal('Bài tập về nhà')}
-                      className="text-[11px] text-[#4F46E5] hover:underline font-bold flex items-center gap-1"
-                    >
-                      <Sparkles className="w-2.5 h-2.5" />
-                      <span>Tạo với AI (sắp có)</span>
-                    </button>
-                  </div>
-                </div>
               </div>
               </>
             )}
@@ -702,8 +778,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           selectedItem={selectedItem}
           onSelectItem={(item) => {
             setQuizReturnTo(null);
+            if (item.type === 'quiz') setQuizInitialTab('questions');
             setSelectedItem(item);
           }}
+          onCreateItemInTopic={(topicId, kind) => handleCreateNewManual(kind, topicId)}
           onOpenCreateTopic={handleOpenCreateTopic}
           onAddAssignment={() => setIsAssignmentModalOpen(true)}
           onEditTopic={handleEditTopic}
@@ -713,7 +791,21 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           onDeleteItem={handleDeleteItem}
         />
 
-        {/* Right Pane: Selected Item Editor */}
+        {/* Right Pane: dải luồng học + Selected Item Editor */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          {stripTopic && (
+            <TopicFlowStrip
+              topicTitle={stripTopic.title}
+              items={stripItems}
+              activeKey={activeFlowKey}
+              onSelect={(item) => {
+                if (item.type === 'quiz') setQuizInitialTab('questions');
+                setSelectedItem({ type: item.type, id: item.id });
+              }}
+              onAdd={(kind) => handleCreateNewManual(kind, stripTopic.id)}
+              onReorder={handleFlowReorder}
+            />
+          )}
         {currentVideo ? (
           <VideoLessonEditor
             video={currentVideo}
@@ -742,6 +834,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           />
         ) : currentQuiz ? (
           <QuizBuilder
+            key={currentQuiz.id}
+            initialTab={quizInitialTab}
             quiz={currentQuiz}
             allQuestions={questions}
             topics={topics}
@@ -825,9 +919,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
                       {[
                         { type: 'video' as const, label: 'Bài giảng Video', icon: Video, color: 'text-[#E2704A]', hover: 'hover:text-[#E2704A]', ai: 'Video bài giảng' },
                         { type: 'theory' as const, label: 'Lý thuyết', icon: BookOpen, color: 'text-[#7C3AED]', hover: 'hover:text-[#7C3AED]', ai: 'Lý thuyết' },
-                        { type: 'practice' as const, label: 'Bài luyện tập', icon: FileQuestion, color: 'text-[#0D9488]', hover: 'hover:text-[#0D9488]', ai: 'Bài luyện tập' },
-                        { type: 'quick' as const, label: 'Bài kiểm tra', icon: FileQuestion, color: 'text-[#2563EB]', hover: 'hover:text-[#2563EB]', ai: 'Bài kiểm tra' },
-                        { type: 'homework' as const, label: 'Bài tập về nhà', icon: Calendar, color: 'text-[#E2704A]', hover: 'hover:text-[#E2704A]', ai: 'Bài tập về nhà' },
+                        { type: 'quiz' as const, label: 'Bài tập', icon: FileQuestion, color: 'text-[#0D9488]', hover: 'hover:text-[#0D9488]', ai: 'Bài tập' },
                       ].map((row) => (
                         <div key={row.type} className="p-2 rounded-xl hover:bg-[#FAF5EB] transition-colors">
                           <div className="flex items-center gap-2 mb-1">
@@ -877,6 +969,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             </p>
           </div>
         )}
+        </div>
       </div>
 
       {/* Modals */}

@@ -2720,6 +2720,7 @@ export class SupabaseContentRepository implements ContentRepository {
           shortDesc: vPayload.shortDesc || '',
           tag: row.category || 'Chung',
           videoIds: Array.isArray(vPayload.videoIds) ? vPayload.videoIds : [],
+          flowOrder: Array.isArray(vPayload.flowOrder) ? vPayload.flowOrder : [],
           theoryId: tPayload.theoryId || '',
           colorScheme: vPayload.colorScheme || '#2F3E6B',
           status: (row.status as any) || 'published',
@@ -2793,6 +2794,7 @@ export class SupabaseContentRepository implements ContentRepository {
       const vPayload = {
         shortDesc: topic.shortDesc || savedMock.shortDesc || '',
         videoIds: topic.videoIds || savedMock.videoIds || [],
+        flowOrder: topic.flowOrder || savedMock.flowOrder || [],
         colorScheme: topic.colorScheme || savedMock.colorScheme || '#2F3E6B',
         class_ids: topic.class_ids || savedMock.class_ids || ['all'],
         version: topic.version ?? savedMock.version ?? 1,
@@ -2894,6 +2896,7 @@ export class SupabaseContentRepository implements ContentRepository {
           video_payload: {
             shortDesc: t.shortDesc || '',
             videoIds: Array.isArray(t.videoIds) ? t.videoIds : [],
+            flowOrder: Array.isArray(t.flowOrder) ? t.flowOrder : [],
             colorScheme: t.colorScheme || '#2F3E6B',
             class_ids: Array.isArray(t.class_ids) ? t.class_ids : ['all'],
             version: t.version ?? 1,

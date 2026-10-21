@@ -7,6 +7,7 @@ import {
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
 import { ConfirmDialog } from '../ui/ConfirmDialog.tsx';
+import { deriveFlowItems } from '../../../logic/flowOrder.ts';
 import {
   ChevronRight,
   ChevronDown,
@@ -42,6 +43,7 @@ interface TopicTreeSidebarProps {
   onSelectItem: (item: SelectedContentItem) => void;
   onOpenCreateTopic: () => void;
   onAddAssignment?: () => void;
+  onCreateItemInTopic?: (topicId: string, kind: 'video' | 'theory' | 'quiz') => void;
   onEditTopic: (topic: TopicWithMeta) => void;
   onDeleteTopic: (topicId: string) => void;
   onReorderTopics: (orderedIds: string[]) => void;
@@ -58,6 +60,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   onSelectItem,
   onOpenCreateTopic,
   onAddAssignment,
+  onCreateItemInTopic,
   onEditTopic,
   onDeleteTopic,
   onReorderTopics,
@@ -76,6 +79,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
 
   // Menu tùy chọn đang mở
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [addMenuTopicId, setAddMenuTopicId] = useState<string | null>(null);
 
   // Kéo-thả đổi thứ tự chủ đề (giữ-kéo thay cho nút lên/xuống)
   const [draggingTopicId, setDraggingTopicId] = useState<string | null>(null);
@@ -293,145 +297,81 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                   </div>
                 </div>
 
-                {/* Sub-items List (Videos, Theories, Quizzes) */}
+                {/* Sub-items List — hợp nhất theo THỨ TỰ LUỒNG HỌC của chủ đề */}
                 {isExpanded && (
                   <div className="bg-white px-2 py-2 border-t border-[#E6DCC8]/60 space-y-1 pl-6">
-                    {/* Videos */}
-                    {topicVideos.map((vid) => {
+                    {deriveFlowItems(
+                      topic.flowOrder,
+                      topicVideos.map((v) => v.id),
+                      topicTheories.map((t) => t.id),
+                      topicQuizzes.map((q) => q.id)
+                    ).map((child) => {
+                      const src: any =
+                        child.type === 'video'
+                          ? topicVideos.find((v) => v.id === child.id)
+                          : child.type === 'theory'
+                            ? topicTheories.find((t) => t.id === child.id)
+                            : topicQuizzes.find((q) => q.id === child.id);
+                      if (!src) return null;
                       const isSelected =
-                        selectedItem?.type === 'video' && selectedItem?.id === vid.id;
+                        selectedItem?.type === child.type && selectedItem?.id === child.id;
+                      const conf =
+                        child.type === 'video'
+                          ? {
+                              icon: <Video className="w-3.5 h-3.5 text-[#E2704A] shrink-0" />,
+                              sel: 'bg-orange-50 border border-orange-200 text-[#E2704A] font-bold shadow-2xs',
+                              label: 'video',
+                              dupTitle: 'Nhân bản video',
+                              delTitle: 'Xóa video',
+                            }
+                          : child.type === 'theory'
+                            ? {
+                                icon: <BookOpen className="w-3.5 h-3.5 text-[#7C3AED] shrink-0" />,
+                                sel: 'bg-purple-50 border border-purple-200 text-[#7C3AED] font-bold shadow-2xs',
+                                label: 'lý thuyết',
+                                dupTitle: 'Nhân bản lý thuyết',
+                                delTitle: 'Xóa lý thuyết',
+                              }
+                            : {
+                                icon: <FileQuestion className="w-3.5 h-3.5 text-[#4F46E5] shrink-0" />,
+                                sel: 'bg-indigo-50 border border-indigo-200 text-[#4F46E5] font-bold shadow-2xs',
+                                label: 'bài tập',
+                                dupTitle: 'Nhân bản đề thi',
+                                delTitle: 'Xóa bài tập',
+                              };
                       return (
                         <div
-                          key={vid.id}
-                          onClick={() => onSelectItem({ type: 'video', id: vid.id })}
+                          key={child.type + ':' + child.id}
+                          onClick={() => onSelectItem({ type: child.type, id: child.id })}
                           className={`p-2 rounded-xl flex items-center justify-between gap-2 cursor-pointer transition-all text-xs ${
-                            isSelected
-                              ? 'bg-orange-50 border border-orange-200 text-[#E2704A] font-bold shadow-2xs'
-                              : 'hover:bg-[#FAF5EB] text-[#2F3E6B]'
+                            isSelected ? conf.sel : 'hover:bg-[#FAF5EB] text-[#2F3E6B]'
                           }`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <Video className="w-3.5 h-3.5 text-[#E2704A] shrink-0" />
-                            <span className="truncate">{vid.title}</span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <StatusBadge
-                              status={vid.status}
-                              hasUnpublishedEdits={vid.has_unpublished_edits}
-                              size="sm"
-                            />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDuplicateItem('video', vid.id);
-                              }}
-                              className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] hover:text-[#2F3E6B]"
-                              title="Nhân bản video"
-                            >
-                              <Copy className="w-3 h-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPendingDelete({ type: 'video', id: vid.id, label: 'video', title: vid.title });
-                              }}
-                              className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
-                              title="Xóa video"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Theories (hiện TẤT CẢ bài lý thuyết của chủ đề) */}
-                    {topicTheories.map((topicTheory) => (
-                      <div
-                        key={topicTheory.id}
-                        onClick={() => onSelectItem({ type: 'theory', id: topicTheory.id })}
-                        className={`p-2 rounded-xl flex items-center justify-between gap-2 cursor-pointer transition-all text-xs ${
-                          selectedItem?.type === 'theory' &&
-                          selectedItem?.id === topicTheory.id
-                            ? 'bg-purple-50 border border-purple-200 text-[#7C3AED] font-bold shadow-2xs'
-                            : 'hover:bg-[#FAF5EB] text-[#2F3E6B]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <BookOpen className="w-3.5 h-3.5 text-[#7C3AED] shrink-0" />
-                          <span className="truncate">{topicTheory.title}</span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <StatusBadge
-                            status={topicTheory.status}
-                            hasUnpublishedEdits={topicTheory.has_unpublished_edits}
-                            size="sm"
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDuplicateItem('theory', topicTheory.id);
-                            }}
-                            className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] hover:text-[#2F3E6B]"
-                            title="Nhân bản lý thuyết"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPendingDelete({ type: 'theory', id: topicTheory.id, label: 'lý thuyết', title: topicTheory.title });
-                            }}
-                            className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
-                            title="Xóa lý thuyết"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Quizzes / Tests */}
-                    {topicQuizzes.map((quiz) => {
-                      const isSelected =
-                        selectedItem?.type === 'quiz' && selectedItem?.id === quiz.id;
-                      return (
-                        <div
-                          key={quiz.id}
-                          onClick={() => onSelectItem({ type: 'quiz', id: quiz.id })}
-                          className={`p-2 rounded-xl flex items-center justify-between gap-2 cursor-pointer transition-all text-xs ${
-                            isSelected
-                              ? 'bg-indigo-50 border border-indigo-200 text-[#4F46E5] font-bold shadow-2xs'
-                              : 'hover:bg-[#FAF5EB] text-[#2F3E6B]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <FileQuestion className="w-3.5 h-3.5 text-[#4F46E5] shrink-0" />
+                            {conf.icon}
                             <div className="min-w-0">
-                              <span className="truncate block">{quiz.title}</span>
-                              <span className="text-[10px] text-[#8C7E6A] font-medium">
-                                {getQuizKindLabel(quiz.kind)} • {quiz.questionIds.length} câu
-                              </span>
+                              <span className="truncate block">{src.title}</span>
+                              {child.type === 'quiz' && (
+                                <span className="text-[10px] text-[#8C7E6A] font-medium">
+                                  {getQuizKindLabel(src.kind)} • {src.questionIds.length} câu
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <StatusBadge
-                              status={quiz.status}
-                              hasUnpublishedEdits={quiz.has_unpublished_edits}
+                              status={src.status}
+                              hasUnpublishedEdits={src.has_unpublished_edits}
                               size="sm"
                             />
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onDuplicateItem('quiz', quiz.id);
+                                onDuplicateItem(child.type, child.id);
                               }}
                               className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] hover:text-[#2F3E6B]"
-                              title="Nhân bản đề thi"
+                              title={conf.dupTitle}
                             >
                               <Copy className="w-3 h-3" />
                             </button>
@@ -439,10 +379,10 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPendingDelete({ type: 'quiz', id: quiz.id, label: 'bài tập', title: quiz.title });
+                                setPendingDelete({ type: child.type, id: child.id, label: conf.label, title: src.title });
                               }}
                               className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
-                              title="Xóa bài tập"
+                              title={conf.delTitle}
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -452,8 +392,47 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                     })}
 
                     {topicVideos.length === 0 && topicTheories.length === 0 && topicQuizzes.length === 0 && (
-                      <div className="py-2 text-center text-[11px] text-[#8C7E6A] italic">
-                        Chủ đề này chưa có bài giảng hoặc bài tập.
+                      <div className="py-1.5 text-center text-[11px] text-[#8C7E6A] italic">
+                        Chủ đề chưa có bài nào — bấm + Tạo mới để thêm bài đầu tiên.
+                      </div>
+                    )}
+
+                    {/* + Tạo mới: luôn ở cuối danh sách bài của chủ đề */}
+                    {onCreateItemInTopic && (
+                      <div className="relative pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setAddMenuTopicId(addMenuTopicId === topic.id ? null : topic.id)}
+                          className="w-full p-2 rounded-xl border border-dashed border-[#D8CCAF] text-[#8C7E6A] hover:border-[#E2704A] hover:text-[#E2704A] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Tạo mới
+                        </button>
+                        {addMenuTopicId === topic.id && (
+                          <>
+                            <div className="fixed inset-0 z-20" onClick={() => setAddMenuTopicId(null)} />
+                            <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-[#E6DCC8] rounded-xl shadow-xl z-30 p-1">
+                              {(
+                                [
+                                  { kind: 'video' as const, label: 'Bài giảng Video', icon: <Video className="w-3.5 h-3.5 text-[#E2704A]" /> },
+                                  { kind: 'theory' as const, label: 'Lý thuyết', icon: <BookOpen className="w-3.5 h-3.5 text-[#7C3AED]" /> },
+                                  { kind: 'quiz' as const, label: 'Bài tập', icon: <FileQuestion className="w-3.5 h-3.5 text-[#4F46E5]" /> },
+                                ]
+                              ).map((row) => (
+                                <button
+                                  key={row.kind}
+                                  type="button"
+                                  onClick={() => {
+                                    setAddMenuTopicId(null);
+                                    onCreateItemInTopic(topic.id, row.kind);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-[#FAF5EB] text-left text-xs font-bold text-[#2F3E6B]"
+                                >
+                                  {row.icon} {row.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

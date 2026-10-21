@@ -47,6 +47,8 @@ import { aiService } from '../../../services/index.ts';
 import { XP_CONFIG } from '../../../config.ts';
 
 interface QuizBuilderProps {
+  /** Tab mở đầu: Bài tập MỚI TẠO mở thẳng 'settings' (Cài đặt bài trước, soạn câu sau). */
+  initialTab?: 'questions' | 'settings';
   quiz: QuizWithMeta;
   allQuestions: Record<string, QuestionWithMeta>;
   topics: TopicWithMeta[];
@@ -118,6 +120,7 @@ const SKILL_TOOLTIPS: Record<SkillLevel, { title: string; desc: string }> = {
 };
 
 export const QuizBuilder: React.FC<QuizBuilderProps> = ({
+  initialTab,
   quiz,
   allQuestions,
   topics,
@@ -150,7 +153,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   });
 
   // Tab đang mở trên giao diện: 'questions' (Soạn câu) hoặc 'settings' (Cài đặt)
-  const [activeTab, setActiveTab] = useState<'questions' | 'settings'>('questions');
+  const [activeTab, setActiveTab] = useState<'questions' | 'settings'>(initialTab ?? 'questions');
 
   // Modal Ngân hàng câu hỏi
   const [isBankOpen, setIsBankOpen] = useState(false);
@@ -969,6 +972,17 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                 </div>
               )}
             </div>
+            {initialTab === 'settings' && (
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('questions')}
+                  className="px-5 py-2.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-sm font-black shadow-xs"
+                >
+                  Tiếp tục: Soạn câu hỏi →
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           /* =========================================================

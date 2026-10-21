@@ -1,3 +1,12 @@
+## 2026-10-22 — Luồng học trong chủ đề: bỏ video nháp tự sinh, Tạo mới 3 mục, dải nút tròn, học sinh học theo thứ tự
+
+Theo kế hoạch đã duyệt (kèm ảnh chụp của chủ dự án):
+- **Bỏ tự sinh video nháp khi tạo chủ đề**: tạo chủ đề mới chỉ chọn chủ đề đó, chủ đề TRỐNG. Hai video nháp ma "Bài giảng Video mới" trong chủ đề "Văn 7" đã xóa khỏi DB (kèm dọn videoIds).
+- **Menu Tạo mới hợp nhất đúng 3 mục** (Bài giảng Video / Lý thuyết / Bài tập) ở mọi vị trí: dropdown góc trên trang Nội dung học (trước có 5), menu "Thêm vào chủ đề", dòng **"+ Tạo mới"** luôn ở cuối danh sách bài của mỗi chủ đề trong cây, và nút + cuối dải luồng. Loại bài tập cụ thể (Luyện tập/Kiểm tra nhanh/Mastery/BTVN…) chọn trong Cài đặt bài.
+- **Thứ tự luồng học `flowOrder`** lưu trên bản ghi chủ đề (`video_payload.flowOrder`, khóa `video:<id>/theory:<id>/quiz:<id>`; helper `src/logic/flowOrder.ts` — chủ đề cũ suy ra tạm video → lý thuyết → bài tập). **Dải luồng học** (`TopicFlowStrip`) ở đầu khung phải: nút tròn icon theo loại nối gạch ngang, bấm để tới bài, **kéo–thả đổi thứ tự lưu ngay**, nút đang mở tô đậm, chấm trạng thái nháp/đã xuất bản. Cây chủ đề cũng hiển thị các bài **hợp nhất theo đúng thứ tự luồng**.
+- **Học sinh**: màn Học bài thêm tab **"Luồng học"** (mặc định) — bài trong chủ đề hiện theo đúng flowOrder (số thứ tự + icon loại), bấm mở đúng bài kể cả Bài tập; 2 tab cũ giữ nguyên.
+- **QuizBuilder**: tạo Bài tập mới mở thẳng tab **Cài đặt bài** trước, có nút "Tiếp tục: Soạn câu hỏi →"; mở bài cũ giữ nguyên.
+
 ## 2026-10-21 (đêm muộn) — Bài tập độc lập DÙNG THẬT: tạo bài, giao bài, làm bài, tự chấm
 
 - Mục mới **"Thêm bài tập & đánh giá"** ngay dưới đầu Cây chủ đề (màn Nội dung học) mở `AssignmentBuilderModal`: đặt tên bài, chọn câu hỏi từ Ngân hàng câu hỏi (cảnh báo tại chỗ nếu câu trắc nghiệm chưa có văn bản lựa chọn), chọn lớp + bỏ chọn từng học sinh, đặt hạn nộp và giới hạn thời gian. Lưu ghi vào `assignments` + `assignment_questions` + `assignment_targets` (`biRepository.createAssignment`).

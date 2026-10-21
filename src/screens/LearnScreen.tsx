@@ -3,7 +3,8 @@ import { StudentState, Topic, VideoLesson, TheoryLesson, Quiz } from '../types.t
 import { calculateAllMastery, isTopicSolid } from '../logic/mastery.ts';
 import { VideoCard, VideoCardSkeleton } from '../components/VideoCard.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
-import { Video, BookOpen, CheckCircle, Clock, ArrowRight, Filter, Sparkles, Layers } from 'lucide-react';
+import { Video, BookOpen, CheckCircle, Clock, ArrowRight, Filter, Sparkles, Layers, ListOrdered, PenLine, Play } from 'lucide-react';
+import { deriveFlowItems } from '../logic/flowOrder.ts';
 import { useLiveQuery, contentService, quizService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
 import { QUIZZES } from '../data/mockData.ts';
 
@@ -13,6 +14,7 @@ interface LearnScreenProps {
   focusTopicId?: string | null;
   onSelectVideo: (videoId: string) => void;
   onSelectTheory: (theoryId: string) => void;
+  onSelectQuiz?: (quizId: string) => void;
   isLoading?: boolean;
 }
 
@@ -22,9 +24,10 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
   focusTopicId,
   onSelectVideo,
   onSelectTheory,
+  onSelectQuiz,
   isLoading = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'video' | 'theory'>('video');
+  const [activeTab, setActiveTab] = useState<'flow' | 'video' | 'theory'>('flow');
   const [filter, setFilter] = useState<'all' | 'unlearned' | 'needs_review'>('all');
   const activeTopics = topics ?? [];
 
@@ -123,8 +126,20 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
           </p>
         </div>
 
-        {/* 2 Tabs chuyển đổi luồng học */}
+        {/* Tabs chuyển đổi: Luồng học (theo thứ tự giáo viên xếp) / Video / Lý thuyết */}
         <div className="flex items-center p-1 bg-slate-100/80 rounded-2xl border border-slate-200/80 self-start sm:self-auto shadow-inner">
+          <button
+            onClick={() => setActiveTab('flow')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'flow'
+                ? 'bg-white text-[#E2704A] shadow-sm'
+                : 'text-slate-600 hover:text-[#1E1B4B]'
+            }`}
+          >
+            <ListOrdered className="w-4 h-4 text-[#E2704A]" />
+            <span>Luồng học</span>
+          </button>
+
           <button
             onClick={() => setActiveTab('video')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
@@ -235,7 +250,94 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                 </div>
 
                 {/* DANH SÁCH BÀI THEO TAB HIỆN TẠI */}
-                {activeTab === 'video' ? (
+                {activeTab === 'flow' ? (
+                  /* LUỒNG HỌC: danh sách hỗn hợp đúng thứ tự giáo viên đã xếp */
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Luồng học của chủ đề — học theo thứ tự từ trên xuống
+                    </p>
+                    {(() => {
+                      const vids = (liveVideos || []).filter((v) => topic.videoIds.includes(v.id));
+                      const ths = (liveTheories || []).filter((t) => t.topicId === topic.id);
+                      const qzs = (liveQuizzes || []).filter((q) => q.topicId === topic.id);
+                      const items = deriveFlowItems(
+                        topic.flowOrder,
+                        topic.videoIds.filter((id) => vids.some((v) => v.id === id)),
+                        ths.map((t) => t.id),
+                        qzs.map((q) => q.id)
+                      );
+                      if (items.length === 0) {
+                        return (
+                          <div className="p-6 rounded-2xl bg-[#FFFDF8] border border-[#E6DCC8] border-dashed text-center">
+                            <p className="font-bold text-[#2F3E6B] text-sm">
+                              Thầy/cô chưa đăng bài cho chủ đề này
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              Các bài học sẽ sớm được cập nhật vào kho học liệu!
+                            </p>
+                          </div>
+                        );
+                      }
+                      return items.map((item, idx) => {
+                        const src: any =
+                          item.type === 'video'
+                            ? vids.find((v) => v.id === item.id)
+                            : item.type === 'theory'
+                              ? ths.find((t) => t.id === item.id)
+                              : qzs.find((q) => q.id === item.id);
+                        if (!src) return null;
+                        const meta =
+                          item.type === 'video'
+                            ? `Video • ${Math.max(1, Math.round((src.durationSec || 0) / 60))} phút`
+                            : item.type === 'theory'
+                              ? 'Lý thuyết • Đọc và ghi nhớ'
+                              : `Bài tập • ${src.questionIds?.length || 0} câu`;
+                        return (
+                          <button
+                            key={item.type + ':' + item.id}
+                            type="button"
+                            onClick={() =>
+                              item.type === 'video'
+                                ? onSelectVideo(item.id)
+                                : item.type === 'theory'
+                                  ? onSelectTheory(item.id)
+                                  : onSelectQuiz?.(item.id)
+                            }
+                            className="w-full flex items-center gap-3 bg-white border border-slate-200 hover:border-[#E2704A]/60 hover:shadow-sm rounded-2xl px-3.5 py-3 text-left transition-all"
+                          >
+                            <span className="w-7 h-7 rounded-full bg-[#2F3E6B] text-white text-xs font-black flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span
+                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                                item.type === 'video'
+                                  ? 'bg-orange-50 text-[#E2704A]'
+                                  : item.type === 'theory'
+                                    ? 'bg-purple-50 text-[#7C3AED]'
+                                    : 'bg-indigo-50 text-[#4F46E5]'
+                              }`}
+                            >
+                              {item.type === 'video' ? (
+                                <Play className="w-4 h-4" />
+                              ) : item.type === 'theory' ? (
+                                <BookOpen className="w-4 h-4" />
+                              ) : (
+                                <PenLine className="w-4 h-4" />
+                              )}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className="block font-bold text-sm text-[#1E1B4B] truncate">
+                                {src.title}
+                              </span>
+                              <span className="block text-[11px] text-slate-500">{meta}</span>
+                            </span>
+                            <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                ) : activeTab === 'video' ? (
                   <div className="space-y-3">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Bài giảng video ({topic.videoIds.length} bài)

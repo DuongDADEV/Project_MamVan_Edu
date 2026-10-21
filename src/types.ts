@@ -158,6 +158,8 @@ export interface Topic {
   videoIds: string[];
   theoryId: string;
   colorScheme: string;
+  /** Thứ tự luồng học hỗn hợp trong chủ đề: các khóa "video:<id>" | "theory:<id>" | "quiz:<id>". */
+  flowOrder?: string[];
 }
 
 export interface QuestionResult {
