@@ -711,6 +711,7 @@ export async function submitAssignmentAttempt(input: {
     status: 'SUBMITTED',
     started_at: input.startedAt,
     submitted_at: now,
+    submitted_date: new Date(new Date(now).getTime() + 7 * 3600_000).toISOString().slice(0, 10),
     total_time_seconds: totalSeconds,
     score_awarded: gradedCount > 0 ? autoScore : null,
     max_score: maxTotal,
