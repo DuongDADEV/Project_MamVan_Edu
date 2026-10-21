@@ -47,6 +47,7 @@ interface HomeScreenProps {
   onSelectVideo: (videoId: string) => void;
   onSelectTheory: (theoryId: string) => void;
   onSelectHomework: (homeworkQuizId?: string) => void;
+  onOpenAssignment?: (assignmentId: string) => void;
   onNavigateTab: (tab: 'learn' | 'tree' | 'rewards' | 'profile') => void;
 }
 
@@ -59,6 +60,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectVideo,
   onSelectTheory,
   onSelectHomework,
+  onOpenAssignment,
   onNavigateTab,
   latestNotification,
   onOpenNotification,
@@ -328,7 +330,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </div>
 
       {/* ================= BÀI TẬP ĐỘC LẬP ĐƯỢC GIAO (dữ liệu assignments/targets) ================= */}
-      <AssignedHomeworkSection studentId={state.profile.id} />
+      <AssignedHomeworkSection studentId={state.profile.id} onOpen={onOpenAssignment} />
 
       {/* ================= 2. SUBJECT / TOPIC CAROUSEL (IN THE STYLE OF THE REFERENCE IMAGE) ================= */}
       <div className="space-y-3">

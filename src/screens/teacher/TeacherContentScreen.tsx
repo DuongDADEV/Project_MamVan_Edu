@@ -19,6 +19,7 @@ import { VideoLessonEditor } from '../../components/teacher/content/VideoLessonE
 import { TheoryLessonEditor } from '../../components/teacher/content/TheoryLessonEditor.tsx';
 import { QuizBuilder } from '../../components/teacher/content/QuizBuilder.tsx';
 import { TopicModal } from '../../components/teacher/content/TopicModal.tsx';
+import { AssignmentBuilderModal } from '../../components/teacher/content/AssignmentBuilderModal.tsx';
 import { PublishModal } from '../../components/teacher/content/PublishModal.tsx';
 import { AiContentStudioModal } from '../../components/teacher/ai/AiContentStudioModal.tsx';
 import { StudentPreviewModal } from '../../components/teacher/content/StudentPreviewModal.tsx';
@@ -97,6 +98,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
   // 3. Quản lý các Modal
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [topicToDelete, setTopicToDelete] = useState<{ id: string; warn: string } | null>(null);
   // Bài gốc (video/lý thuyết) vừa rời khỏi để vào trình tạo bài tập liên kết —
   // nút "Quay lại" trong trình tạo bài tập phải trở về đúng bài này.
@@ -703,6 +705,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             setSelectedItem(item);
           }}
           onOpenCreateTopic={handleOpenCreateTopic}
+          onAddAssignment={() => setIsAssignmentModalOpen(true)}
           onEditTopic={handleEditTopic}
           onDeleteTopic={handleDeleteTopic}
           onReorderTopics={handleReorderTopics}
@@ -877,6 +880,14 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       </div>
 
       {/* Modals */}
+      {isAssignmentModalOpen && teacher && (
+        <AssignmentBuilderModal
+          teacher={teacher}
+          classes={propClasses || []}
+          onClose={() => setIsAssignmentModalOpen(false)}
+        />
+      )}
+
       <TopicModal
         isOpen={isTopicModalOpen}
         onClose={() => setIsTopicModalOpen(false)}

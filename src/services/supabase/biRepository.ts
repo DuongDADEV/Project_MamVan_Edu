@@ -473,6 +473,283 @@ export async function getTopicFlows(teacherId: string): Promise<BiTopicFlow[]> {
   });
 }
 
+/** Chuẩn hóa loại câu hỏi: app dùng single/multi/fill/essay, DB/payload có thể là
+ *  single_choice/multiple_choice/fill_in_blank/essay — quy về 1 hệ tên của DB. */
+export function normalizeQType(t: string | null | undefined): string {
+  switch ((t || '').toString()) {
+    case 'single':
+    case 'single_choice':
+      return 'single_choice';
+    case 'multi':
+    case 'multiple_choice':
+      return 'multiple_choice';
+    case 'fill':
+    case 'fill_in_blank':
+      return 'fill_in_blank';
+    default:
+      return 'essay';
+  }
+}
+
+function genId(prefix: string): string {
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+export interface CreateAssignmentInput {
+  teacherId: string;
+  classId: string | null;
+  title: string;
+  questionIds: string[];
+  studentIds: string[];
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+}
+
+/** Giáo viên tạo bài tập độc lập & giao cho từng học sinh (assignment + questions + targets). */
+export async function createAssignment(input: CreateAssignmentInput): Promise<string> {
+  const id = genId('asg_');
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('assignments').insert({
+    id,
+    title: input.title,
+    activity_type: 'ASSIGNMENT',
+    display_location: 'HOMEWORK',
+    target_class_id: input.classId,
+    teacher_id: input.teacherId,
+    published_at: now,
+    due_at: input.dueAt,
+    is_timed: input.isTimed,
+    time_limit_minutes: input.isTimed ? input.timeLimitMinutes : null,
+  });
+  if (error) throw new Error(error.message);
+  if (input.questionIds.length) {
+    const { error: e2 } = await supabase.from('assignment_questions').insert(
+      input.questionIds.map((qid, i) => ({ assignment_id: id, question_id: qid, position: i + 1 }))
+    );
+    if (e2) throw new Error(e2.message);
+  }
+  if (input.studentIds.length) {
+    const { error: e3 } = await supabase.from('assignment_targets').insert(
+      input.studentIds.map((sid) => ({
+        target_id: genId('tgt_') + sid.slice(0, 4),
+        assignment_id: id,
+        student_id: sid,
+        assigned_at: now,
+        due_at: input.dueAt,
+        submission_status: 'NOT_SUBMITTED',
+      }))
+    );
+    if (e3) throw new Error(e3.message);
+  }
+  return id;
+}
+
+export interface AssignmentDetailQuestion {
+  id: string;
+  prompt: string;
+  passage: string | null;
+  type: string;
+  options: string[];
+  points: number;
+}
+
+export interface AssignmentDetail {
+  id: string;
+  title: string;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  dueAt: string | null;
+  questions: AssignmentDetailQuestion[];
+}
+
+/** Đề bài cho học sinh làm — KHÔNG kèm đáp án đúng. */
+export async function getAssignmentDetail(assignmentId: string): Promise<AssignmentDetail | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: a } = await supabase.from('assignments').select('*').eq('id', assignmentId).maybeSingle();
+  if (!a) return null;
+  const { data: links } = await supabase
+    .from('assignment_questions')
+    .select('question_id, position')
+    .eq('assignment_id', assignmentId)
+    .order('position', { ascending: true });
+  const qIds = (links || []).map((l: any) => l.question_id);
+  if (!qIds.length)
+    return { id: a.id, title: a.title, isTimed: !!a.is_timed, timeLimitMinutes: a.time_limit_minutes, dueAt: a.due_at, questions: [] };
+  const { data: qs } = await supabase.from('questions').select('id, payload').in('id', qIds);
+  const qMap = new Map((qs || []).map((q: any) => [q.id, q.payload || {}]));
+  return {
+    id: a.id,
+    title: a.title,
+    isTimed: !!a.is_timed,
+    timeLimitMinutes: a.time_limit_minutes,
+    dueAt: a.due_at,
+    questions: qIds.map((qid) => {
+      const p = qMap.get(qid) || {};
+      return {
+        id: qid,
+        prompt: p.prompt || qid,
+        passage: p.passage || null,
+        type: normalizeQType(p.type),
+        options: Array.isArray(p.options) ? p.options : [],
+        points: typeof p.points === 'number' ? p.points : 10,
+      };
+    }),
+  };
+}
+
+function normText(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export interface SubmitResult {
+  attemptId: string;
+  autoScore: number;
+  maxScore: number;
+  pendingCount: number;
+  gradedCount: number;
+}
+
+/** Học sinh nộp bài: ghi attempts + attempt_answers, chấm tự động phần có đáp án,
+ *  phần tự luận tạo phiếu chờ giáo viên chấm (answer_reviews PENDING). */
+export async function submitAssignmentAttempt(input: {
+  assignmentId: string;
+  studentId: string;
+  startedAt: string;
+  responses: Record<string, { selected?: string[]; text?: string }>;
+}): Promise<SubmitResult> {
+  const { data: links } = await supabase
+    .from('assignment_questions')
+    .select('question_id, position')
+    .eq('assignment_id', input.assignmentId)
+    .order('position', { ascending: true });
+  const qIds = (links || []).map((l: any) => l.question_id);
+  const { data: qs } = await supabase
+    .from('questions')
+    .select('id, type, correct_answer, max_score, payload, grading_method')
+    .in('id', qIds);
+  const qMap = new Map((qs || []).map((q: any) => [q.id, q]));
+
+  const { count } = await supabase
+    .from('attempts')
+    .select('*', { count: 'exact', head: true })
+    .eq('assignment_id', input.assignmentId)
+    .eq('student_id', input.studentId);
+  const attemptId = genId('att_');
+  const now = new Date().toISOString();
+  const totalSeconds = Math.max(
+    0,
+    Math.round((new Date(now).getTime() - new Date(input.startedAt).getTime()) / 1000)
+  );
+
+  let autoScore = 0;
+  let maxTotal = 0;
+  let pendingCount = 0;
+  let gradedCount = 0;
+  const answerRows: any[] = [];
+  const pendingAnswers: string[] = [];
+
+  for (const qid of qIds) {
+    const q = qMap.get(qid);
+    if (!q) continue;
+    const payload = q.payload || {};
+    const max = q.max_score ?? (typeof payload.points === 'number' ? payload.points : 10);
+    maxTotal += max;
+    const resp = input.responses[qid] || {};
+    const qtype = normalizeQType(q.type || payload.type);
+    const responseJson =
+      qtype === 'single_choice' || qtype === 'multiple_choice'
+        ? { selected: qtype === 'single_choice' ? (resp.selected || [])[0] || null : resp.selected || [] }
+        : { text: resp.text || '' };
+    const key = q.correct_answer ?? payload.answer ?? null;
+    const isAuto = q.grading_method === 'AUTO' && key != null && qtype !== 'essay';
+    let isCorrect: boolean | null = null;
+    let score: number | null = null;
+    let gStatus = 'PENDING_TEACHER_REVIEW';
+    if (isAuto) {
+      if (qtype === 'single_choice') {
+        isCorrect = normText(String((resp.selected || [])[0] || '')) === normText(String(key));
+      } else if (qtype === 'multiple_choice') {
+        const mine = new Set((resp.selected || []).map((s) => normText(s)));
+        const keys = new Set((Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s))));
+        isCorrect = mine.size === keys.size && [...mine].every((s) => keys.has(s));
+      } else {
+        // fill_in_blank: đáp án đúng có thể là 1 chuỗi hoặc mảng các đáp án chấp nhận được
+        const accepted = (Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s)));
+        isCorrect = accepted.includes(normText(resp.text || ''));
+      }
+      const sc = isCorrect ? max : 0;
+      score = sc;
+      autoScore += sc;
+      gStatus = 'GRADED';
+      gradedCount += 1;
+    } else {
+      pendingCount += 1;
+    }
+    const ansId = genId('ans_');
+    if (gStatus === 'PENDING_TEACHER_REVIEW') pendingAnswers.push(ansId);
+    answerRows.push({
+      answer_id: ansId,
+      attempt_id: attemptId,
+      question_id: qid,
+      response_json: responseJson,
+      is_correct: isCorrect,
+      score_awarded: score,
+      max_score: max,
+      grading_status: gStatus,
+      grading_method: q.grading_method || (qtype === 'essay' ? 'TEACHER' : 'AUTO'),
+    });
+  }
+
+  const gradingStatus =
+    pendingCount === 0 ? 'GRADED' : gradedCount === 0 ? 'PENDING_TEACHER_REVIEW' : 'PARTIALLY_GRADED';
+  const { error: e1 } = await supabase.from('attempts').insert({
+    attempt_id: attemptId,
+    student_id: input.studentId,
+    assignment_id: input.assignmentId,
+    attempt_no: (count || 0) + 1,
+    status: 'SUBMITTED',
+    started_at: input.startedAt,
+    submitted_at: now,
+    total_time_seconds: totalSeconds,
+    score_awarded: gradedCount > 0 ? autoScore : null,
+    max_score: maxTotal,
+    grading_status: gradingStatus,
+    grading_mode: pendingCount === 0 ? 'AUTO' : gradedCount === 0 ? 'TEACHER' : 'MIXED',
+  });
+  if (e1) throw new Error(e1.message);
+  if (answerRows.length) {
+    const { error: e2 } = await supabase.from('attempt_answers').insert(answerRows);
+    if (e2) throw new Error(e2.message);
+  }
+  if (pendingAnswers.length) {
+    await supabase.from('answer_reviews').insert(
+      pendingAnswers.map((aid) => ({
+        review_id: genId('rev_'),
+        answer_id: aid,
+        reviewer_id: null,
+        review_status: 'PENDING',
+      }))
+    );
+  }
+  const { data: target } = await supabase
+    .from('assignment_targets')
+    .select('target_id, first_submitted_at')
+    .eq('assignment_id', input.assignmentId)
+    .eq('student_id', input.studentId)
+    .maybeSingle();
+  if (target) {
+    await supabase
+      .from('assignment_targets')
+      .update({
+        submission_status: 'SUBMITTED',
+        first_submitted_at: target.first_submitted_at || now,
+      })
+      .eq('target_id', target.target_id);
+  }
+  return { attemptId, autoScore, maxScore: maxTotal, pendingCount, gradedCount };
+}
+
 /** Phía học sinh: bài độc lập được giao cho em + trạng thái + các lượt đã làm. */
 export async function getStudentAssignments(studentId: string) {
   if (!isSupabaseReady()) return [];

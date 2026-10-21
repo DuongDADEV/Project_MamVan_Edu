@@ -1,3 +1,10 @@
+## 2026-10-21 (đêm muộn) — Bài tập độc lập DÙNG THẬT: tạo bài, giao bài, làm bài, tự chấm
+
+- Mục mới **"Thêm bài tập & đánh giá"** ngay dưới đầu Cây chủ đề (màn Nội dung học) mở `AssignmentBuilderModal`: đặt tên bài, chọn câu hỏi từ Ngân hàng câu hỏi (cảnh báo tại chỗ nếu câu trắc nghiệm chưa có văn bản lựa chọn), chọn lớp + bỏ chọn từng học sinh, đặt hạn nộp và giới hạn thời gian. Lưu ghi vào `assignments` + `assignment_questions` + `assignment_targets` (`biRepository.createAssignment`).
+- Học sinh: mục **Bài tập được giao** ở trang chủ bấm được → `AssignmentAttemptScreen` làm bài thật (chọn đáp án/điền khuyết/viết tự luận, đếm ngược và tự nộp khi hết giờ nếu bài có giới hạn). Nộp bài (`submitAssignmentAttempt`) ghi `attempts` + `attempt_answers`: câu có đáp án đúng **tự chấm ngay**, câu tự luận sinh phiếu `answer_reviews` PENDING chảy vào hàng chờ chấm của màn Tiến độ bài làm; trạng thái nộp của học sinh cập nhật ngay.
+- Chuẩn hóa loại câu hai hệ tên: app dùng `single/multi/fill/essay`, DB/payload dùng `single_choice/multiple_choice/fill_in_blank/essay` — `normalizeQType` quy về một hệ ở cả bước lấy đề (không lộ đáp án) lẫn bước chấm.
+- Kiểm chứng trên production theo vòng khép kín tự dọn dẹp: tạo bài thử giao riêng hs001 (1 câu tự chấm + 1 câu tự luận), hs001 làm và nộp, đối chiếu điểm + phiếu chờ phía gv001, sau đó xóa bài thử khỏi DB (cascade) để dữ liệu giả lập giữ nguyên trạng.
+
 ## 2026-10-21 (đêm) — Xóa sạch DB + nạp dữ liệu giả lập Power BI + màn Tiến độ bài làm (GĐ2–GĐ5)
 
 - GĐ2: sao lưu toàn bộ 12 bảng ra ngoài repo (`~/workspace/mamvan-backups/2026-10-21_pre-wipe/`), chạy file gộp migration 003+004+005 (RLS đủ 12 bảng + cột `questions.payload`), TRUNCATE sạch 12 bảng, dựng lại Admin (migration_006) + giáo viên chủ dữ liệu **gv001**.

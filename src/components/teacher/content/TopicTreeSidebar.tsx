@@ -19,6 +19,7 @@ import {
   Trash2,
   GripVertical,
   FolderPlus,
+  ClipboardPlus,
   Layers,
   Sparkles,
   Copy,
@@ -40,6 +41,7 @@ interface TopicTreeSidebarProps {
   selectedItem: SelectedContentItem | null;
   onSelectItem: (item: SelectedContentItem) => void;
   onOpenCreateTopic: () => void;
+  onAddAssignment?: () => void;
   onEditTopic: (topic: TopicWithMeta) => void;
   onDeleteTopic: (topicId: string) => void;
   onReorderTopics: (orderedIds: string[]) => void;
@@ -55,6 +57,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   selectedItem,
   onSelectItem,
   onOpenCreateTopic,
+  onAddAssignment,
   onEditTopic,
   onDeleteTopic,
   onReorderTopics,
@@ -140,6 +143,20 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
           <span>Thêm chủ đề</span>
         </button>
       </div>
+
+      {/* Thêm bài tập & đánh giá: tạo bài tập độc lập giao từng học sinh */}
+      {onAddAssignment && (
+        <div className="px-3 pt-3">
+          <button
+            onClick={onAddAssignment}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-[#2F3E6B] hover:bg-[#28355c] text-white text-xs font-black transition-all shadow-xs"
+            title="Tạo bài tập độc lập và giao cho học sinh"
+          >
+            <ClipboardPlus className="w-4 h-4" />
+            <span>Thêm bài tập & đánh giá</span>
+          </button>
+        </div>
+      )}
 
       {/* Topics Tree List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">

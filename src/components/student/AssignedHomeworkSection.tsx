@@ -4,6 +4,7 @@ import { getStudentAssignments } from '../../services/supabase/biRepository.ts';
 
 interface AssignedHomeworkSectionProps {
   studentId: string;
+  onOpen?: (assignmentId: string) => void;
 }
 
 function fmtDue(v?: string | null): string {
@@ -18,7 +19,10 @@ function fmtDue(v?: string | null): string {
 }
 
 /** Bài tập độc lập được giáo viên giao riêng cho từng em (bảng assignments/targets). */
-export const AssignedHomeworkSection: React.FC<AssignedHomeworkSectionProps> = ({ studentId }) => {
+export const AssignedHomeworkSection: React.FC<AssignedHomeworkSectionProps> = ({
+  studentId,
+  onOpen,
+}) => {
   const [items, setItems] = useState<any[] | null>(null);
 
   useEffect(() => {
@@ -54,7 +58,10 @@ export const AssignedHomeworkSection: React.FC<AssignedHomeworkSectionProps> = (
           return (
             <div
               key={it.targetId}
-              className="bg-white border border-[#E6DCC8] rounded-2xl px-4 py-3 flex items-center gap-3"
+              onClick={onOpen ? () => onOpen(it.assignmentId) : undefined}
+              className={`bg-white border border-[#E6DCC8] rounded-2xl px-4 py-3 flex items-center gap-3 ${
+                onOpen ? 'cursor-pointer hover:border-[#2F3E6B]/60 transition' : ''
+              }`}
             >
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-[#2F3E6B] truncate">{it.title}</p>
@@ -87,6 +94,11 @@ export const AssignedHomeworkSection: React.FC<AssignedHomeworkSectionProps> = (
               ) : (
                 <span className="flex items-center gap-1 text-amber-700 bg-amber-50 font-bold text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
                   <Hourglass size={13} /> Chưa nộp
+                </span>
+              )}
+              {onOpen && (
+                <span className="text-xs font-black text-[#E2704A] whitespace-nowrap">
+                  {done ? 'Làm lại' : 'Làm bài'} →
                 </span>
               )}
             </div>

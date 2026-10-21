@@ -54,6 +54,7 @@ import {
 // Screens
 import { LoginScreen } from './screens/LoginScreen.tsx';
 import { HomeScreen } from './screens/HomeScreen.tsx';
+import { AssignmentAttemptScreen } from './screens/AssignmentAttemptScreen.tsx';
 // Các màn hình còn lại được tải lười (lazy) để chia nhỏ gói JS ban đầu
 const LearnScreen = React.lazy(() =>
   import('./screens/LearnScreen.tsx').then((m) => ({ default: m.LearnScreen }))
@@ -417,6 +418,7 @@ export default function App() {
     | { type: 'video'; videoId: string }
     | { type: 'theory'; theoryId: string }
     | { type: 'homework'; homeworkQuizId?: string }
+    | { type: 'assignment'; assignmentId: string }
   >(null);
 
   // 4. Quản lý Popup nhắc nghỉ & Modal chọn Theme
@@ -887,6 +889,13 @@ export default function App() {
               </div>
             );
           })()
+        ) : activeFlow?.type === 'assignment' ? (
+          /* Luồng làm BÀI TẬP ĐỘC LẬP giáo viên giao (assignments/targets) */
+          <AssignmentAttemptScreen
+            assignmentId={activeFlow.assignmentId}
+            studentId={currentStudentId}
+            onBack={() => setActiveFlow(null)}
+          />
         ) : (
           /* CÁC TAB CHÍNH */
           <React.Suspense
@@ -909,6 +918,7 @@ export default function App() {
                 onSelectVideo={(vId) => setActiveFlow({ type: 'video', videoId: vId })}
                 onSelectTheory={(thId) => setActiveFlow({ type: 'theory', theoryId: thId })}
                 onSelectHomework={(hwId) => setActiveFlow({ type: 'homework', homeworkQuizId: hwId })}
+                onOpenAssignment={(aId) => setActiveFlow({ type: 'assignment', assignmentId: aId })}
                 onNavigateTab={(tab) => setCurrentTab(tab)}
                 latestNotification={unreadNotifications[0] || null}
                 onOpenNotification={handleOpenNotification}
