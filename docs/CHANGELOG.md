@@ -1,3 +1,9 @@
+## 2026-10-22 (SỬA LỖI: xóa chủ đề không ăn — chủ đề tự hồi sinh)
+
+- **Triệu chứng:** bấm thùng rác + xác nhận xóa chủ đề, hộp thoại đóng nhưng chủ đề vẫn còn sau khi tải lại trang (kiểm chứng trình duyệt bấm tới 7 lần không xóa được).
+- **Nguyên nhân:** `deleteTopic` xóa cứng dòng trên Supabase nhưng KHÔNG gỡ chủ đề khỏi bộ đệm payload của trình duyệt; lần nạp sau, `getTopics` coi chủ đề đó là "chỉ có ở máy này" và tự đẩy ngược lên máy chủ (cơ chế chống mất dữ liệu) → chủ đề hồi sinh. Bộ đệm của thiết bị khác cũng gây hồi sinh tương tự. Đây cũng là gốc của việc xóa thẳng trong DB trước đó không hiệu quả.
+- **Cách sửa (migration_011):** bảng topics thêm cột `deleted_at` — xóa chủ đề nay là **xóa mềm** (đóng dấu thời gian xóa): `getTopics` loại mọi dòng đã đóng dấu khỏi mọi thiết bị, danh sách "chỉ có ở máy này" cũng bỏ qua các id đã đóng dấu, và `deleteTopic` gỡ ngay chủ đề khỏi bộ đệm payload của máy đang thao tác.
+
 ## 2026-10-22 (MÔ HÌNH XP MỚI — theo chủ đề & bài kiểm tra, chủ dự án duyệt)
 
 Đổi toàn bộ mô hình XP theo yêu cầu chủ dự án (kế hoạch: KE-HOACH-XP-THEO-CHU-DE-VA-BAI-KIEM-TRA.md):

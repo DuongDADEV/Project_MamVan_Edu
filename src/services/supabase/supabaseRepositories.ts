@@ -2729,7 +2729,14 @@ export class SupabaseContentRepository implements ContentRepository {
         return mockContentRepo.getTopics(classId, onlyPublished);
       }
 
-      const remoteTopics: TopicWithMeta[] = (rows || []).map((row) => {
+      // XÓA MỀM (migration_011): dòng đã đóng dấu deleted_at không hiển thị
+      // ở BẤT KỲ thiết bị nào và không bao giờ bị đẩy hồi sinh.
+      const deletedIds = new Set(
+        (rows || []).filter((r: any) => r.deleted_at).map((r: any) => r.id)
+      );
+      const remoteTopics: TopicWithMeta[] = (rows || [])
+        .filter((row: any) => !row.deleted_at)
+        .map((row) => {
         const vPayload = typeof row.video_payload === 'object' && row.video_payload !== null ? row.video_payload : {};
         const tPayload = typeof row.theory_payload === 'object' && row.theory_payload !== null ? row.theory_payload : {};
 
@@ -2762,6 +2769,7 @@ export class SupabaseContentRepository implements ContentRepository {
           t &&
           t.id &&
           !remoteIds.has(t.id) &&
+          !deletedIds.has(t.id) &&
           !t.deleted_at &&
           (!ownerId || (t as any).teacher_id === ownerId)
       );
@@ -2861,12 +2869,27 @@ export class SupabaseContentRepository implements ContentRepository {
 
     if (!isSupabaseReady()) return;
 
+    // Gỡ chủ đề khỏi bộ đệm payload của máy này — nếu không, getTopics sẽ
+    // coi nó là "chỉ có ở máy này" và tự đẩy hồi sinh (lỗi đã gặp 22/10).
     try {
-      const { error } = await supabase.from('topics').delete().eq('id', id);
+      const cached = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY);
+      writeLocalList(
+        TOPIC_CACHE_KEY,
+        cached.filter((t) => t.id !== id)
+      );
+    } catch {}
+
+    try {
+      // XÓA MỀM: đóng dấu deleted_at để mọi thiết bị đều tôn trọng việc xóa
+      // (xóa cứng khiến bộ đệm của thiết bị khác đẩy hồi sinh chủ đề).
+      const { error } = await supabase
+        .from('topics')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id);
       if (error) {
         console.warn('[SupabaseContent] Lỗi xóa chủ đề trên Supabase:', error.message);
       } else {
-        console.log(`[SupabaseContent] 🗑️ Đã xóa chủ đề [${id}] trên Supabase database.`);
+        console.log(`[SupabaseContent] 🗑️ Đã xóa (mềm) chủ đề [${id}] trên Supabase database.`);
       }
       syncEventBus.emit('content', { deletedTopicId: id });
     } catch (err) {
