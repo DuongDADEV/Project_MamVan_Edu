@@ -248,7 +248,7 @@ export const TeacherTopbar: React.FC<TeacherTopbarProps> = ({
             <div className="absolute top-full right-0 mt-1.5 w-64 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl shadow-xl p-2 z-40 animate-[scaleUp_0.15s_ease]">
               <div className="p-3 bg-[#FAF5EB] rounded-xl border border-[#E6DCC8]/70 mb-2">
                 <p className="font-semibold text-xs text-[#2F3E6B]">{teacher.name}</p>
-                <p className="text-[11px] text-[#6B7280] mt-0.5">{teacher.email || 'nguyenvanan.van7@mamvan.edu.vn'}</p>
+                <p className="text-[11px] text-[#6B7280] mt-0.5">{teacher.email || 'Chưa cập nhật email'}</p>
                 <div className="mt-2 flex items-center gap-1.5 text-[10px] text-[#2E5E3D] bg-[#7FA88A]/15 px-2 py-0.5 rounded-full w-fit">
                   <School className="w-3 h-3" />
                   <span>{teacher.school}</span>

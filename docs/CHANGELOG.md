@@ -1,5 +1,11 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-21] - Bảo mật: bổ sung header bảo mật cho bản production + gỡ email hardcode
+- Theo kết quả rà soát bảo mật (audit) ngày 21/10: trước đây trang chưa có header bảo mật nào, Vercel phát mặc định `Access-Control-Allow-Origin: *` và lộ banner `Server: Vercel`.
+- Nay `vercel.json` bổ sung cho mọi đường dẫn: Content-Security-Policy (chỉ cho phép script từ chính trang; kết nối giới hạn ở Supabase, Gemini API, r.jina.ai, noembed; cấm nhúng trang vào iframe của trang khác qua `frame-ancestors 'self'`), X-Frame-Options: SAMEORIGIN (chống clickjacking), X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy (khóa camera/micro/định vị/thanh toán), Strict-Transport-Security (ép HTTPS 2 năm), và Access-Control-Allow-Origin thu hẹp về đúng `https://mamvan.vercel.app`.
+- Gỡ email thật hardcode `nguyenvanan.van7@mamvan.edu.vn` khỏi bundle: trước đây email này là giá trị dự phòng hiển thị ở menu tài khoản giáo viên khi hồ sơ chưa có email; nay hiển thị "Chưa cập nhật email".
+- Việc còn treo ngoài đợt này: logic XP/điểm danh vẫn tính ở client (mục Info của audit) — muốn bịt hẳn phải khóa quyền ghi ở tầng cơ sở dữ liệu (RLS + các migration 003/004/005 đang chờ chủ dự án chạy trong Supabase), không thuộc phạm vi sửa cấu hình lần này.
+
 ## [2026-10-21] - Ngân hàng câu hỏi: bỏ thanh trạng thái Mầm AI
 - Theo yêu cầu của chủ dự án: gỡ hẳn thanh "Mầm AI đang kích hoạt (AI-2.5-flash)" + nút Cấu hình khỏi đầu màn Ngân hàng câu hỏi, kèm modal nhập API Key riêng của thanh này (không còn nơi nào mở nữa).
 - Cấu hình API Key / model Gemini vẫn còn nguyên ở tab Cài đặt và ngay trong Mầm AI Studio (mở bằng nút "Mở Mầm AI Studio" trên cùng màn hình) — không mất chức năng nào.
