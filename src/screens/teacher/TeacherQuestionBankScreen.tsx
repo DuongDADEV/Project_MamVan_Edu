@@ -642,11 +642,13 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      {/* 1. KHỐI ĐẦU TRANG GỘP (theo yêu cầu chủ dự án): tiêu đề + nút hành
-          động + thanh TAB nằm chung MỘT khối trên cùng, thay cho tiêu đề một
-          nơi, tab một nơi như trước */}
+      {/* 1. KHỐI ĐẦU TRANG GỘP (theo yêu cầu chủ dự án): tiêu đề bên trái;
+          bên phải là MỘT CỤM 4 NÚT SÁT NHAU ở đúng vị trí nút "Thêm câu hỏi
+          thủ công": 3 tab (Kho ngân hàng / Bản nháp / Mầm AI Studio) + nút
+          Thêm câu hỏi thủ công. Nút cam "Mở Mầm AI Studio" ĐÃ XÓA (trùng
+          chức năng với tab Mầm AI Studio). */}
       <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl px-5 pt-4 pb-4 shadow-2xs">
-      <div className="[&>*]:mb-0 [&>*]:pb-3">
+      <div className="[&>*]:mb-0 [&>*]:pb-0 [&>*]:border-b-0">
       <PageHeader
         title="Ngân hàng câu hỏi & Kho học liệu"
         subtitle="Quản lý toàn bộ câu hỏi trắc nghiệm, tự luận, video bài giảng và lý thuyết; tích hợp Mầm AI Studio đối chiếu trực tiếp từ ngữ liệu."
@@ -657,7 +659,56 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           </span>
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Cụm 3 tab */}
+            <div className="flex items-center gap-1 p-1 bg-[#FAF5EB] border border-[#E6DCC8] rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('bank')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeMainTab === 'bank'
+                    ? 'bg-[#2F3E6B] text-white shadow-xs'
+                    : 'text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-black/5'
+                }`}
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span>Kho ngân hàng</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftsVersion((v) => v + 1);
+                  setActiveMainTab('drafts');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeMainTab === 'drafts'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-[#8C7E6A] hover:text-amber-600 hover:bg-amber-50'
+                }`}
+              >
+                <NotebookPen className="w-4 h-4" />
+                <span>Bản nháp</span>
+                {pendingDraftCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">
+                    {pendingDraftCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('ai_studio')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeMainTab === 'ai_studio'
+                    ? 'bg-[#E2704A] text-white shadow-xs'
+                    : 'text-[#8C7E6A] hover:text-[#E2704A] hover:bg-[#E2704A]/5'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Mầm AI Studio</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/5 font-bold">RAG Studio</span>
+              </button>
+            </div>
+            {/* Nút thêm câu hỏi thủ công — sát ngay cụm tab */}
             <button
               type="button"
               onClick={handleOpenAddQuestionModal}
@@ -666,21 +717,10 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               <Plus className="w-4 h-4 text-[#E2704A]" />
               <span>Thêm câu hỏi thủ công</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveMainTab(activeMainTab === 'ai_studio' ? 'bank' : 'ai_studio')}
-              className={`px-4 py-2 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer ${
-                activeMainTab === 'ai_studio'
-                  ? 'bg-[#2F3E6B] text-white hover:bg-[#233055]'
-                  : 'bg-gradient-to-r from-[#E2704A] to-[#D45E36] hover:from-[#D45E36] hover:to-[#C34F28] text-white'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{activeMainTab === 'ai_studio' ? '📚 Quay lại Kho ngân hàng' : '⚡ Mở Mầm AI Studio'}</span>
-            </button>
           </div>
         }
       />
+      </div>
       </div>
 
       {/* TOAST THÔNG BÁO NỔI */}
@@ -690,58 +730,6 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           <span className="text-xs font-medium">{toastMessage}</span>
         </div>
       )}
-
-
-      {/* 2. TAB SWITCHER CHÍNH — nay nằm TRONG khối đầu trang gộp */}
-      <div className="flex items-center gap-2 p-1.5 bg-[#FAF5EB] border border-[#E6DCC8] rounded-2xl w-fit">
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('bank')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeMainTab === 'bank'
-              ? 'bg-[#2F3E6B] text-white shadow-xs'
-              : 'text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-black/5'
-          }`}
-        >
-          <FolderOpen className="w-4 h-4" />
-          <span>Kho ngân hàng</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setDraftsVersion((v) => v + 1);
-            setActiveMainTab('drafts');
-          }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeMainTab === 'drafts'
-              ? 'bg-amber-500 text-white shadow-xs'
-              : 'text-[#8C7E6A] hover:text-amber-600 hover:bg-amber-50'
-          }`}
-        >
-          <NotebookPen className="w-4 h-4" />
-          <span>Bản nháp</span>
-          {pendingDraftCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">
-              {pendingDraftCount}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('ai_studio')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeMainTab === 'ai_studio'
-              ? 'bg-[#E2704A] text-white shadow-xs'
-              : 'text-[#8C7E6A] hover:text-[#E2704A] hover:bg-[#E2704A]/5'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Mầm AI Studio</span>
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-white/20 font-bold">RAG Studio</span>
-        </button>
-      </div>
-
-      </div>
 
       {/* ========================================================================= */}
       {/* PHÂN HỆ 1: XƯỞNG SÁNG TẠO AI NOTEBOOKLM (NHÚNG TRỰC TIẾP ĐẦY ĐỦ 3 CỘT)    */}

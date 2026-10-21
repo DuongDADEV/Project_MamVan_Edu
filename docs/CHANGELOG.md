@@ -1,3 +1,7 @@
+## 2026-10-22 (cụm nút đầu trang Ngân hàng — theo yêu cầu chủ dự án)
+
+- **Ngân hàng câu hỏi:** 4 nút [Kho ngân hàng] [Bản nháp] [Mầm AI Studio] [+ Thêm câu hỏi thủ công] **gom thành một cụm sát nhau ở góc phải đầu trang** (đúng vị trí nút Thêm câu hỏi trước đây); **xóa hẳn nút cam "Mở Mầm AI Studio"** (trùng chức năng với tab Mầm AI Studio).
+
 ## 2026-10-22 (gộp khối đầu trang Ngân hàng câu hỏi)
 
 - **Ngân hàng câu hỏi & Kho học liệu:** tiêu đề trang + 2 nút hành động (Thêm câu hỏi thủ công / Mở Mầm AI Studio) + thanh tab (Kho ngân hàng / Bản nháp / Mầm AI Studio) **gộp vào MỘT khối đầu trang duy nhất** (trước: tiêu đề một nơi, tab một nơi) — cùng đợt đồng bộ với màn Chấm bài.
