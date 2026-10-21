@@ -1740,42 +1740,42 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
             {/* LỰA CHỌN LOẠI ĐẦU RA */}
             <div>
               <label className="text-xs font-bold text-[#2F3E6B] block mb-1.5">Loại nội dung cần tạo:</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   onClick={() => setOutputType('quiz')}
-                  className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-all ${
+                  className={`h-[68px] px-1 py-2 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-colors overflow-hidden ${
                     outputType === 'quiz'
-                      ? 'bg-white border-[#E2704A] text-[#E2704A] font-bold shadow-xs'
-                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A]'
+                      ? 'bg-white border-[#E2704A] text-[#E2704A] shadow-xs'
+                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A] hover:border-[#E2704A]/50'
                   }`}
                 >
                   <HelpCircle className="w-4 h-4" />
-                  <span className="text-[11px]">Bộ câu hỏi</span>
+                  <span className="text-[10.5px] font-bold tracking-tight whitespace-nowrap">Bộ câu hỏi</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setOutputType('video')}
-                  className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-all ${
+                  className={`h-[68px] px-1 py-2 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-colors overflow-hidden ${
                     outputType === 'video'
-                      ? 'bg-white border-[#E2704A] text-[#E2704A] font-bold shadow-xs'
-                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A]'
+                      ? 'bg-white border-[#E2704A] text-[#E2704A] shadow-xs'
+                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A] hover:border-[#E2704A]/50'
                   }`}
                 >
                   <Video className="w-4 h-4" />
-                  <span className="text-[11px]">Ý trọng tâm video</span>
+                  <span className="text-[10.5px] font-bold tracking-tight whitespace-nowrap">Ý trọng tâm video</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setOutputType('theory')}
-                  className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-all ${
+                  className={`h-[68px] px-1 py-2 rounded-xl border flex flex-col items-center justify-center gap-1 text-center transition-colors overflow-hidden ${
                     outputType === 'theory'
-                      ? 'bg-white border-[#E2704A] text-[#E2704A] font-bold shadow-xs'
-                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A]'
+                      ? 'bg-white border-[#E2704A] text-[#E2704A] shadow-xs'
+                      : 'bg-white/50 border-[#E6DCC8] text-[#8C7E6A] hover:border-[#E2704A]/50'
                   }`}
                 >
                   <BookOpen className="w-4 h-4" />
-                  <span className="text-[11px]">Lý thuyết chi tiết</span>
+                  <span className="text-[10.5px] font-bold tracking-tight whitespace-nowrap">Lý thuyết chi tiết</span>
                 </button>
               </div>
             </div>

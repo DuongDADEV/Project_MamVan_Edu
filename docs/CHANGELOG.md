@@ -1,3 +1,5 @@
+- (Bổ sung cùng đợt, theo làm rõ của chủ dự án) **3 thẻ chọn loại nội dung** trong panel (Bộ câu hỏi / Ý trọng tâm video / Lý thuyết chi tiết) cũng đã **fix cứng kích thước**: trước đây thẻ đang chọn được bôi đậm làm chữ phình ra — "Ý trọng tâm video" bị rớt chữ "video" xuống dòng và thẻ đổi chiều cao theo trạng thái chọn. Nay cả 3 thẻ cố định chiều cao 68px, chữ luôn đậm như nhau + không xuống dòng (thu hẹp khoảng cách lưới và đệm thẻ để chữ nằm gọn một hàng); chọn thẻ nào chỉ viền/nền đổi, cỡ thẻ không đổi nữa.
+
 ## 2026-10-22 (đợt BÀI TẬP & ĐÁNH GIÁ NGANG HÀNG CHỦ ĐỀ) — mục riêng trong cây + màn soạn bài kiểm tra
 
 Theo yêu cầu chủ dự án: "Thêm bài tập & đánh giá" phải ngang vai trò với "Thêm chủ đề"; mỗi bài là một mục riêng như một bài kiểm tra có nhiều câu hỏi.
