@@ -583,7 +583,27 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   const handleOpenPublishModalForCurrent = async () => {
     if (!selectedItem) return;
 
-    if (selectedItem.type === 'video') {
+    if (selectedItem.type === 'topic') {
+      const t = topics.find((item) => item.id === selectedItem.id);
+      if (!t) return;
+      const itemCount =
+        videos.filter((v) => v.topicId === t.id).length +
+        theories.filter((th) => th.topicId === t.id).length +
+        quizzes.filter((q) => q.topicId === t.id).length;
+      const warnings: string[] = [];
+      if (itemCount === 0)
+        warnings.push('Chủ đề chưa có bài nào — học sinh sẽ thấy một chủ đề trống.');
+      setPublishTarget({
+        id: t.id,
+        type: 'topic',
+        title: t.title,
+        classIds: ['all'],
+        version: 1,
+        hasStudentAttempts: false,
+        warnings,
+      });
+      setIsPublishModalOpen(true);
+    } else if (selectedItem.type === 'video') {
       const v = videos.find((item) => item.id === selectedItem.id);
       if (!v) return;
       const warnings: string[] = [];
@@ -901,6 +921,25 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
                 className="px-4 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B]"
               >
                 Chỉnh sửa chủ đề
+              </button>
+              {/* Xuất bản CHỦ ĐỀ — trước đây thiếu hẳn nút này nên chủ đề mới
+                  tạo kẹt ở Bản nháp và học sinh không bao giờ thấy */}
+              <button
+                type="button"
+                onClick={handleOpenPublishModalForCurrent}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 ${
+                  currentTopic.status === 'published'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : 'bg-[#2F3E6B] hover:bg-[#28355c] text-white'
+                }`}
+                title="Xuất bản chủ đề để học sinh nhìn thấy trên web học"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>
+                  {currentTopic.status === 'published'
+                    ? 'Đã xuất bản — cập nhật lại'
+                    : 'Cập nhật lên web học sinh'}
+                </span>
               </button>
               <div className="relative">
                 <button

@@ -1,3 +1,10 @@
+## 2026-10-22 (đợt sửa theo kiểm chứng luồng học + đồng bộ màn Chấm bài)
+
+- **Bổ sung XUẤT BẢN CHỦ ĐỀ:** trang chi tiết chủ đề có nút "Cập nhật lên web học sinh" mở PublishModal dùng chung (nhánh topic trong `handleOpenPublishModalForCurrent`). Trước đây cơ chế xuất bản chỉ có cho Video/Lý thuyết/Bài tập — chủ đề mới tạo kẹt ở Bản nháp vĩnh viễn, học sinh không thấy (phát hiện khi kiểm chứng luồng học bước 5–6).
+- **Siết lớp lưu trữ — hết "bài tự biến mất":** kiểm chứng phát hiện video tạo trong chủ đề mới hiện trong cây/dải rồi biến mất: `saveVideoLesson` lưu cục bộ rồi đẩy Supabase, đẩy hỏng vẫn trả về thành công (chỉ log khi thành công) nên chủ đề ghi tham chiếu treo còn dòng video không hề lên máy chủ. Nay `saveVideoLesson / saveTheoryLesson / saveQuiz` dùng `pushOrThrow`: đẩy hỏng → thử lại 1 lần sau 700ms → vẫn hỏng thì **ném lỗi** để tầng tạo bài dừng lại và báo giáo viên, thay vì im lặng.
+- **Màn Chấm bài — gộp đầu trang + đồng bộ theme** (theo yêu cầu chủ dự án): 2 thẻ thống kê lớn (Cần chấm / Chờ > 24 giờ) và thanh tìm kiếm–bộ lọc riêng được **gộp thành một dải gọn duy nhất** trên cùng (thống kê dạng pill, giữ nguyên mọi thao tác lọc khi bấm), bảng hàng đợi được đẩy lên cao; **đầu bảng đổi từ cam #F59E0B chói sang navy #2F3E6B** đồng bộ giao diện chung.
+- Ghi nhận vận hành: lần dọn chủ đề thử "CHỦ ĐỀ THỬ LUỒNG — XÓA SAU TEST" — xóa thẳng trong DB bị app **hồi sinh** từ bộ đệm trình duyệt (cơ chế tự đồng bộ local→Supabase); phải xóa qua giao diện mới sạch (xem mục sơ đồ).
+
 ## 2026-10-22 (tách mục) — Cây tách 2 tab riêng: Chủ đề / Bài tập & đánh giá
 
 - Theo phản hồi của chủ dự án (hai loại chung một danh sách "khó nhìn, khó kiểm soát"): cột cây nay có **công tắc 2 tab** ở đầu — tab **Chủ đề** chỉ hiện cây chủ đề, tab **Bài tập & đánh giá** thay đúng vị trí đó bằng danh sách bài kiểm tra; mỗi tab có số đếm riêng và **nút Thêm của riêng tab đó**. Chọn một bài tập (vừa tạo mới hoặc bấm thẻ) thì cột tự chuyển sang tab Bài tập & đánh giá và ngược lại.

@@ -153,69 +153,59 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
   }, [filteredSubmissions, quizzes, questionsMap]);
 
   return (
-    <div className="space-y-6">
-      {/* 1. THẺ THỐNG KÊ NHANH — 2 thẻ theo mẫu: Cần chấm (gộp gợi ý AI) + Chờ > 24 giờ màu đỏ nổi nhất */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        {/* Cần chấm */}
+    <div className="space-y-4">
+      {/* 1+2 GỘP MỘT DẢI GỌN TRÊN ĐẦU (theo yêu cầu chủ dự án: gộp thống kê
+          + tìm kiếm + bộ lọc vào MỘT thẻ trên cùng cho bảng được đẩy lên cao,
+          thay cho 2 thẻ thống kê lớn + 1 thanh lọc riêng xếp chồng như trước).
+          Mọi thao tác lọc bấm trên thẻ giữ nguyên hành vi cũ. */}
+      <div className="bg-white p-3 rounded-2xl border border-[#E8DFD1] shadow-xs flex flex-wrap items-center gap-2.5">
+        {/* Cụm thống kê nhanh dạng pill gọn */}
         <div
           onClick={() => handleToolbarPick(statusFilter === 'UNGRADED' ? 'status:ALL' : 'status:UNGRADED')}
-          className={`cursor-pointer p-4 rounded-2xl border transition-all ${
+          className={`cursor-pointer flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
             statusFilter === 'UNGRADED'
-              ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400'
-              : 'bg-white border-[#E8DFD1] hover:border-amber-200 hover:shadow-xs'
+              ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-400'
+              : 'bg-[#FAF5EB] border-[#E8DFD1] hover:border-amber-300'
           }`}
+          title="Lọc các bài cần chấm"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-bold text-slate-700">Cần chấm</span>
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-[#1E1B4B]">{stats.pending + stats.aiSuggested}</span>
-            <span className="text-xs text-slate-400">bài</span>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleToolbarPick(statusFilter === 'AI_SUGGESTED' ? 'status:ALL' : 'status:AI_SUGGESTED');
-            }}
-            className={`mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold transition-colors ${
-              statusFilter === 'AI_SUGGESTED'
-                ? 'bg-purple-600 border-purple-600 text-white'
-                : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
-            }`}
-            title="Lọc riêng các bài đã có gợi ý AI"
-          >
-            <Sparkles className="w-3 h-3" /> Đã có gợi ý AI · {stats.aiSuggested}
-          </button>
+          <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+          <span className="text-xs font-bold text-slate-600">Cần chấm</span>
+          <span className="text-lg font-black text-[#2F3E6B] leading-none">
+            {stats.pending + stats.aiSuggested}
+          </span>
+          <span className="text-[11px] text-slate-400">bài</span>
         </div>
 
-        {/* Chờ > 24 giờ — màu đỏ, nổi nhất */}
+        <button
+          type="button"
+          onClick={() =>
+            handleToolbarPick(statusFilter === 'AI_SUGGESTED' ? 'status:ALL' : 'status:AI_SUGGESTED')
+          }
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${
+            statusFilter === 'AI_SUGGESTED'
+              ? 'bg-purple-600 border-purple-600 text-white'
+              : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
+          }`}
+          title="Lọc riêng các bài đã có gợi ý AI"
+        >
+          <Sparkles className="w-3.5 h-3.5" /> Đã có gợi ý AI · {stats.aiSuggested}
+        </button>
+
         <div
           onClick={() => handleToolbarPick('sort:waiting_desc')}
-          className="cursor-pointer p-4 rounded-2xl border-2 border-rose-400 bg-rose-50 shadow-xs transition-all hover:shadow-sm"
-          title="Sắp xếp hàng đợi theo thời gian chờ lâu nhất"
+          className="cursor-pointer flex items-center gap-2 px-3 py-2 rounded-xl border border-rose-300 bg-rose-50 transition-all hover:border-rose-400"
+          title="Đưa các bài chờ lâu nhất lên đầu hàng đợi"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-bold text-rose-700 flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4 text-rose-600" /> Chờ &gt; 24 giờ
-            </span>
-            {stats.urgent > 0 && <span className="animate-ping w-2.5 h-2.5 rounded-full bg-rose-500" />}
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-rose-600">{stats.urgent}</span>
-            <span className="text-xs font-semibold text-rose-500">cần ưu tiên</span>
-          </div>
-          <p className="mt-3 text-[11px] font-medium text-rose-500">
-            Bấm để đưa các bài chờ lâu nhất lên đầu hàng đợi
-          </p>
+          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+          <span className="text-xs font-bold text-rose-700">Chờ &gt; 24 giờ</span>
+          <span className="text-lg font-black text-rose-600 leading-none">{stats.urgent}</span>
+          <span className="text-[11px] font-semibold text-rose-500">cần ưu tiên</span>
+          {stats.urgent > 0 && <span className="animate-ping w-2 h-2 rounded-full bg-rose-500" />}
         </div>
-      </div>
 
-      {/* 2. THANH CÔNG CỤ TÌM KIẾM VÀ BỘ LỌC */}
-      <div className="bg-white p-4 rounded-2xl border border-[#E8DFD1] shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
         {/* Ô tìm kiếm */}
-        <div className="relative w-full md:w-80">
+        <div className="relative flex-1 min-w-44">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -226,9 +216,8 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
           />
         </div>
 
-        {/* Bộ lọc Lớp, Trạng thái, Sắp xếp */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
-          {/* Lọc Lớp */}
+        {/* Bộ lọc Lớp + ô gộp Trạng thái/Sắp xếp */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <select
             value={classFilter}
             onChange={(e) => setClassFilter(e.target.value)}
@@ -242,7 +231,6 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
             ))}
           </select>
 
-          {/* Ô GỘP: Lọc trạng thái + Sắp xếp trong 1 ô (đã bỏ lựa chọn "Nộp trước nhất") */}
           <select
             value={toolbarPick}
             onChange={(e) => handleToolbarPick(e.target.value)}
@@ -263,12 +251,13 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
         </div>
       </div>
 
-      {/* 3. BẢNG HÀNG ĐỢI THEO HỌC SINH (mẫu thiết kế: đầu bảng cam, 6 cột) */}
+      {/* 3. BẢNG HÀNG ĐỢI THEO HỌC SINH — đầu bảng NAVY đồng bộ giao diện
+          chung (trước là cam #F59E0B chói, lệch tông với toàn app) */}
       <div className="bg-white rounded-2xl border border-[#E8DFD1] overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="bg-[#F59E0B] text-[#1E1B4B] text-xs font-extrabold uppercase tracking-wide">
+              <tr className="bg-[#2F3E6B] text-white text-xs font-extrabold uppercase tracking-wide">
                 <th className="py-3 px-4">Học sinh</th>
                 <th className="py-3 px-4">Lớp</th>
                 <th className="py-3 px-4 text-center">Chủ đề đã làm</th>

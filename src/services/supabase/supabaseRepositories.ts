@@ -75,6 +75,25 @@ import {
 } from './payloadStore.ts';
 import { generateUsername, generateFriendlyPassword, generateStudentCode } from '../mock/credentialUtils.ts';
 
+/**
+ * Đẩy 1 bản ghi lên Supabase cho các thao tác TẠO MỚI: thất bại thì thử lại
+ * 1 lần, vẫn hỏng thì NÉM lỗi để tầng gọi dừng lại và báo cho giáo viên.
+ * (Trước đây lỗi đẩy bị nuốt: hàm lưu trả về "thành công" trong khi bản ghi
+ * không hề lên máy chủ — bài tạo xong hiện trong cây rồi tự biến mất sau khi
+ * tải lại trang, chỉ còn tham chiếu treo trong chủ đề. Điển hình: video tạo
+ * trong chủ đề mới ngày 22/10.)
+ */
+async function pushOrThrow(table: string, item: PayloadItem): Promise<void> {
+  let ok = await pushPayloadItem(table, item);
+  if (!ok) {
+    await new Promise((r) => setTimeout(r, 700));
+    ok = await pushPayloadItem(table, item);
+  }
+  if (!ok) {
+    throw new Error('Không lưu được lên máy chủ. Thầy/Cô kiểm tra kết nối mạng rồi thử lại.');
+  }
+}
+
 const TOPIC_CACHE_KEY = 'mam_van_topics';
 const VIDEO_CACHE_KEY = 'mam_van_videos';
 const THEORY_CACHE_KEY = 'mam_van_theories';
@@ -2364,7 +2383,7 @@ export class SupabaseQuizRepository implements QuizRepository {
   async saveQuiz(quiz: Partial<QuizWithMeta>): Promise<QuizWithMeta> {
     await this.ensureQuizLocal(quiz.id);
     const saved = await mockQuizRepo.saveQuiz(quiz);
-    const ok = await pushPayloadItem('quizzes', saved);
+    await pushOrThrow('quizzes', saved as unknown as PayloadItem);
     return saved;
   }
 
@@ -2951,15 +2970,15 @@ export class SupabaseContentRepository implements ContentRepository {
   async saveVideoLesson(video: Partial<VideoLessonWithMeta>): Promise<VideoLessonWithMeta> {
     await this.ensureLocal('video_lessons', VIDEO_CACHE_KEY, video.id);
     const saved = await mockContentRepo.saveVideoLesson(video);
-    const ok = await pushPayloadItem('video_lessons', saved);
-    if (ok) console.log(`[SupabaseContent] ✅ Đã lưu video [${saved.id}] vào Supabase database.`);
+    await pushOrThrow('video_lessons', saved as unknown as PayloadItem);
+    console.log(`[SupabaseContent] ✅ Đã lưu video [${saved.id}] vào Supabase database.`);
     return saved;
   }
 
   async saveTheoryLesson(theory: Partial<TheoryLessonWithMeta>): Promise<TheoryLessonWithMeta> {
     await this.ensureLocal('theory_lessons', THEORY_CACHE_KEY, theory.id);
     const saved = await mockContentRepo.saveTheoryLesson(theory);
-    const ok = await pushPayloadItem('theory_lessons', saved);
+    await pushOrThrow('theory_lessons', saved as unknown as PayloadItem);
     return saved;
   }
 
