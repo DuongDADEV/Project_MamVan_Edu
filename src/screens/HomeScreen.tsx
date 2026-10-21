@@ -6,6 +6,7 @@ import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
+import { AssignedHomeworkSection } from '../components/student/AssignedHomeworkSection.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
 import { ChestIllustration } from '../components/rewards/ChestIllustration.tsx';
 import { getChestTierConfig } from '../config.ts';
@@ -325,6 +326,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ================= BÀI TẬP ĐỘC LẬP ĐƯỢC GIAO (dữ liệu assignments/targets) ================= */}
+      <AssignedHomeworkSection studentId={state.profile.id} />
 
       {/* ================= 2. SUBJECT / TOPIC CAROUSEL (IN THE STYLE OF THE REFERENCE IMAGE) ================= */}
       <div className="space-y-3">
