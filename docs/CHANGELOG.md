@@ -1,3 +1,7 @@
+## 2026-10-22 (tách mục) — Cây tách 2 tab riêng: Chủ đề / Bài tập & đánh giá
+
+- Theo phản hồi của chủ dự án (hai loại chung một danh sách "khó nhìn, khó kiểm soát"): cột cây nay có **công tắc 2 tab** ở đầu — tab **Chủ đề** chỉ hiện cây chủ đề, tab **Bài tập & đánh giá** thay đúng vị trí đó bằng danh sách bài kiểm tra; mỗi tab có số đếm riêng và **nút Thêm của riêng tab đó**. Chọn một bài tập (vừa tạo mới hoặc bấm thẻ) thì cột tự chuyển sang tab Bài tập & đánh giá và ngược lại.
+
 - (Bổ sung cùng đợt, theo làm rõ của chủ dự án) **3 thẻ chọn loại nội dung** trong panel (Bộ câu hỏi / Ý trọng tâm video / Lý thuyết chi tiết) cũng đã **fix cứng kích thước**: trước đây thẻ đang chọn được bôi đậm làm chữ phình ra — "Ý trọng tâm video" bị rớt chữ "video" xuống dòng và thẻ đổi chiều cao theo trạng thái chọn. Nay cả 3 thẻ cố định chiều cao 68px, chữ luôn đậm như nhau + không xuống dòng (thu hẹp khoảng cách lưới và đệm thẻ để chữ nằm gọn một hàng); chọn thẻ nào chỉ viền/nền đổi, cỡ thẻ không đổi nữa.
 
 ## 2026-10-22 (đợt BÀI TẬP & ĐÁNH GIÁ NGANG HÀNG CHỦ ĐỀ) — mục riêng trong cây + màn soạn bài kiểm tra
