@@ -151,22 +151,24 @@ export const TopicFlowStrip: React.FC<TopicFlowStripProps> = ({
             Chủ đề chưa có bài nào — bấm + để thêm bài đầu tiên.
           </span>
         )}
+      </div>
 
-        {/* Nút + thêm bài */}
-        <div className="relative shrink-0 ml-1">
-          <button
-            type="button"
-            onClick={() => setAddOpen((p) => !p)}
-            className="flex items-center gap-1 h-8 pl-1.5 pr-2.5 rounded-full border-2 border-dashed border-[#E2704A]/70 text-[#E2704A] bg-[#E2704A]/5 hover:bg-[#E2704A]/15 transition-all"
-            title="Thêm bài mới vào luồng học"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="text-[11px] font-black">Thêm bài</span>
-          </button>
-          {addOpen && (
-            <>
-              <div className="fixed inset-0 z-20" onClick={() => setAddOpen(false)} />
-              <div className="absolute right-0 top-10 w-48 bg-white border border-[#E6DCC8] rounded-2xl shadow-xl z-30 p-1.5">
+      {/* Nút + thêm bài — nằm NGOÀI vùng cuộn ngang để menu xổ xuống phủ lên
+          các mục bên dưới, không bị cắt mất */}
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          onClick={() => setAddOpen((p) => !p)}
+          className="flex items-center gap-1 h-8 pl-1.5 pr-2.5 rounded-full border-2 border-dashed border-[#E2704A]/70 text-[#E2704A] bg-[#E2704A]/5 hover:bg-[#E2704A]/15 transition-all"
+          title="Thêm bài mới vào luồng học"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="text-[11px] font-black">Thêm bài</span>
+        </button>
+        {addOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setAddOpen(false)} />
+            <div className="absolute right-0 top-[calc(100%+6px)] w-48 bg-white border border-[#E6DCC8] rounded-2xl shadow-xl z-50 p-1.5">
                 {(['video', 'theory', 'quiz'] as const).map((kind) => (
                   <button
                     key={kind}
@@ -184,7 +186,6 @@ export const TopicFlowStrip: React.FC<TopicFlowStripProps> = ({
               </div>
             </>
           )}
-        </div>
       </div>
     </div>
   );

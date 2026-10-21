@@ -833,7 +833,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                     onClick={() => onCreateLinkedQuiz('practice')}
                     className="text-[10px] text-[#E2704A] hover:underline font-bold"
                   >
-                    + Tạo mới ngay
+                    + Tạo mới
                   </button>
                 </div>
                 <select
@@ -858,7 +858,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                     onClick={() => onCreateLinkedQuiz('quick')}
                     className="text-[10px] text-[#E2704A] hover:underline font-bold"
                   >
-                    + Tạo mới ngay
+                    + Tạo mới
                   </button>
                 </div>
                 <select

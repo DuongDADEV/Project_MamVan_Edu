@@ -641,7 +641,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                   onClick={() => onCreateLinkedQuiz('practice')}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
-                  + Tạo mới ngay
+                  + Tạo mới
                 </button>
               </div>
               <select
@@ -667,7 +667,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                   onClick={() => onCreateLinkedQuiz('quick')}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
-                  + Tạo mới ngay
+                  + Tạo mới
                 </button>
               </div>
               <select
@@ -693,7 +693,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                   onClick={() => onCreateLinkedQuiz('mastery')}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
-                  + Tạo mới ngay
+                  + Tạo mới
                 </button>
               </div>
               <select

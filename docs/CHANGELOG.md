@@ -1,3 +1,8 @@
+## 2026-10-22 (hotfix bố cục 2) — Menu Thêm bài phủ lên trên + thống nhất chữ "Tạo mới"
+
+- **Sửa lỗi menu "+ Thêm bài" bị cắt mất:** nút thêm trước đây nằm bên trong vùng cuộn ngang của thanh luồng nên menu xổ xuống bị vùng cuộn nuốt mất; đã đưa nút ra ngoài vùng cuộn — menu giờ xổ xuống **phủ lên trên** trình soạn bên dưới (z-50), bấm ra ngoài để đóng.
+- **Thống nhất cách gọi:** 5 link "+ Tạo mới ngay" ở phần bài liên kết của trình soạn Video (3 mục: Bài luyện tập / Kiểm tra 1 / Kiểm tra 2) và Lý thuyết (2 mục) đổi thành "+ Tạo mới" cho đồng nhất với các nút Tạo mới khác trong trang.
+
 ## 2026-10-22 (ngay sau đợt Luồng học) — Gọn bố cục dải luồng học
 
 - `TopicFlowStrip` viết lại phần hiển thị theo phản hồi của chủ dự án ("bố cục khó chịu"): từ một thẻ cao ~110px (nút tròn + tên bài 2 dòng bên dưới + sợi nối kéo dài hết chiều ngang khi ít bài) thành **một thanh mỏng ~52px**: nút tròn 32px, tên bài + loại bài nằm ngang bên cạnh, các bài xếp sát nhau bên trái (nối bằng đoạn gạch ngắn cố định, cuộn ngang khi dài), bỏ dòng chữ hướng dẫn dài (chỉ còn trong tooltip), nhãn "Luồng học · tên chủ đề" thu thành một cột nhỏ bên trái. Chức năng giữ nguyên: bấm để tới bài, kéo–thả đổi thứ tự, chấm trạng thái, nút "+ Thêm bài".
