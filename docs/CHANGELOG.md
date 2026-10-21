@@ -1,3 +1,9 @@
+## 2026-10-22 (đợt bố cục 3) — Bỏ nút Tạo mới đầu trang, menu theo theme gọn, bài mới chèn ngay sau bài đang mở
+
+- **Bỏ nút "+ Tạo mới" ở góc trên trang Nội dung học** (yêu cầu chủ dự án): tạo bài chỉ còn ở 3 vị trí có ngữ cảnh — dòng "+ Tạo mới" cuối cây, "Thêm vào chủ đề" ở chi tiết chủ đề, "+ Thêm bài" trên dải luồng.
+- **Menu "Thêm vào chủ đề" sửa theo theme gọn** (lấy menu 3 dòng của dải luồng làm gốc): mỗi loại một dòng icon + tên, bấm dòng = tạo thủ công, icon ✦ ở cuối dòng = Tạo với AI; bỏ hẳn kiểu hai cấp "• Tạo thủ công / Tạo với AI (sắp có)" lồng bên dưới.
+- **Quy tắc vị trí mới khi tạo bài** (`logic/flowOrder.ts` thêm `insertFlowKeyAfter`, `TeacherContentScreen.placeInFlowOrder`): bài mới tạo được **chèn NGAY SAU bài đang mở** trong luồng của chủ đề (đang ở vị trí 1 tạo mới → bài mới ở vị trí 2), áp cho mọi đường tạo: menu cây / chi tiết chủ đề / dải luồng / nút "+ Tạo mới" tạo bài liên kết trong trình soạn Video & Lý thuyết (bài liên kết trước đây chỉ hiện ở cuối nhờ thứ tự suy ra tạm). Không mở bài nào → vào cuối luồng như cũ.
+
 ## 2026-10-22 (hotfix bố cục 2) — Menu Thêm bài phủ lên trên + thống nhất chữ "Tạo mới"
 
 - **Sửa lỗi menu "+ Thêm bài" bị cắt mất:** nút thêm trước đây nằm bên trong vùng cuộn ngang của thanh luồng nên menu xổ xuống bị vùng cuộn nuốt mất; đã đưa nút ra ngoài vùng cuộn — menu giờ xổ xuống **phủ lên trên** trình soạn bên dưới (z-50), bấm ra ngoài để đóng.

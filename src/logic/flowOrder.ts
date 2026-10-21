@@ -16,6 +16,28 @@ export function flowKeyOf(type: FlowItemType, id: string): string {
   return `${type}:${id}`;
 }
 
+/**
+ * Chèn khóa mới NGAY SAU khóa neo (bài đang mở lúc bấm Tạo mới) — quy tắc của
+ * chủ dự án: đang ở vị trí nào thì bài mới nằm ngay sau vị trí đó.
+ * Không có neo (hoặc neo không còn trong danh sách) → gắn vào cuối.
+ */
+export function insertFlowKeyAfter(
+  keys: string[],
+  newKey: string,
+  afterKey?: string | null
+): string[] {
+  if (keys.includes(newKey)) return keys;
+  if (afterKey) {
+    const idx = keys.indexOf(afterKey);
+    if (idx >= 0) {
+      const next = [...keys];
+      next.splice(idx + 1, 0, newKey);
+      return next;
+    }
+  }
+  return [...keys, newKey];
+}
+
 export function parseFlowKey(key: string): FlowItem | null {
   const idx = key.indexOf(':');
   if (idx <= 0) return null;
