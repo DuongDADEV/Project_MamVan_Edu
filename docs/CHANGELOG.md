@@ -1,3 +1,8 @@
+## 2026-10-22 (hotfix) — Panel Mầm AI hết nhảy lên/xuống khi đổi loại nội dung
+
+- Nguyên nhân: trong panel phải (Xưởng tạo đầu ra) của `AiContentStudioModal`, chỉ loại "Bộ câu hỏi" có khối cấu hình cao ~330px; đổi sang "Ý trọng tâm video"/"Lý thuyết chi tiết" là khối biến mất → chiều cao panel sụt → vị trí cuộn bị kẹp lại → toàn bộ nội dung nhảy lên/xuống mỗi lần bấm đổi loại.
+- Sửa: vùng cấu hình theo loại có **chiều cao cố định** (min-h 332px; hai loại không có cấu hình hiện khung ghi chú giữ chỗ), và panel **neo cuộn về đầu** mỗi khi đổi loại. Nút "Tạo bản nháp với Mầm AI" từ nay đứng yên một vị trí ở cả 3 loại.
+
 ## 2026-10-22 (đợt bố cục 3) — Bỏ nút Tạo mới đầu trang, menu theo theme gọn, bài mới chèn ngay sau bài đang mở
 
 - **Bỏ nút "+ Tạo mới" ở góc trên trang Nội dung học** (yêu cầu chủ dự án): tạo bài chỉ còn ở 3 vị trí có ngữ cảnh — dòng "+ Tạo mới" cuối cây, "Thêm vào chủ đề" ở chi tiết chủ đề, "+ Thêm bài" trên dải luồng.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog.tsx';
 import {
   Sparkles,
@@ -330,6 +330,12 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
 
   // 4. STATE XƯỞNG TẠO (VÙNG PHẢI)
   const [outputType, setOutputType] = useState<'video' | 'theory' | 'quiz'>(targetTypeInitial);
+  // Panel phải (Xưởng tạo) neo cuộn lên đầu mỗi khi đổi loại nội dung — cùng
+  // với vùng cấu hình chiều cao cố định, panel không còn nhảy lên/xuống nữa.
+  const rightPanelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    rightPanelRef.current?.scrollTo({ top: 0 });
+  }, [outputType]);
 
   // STATE XEM TRƯỚC VÀ PHÊ DUYỆT BỘ CÂU HỎI AI VỪA TẠO — đồng thời là BẢN NHÁP:
   // bộ câu AI tạo xong được tự lưu nháp (localStorage theo chủ đề), đóng xưởng
@@ -1704,6 +1710,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
         {/* VÙNG 3: XƯỞNG TẠO (BÊN PHẢI ~ 380px) */}
         {/* ========================================================= */}
         <div
+          ref={rightPanelRef}
           className="w-full flex flex-col shrink-0 bg-[#FAF5EB]/70 overflow-y-auto overflow-x-hidden"
           style={isWide ? { width: collapsedPanels.right ? 46 : panelWidths.right } : undefined}
         >
@@ -1773,7 +1780,11 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
               </div>
             </div>
 
-            {/* CẤU HÌNH BỘ CÂU HỎI */}
+            {/* CẤU HÌNH THEO LOẠI — vùng chiều cao CỐ ĐỊNH: trước đây chỉ loại
+                Bộ câu hỏi có khối cấu hình cao ~330px, đổi sang Video/Lý thuyết
+                là khối biến mất, panel cuộn bị sụt chiều cao và NỘI DUNG NHẢY
+                LÊN/XUỐNG. Nay giữ nguyên chiều cao cho cả 3 loại. */}
+            <div className="min-h-[332px]">
             {outputType === 'quiz' && (
               <div className="space-y-3 p-3.5 bg-white rounded-2xl border border-[#E6DCC8]">
                 <div>
@@ -1840,6 +1851,14 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                 </div>
               </div>
             )}
+            {outputType !== 'quiz' && (
+              <div className="p-3.5 bg-white/60 rounded-2xl border border-dashed border-[#E6DCC8] text-[11px] leading-relaxed text-[#8C7E6A]">
+                Loại nội dung này không cần cấu hình thêm — Mầm AI sẽ sinh theo
+                đúng các nguồn thầy/cô đã bật ở cột giữa. Bấm nút cam bên dưới
+                để tạo bản nháp.
+              </div>
+            )}
+            </div>
 
             {/* NÚT SINH NỘI DUNG VỚI AI */}
             <div className="pt-2 space-y-2">
