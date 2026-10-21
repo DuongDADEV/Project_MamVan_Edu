@@ -1,3 +1,9 @@
+## 2026-10-22 (SỬA LỖI: XP của chủ đề không lưu được)
+
+- **Triệu chứng (kiểm chứng XP phát hiện):** đặt "XP thưởng khi hoàn thành toàn bộ chủ đề" = 50 lúc tạo và sửa lại 2 lần, mở lại vẫn 0.
+- **Nguyên nhân:** `saveTopic` tự dựng `video_payload` riêng để upsert và THIẾU trường `xpReward` (trường này chỉ có ở `pushTopicRecord`) — mỗi lần lưu chủ đề là payload bị ghi đè mất XP.
+- **Cách sửa:** bổ sung `xpReward: topic.xpReward ?? savedMock.xpReward ?? 0` vào payload của `saveTopic` (mọi đường lưu chủ đề — sửa, gắn bài, đổi luồng — đều giữ nguyên XP đã cấu hình).
+
 ## 2026-10-22 (SỬA LỖI: xóa chủ đề không ăn — chủ đề tự hồi sinh)
 
 - **Triệu chứng:** bấm thùng rác + xác nhận xóa chủ đề, hộp thoại đóng nhưng chủ đề vẫn còn sau khi tải lại trang (kiểm chứng trình duyệt bấm tới 7 lần không xóa được).

@@ -2824,6 +2824,7 @@ export class SupabaseContentRepository implements ContentRepository {
         videoIds: topic.videoIds || savedMock.videoIds || [],
         flowOrder: topic.flowOrder || savedMock.flowOrder || [],
         colorScheme: topic.colorScheme || savedMock.colorScheme || '#2F3E6B',
+        xpReward: topic.xpReward ?? savedMock.xpReward ?? 0,
         class_ids: topic.class_ids || savedMock.class_ids || ['all'],
         version: topic.version ?? savedMock.version ?? 1,
         has_unpublished_edits: topic.has_unpublished_edits ?? savedMock.has_unpublished_edits ?? false,
