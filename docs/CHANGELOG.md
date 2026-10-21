@@ -1,3 +1,7 @@
+## 2026-10-22 (ngay sau đợt Luồng học) — Gọn bố cục dải luồng học
+
+- `TopicFlowStrip` viết lại phần hiển thị theo phản hồi của chủ dự án ("bố cục khó chịu"): từ một thẻ cao ~110px (nút tròn + tên bài 2 dòng bên dưới + sợi nối kéo dài hết chiều ngang khi ít bài) thành **một thanh mỏng ~52px**: nút tròn 32px, tên bài + loại bài nằm ngang bên cạnh, các bài xếp sát nhau bên trái (nối bằng đoạn gạch ngắn cố định, cuộn ngang khi dài), bỏ dòng chữ hướng dẫn dài (chỉ còn trong tooltip), nhãn "Luồng học · tên chủ đề" thu thành một cột nhỏ bên trái. Chức năng giữ nguyên: bấm để tới bài, kéo–thả đổi thứ tự, chấm trạng thái, nút "+ Thêm bài".
+
 ## 2026-10-22 — Luồng học trong chủ đề: bỏ video nháp tự sinh, Tạo mới 3 mục, dải nút tròn, học sinh học theo thứ tự
 
 Theo kế hoạch đã duyệt (kèm ảnh chụp của chủ dự án):
