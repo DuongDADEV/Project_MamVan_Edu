@@ -527,6 +527,25 @@ export class MockAuthRepository implements AuthRepository {
   async signOut(): Promise<void> {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEYS.SESSION);
+      // TÁCH DỮ LIỆU THEO TÀI KHOẢN: dọn bộ nhớ đệm nội dung/dữ liệu học tập
+      // của tài khoản vừa đăng xuất (xem ghi chú tương tự ở SupabaseAuth).
+      try {
+        [
+          STORAGE_KEYS.TOPICS,
+          STORAGE_KEYS.VIDEOS,
+          STORAGE_KEYS.THEORIES,
+          STORAGE_KEYS.QUIZZES,
+          STORAGE_KEYS.QUESTIONS,
+          STORAGE_KEYS.STATES,
+          STORAGE_KEYS.ESSAYS,
+          STORAGE_KEYS.REQUESTS,
+        ].forEach((k) => localStorage.removeItem(k));
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith(STORAGE_KEYS.SETTINGS))
+          .forEach((k) => localStorage.removeItem(k));
+      } catch {
+        /* bỏ qua lỗi dọn dẹp */
+      }
     }
     syncEventBus.emit('auth', null, 'auth-service');
   }
@@ -2550,8 +2569,29 @@ export const rewardRepo = new MockRewardRepository();
 // ==========================================
 // 10. SETTING REPOSITORY
 // ==========================================
+/**
+ * Cài đặt gắn RIÊNG theo giáo viên đang đăng nhập: khóa lưu trữ có hậu tố
+ * id giáo viên (trước đây mọi tài khoản trên cùng trình duyệt dùng chung
+ * một bản cài đặt). Chưa có bản riêng thì kế thừa bản chung cũ (mặc định).
+ */
+function settingsStorageKey(): string {
+  try {
+    const session = readStorage<any>(STORAGE_KEYS.SESSION, null);
+    const u = session?.user;
+    if (u && u.role === 'teacher' && u.id) {
+      return STORAGE_KEYS.SETTINGS + ':' + u.id;
+    }
+  } catch {
+    /* bỏ qua */
+  }
+  return STORAGE_KEYS.SETTINGS;
+}
+
 export class MockSettingRepository implements SettingRepository {
   async getSettings(): Promise<SystemSettings> {
+    const key = settingsStorageKey();
+    const own = readStorage<SystemSettings | null>(key, null);
+    if (own) return own;
     return readStorage<SystemSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
   }
 
@@ -2573,7 +2613,7 @@ export class MockSettingRepository implements SettingRepository {
       throw new Error('Trần XP ngày tối đa không thể nhỏ hơn trần XP dưới 45 phút');
     }
 
-    writeStorage(STORAGE_KEYS.SETTINGS, updated);
+    writeStorage(settingsStorageKey(), updated);
 
     await auditRepo.log({
       actor_id: actorId || 'teacher_001',
@@ -2606,7 +2646,7 @@ export class MockSettingRepository implements SettingRepository {
       updated.notifications = { ...DEFAULT_SYSTEM_SETTINGS.notifications };
     }
 
-    writeStorage(STORAGE_KEYS.SETTINGS, updated);
+    writeStorage(settingsStorageKey(), updated);
     await auditRepo.log({
       actor_id: 'teacher_001',
       actor_name: 'Thầy/Cô',
@@ -2622,7 +2662,7 @@ export class MockSettingRepository implements SettingRepository {
   }
 
   async resetAll(): Promise<SystemSettings> {
-    writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
+    writeStorage(settingsStorageKey(), DEFAULT_SYSTEM_SETTINGS);
     await auditRepo.log({
       actor_id: 'teacher_001',
       actor_name: 'Thầy/Cô',

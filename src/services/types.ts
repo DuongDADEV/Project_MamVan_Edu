@@ -224,6 +224,8 @@ export interface ContentMetadata {
   version: number;
   has_unpublished_edits?: boolean;
   published_at?: string;
+  /** Chủ sở hữu: id giáo viên tạo nội dung này (tách dữ liệu riêng theo giáo viên). */
+  teacher_id?: string;
 }
 
 export type TopicWithMeta = Topic & ContentMetadata;

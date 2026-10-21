@@ -15,6 +15,73 @@ export interface PayloadItem {
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
+  /** Chủ sở hữu: id giáo viên tạo nội dung này (tách dữ liệu riêng theo giáo viên). */
+  teacher_id?: string;
+}
+
+// ==============================================================================
+// CHỦ SỞ HỮU NỘI DUNG THEO PHIÊN ĐĂNG NHẬP (tách dữ liệu riêng theo giáo viên)
+// Giáo viên: chủ là chính mình. Học sinh: chủ là giáo viên chủ nhiệm lớp của
+// em (tra từ DB). Admin: không có nội dung riêng -> null. Không có phiên
+// (chế độ mock/test): null để giữ hành vi cũ.
+// ==============================================================================
+const SESSION_KEY = 'mam_van_auth_session';
+const LEGACY_TEACHER_ID_MAP: Record<string, string> = {
+  gv001: '00000000-0000-0000-0000-000000000001',
+};
+
+export function getSessionUser(): any | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.user || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Id giáo viên của phiên hiện tại (chỉ khi phiên là giáo viên). */
+export function sessionTeacherId(): string | null {
+  const u = getSessionUser();
+  if (!u || u.role !== 'teacher') return null;
+  return LEGACY_TEACHER_ID_MAP[u.id] || u.id;
+}
+
+let studentTeacherCache: { studentId: string; teacherId: string | null } | null = null;
+
+/** Giáo viên sở hữu nội dung mà phiên hiện tại được phép thấy. */
+export async function resolveContentOwnerId(): Promise<string | null> {
+  const u = getSessionUser();
+  if (!u) return null;
+  if (u.role === 'teacher') return LEGACY_TEACHER_ID_MAP[u.id] || u.id;
+  if (u.role === 'student') {
+    if (studentTeacherCache && studentTeacherCache.studentId === u.id) {
+      return studentTeacherCache.teacherId;
+    }
+    let teacherId: string | null = null;
+    try {
+      const { data: st } = await supabase
+        .from('students')
+        .select('class_id')
+        .eq('id', u.id)
+        .maybeSingle();
+      if (st?.class_id) {
+        const { data: cl } = await supabase
+          .from('classes')
+          .select('teacher_id')
+          .eq('id', st.class_id)
+          .maybeSingle();
+        teacherId = cl?.teacher_id || null;
+      }
+    } catch {
+      teacherId = null;
+    }
+    studentTeacherCache = { studentId: u.id, teacherId };
+    return teacherId;
+  }
+  return null;
 }
 
 export function readLocalList<T>(storageKey: string): T[] {
@@ -48,16 +115,20 @@ function ts(v?: string | null): number {
 export async function pushPayloadItem(table: string, item: PayloadItem): Promise<boolean> {
   if (!isSupabaseReady() || !item || !item.id) return false;
   const now = new Date().toISOString();
+  // Đóng dấu chủ sở hữu: item chưa có chủ thì lấy giáo viên của phiên hiện tại.
+  const ownerId = item.teacher_id || sessionTeacherId() || null;
+  const stamped: PayloadItem = ownerId ? { ...item, teacher_id: ownerId } : item;
   try {
     const { error } = await supabase.from(table).upsert(
       {
-        id: item.id,
-        topic_id: item.topicId || null,
-        status: item.status || 'draft',
-        payload: item,
-        deleted_at: item.deleted_at || null,
-        created_at: item.created_at || now,
-        updated_at: item.updated_at || now,
+        id: stamped.id,
+        topic_id: stamped.topicId || null,
+        status: stamped.status || 'draft',
+        payload: stamped,
+        teacher_id: ownerId,
+        deleted_at: stamped.deleted_at || null,
+        created_at: stamped.created_at || now,
+        updated_at: stamped.updated_at || now,
       },
       { onConflict: 'id' }
     );
@@ -92,7 +163,16 @@ export async function syncPayloadCollection<T extends PayloadItem>(
 ): Promise<T[] | null> {
   if (!isSupabaseReady()) return null;
   try {
-    const { data: rows, error } = await supabase.from(table).select('*');
+    // TÁCH THEO GIÁO VIÊN: chỉ đồng bộ nội dung của chủ sở hữu theo phiên.
+    const ownerId = await resolveContentOwnerId();
+    const sessUser = getSessionUser();
+    if (sessUser && !ownerId) return [] as T[];
+
+    let query = supabase.from(table).select('*');
+    if (ownerId) {
+      query = query.eq('teacher_id', ownerId);
+    }
+    const { data: rows, error } = await query;
     if (error) {
       console.warn(`[PayloadStore] Lỗi đọc bảng ${table}, dùng bộ nhớ đệm:`, error.message);
       return null;
@@ -106,6 +186,7 @@ export async function syncPayloadCollection<T extends PayloadItem>(
         id: row.id,
         status: p.status || row.status,
         topicId: p.topicId || row.topic_id || undefined,
+        teacher_id: (p as any).teacher_id || row.teacher_id || undefined,
         deleted_at: row.deleted_at || p.deleted_at || null,
         created_at: p.created_at || row.created_at,
         updated_at: p.updated_at || row.updated_at,
@@ -115,6 +196,12 @@ export async function syncPayloadCollection<T extends PayloadItem>(
     const toPush: T[] = [];
     for (const localItem of readLocalList<T>(storageKey)) {
       if (!localItem || !localItem.id) continue;
+      // Item mang dấu chủ của NGƯỜI KHÁC -> bỏ qua hoàn toàn (không hiển thị,
+      // không đẩy lên). Item không dấu chủ khi đang có phiên -> coi là dữ
+      // liệu vô chủ từ trước đợt tách, cũng không nhận để tránh rò chéo.
+      const stamp = (localItem as any).teacher_id as string | undefined;
+      if (ownerId && stamp && stamp !== ownerId) continue;
+      if (ownerId && !stamp && !merged.has(localItem.id)) continue;
       const remoteItem = merged.get(localItem.id);
       if (
         !remoteItem ||

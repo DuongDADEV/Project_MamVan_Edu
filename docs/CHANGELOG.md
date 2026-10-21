@@ -1,3 +1,11 @@
+## 2026-10-21 (tối) — Tách dữ liệu RIÊNG theo giáo viên (GĐ1) + migration_007
+
+- Khắc phục lỗi các tài khoản giáo viên thấy/dùng chung dữ liệu của nhau. Đã chạy `database/migration_007_teacher_isolation.sql` vào DB: thêm cột `teacher_id` cho `video_lessons`, `theory_lessons`, `quizzes`, `questions` (+ index); nội dung cũ chưa có chủ được gán về giáo viên chính gv004 — kiểm chứng 0 dòng còn thiếu chủ ở cả 5 bảng nội dung.
+- `payloadStore.ts`: thêm cơ chế xác định chủ sở hữu theo phiên đăng nhập (giáo viên = chính mình; học sinh = giáo viên chủ nhiệm lớp của em; Admin = không có nội dung riêng); đồng bộ payload chỉ đọc/ghi nội dung của đúng chủ; item local mang dấu chủ của người khác hoặc vô chủ bị bỏ qua hoàn toàn; khi đẩy lên tự đóng dấu `teacher_id`.
+- `supabaseRepositories.ts`: `getTopics` lọc theo chủ + ánh xạ `teacher_id`; `saveTopic`/`pushTopicRecord` ghi `teacher_id`; `getQuestions` chỉ lấy câu của giáo viên (trực tiếp hoặc qua chủ đề của mình), bỏ gộp 22 câu mẫu dùng chung ở chế độ Supabase, lỗi truy vấn chỉ còn fallback về câu local của chính giáo viên; `saveQuestion` đóng dấu chủ ở cả local lẫn cột DB; `getSubmissions` mặc định chặn trong các lớp của giáo viên (kể cả nơi gọi không truyền lọc); `getAllStates` chỉ đọc state học sinh thuộc lớp của mình; đăng xuất dọn toàn bộ cache nội dung/dữ liệu học tập + khóa cài đặt theo tài khoản.
+- `mockRepositories.ts`: đăng xuất dọn cache tương tự; cài đặt hệ thống gắn riêng theo từng giáo viên (khóa lưu trữ có hậu tố id giáo viên, chưa có bản riêng thì kế thừa mặc định).
+- Kiểm tra: `tsc` sạch, test logic 35/35, build OK. Kiểm chứng A/B bằng 2 tài khoản giáo viên trên production thực hiện ngay sau deploy đợt này (cổng bắt buộc trước Giai đoạn 2 — xóa sạch DB — của kế hoạch nạp dữ liệu giả lập).
+
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
 ## [2026-10-21] - Bảo mật: Admin thành tài khoản THẬT trong database — gỡ đăng nhập ghi cứng khỏi mã nguồn
