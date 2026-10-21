@@ -6,6 +6,7 @@
 - Siết thêm cùng đợt: cổng Giáo viên nay chỉ nhận tài khoản `role = 'teacher'`, nên tài khoản Admin không dùng qua cổng Giáo viên được; type `TeacherProfile.role` nới thành `'teacher' | 'admin'` cho khớp schema DB.
 - Kiểm chứng: tsc sạch, test logic 35/35, build thành công và bundle không còn dấu vết bí danh cũ.
 - Thứ tự lên sóng: code đã lên nhánh dev; bản production chỉ deploy SAU KHI migration_006 được chạy trong Supabase (tránh khóa đường vào Admin trong lúc chuyển đổi).
+- Hoàn tất tối 21/10: theo chỉ định của chủ dự án, migration_006 đã được chạy thẳng vào database (mật khẩu Admin giữ nguyên như mật khẩu cũ theo quyết định của chủ dự án) và bản mới đã deploy production. Kiểm chứng trực tiếp trên production đạt cả 3 ca: đăng nhập `admin` vào được Cổng Admin; bí danh cũ bị từ chối với thông báo "Tài khoản Quản trị viên không tồn tại trên hệ thống"; sai mật khẩu bị từ chối với thông báo "Mật khẩu Quản trị viên chưa chính xác".
 
 ## [2026-10-21] - Bảo mật: bổ sung header bảo mật cho bản production + gỡ email hardcode
 - Theo kết quả rà soát bảo mật (audit) ngày 21/10: trước đây trang chưa có header bảo mật nào, Vercel phát mặc định `Access-Control-Allow-Origin: *` và lộ banner `Server: Vercel`.
