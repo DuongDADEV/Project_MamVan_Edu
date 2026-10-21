@@ -59,7 +59,9 @@ export interface TeacherProfile {
   id: string;
   name: string;
   username: string;
-  role: 'teacher';
+  // Khớp schema DB: teachers.role IN ('teacher','admin') — tài khoản Admin
+  // thật cũng là một dòng trong bảng teachers (migration_006).
+  role: 'teacher' | 'admin';
   email?: string;
   subject: string;
   school: string;

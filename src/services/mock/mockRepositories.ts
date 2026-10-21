@@ -386,26 +386,42 @@ export class MockAuthRepository implements AuthRepository {
     const pClean = password.trim();
 
     if (role === 'admin') {
-      if ((uClean === 'admin' || uClean === 'quantri') && pClean === '123456') {
-        const session: AuthSession = {
-          user: {
-            id: 'admin_001',
-            name: 'Quản trị viên Hệ thống',
-            username: 'admin',
-            role: 'admin',
-            email: 'admin@mamvan.edu.vn',
-          },
-          role: 'admin',
-          signedInAt: Date.now(),
+      // Admin ở chế độ mock = tài khoản role='admin' trong kho giáo viên local
+      // (nếu có). Đã gỡ thông tin đăng nhập ghi cứng khỏi mã nguồn (đợt 21/10) —
+      // tài khoản Admin thật nằm trong DB (migration_006_admin_account.sql).
+      const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+      const matched = teachers.find((t) => t.role === 'admin' && t.username.toLowerCase() === uClean);
+      if (!matched) {
+        return {
+          success: false,
+          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
         };
-        writeStorage(STORAGE_KEYS.SESSION, session);
-        syncEventBus.emit('auth', session, 'auth-service');
-        return { success: true, session };
       }
-      return {
-        success: false,
-        error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
+
+      if (matched.status === 'locked') {
+        return {
+          success: false,
+          isLocked: true,
+          error: 'Tài khoản Quản trị viên đã bị tạm khóa. Vui lòng liên hệ hỗ trợ!',
+        };
+      }
+
+      const validPw = !!(matched.password && matched.password === pClean);
+      if (!validPw) {
+        return {
+          success: false,
+          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
+        };
+      }
+
+      const session: AuthSession = {
+        user: matched,
+        role: 'admin',
+        signedInAt: Date.now(),
       };
+      writeStorage(STORAGE_KEYS.SESSION, session);
+      syncEventBus.emit('auth', session, 'auth-service');
+      return { success: true, session };
     }
 
     if (role === 'teacher') {

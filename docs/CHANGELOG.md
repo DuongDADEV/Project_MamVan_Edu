@@ -1,5 +1,12 @@
 # Nhật ký thay đổi (Changelog) - Dự án Mầm Văn 7
 
+## [2026-10-21] - Bảo mật: Admin thành tài khoản THẬT trong database — gỡ đăng nhập ghi cứng khỏi mã nguồn
+- Trước đây đăng nhập Admin là thông tin ghi cứng ngay trong mã nguồn ở cả 2 đường (`supabaseRepositories.ts` và `mockRepositories.ts`): nhập đúng tên đăng nhập + mật khẩu viết sẵn trong code là app tự tạo phiên Admin, không hề tra cứu database — mà repo đang công khai nên ai cũng đọc được.
+- Nay Admin là một tài khoản thật trong bảng `teachers` với `role = 'admin'` (bảng này vốn đã thiết kế `role IN ('teacher','admin')`), tạo bằng `database/migration_006_admin_account.sql` — chủ dự án tự đặt mật khẩu Admin trong file trước khi chạy ở Supabase SQL Editor. Cả 2 đường đăng nhập đều tra cứu tài khoản thật như giáo viên: sai tên → báo không tồn tại, bị khóa → báo khóa, sai mật khẩu → báo sai mật khẩu; bí danh đăng nhập cũ bị bỏ hẳn.
+- Siết thêm cùng đợt: cổng Giáo viên nay chỉ nhận tài khoản `role = 'teacher'`, nên tài khoản Admin không dùng qua cổng Giáo viên được; type `TeacherProfile.role` nới thành `'teacher' | 'admin'` cho khớp schema DB.
+- Kiểm chứng: tsc sạch, test logic 35/35, build thành công và bundle không còn dấu vết bí danh cũ.
+- Thứ tự lên sóng: code đã lên nhánh dev; bản production chỉ deploy SAU KHI migration_006 được chạy trong Supabase (tránh khóa đường vào Admin trong lúc chuyển đổi).
+
 ## [2026-10-21] - Bảo mật: bổ sung header bảo mật cho bản production + gỡ email hardcode
 - Theo kết quả rà soát bảo mật (audit) ngày 21/10: trước đây trang chưa có header bảo mật nào, Vercel phát mặc định `Access-Control-Allow-Origin: *` và lộ banner `Server: Vercel`.
 - Nay `vercel.json` bổ sung cho mọi đường dẫn: Content-Security-Policy (chỉ cho phép script từ chính trang; kết nối giới hạn ở Supabase, Gemini API, r.jina.ai, noembed; cấm nhúng trang vào iframe của trang khác qua `frame-ancestors 'self'`), X-Frame-Options: SAMEORIGIN (chống clickjacking), X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy (khóa camera/micro/định vị/thanh toán), Strict-Transport-Security (ép HTTPS 2 năm), và Access-Control-Allow-Origin thu hẹp về đúng `https://mamvan.vercel.app`.

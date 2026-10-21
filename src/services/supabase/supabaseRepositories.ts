@@ -110,30 +110,64 @@ export class SupabaseAuthRepository implements AuthRepository {
     }
 
     try {
-      // 0. Phân hệ Quản trị viên (Admin)
+      // 0. Phân hệ Quản trị viên (Admin) — tài khoản THẬT trong bảng teachers
+      // (role = 'admin', tạo bằng database/migration_006_admin_account.sql).
+      // Đã gỡ hoàn toàn thông tin đăng nhập ghi cứng khỏi mã nguồn (đợt 21/10).
       if (role === 'admin') {
-        if ((uClean === 'admin' || uClean === 'quantri') && pClean === '123456') {
-          const session: AuthSession = {
-            user: {
-              id: 'admin_001',
-              name: 'Quản trị viên Hệ thống',
-              username: 'admin',
-              role: 'admin',
-              email: 'admin@mamvan.edu.vn',
-            },
-            role: 'admin',
-            signedInAt: Date.now(),
-          };
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-          }
-          syncEventBus.emit('auth', session, 'supabase-auth');
-          return { success: true, session };
+        const { data: admin, error } = await supabase
+          .from('teachers')
+          .select('*')
+          .ilike('username', uClean)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        if (error) {
+          console.warn('[SupabaseAuth] Lỗi truy vấn tài khoản admin, fallback sang mock:', error.message);
+          return mockAuthRepo.signIn(role, uClean, pClean);
         }
-        return {
-          success: false,
-          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
+
+        if (!admin) {
+          // Tài khoản có thể chỉ tồn tại ở kho local — thử local trước khi kết luận
+          const localAttempt = await mockAuthRepo.signIn(role, uClean, pClean);
+          if (localAttempt.success) return localAttempt;
+          return {
+            success: false,
+            error: 'Tài khoản Quản trị viên không tồn tại trên hệ thống',
+          };
+        }
+
+        if (admin.status === 'locked') {
+          return {
+            success: false,
+            isLocked: true,
+            error: 'Tài khoản Quản trị viên đã bị khóa. Vui lòng liên hệ hỗ trợ kỹ thuật!',
+          };
+        }
+
+        const validPassword = admin.password_hash === pClean;
+        if (!validPassword) {
+          return {
+            success: false,
+            error: 'Mật khẩu Quản trị viên chưa chính xác',
+          };
+        }
+
+        const session: AuthSession = {
+          user: {
+            id: admin.id,
+            name: admin.name,
+            username: admin.username,
+            role: 'admin',
+            email: admin.email || undefined,
+          },
+          role: 'admin',
+          signedInAt: Date.now(),
         };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+        }
+        syncEventBus.emit('auth', session, 'supabase-auth');
+        return { success: true, session };
       }
 
       // 1. Phân hệ Giáo viên
@@ -142,6 +176,7 @@ export class SupabaseAuthRepository implements AuthRepository {
           .from('teachers')
           .select('*')
           .ilike('username', uClean)
+          .eq('role', 'teacher')
           .maybeSingle();
 
         if (error) {
