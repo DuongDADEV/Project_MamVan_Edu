@@ -1,3 +1,7 @@
+## 2026-10-22 (KÍCH HOẠT AI THẬT + GỌN GIAO DIỆN TRỢ LÝ)
+
+Đã lấy API Key có sẵn trong Google AI Studio của chủ dự án (dự án mặc định, gói miễn phí) và nhập vào Cài đặt của app: trạng thái chuyển từ "AI Giả lập (Mock Demo)" sang "AI Thật Đang Hoạt Động", kiểm tra kết nối Gemini thành công. Kiểm chứng hỏi đáp trực tiếp của Trợ lý phân tích: câu tổng quan lớp trả số khớp dữ liệu thật (10 học sinh, 38 bài tự luận chờ chấm, dòng bằng chứng đầy đủ, câu gợi ý nối tiếp); câu hỏi chủ đề yếu nhất được trả lời trung thực "chưa đủ dữ liệu" vì toàn hệ thống hiện chỉ có 1 lượt trả lời trong state học sinh (dữ liệu lượt làm ở các bảng tiến độ là nguồn riêng — nhất quán với các tab cố định). Đồng thời sửa hiển thị: bong bóng trợ lý nay render đúng định dạng (tiêu đề, chữ đậm, gạch đầu dòng) thay vì hiện ký hiệu markdown thô, và tắt thinking budget trên model flash để trả lời nhanh hơn.
+
 ## 2026-10-22 (BỔ SUNG: BONG BÓNG CHAT TRỢ LÝ PHÂN TÍCH — theo yêu cầu chủ dự án)
 
 Ngoài tab trong mục Phân tích, Trợ lý phân tích nay có thêm bong bóng chat nổi ở góc phải dưới của cổng giáo viên: hiện ở mọi màn hình (Tổng quan, Nội dung, Chấm bài, Tiến độ…), bấm vào mở khung chat ngay tại chỗ với cùng 6 công cụ và cùng bộ lọc chung của trang Phân tích nên số liệu luôn khớp; đóng/mở lại không mất nội dung hội thoại.

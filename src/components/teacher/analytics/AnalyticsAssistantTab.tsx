@@ -65,6 +65,45 @@ const STARTERS = [
 
 let msgSeq = 1;
 
+/** Render nhẹ markdown của trợ lý (đậm **, tiêu đề #, ##, ###, gạch đầu dòng)
+ *  — tránh thêm thư viện ngoài cho một nhu cầu hiển thị nhỏ. */
+function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') ? (
+      <strong key={`${keyPrefix}-${i}`} className="font-bold text-[#2F3E6B]">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <span key={`${keyPrefix}-${i}`}>{part}</span>
+    )
+  );
+}
+
+function renderRichText(text: string): React.ReactNode {
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
+    const trimmed = line.trim();
+    if (!trimmed) return <div key={i} className="h-2" />;
+    const heading = trimmed.match(/^#{1,4}\s+(.*)$/);
+    if (heading) {
+      return (
+        <div key={i} className="font-lora font-bold text-[#2F3E6B] mt-1.5 first:mt-0">
+          {renderInline(heading[1].replace(/\*\*/g, ''), `h${i}`)}
+        </div>
+      );
+    }
+    if (/^[-•]\s+/.test(trimmed)) {
+      return (
+        <div key={i} className="flex gap-1.5 pl-1">
+          <span className="text-[#2F3E6B] font-bold">•</span>
+          <span className="flex-1">{renderInline(trimmed.replace(/^[-•]\s+/, ''), `b${i}`)}</span>
+        </div>
+      );
+    }
+    return <div key={i}>{renderInline(trimmed, `p${i}`)}</div>;
+  });
+}
+
 export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   students,
   studentStates,
@@ -269,8 +308,8 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
                       ))}
                     </div>
                   )}
-                  <div className="text-sm text-stone-800 leading-relaxed whitespace-pre-wrap">
-                    {m.text}
+                  <div className="text-sm text-stone-800 leading-relaxed">
+                    {m.role === 'assistant' && !m.isError ? renderRichText(m.text) : m.text}
                   </div>
                   {m.chart && m.chart.rows.length > 0 && (
                     <div className="bg-white border border-[#E6DCC8] rounded-2xl p-3">

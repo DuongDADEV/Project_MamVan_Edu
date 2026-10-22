@@ -585,10 +585,16 @@ async function callGeminiWithTools(
   withTools: boolean
 ): Promise<any> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const generationConfig: any = { temperature: 0.2, maxOutputTokens: 4096 };
+  // Tắt thinking trên các model flash như GeminiAIService đang làm — trả
+  // lời phân tích nhanh hơn rõ rệt mà không đổi chất lượng số liệu.
+  if (model.includes('flash')) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
   const body: any = {
     contents,
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+    generationConfig,
   };
   if (withTools) {
     body.tools = [{ functionDeclarations: FUNCTION_DECLARATIONS }];
