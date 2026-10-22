@@ -1,3 +1,7 @@
+## 2026-10-22 (ĐỒNG NHẤT + LƯU BỀN LỊCH SỬ TRÒ CHUYỆN TRỢ LÝ — theo yêu cầu chủ dự án)
+
+Lịch sử trò chuyện của Trợ lý phân tích được đưa về MỘT kho dùng chung (assistantChatStore): tab Trợ lý trong mục Phân tích và bong bóng chat nổi đọc/ghi cùng một cuộc hội thoại — hỏi ở nơi này thì nơi kia thấy ngay, trạng thái "đang truy vấn" cũng dùng chung (không gửi trùng từ hai nơi), và lịch sử được lưu bền vào bộ nhớ trình duyệt (tối đa 80 tin nhắn gần nhất) nên tải lại trang không mất. Có nút thùng rác cạnh ô nhập để xóa toàn bộ lịch sử khi cần (xóa một nơi là sạch cả hai).
+
 ## 2026-10-22 (KÍCH HOẠT AI THẬT + GỌN GIAO DIỆN TRỢ LÝ)
 
 Đã lấy API Key có sẵn trong Google AI Studio của chủ dự án (dự án mặc định, gói miễn phí) và nhập vào Cài đặt của app: trạng thái chuyển từ "AI Giả lập (Mock Demo)" sang "AI Thật Đang Hoạt Động", kiểm tra kết nối Gemini thành công. Kiểm chứng hỏi đáp trực tiếp của Trợ lý phân tích: câu tổng quan lớp trả số khớp dữ liệu thật (10 học sinh, 38 bài tự luận chờ chấm, dòng bằng chứng đầy đủ, câu gợi ý nối tiếp); câu hỏi chủ đề yếu nhất được trả lời trung thực "chưa đủ dữ liệu" vì toàn hệ thống hiện chỉ có 1 lượt trả lời trong state học sinh (dữ liệu lượt làm ở các bảng tiến độ là nguồn riêng — nhất quán với các tab cố định). Đồng thời sửa hiển thị: bong bóng trợ lý nay render đúng định dạng (tiêu đề, chữ đậm, gạch đầu dòng) thay vì hiện ký hiệu markdown thô, và tắt thinking budget trên model flash để trả lời nhanh hơn.

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Send,
+  Trash2,
   Sparkles,
   Loader2,
   KeyRound,
@@ -44,15 +45,13 @@ interface AnalyticsAssistantTabProps {
   compact?: boolean;
 }
 
-interface ChatMsg {
-  id: number;
-  role: 'user' | 'assistant';
-  text: string;
-  toolRuns?: AssistantToolRun[];
-  chart?: AssistantChart;
-  followups?: string[];
-  isError?: boolean;
-}
+import {
+  useAssistantChat,
+  appendAssistantMsg,
+  setAssistantBusy,
+  clearAssistantChat,
+  type ChatMsg,
+} from './assistantChatStore.ts';
 
 const STARTERS = [
   'Tổng quan lớp trong 6 tuần qua thế nào?',
@@ -63,7 +62,6 @@ const STARTERS = [
   'Tình hình điểm danh và nộp bài tập gần đây thế nào?',
 ];
 
-let msgSeq = 1;
 
 /** Render nhẹ markdown của trợ lý (đậm **, tiêu đề #, ##, ###, gạch đầu dòng)
  *  — tránh thêm thư viện ngoài cho một nhu cầu hiển thị nhỏ. */
@@ -125,9 +123,10 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   compact = false,
 }) => {
   const [hasKey, setHasKey] = useState<boolean>(() => !!getGeminiApiKey());
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  // Lịch sử + trạng thái bận lấy từ kho DÙNG CHUNG: tab Phân tích và bong
+  // bóng chat là cùng một cuộc trò chuyện, lưu bền trong trình duyệt.
+  const { messages, busy } = useAssistantChat();
   const [input, setInput] = useState('');
-  const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ctx: AssistantContext = useMemo(
@@ -160,40 +159,32 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
       .filter((m) => !m.isError)
       .map((m) => ({ role: m.role, text: m.text }));
     history.push({ role: 'user', text });
-    setMessages((prev) => [...prev, { id: msgSeq++, role: 'user', text }]);
+    appendAssistantMsg({ role: 'user', text });
     setInput('');
-    setBusy(true);
+    setAssistantBusy(true);
     try {
       const reply = await askAnalyticsAssistant(history, ctx);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: msgSeq++,
-          role: 'assistant',
-          text: reply.text,
-          toolRuns: reply.toolRuns,
-          chart: reply.chart,
-          followups: reply.followups,
-        },
-      ]);
+      appendAssistantMsg({
+        role: 'assistant',
+        text: reply.text,
+        toolRuns: reply.toolRuns,
+        chart: reply.chart,
+        followups: reply.followups,
+      });
     } catch (err: any) {
       if (err?.message === 'NO_API_KEY') {
         setHasKey(false);
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: msgSeq++,
-          role: 'assistant',
-          text:
-            err?.message === 'NO_API_KEY'
-              ? 'Chưa có khóa Gemini nên em chưa trả lời được. Thầy/cô nhập khóa ở mục Cài đặt → Mô hình Mầm AI rồi quay lại đây nhé.'
-              : `Em chưa truy vấn được lúc này (${err?.message || 'lỗi kết nối'}). Thầy/cô thử gửi lại câu hỏi giúp em.`,
-          isError: true,
-        },
-      ]);
+      appendAssistantMsg({
+        role: 'assistant',
+        text:
+          err?.message === 'NO_API_KEY'
+            ? 'Chưa có khóa Gemini nên em chưa trả lời được. Thầy/cô nhập khóa ở mục Cài đặt → Mô hình Mầm AI rồi quay lại đây nhé.'
+            : `Em chưa truy vấn được lúc này (${err?.message || 'lỗi kết nối'}). Thầy/cô thử gửi lại câu hỏi giúp em.`,
+        isError: true,
+      });
     } finally {
-      setBusy(false);
+      setAssistantBusy(false);
     }
   };
 
@@ -386,6 +377,22 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
 
         {/* Ô nhập câu hỏi */}
         <div className="border-t border-[#E6DCC8] p-3 sm:p-4 flex items-end gap-2 bg-white">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm('Xóa toàn bộ lịch sử trò chuyện với Trợ lý phân tích?')) {
+                  clearAssistantChat();
+                }
+              }}
+              className="shrink-0 w-11 h-11 rounded-2xl border border-[#E6DCC8] text-[#78716C] flex items-center justify-center hover:bg-[#FAF5EB] hover:text-red-700 transition disabled:opacity-40"
+              aria-label="Xóa lịch sử trò chuyện"
+              title="Xóa lịch sử trò chuyện (áp dụng cho cả tab và bong bóng chat)"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          )}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
