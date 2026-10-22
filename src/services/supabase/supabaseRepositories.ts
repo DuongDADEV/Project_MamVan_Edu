@@ -169,8 +169,13 @@ export class SupabaseAuthRepository implements AuthRepository {
           .maybeSingle();
 
         if (error) {
-          console.warn('[SupabaseAuth] Lỗi truy vấn tài khoản admin, fallback sang mock:', error.message);
-          return mockAuthRepo.signIn(role, uClean, pClean);
+          // KHÔNG fallback về tài khoản mẫu khi máy chủ lỗi: tài khoản mẫu có
+          // cùng tên đăng nhập/mật khẩu sẽ tạo "phiên ma" hiển thị sai người.
+          console.warn('[SupabaseAuth] Lỗi truy vấn tài khoản admin:', error.message);
+          return {
+            success: false,
+            error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
+          };
         }
 
         if (!admin) {
@@ -227,8 +232,12 @@ export class SupabaseAuthRepository implements AuthRepository {
           .maybeSingle();
 
         if (error) {
-          console.warn('[SupabaseAuth] Lỗi truy vấn bảng teachers, fallback sang mock:', error.message);
-          return mockAuthRepo.signIn(role, uClean, pClean);
+          // KHÔNG fallback về tài khoản mẫu khi máy chủ lỗi (xem ghi chú ở nhánh admin).
+          console.warn('[SupabaseAuth] Lỗi truy vấn bảng teachers:', error.message);
+          return {
+            success: false,
+            error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
+          };
         }
 
         if (!teacher) {
@@ -297,8 +306,12 @@ export class SupabaseAuthRepository implements AuthRepository {
           .maybeSingle();
 
         if (error) {
-          console.warn('[SupabaseAuth] Lỗi truy vấn bảng students, fallback sang mock:', error.message);
-          return mockAuthRepo.signIn(role, uClean, pClean);
+          // KHÔNG fallback về tài khoản mẫu khi máy chủ lỗi (xem ghi chú ở nhánh admin).
+          console.warn('[SupabaseAuth] Lỗi truy vấn bảng students:', error.message);
+          return {
+            success: false,
+            error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
+          };
         }
 
         if (!student) {
@@ -360,6 +373,14 @@ export class SupabaseAuthRepository implements AuthRepository {
       return { success: false, error: 'Phân hệ đang được hoàn thiện!' };
     } catch (err: any) {
       console.error('[SupabaseAuth] Ngoại lệ khi đăng nhập:', err);
+      if (isSupabaseReady()) {
+        // Đã cấu hình máy chủ mà gặp ngoại lệ: báo lỗi kết nối, KHÔNG đăng
+        // nhập vào tài khoản mẫu (tránh "phiên ma" sai danh tính).
+        return {
+          success: false,
+          error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
+        };
+      }
       return mockAuthRepo.signIn(role, uClean, pClean);
     }
   }
@@ -395,7 +416,37 @@ export class SupabaseAuthRepository implements AuthRepository {
     if (typeof window === 'undefined') return null;
     try {
       const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const session = JSON.parse(raw) as AuthSession;
+      // CHẶN "PHIÊN MA": phiên lưu từ tài khoản MẪU có id không phải UUID
+      // (vd 'hs001') trong khi tên đăng nhập đó TỒN TẠI trên máy chủ với id
+      // UUID thật — phiên mẫu hiển thị sai người (đã gặp: hs001 hiện thành
+      // học sinh mẫu khác tên/khác lớp). Gặp trường hợp này: hủy phiên, bắt
+      // đăng nhập lại để lấy đúng tài khoản thật. Không xác minh được (mất
+      // mạng) thì giữ nguyên phiên, tránh đăng xuất oan.
+      if (
+        isSupabaseReady() &&
+        session?.user?.id &&
+        session?.user?.username &&
+        !isUUID(session.user.id) &&
+        (session.role === 'student' || session.role === 'teacher')
+      ) {
+        try {
+          const table = session.role === 'student' ? 'students' : 'teachers';
+          const { data, error } = await supabase
+            .from(table)
+            .select('id')
+            .ilike('username', session.user.username)
+            .maybeSingle();
+          if (!error && data && isUUID((data as any).id)) {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            return null;
+          }
+        } catch {
+          /* không xác minh được — giữ nguyên phiên */
+        }
+      }
+      return session;
     } catch {
       return null;
     }
@@ -1046,7 +1097,25 @@ export class SupabaseAttemptRepository implements AttemptRepository {
       }
 
       const students = await supabaseStudentRepo.getStudents();
-      const student = students.find((s) => s.id === studentId);
+      let student = students.find((s) => s.id === studentId);
+      let directClassName: string | undefined;
+      if (!student) {
+        // Danh sách học sinh có thể là bản dự phòng/không đầy đủ — tra THẲNG
+        // dòng tài khoản theo id để danh tính (tên + lớp) luôn là người thật,
+        // không rơi về hồ sơ mẫu chung chung.
+        try {
+          const { data: row } = await supabase
+            .from('students')
+            .select('*, classes(name)')
+            .eq('id', studentId)
+            .maybeSingle();
+          if (row) {
+            student = row as any;
+            const cn = (row as any).classes?.name;
+            if (cn) directClassName = cn.startsWith('Lớp') ? cn : `Lớp ${cn}`;
+          }
+        } catch {}
+      }
       const fresh =
         (await this.buildFreshFromAccount(studentId)) ||
         createFreshStudentState(
@@ -1059,7 +1128,8 @@ export class SupabaseAttemptRepository implements AttemptRepository {
             has_logged_in: true,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          }
+          },
+          directClassName
         );
 
       const todayStr = getLocalTodayStr();
@@ -1083,6 +1153,7 @@ export class SupabaseAttemptRepository implements AttemptRepository {
           ...fresh.profile,
           name: student ? student.name : fresh.profile.name,
           username: student ? student.username : fresh.profile.username,
+          ...(directClassName ? { grade: directClassName } : {}),
         },
         essaySubmissions: (localFallback.essaySubmissions || []).filter(
           (e) => !e.id?.startsWith('sub_demo') && e.studentName !== 'Trần Minh An'

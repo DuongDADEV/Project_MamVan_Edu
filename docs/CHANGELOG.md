@@ -1,3 +1,12 @@
+## 2026-10-22 (SỬA LỖI: học sinh lúc hiện đúng người, lúc hiện thành học sinh mẫu khác)
+
+- **Triệu chứng:** cùng tài khoản hs001, có lần trang chủ hiện đúng "Nguyễn Minh An — Lớp 7A4", có lần lại hiện "Nguyễn Minh Anh — Lớp 7A2" với XP nền của dữ liệu mẫu.
+- **Nguyên nhân:** khi truy vấn máy chủ gặp lỗi thoáng qua, khâu đăng nhập tự rơi về kho tài khoản MẪU — tài khoản mẫu trùng tên đăng nhập + mật khẩu nên đăng nhập "thành công" nhưng là một người khác hẳn (kèm toàn bộ tiến độ mẫu); phiên mẫu còn được lưu lại và khôi phục ở các lần mở sau, nên danh tính nhấp nháy qua lại.
+- **Cách sửa (3 điểm, đều trong kho Supabase):**
+  1. Đăng nhập: lỗi truy vấn/ngoại lệ khi máy chủ đã cấu hình → trả lỗi "Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!", KHÔNG còn rơi về tài khoản mẫu ở cả 3 vai trò.
+  2. Khôi phục phiên: phiên đã lưu mà id không phải UUID (phiên mẫu) và tên đăng nhập tồn tại trên máy chủ với id thật → hủy phiên, bắt đăng nhập lại; không xác minh được (mất mạng) thì giữ nguyên, tránh đăng xuất oan.
+  3. Nạp tiến độ học sinh: nếu danh sách học sinh không chứa tài khoản (bản dự phòng/thiếu), tra thẳng dòng tài khoản theo id kèm tên lớp để tên + lớp luôn là của người thật.
+
 ## 2026-10-22 (SỬA LỖI: XP của chủ đề không lưu được)
 
 - **Triệu chứng (kiểm chứng XP phát hiện):** đặt "XP thưởng khi hoàn thành toàn bộ chủ đề" = 50 lúc tạo và sửa lại 2 lần, mở lại vẫn 0.
