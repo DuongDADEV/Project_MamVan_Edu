@@ -7,15 +7,11 @@ export const APP_NAME = 'Mầm Văn';
 export const MASCOT_NAME = 'Mầm Văn';
 
 // XP Cấu hình
+// LƯU Ý: mô hình XP hiện hành (chủ dự án chốt 21–22/10) KHÔNG còn trần XP
+// ngày/tuần — các hằng trần cũ (130/150/900) đã gỡ hẳn để không nơi nào còn
+// hiển thị/áp dụng giới hạn đã bãi bỏ. XP chỉ còn: điểm danh ngày (dưới đây),
+// quỹ XP của chủ đề và XP của từng bài kiểm tra/bài được giao.
 export const XP_CONFIG = {
-  // Trần XP hàng ngày
-  DAILY_CAP_UNDER_45_MIN: 130, // 0-45 phút học tích cực: tối đa 130 XP
-  DAILY_CAP_TOTAL: 150,        // 45-90 phút: cộng thêm tối đa 20 XP (tổng 150 XP)
-  DAILY_ACTIVE_MINUTES_LIMIT: 90, // Quá 90 phút: không cộng thêm XP (vẫn học bình thường)
-
-  // Trần XP hàng tuần (XP đổi quà)
-  WEEKLY_XP_CAP: 900, // Trần tuần (dễ đổi thành 750 nếu cần)
-
   // Điểm danh
   ATTENDANCE_DAILY_XP: 2,
 
@@ -228,9 +224,6 @@ export function getEffectiveXpConfig() {
   if (settings?.xp) {
     return {
       ...XP_CONFIG,
-      DAILY_CAP_UNDER_45_MIN: Number(settings.xp.dailyCapUnder45Min) || XP_CONFIG.DAILY_CAP_UNDER_45_MIN,
-      DAILY_CAP_TOTAL: Number(settings.xp.dailyCapTotal) || XP_CONFIG.DAILY_CAP_TOTAL,
-      WEEKLY_XP_CAP: Number(settings.xp.weeklyCap) || XP_CONFIG.WEEKLY_XP_CAP,
       ATTENDANCE_DAILY_XP: Number(settings.xp.attendanceDailyXp) || XP_CONFIG.ATTENDANCE_DAILY_XP,
       VIDEO_WATCH_80_PERCENT_XP: Number(settings.xp.videoWatchXp) || XP_CONFIG.VIDEO_WATCH_80_PERCENT_XP,
       VIDEO_SUMMARY_READ_XP: Number(settings.xp.videoSummaryReadXp) || XP_CONFIG.VIDEO_SUMMARY_READ_XP,

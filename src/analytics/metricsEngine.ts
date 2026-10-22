@@ -13,14 +13,29 @@ const ONE_DAY = 86400000;
 const SEVEN_DAYS = 7 * ONE_DAY;
 
 /**
- * Tính 6 thẻ số liệu tổng quan với so sánh kỳ trước (+/- %)
+ * Nguồn bước học THẬT cho mẫu số tỉ lệ hoàn thành: mỗi chủ đề đóng góp các
+ * bước mà hệ thống ghi nhận thật trong completedSteps của học sinh —
+ * xem hết từng video (video_watch:<id>), đọc hiểu lý thuyết
+ * (theory_understood:<id>) và hoàn thành từng bài của chủ đề
+ * (quiz_completed:<id>). Không dùng bất kỳ hệ số ước lượng nào.
+ */
+export interface OverviewStepSource {
+  topics?: Array<{ id: string; videoIds?: string[]; theoryId?: string }>;
+  quizzes?: Array<{ id: string; topicId?: string }>;
+}
+
+/**
+ * Tính 6 thẻ số liệu tổng quan. Mọi con số đều truy được nguồn dữ liệu thật;
+ * chênh lệch so với kỳ trước chỉ tính khi có dữ liệu kỳ trước — không có thì
+ * trả null để giao diện ẩn huy hiệu thay vì bịa một tỉ lệ tăng trưởng.
  */
 export function computeOverviewMetrics(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
   filter: AnalyticsFilter,
   allEssays?: EssaySubmission[],
-  allRewards?: RewardRequest[]
+  allRewards?: RewardRequest[],
+  stepSource?: OverviewStepSource
 ): OverviewMetricsData {
   const students = filterStudents(allStudents, filter);
   const studentIds = new Set(students.map((s) => s.id));
@@ -43,22 +58,40 @@ export function computeOverviewMetrics(
     }
   });
 
-  const activeDiff = activePrev7DaysCount === 0
-    ? 15
-    : Math.round(((active7DaysCount - activePrev7DaysCount) / Math.max(1, activePrev7DaysCount)) * 100);
+  // Không có học sinh nào hoạt động ở kỳ trước -> không có cơ sở so sánh,
+  // trả null (giao diện ẩn huy hiệu) thay vì bịa một tỉ lệ tăng trưởng.
+  const activeDiff: number | null = activePrev7DaysCount === 0
+    ? null
+    : Math.round(((active7DaysCount - activePrev7DaysCount) / activePrev7DaysCount) * 100);
 
-  // 2. Tỉ lệ hoàn thành bài được giao
-  let totalStepsCount = 0;
-  let completedStepsCount = 0;
-
-  Object.values(states).forEach((st) => {
-    const completed = st.completedSteps?.length || 0;
-    completedStepsCount += completed;
-    totalStepsCount += 12; // Ước lượng 12 bước cơ bản trong chương trình
+  // 2. Tỉ lệ hoàn thành bài được giao — mẫu số là TỔNG SỐ BƯỚC HỌC THẬT của
+  // các chủ đề trong phạm vi lọc (video + lý thuyết + bài của chủ đề), nhân
+  // với số học sinh trong phạm vi; tử số là số bước thật đã hoàn thành.
+  const stepKeys = new Set<string>();
+  const srcTopics = (stepSource?.topics || []).filter(
+    (t) => !filter.topicId || filter.topicId === 'all' || t.id === filter.topicId
+  );
+  const srcTopicIds = new Set(srcTopics.map((t) => t.id));
+  srcTopics.forEach((t) => {
+    (t.videoIds || []).forEach((vId) => stepKeys.add(`video_watch:${vId}`));
+    if (t.theoryId) stepKeys.add(`theory_understood:${t.theoryId}`);
+  });
+  (stepSource?.quizzes || []).forEach((q) => {
+    if (q.topicId && srcTopicIds.has(q.topicId)) {
+      stepKeys.add(`quiz_completed:${q.id}`);
+    }
   });
 
+  let completedStepsCount = 0;
+  students.forEach((s) => {
+    const done = states[s.id]?.completedSteps || [];
+    completedStepsCount += done.filter((k) => stepKeys.has(k)).length;
+  });
+  const totalStepsCount = stepKeys.size * students.length;
+
   const completionRatePercent = totalStepsCount === 0 ? 0 : Math.min(100, Math.round((completedStepsCount / totalStepsCount) * 100));
-  const completionRateDiffPercent = 0;
+  // Chưa có phép tính kỳ trước cho chỉ số này -> null, không hiện "+0%" giả.
+  const completionRateDiffPercent: number | null = null;
 
   // 3. Điểm trung bình bài kiểm tra
   let totalScoreRatio = 0;
@@ -74,22 +107,25 @@ export function computeOverviewMetrics(
   });
 
   const averageScore = totalScoreAttempts === 0 ? 0 : Math.round((totalScoreRatio / totalScoreAttempts) * 10 * 10) / 10;
-  const averageScoreDiff = 0;
+  const averageScoreDiff: number | null = null;
 
-  // 4. Thời gian học tích cực trung bình/tuần
+  // 4. Thời gian học tích cực trung bình mỗi học sinh — CHỈ tính từ số giây
+  // hoạt động đã ghi nhận thật trong state (hôm nay + phiên liên tục).
+  // Không giả định "mỗi ngày điểm danh = 30 phút học" và không chia cho số
+  // tuần không có cơ sở như trước.
   let totalActiveMinutes = 0;
   const stateValues = Object.values(states);
 
   stateValues.forEach((st) => {
-    const totalSecs = (st.activeSecondsToday || 0) + (st.activeSecondsContinuous || 0) + (st.attendanceHistory?.length || 0) * 1800;
-    totalActiveMinutes += Math.round(totalSecs / 60);
+    const totalSecs = (st.activeSecondsToday || 0) + (st.activeSecondsContinuous || 0);
+    totalActiveMinutes += totalSecs / 60;
   });
 
-  const avgActiveMinutesPerWeek = stateValues.length === 0
+  const avgActiveMinutes = stateValues.length === 0
     ? 0
-    : Math.round(totalActiveMinutes / stateValues.length / 6); // Chia trung bình 6 tuần
+    : Math.round(totalActiveMinutes / stateValues.length);
 
-  const avgActiveMinutesDiff = 0;
+  const avgActiveMinutesDiff: number | null = null;
 
   // 5. Số bài viết chờ chấm (Ưu tiên đếm từ bảng essay_submissions thực tế)
   let pendingGradingCount = 0;
@@ -124,7 +160,7 @@ export function computeOverviewMetrics(
     completionRateDiffPercent,
     averageScore,
     averageScoreDiff,
-    avgActiveMinutesPerWeek,
+    avgActiveMinutes,
     avgActiveMinutesDiff,
     pendingGradingCount,
     pendingRewardCount,

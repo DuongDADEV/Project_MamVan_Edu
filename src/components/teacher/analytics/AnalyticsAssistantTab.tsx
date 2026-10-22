@@ -35,7 +35,8 @@ interface AnalyticsAssistantTabProps {
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
   classes: ClassItem[];
-  topics: Array<{ id: string; title: string }>;
+  topics: Array<{ id: string; title: string; videoIds?: string[]; theoryId?: string }>;
+  quizzes?: Array<{ id: string; topicId?: string }>;
   essays: EssaySubmission[];
   rewards: RewardRequest[];
   questions: Record<string, Question>;
@@ -70,6 +71,7 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   studentStates,
   classes,
   topics,
+  quizzes,
   essays,
   rewards,
   questions,
@@ -97,13 +99,14 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
       studentStates,
       classes,
       topics,
+      quizzes,
       essays,
       rewards,
       questions,
       filters,
       teacherId,
     }),
-    [students, studentStates, classes, topics, essays, rewards, questions, filters, teacherId]
+    [students, studentStates, classes, topics, quizzes, essays, rewards, questions, filters, teacherId]
   );
 
   useEffect(() => {

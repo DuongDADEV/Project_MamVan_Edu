@@ -144,7 +144,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     setIsParsing(true);
     try {
       const classNames = selectableClasses.map((c) => c.name);
-      const defaultClsName = selectableClasses.find((c) => c.id === activeClassId)?.name || '7A2';
+      const defaultClsName = selectableClasses.find((c) => c.id === activeClassId)?.name || '';
       const result = await parseUploadedExcel(file, existingStudents, classNames, defaultClsName);
       setExcelRows(result.rows);
       setExcelSummary({ validCount: result.validCount, errorCount: result.errorCount });

@@ -262,7 +262,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-extrabold text-[#1E1B4B] text-base">
-                {submission.studentName || 'Học sinh'} · {submission.className ? (submission.className.toLowerCase().startsWith('lớp') ? submission.className : `Lớp ${submission.className}`) : 'Lớp 7A2'}
+                {submission.studentName || 'Học sinh'} · {submission.className ? (submission.className.toLowerCase().startsWith('lớp') ? submission.className : `Lớp ${submission.className}`) : 'Chưa rõ lớp'}
               </h2>
               {/* Badge mức năng lực ảnh hưởng Mastery */}
               <span

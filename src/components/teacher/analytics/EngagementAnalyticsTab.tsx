@@ -18,7 +18,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { AnalyticsFilter, FunnelStepItem, WeeklyAttendancePoint, VideoAnalyticsSummary } from '../../../analytics/types.ts';
-import { StudentAccount } from '../../../services/types.ts';
+import { ClassItem, StudentAccount } from '../../../services/types.ts';
 import { StudentState } from '../../../types.ts';
 import { AccessibleChartWrapper } from './AccessibleChartWrapper.tsx';
 import {
@@ -31,6 +31,7 @@ import { exportToExcel } from '../../../utils/exportUtils.ts';
 interface EngagementAnalyticsTabProps {
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
+  classes?: ClassItem[];
   filters: AnalyticsFilter;
   onSelectStudentDossier: (studentId: string) => void;
 }
@@ -46,6 +47,7 @@ const PALETTE = {
 export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
   students,
   studentStates,
+  classes,
   filters,
   onSelectStudentDossier,
 }) => {
@@ -76,7 +78,8 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
       return {
         studentId: s.id,
         studentName: s.name,
-        className: s.class_id === 'class_7a2' ? '7A2' : '7A3',
+        // Tên lớp tra từ danh sách lớp thật — không gán nhãn lớp bịa theo class_id
+        className: (classes || []).find((c) => c.id === s.class_id)?.name || '',
         activeLearningMinutes: activeMinutes,
         webOpenEstimatedMinutes: webOpenMinutes,
         attendanceDaysCount: attendanceDays,
@@ -99,7 +102,7 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
     exportToExcel(
       studentRank.map((s) => ({
         'Họ và tên': s.studentName,
-        'Lớp': `Lớp ${s.className}`,
+        'Lớp': s.className ? `Lớp ${s.className}` : '',
         'Học tích cực (phút)': s.activeLearningMinutes,
         'Thời gian mở web (phút)': s.webOpenEstimatedMinutes,
         'Số buổi điểm danh': s.attendanceDaysCount,

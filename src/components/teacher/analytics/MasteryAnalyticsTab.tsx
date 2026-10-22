@@ -304,7 +304,7 @@ export const MasteryAnalyticsTab: React.FC<MasteryAnalyticsTabProps> = ({
                               cell || {
                                 studentId: st.id,
                                 studentName: st.name,
-                                className: '7A2',
+                                className: classes.find((c) => c.id === students.find((s) => s.id === st.id)?.class_id)?.name || '',
                                 topicId: topic.id,
                                 topicTitle: topic.title,
                                 status: 'NOT_ENOUGH_DATA' as any,

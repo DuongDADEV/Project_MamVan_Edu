@@ -17,13 +17,13 @@ export type GlobalAnalyticsFilter = AnalyticsFilter;
 
 export interface OverviewMetricsData {
   active7DaysCount: number;
-  active7DaysDiffPercent: number; // So với 7 ngày trước (+12%)
-  completionRatePercent: number;
-  completionRateDiffPercent: number;
+  active7DaysDiffPercent: number | null; // So với 7 ngày trước; null = không có dữ liệu kỳ trước (ẩn huy hiệu, không bịa %)
+  completionRatePercent: number; // Trên tổng số bước học thật của các chủ đề trong phạm vi
+  completionRateDiffPercent: number | null;
   averageScore: number; // 0..10
-  averageScoreDiff: number; // +0.4
-  avgActiveMinutesPerWeek: number;
-  avgActiveMinutesDiff: number;
+  averageScoreDiff: number | null;
+  avgActiveMinutes: number; // Phút học tích cực TB/học sinh từ giây hoạt động ghi thật trong state
+  avgActiveMinutesDiff: number | null;
   pendingGradingCount: number;
   pendingRewardCount: number;
 }

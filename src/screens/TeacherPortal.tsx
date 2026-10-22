@@ -44,6 +44,7 @@ interface TeacherPortalData {
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
   topics: any[];
+  quizzes: any[];
   allEssays: EssaySubmission[];
   allRewards: RewardRequest[];
   auditLogs: AuditLog[];
@@ -79,6 +80,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         allRewards,
         auditLogs,
         questions,
+        quizzes,
       ] = await Promise.all([
         classService.getClasses(teacher.id),
         studentService.getStudents(),
@@ -88,12 +90,14 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         rewardService.getRequests(),
         auditService.getLogs({ limit: 100 }),
         quizService.getQuestions(),
+        quizService.getQuizzes(undefined, false),
       ]);
       return {
         classes: classes || [],
         students: students || [],
         studentStates: studentStates || {},
         topics: topics || [],
+        quizzes: quizzes || [],
         allEssays: allEssays || [],
         allRewards: allRewards || [],
         auditLogs: auditLogs || [],
@@ -108,6 +112,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const students = portalData?.students ?? [];
   const studentStates = portalData?.studentStates ?? {};
   const topics = portalData?.topics ?? [];
+  const quizzes = portalData?.quizzes ?? [];
   const allEssays = portalData?.allEssays ?? [];
   const allRewards = portalData?.allRewards ?? [];
   const auditLogs = portalData?.auditLogs ?? [];
@@ -246,6 +251,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   students={students || []}
                   studentStates={studentStates || {}}
                   topics={topics || []}
+                  quizzes={quizzes || []}
                   essays={allEssays || []}
                   rewards={allRewards || []}
                   auditLogs={auditLogs || []}
@@ -324,6 +330,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   students={students || []}
                   studentStates={studentStates || {}}
                   topics={topics || []}
+                  quizzes={quizzes || []}
                   essays={allEssays || []}
                   rewards={allRewards || []}
                   questions={portalData?.questions ?? {}}

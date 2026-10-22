@@ -48,7 +48,8 @@ interface TeacherOverviewScreenProps {
   classes: ClassItem[];
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
-  topics: Array<{ id: string; title: string }>;
+  topics: Array<{ id: string; title: string; videoIds?: string[]; theoryId?: string }>;
+  quizzes?: Array<{ id: string; topicId?: string }>;
   essays: EssaySubmission[];
   rewards: RewardRequest[];
   auditLogs: AuditLog[];
@@ -84,6 +85,7 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
   students,
   studentStates,
   topics,
+  quizzes,
   essays,
   rewards,
   auditLogs,
@@ -125,10 +127,14 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
     return students.filter((st) => myClassIds.has(st.class_id));
   }, [students, classes]);
 
-  // 1. Tính toán 6 thẻ số liệu tổng quan với so sánh kỳ trước (+/- %)
+  // 1. Tính toán 6 thẻ số liệu tổng quan — mọi số truy từ dữ liệu thật;
+  // tỉ lệ hoàn thành tính trên tổng bước học thật của các chủ đề/bài.
   const overviewMetrics = useMemo(() => {
-    return computeOverviewMetrics(studentStates, scopedStudents, filters, essays, rewards);
-  }, [scopedStudents, studentStates, filters, essays, rewards]);
+    return computeOverviewMetrics(studentStates, scopedStudents, filters, essays, rewards, {
+      topics,
+      quizzes,
+    });
+  }, [scopedStudents, studentStates, filters, essays, rewards, topics, quizzes]);
 
   // 2. Tự động nhận diện học sinh cần quan tâm sư phạm
   const attentionStudents = useMemo(() => {
@@ -205,7 +211,7 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
         onResetFilters={handleResetFilters}
       />
 
-      {/* 6 THẺ SỐ LIỆU TỔNG QUAN (CÓ SO SÁNH KỲ TRƯỚC) */}
+      {/* 6 THẺ SỐ LIỆU TỔNG QUAN (số thật; huy hiệu so sánh chỉ hiện khi có dữ liệu kỳ trước) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
         {/* Thẻ 1: Học sinh hoạt động 7 ngày qua */}
         <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-[#2F3E6B]/40 transition-all">
@@ -223,18 +229,25 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
               </span>
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-xs">
-              {overviewMetrics.active7DaysDiffPercent >= 0 ? (
-                <span className="text-[#10B981] font-semibold flex items-center">
-                  <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
-                  +{overviewMetrics.active7DaysDiffPercent}%
-                </span>
+              {overviewMetrics.active7DaysDiffPercent === null ? (
+                <span className="text-[#9CA3AF] text-[11px]">Chưa có dữ liệu tuần trước để so sánh</span>
+              ) : overviewMetrics.active7DaysDiffPercent >= 0 ? (
+                <>
+                  <span className="text-[#10B981] font-semibold flex items-center">
+                    <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
+                    +{overviewMetrics.active7DaysDiffPercent}%
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">so với tuần trước</span>
+                </>
               ) : (
-                <span className="text-[#EF4444] font-semibold flex items-center">
-                  <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
-                  {overviewMetrics.active7DaysDiffPercent}%
-                </span>
+                <>
+                  <span className="text-[#EF4444] font-semibold flex items-center">
+                    <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
+                    {overviewMetrics.active7DaysDiffPercent}%
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">so với tuần trước</span>
+                </>
               )}
-              <span className="text-[#9CA3AF] text-[11px]">so với tuần trước</span>
             </div>
           </div>
         </div>
@@ -252,18 +265,25 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
               {overviewMetrics.completionRatePercent}%
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-xs">
-              {overviewMetrics.completionRateDiffPercent >= 0 ? (
-                <span className="text-[#10B981] font-semibold flex items-center">
-                  <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
-                  +{overviewMetrics.completionRateDiffPercent}%
-                </span>
+              {overviewMetrics.completionRateDiffPercent === null ? (
+                <span className="text-[#9CA3AF] text-[11px]">Tính trên tổng số bước học thật của các chủ đề</span>
+              ) : overviewMetrics.completionRateDiffPercent >= 0 ? (
+                <>
+                  <span className="text-[#10B981] font-semibold flex items-center">
+                    <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
+                    +{overviewMetrics.completionRateDiffPercent}%
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">so với kỳ trước</span>
+                </>
               ) : (
-                <span className="text-[#EF4444] font-semibold flex items-center">
-                  <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
-                  {overviewMetrics.completionRateDiffPercent}%
-                </span>
+                <>
+                  <span className="text-[#EF4444] font-semibold flex items-center">
+                    <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
+                    {overviewMetrics.completionRateDiffPercent}%
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">so với kỳ trước</span>
+                </>
               )}
-              <span className="text-[#9CA3AF] text-[11px]">so với kỳ trước</span>
             </div>
           </div>
         </div>
@@ -282,48 +302,62 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
               <span className="text-xs text-[#9CA3AF] font-sans font-normal ml-1">/10</span>
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-xs">
-              {overviewMetrics.averageScoreDiff >= 0 ? (
-                <span className="text-[#10B981] font-semibold flex items-center">
-                  <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
-                  +{overviewMetrics.averageScoreDiff}
-                </span>
+              {overviewMetrics.averageScoreDiff === null ? (
+                <span className="text-[#9CA3AF] text-[11px]">Từ các lượt làm bài đã ghi nhận</span>
+              ) : overviewMetrics.averageScoreDiff >= 0 ? (
+                <>
+                  <span className="text-[#10B981] font-semibold flex items-center">
+                    <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
+                    +{overviewMetrics.averageScoreDiff}
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">điểm</span>
+                </>
               ) : (
-                <span className="text-[#EF4444] font-semibold flex items-center">
-                  <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
-                  {overviewMetrics.averageScoreDiff}
-                </span>
+                <>
+                  <span className="text-[#EF4444] font-semibold flex items-center">
+                    <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
+                    {overviewMetrics.averageScoreDiff}
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">điểm</span>
+                </>
               )}
-              <span className="text-[#9CA3AF] text-[11px]">điểm</span>
             </div>
           </div>
         </div>
 
-        {/* Thẻ 4: Thời gian học tích cực TB / tuần */}
+        {/* Thẻ 4: Thời gian học tích cực trung bình mỗi học sinh (giây hoạt động ghi thật) */}
         <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-[#2F3E6B]/40 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#6B7280]">Học tích cực TB/tuần</span>
+            <span className="text-xs font-semibold text-[#6B7280]">Phút học tích cực TB</span>
             <div className="w-8 h-8 rounded-xl bg-[#8B5CF6]/15 text-[#8B5CF6] flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2">
             <div className="text-2xl font-bold font-lora text-[#2F3E6B]">
-              {overviewMetrics.avgActiveMinutesPerWeek}
+              {overviewMetrics.avgActiveMinutes}
               <span className="text-xs text-[#9CA3AF] font-sans font-normal ml-1">phút</span>
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-xs">
-              {overviewMetrics.avgActiveMinutesDiff >= 0 ? (
-                <span className="text-[#10B981] font-semibold flex items-center">
-                  <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
-                  +{overviewMetrics.avgActiveMinutesDiff}%
-                </span>
+              {overviewMetrics.avgActiveMinutesDiff === null ? (
+                <span className="text-[#9CA3AF] text-[11px]">Trung bình mỗi học sinh · từ thời gian học đã ghi nhận</span>
+              ) : overviewMetrics.avgActiveMinutesDiff >= 0 ? (
+                <>
+                  <span className="text-[#10B981] font-semibold flex items-center">
+                    <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
+                    +{overviewMetrics.avgActiveMinutesDiff}%
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">so với tuần trước</span>
+                </>
               ) : (
-                <span className="text-[#EF4444] font-semibold flex items-center">
-                  <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
-                  {overviewMetrics.avgActiveMinutesDiff}%
-                </span>
+                <>
+                  <span className="text-[#EF4444] font-semibold flex items-center">
+                    <TrendingDown className="w-3.5 h-3.5 mr-0.5" />
+                    {overviewMetrics.avgActiveMinutesDiff}%
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px]">so với tuần trước</span>
+                </>
               )}
-              <span className="text-[#9CA3AF] text-[11px]">so với tuần trước</span>
             </div>
           </div>
         </div>

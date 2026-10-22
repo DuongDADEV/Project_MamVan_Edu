@@ -136,26 +136,17 @@ async function runPrompt5Verification() {
   console.log('\n--- 3. KIỂM THỬ CÀI ĐẶT HỆ THỐNG & RÀNG BUỘC TOÁN HỌC ---');
 
   const currentSettings = await settingService.getSettings();
-  assert(!!currentSettings.schoolInfo.schoolName, 'Nạp được thông tin trường lớp mặc định');
+  assert(!!currentSettings.schoolInfo, 'Nạp được khối thông tin trường lớp');
   assert(currentSettings.mastery.thresholdNeedsReview === 50, 'Ngưỡng Cần ôn lại mặc định là 50%');
   assert(currentSettings.mastery.thresholdProgressing === 80, 'Ngưỡng Vững vàng mặc định là 80%');
-  assert(currentSettings.xp.weeklyCap === 900, 'Trần XP tuần mặc định là 900');
+  // Mô hình XP hiện hành không còn trần XP ngày/tuần (đã bãi bỏ 21–22/10):
+  // cài đặt mặc định không được chứa lại các trường trần.
+  assert(
+    !('weeklyCap' in currentSettings.xp) && !('dailyCapTotal' in currentSettings.xp) && !('dailyCapUnder45Min' in currentSettings.xp),
+    'Cài đặt mặc định không còn trường trần XP ngày/tuần'
+  );
+  assert(currentSettings.xp.attendanceDailyXp === 2, 'XP điểm danh ngày mặc định là 2');
   assert(currentSettings.time.essayReviewEstimatedHours === 48, 'Thời gian chờ chấm hiển thị mặc định là 48 giờ');
-
-  // Test kiểm tra ràng buộc bất hợp lý (Validation): weeklyCap < dailyCapTotal
-  let validationErrorCaught = false;
-  try {
-    await settingService.updateSettings({
-      xp: {
-        ...currentSettings.xp,
-        dailyCapTotal: 200,
-        weeklyCap: 150, // Bất hợp lý: trần tuần nhỏ hơn trần ngày
-      },
-    });
-  } catch (err: any) {
-    validationErrorCaught = true;
-  }
-  assert(validationErrorCaught, 'Chặn thành công lỗi bất hợp lý: trần tuần nhỏ hơn trần ngày tối đa');
 
   // Test cập nhật cài đặt hợp lệ
   const updatedSettings = await settingService.updateSettings({
@@ -165,15 +156,15 @@ async function runPrompt5Verification() {
     },
     xp: {
       ...currentSettings.xp,
-      weeklyCap: 1000,
+      attendanceDailyXp: 5,
     },
   });
   assert(updatedSettings.schoolInfo.schoolName === 'THCS Mầm Văn Thực Nghiệm', 'Cập nhật thành công tên trường');
-  assert(updatedSettings.xp.weeklyCap === 1000, 'Cập nhật thành công trần tuần');
+  assert(updatedSettings.xp.attendanceDailyXp === 5, 'Cập nhật thành công XP điểm danh ngày');
 
   // Test khôi phục nhóm cài đặt (Reset Group)
   const afterResetGroup = await settingService.resetGroup('xp');
-  assert(afterResetGroup.xp.weeklyCap === 900, 'Khôi phục thành công nhóm XP về mặc định (900 XP)');
+  assert(afterResetGroup.xp.attendanceDailyXp === 2, 'Khôi phục thành công nhóm XP về mặc định (điểm danh 2 XP)');
 
   // Test khôi phục toàn bộ cài đặt (Reset All)
   const afterResetAll = await settingService.resetAll();

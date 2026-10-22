@@ -45,7 +45,8 @@ export interface AssistantContext {
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
   classes: ClassItem[];
-  topics: { id: string; title: string }[];
+  topics: { id: string; title: string; videoIds?: string[]; theoryId?: string }[];
+  quizzes?: { id: string; topicId?: string }[];
   essays: EssaySubmission[];
   rewards: RewardRequest[];
   questions: Record<string, Question>;
@@ -175,7 +176,8 @@ async function executeTool(
         ctx.students,
         f,
         ctx.essays,
-        ctx.rewards
+        ctx.rewards,
+        { topics: ctx.topics, quizzes: ctx.quizzes }
       );
       const rankings = computeStudentScoreRankings(
         ctx.studentStates,
@@ -216,7 +218,7 @@ async function executeTool(
           hocSinhHoatDong7Ngay: overview.active7DaysCount,
           tyLeHoanThanhBaiHoc: overview.completionRatePercent,
           diemTrungBinhLop: overview.averageScore,
-          phutHocTBTuan: overview.avgActiveMinutesPerWeek,
+          phutHocTichCucTB: overview.avgActiveMinutes,
           baiTuLuanChoCham: pendingEssays,
           yeuCauQuaChoDuyet: overview.pendingRewardCount,
           hocSinhDiemCaoNhat: [...withAttempts]

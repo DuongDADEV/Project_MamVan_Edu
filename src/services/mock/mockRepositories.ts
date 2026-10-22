@@ -38,9 +38,6 @@ import {
   getSeedRewards,
   getSeedStudentStates,
   createFreshStudentState,
-  SEED_AUDIT_LOGS,
-  SEED_RUBRIC_TEMPLATES,
-  SEED_GRADED_SAMPLES,
   SEED_AI_GRADING_CONFIG,
 } from './seedData.ts';
 import {
@@ -93,10 +90,11 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   schoolInfo: {
-    schoolName: 'Trường THCS Lê Quý Đôn',
+    // Không gieo tên trường/lớp bịa: để trống cho giáo viên tự điền thật.
+    schoolName: '',
     academicYear: '2026-2027',
     semester: 'Học kỳ I',
-    classNameDefault: '7A2',
+    classNameDefault: '',
   },
   mastery: {
     thresholdNeedsReview: 50,
@@ -105,9 +103,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     weightDecayFactor: 0.88,
   },
   xp: {
-    dailyCapUnder45Min: 130,
-    dailyCapTotal: 150,
-    weeklyCap: 900,
+    // Mô hình XP hiện hành KHÔNG còn trần XP ngày/tuần (đã bãi bỏ 21–22/10)
+    // nên defaults không còn các trường trần; chỉ giữ mức XP điểm danh là
+    // cấu hình còn hiệu lực ở màn Cài đặt.
     attendanceDailyXp: 2,
     videoWatchXp: 5,
     videoSummaryReadXp: 2,
@@ -500,7 +498,7 @@ export class MockAuthRepository implements AuthRepository {
       if (!states[student.id]) {
         const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
         const cls = classes.find((c) => c.id === student.class_id);
-        states[student.id] = createFreshStudentState(student, cls ? `Lớp ${cls.name}` : 'Lớp 7A2');
+        states[student.id] = createFreshStudentState(student, cls ? `Lớp ${cls.name}` : '');
         writeStorage(STORAGE_KEYS.STATES, states);
       }
 
@@ -778,7 +776,7 @@ export class MockStudentRepository implements StudentRepository {
         username: newStudent.username,
         initialPassword: rawPassword,
         class_id: newStudent.class_id,
-        className: cls?.name || '7A2',
+        className: cls?.name || '',
         student_code: newStudent.student_code,
       });
 
@@ -894,7 +892,7 @@ export class MockStudentRepository implements StudentRepository {
         username: target.username,
         initialPassword: newPassword,
         class_id: target.class_id,
-        className: cls?.name || '7A2',
+        className: cls?.name || '',
         student_code: target.student_code,
       },
     };
@@ -1767,7 +1765,7 @@ export class MockAttemptRepository implements AttemptRepository {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      cls ? `Lớp ${cls.name}` : 'Lớp 7A2'
+      cls ? `Lớp ${cls.name}` : ''
     );
     // Chỉ lưu state cho học sinh CÓ tài khoản thật; id lạ (đã xóa/gõ sai) mà
     // cũng lưu sẽ sinh "học sinh ma" làm phồng số liệu của giáo viên
@@ -1866,7 +1864,7 @@ export class MockEssayRepository implements EssayRepository {
         const enriched = st.essaySubmissions.map((e) => ({
           ...e,
           studentName: e.studentName || student?.name || st.profile?.name || 'Học sinh',
-          className: e.className || st.profile?.grade || '7A2',
+          className: e.className || st.profile?.grade || '',
           classId: e.classId || student?.class_id || 'class_7a2',
           hoursWaiting: Math.max(0, Math.floor((Date.now() - e.submittedAt) / 3600000)),
         }));
@@ -1935,7 +1933,7 @@ export class MockEssayRepository implements EssayRepository {
       submittedAt: Date.now(),
       status: 'PENDING_TEACHER',
       studentName: submission.studentName || student?.name || 'Học sinh',
-      className: submission.className || cls?.name || '7A2',
+      className: submission.className || cls?.name || '',
       classId: submission.classId || student?.class_id || 'class_7a2',
       hoursWaiting: 0,
     };
@@ -2151,7 +2149,8 @@ export class MockEssayRepository implements EssayRepository {
   // HUẤN LUYỆN & CẤU HÌNH AI
   // ==========================================
   async getRubricTemplates(): Promise<RubricTemplate[]> {
-    return readStorage<RubricTemplate[]>(STORAGE_KEYS.RUBRICS, SEED_RUBRIC_TEMPLATES);
+    // Mặc định RỖNG: chỉ trả rubric giáo viên đã tự tạo/lưu (không còn rubric mẫu gieo sẵn)
+    return readStorage<RubricTemplate[]>(STORAGE_KEYS.RUBRICS, []);
   }
 
   async saveRubricTemplate(template: Partial<RubricTemplate>): Promise<RubricTemplate> {
@@ -2182,7 +2181,8 @@ export class MockEssayRepository implements EssayRepository {
   }
 
   async getGradedSamples(): Promise<GradedSampleEssay[]> {
-    return readStorage<GradedSampleEssay[]>(STORAGE_KEYS.SAMPLES, SEED_GRADED_SAMPLES);
+    // Mặc định RỖNG: chỉ trả bài mẫu giáo viên đã tự lưu (không còn bài mẫu chấm sẵn gieo sẵn)
+    return readStorage<GradedSampleEssay[]>(STORAGE_KEYS.SAMPLES, []);
   }
 
   async saveGradedSample(sample: Partial<GradedSampleEssay>): Promise<GradedSampleEssay> {
@@ -2404,9 +2404,9 @@ export class MockRewardRepository implements RewardRepository {
           allReqs.push({
             ...r,
             studentId: sId,
-            studentName: student?.name || (sId === 'hs001' ? 'Nguyễn Minh Anh' : sId === 'hs002' ? 'Trần Gia Bảo' : sId),
+            studentName: student?.name || sId,
             classId: student?.class_id,
-            className: cls?.name || '7A2',
+            className: cls?.name || '',
             xpWeekActual,
             attendanceDaysActual,
             isEligible,
@@ -2605,13 +2605,8 @@ export class MockSettingRepository implements SettingRepository {
       notifications: { ...current.notifications, ...(newSettings.notifications || {}) },
     };
 
-    // Kiểm tra ràng buộc hợp lệ:
-    if (updated.xp.weeklyCap < updated.xp.dailyCapTotal) {
-      throw new Error('Trần XP tuần không thể nhỏ hơn trần XP ngày tối đa');
-    }
-    if (updated.xp.dailyCapTotal < updated.xp.dailyCapUnder45Min) {
-      throw new Error('Trần XP ngày tối đa không thể nhỏ hơn trần XP dưới 45 phút');
-    }
+    // (Đã bỏ kiểm tra ràng buộc trần XP: mô hình XP hiện hành không còn
+    // trần ngày/tuần nên không còn các trường đó trong cài đặt.)
 
     writeStorage(settingsStorageKey(), updated);
 

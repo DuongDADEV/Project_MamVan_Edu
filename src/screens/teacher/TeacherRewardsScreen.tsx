@@ -573,7 +573,7 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
                           <td className="py-3 px-3 font-semibold text-[#2F3E6B]">
                             <div className="font-bold text-xs">{req.studentName}</div>
                             <div className="text-[11px] text-[#6B7280]">
-                              Lớp {req.className || '7A2'}
+                              {req.className ? `Lớp ${req.className}` : 'Chưa rõ lớp'}
                             </div>
                           </td>
 

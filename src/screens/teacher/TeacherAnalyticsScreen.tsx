@@ -25,7 +25,8 @@ interface TeacherAnalyticsScreenProps {
   classes: ClassItem[];
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
-  topics: Array<{ id: string; title: string }>;
+  topics: Array<{ id: string; title: string; videoIds?: string[]; theoryId?: string }>;
+  quizzes?: Array<{ id: string; topicId?: string }>;
   essays: EssaySubmission[];
   rewards: RewardRequest[];
   questions?: Record<string, Question>;
@@ -50,6 +51,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
   students,
   studentStates,
   topics,
+  quizzes,
   essays,
   rewards,
   questions,
@@ -161,6 +163,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
             studentStates={studentStates}
             classes={classes}
             topics={topics}
+            quizzes={quizzes}
             essays={essays}
             rewards={rewards}
             questions={questions ?? {}}
@@ -205,6 +208,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
           <EngagementAnalyticsTab
             students={students}
             studentStates={studentStates}
+            classes={classes}
             filters={filters}
             onSelectStudentDossier={handleSelectStudentDossier}
           />

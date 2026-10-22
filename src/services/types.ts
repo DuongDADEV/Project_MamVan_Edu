@@ -398,9 +398,8 @@ export interface SystemSettings {
     weightDecayFactor: number;
   };
   xp: {
-    dailyCapUnder45Min: number;
-    dailyCapTotal: number;
-    weeklyCap: number;
+    // Không còn trường trần XP ngày/tuần: mô hình XP hiện hành đã bãi bỏ
+    // toàn bộ trần (chỉ còn điểm danh ngày + quỹ XP chủ đề + XP từng bài).
     attendanceDailyXp: number;
     videoWatchXp: number;
     videoSummaryReadXp: number;
