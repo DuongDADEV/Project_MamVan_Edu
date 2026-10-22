@@ -261,6 +261,9 @@ export function bootstrapStorage(): { reset: boolean } {
         STORAGE_KEYS.REQUESTS,
         STORAGE_KEYS.AUDIT,
         'mam_van_announcements',
+        // Lịch sử trò chuyện Trợ lý phân tích: dữ liệu thật của giáo viên,
+        // không được dọn khi đổi schema (cùng nguyên tắc các key trên).
+        'mam_van_assistant_chat_v1',
       ]);
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {

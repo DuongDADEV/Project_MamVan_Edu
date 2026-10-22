@@ -45,6 +45,8 @@ interface AnalyticsAssistantTabProps {
   compact?: boolean;
 }
 
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   useAssistantChat,
   appendAssistantMsg,
@@ -63,60 +65,6 @@ const STARTERS = [
 ];
 
 
-/** Render nhẹ markdown của trợ lý (đậm **, tiêu đề #, ##, ###, gạch đầu dòng)
- *  — tránh thêm thư viện ngoài cho một nhu cầu hiển thị nhỏ. */
-function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/g).map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-      return (
-        <strong key={`${keyPrefix}-${i}`} className="font-bold text-[#2F3E6B]">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-      return (
-        <em key={`${keyPrefix}-${i}`} className="italic">
-          {part.slice(1, -1)}
-        </em>
-      );
-    }
-    return <span key={`${keyPrefix}-${i}`}>{part}</span>;
-  });
-}
-
-function renderRichText(rawText: string): React.ReactNode {
-  // Chuẩn hóa các lệch chuẩn markdown mô hình hay mắc: đóng đậm bằng ***
-  // (thừa một dấu *) và ***bao cả cụm*** → quy hết về **đậm**.
-  const text = rawText
-    .replace(/\*\*\*([^*]+)\*\*\*/g, '**$1**')
-    .replace(/\*\*([^*]+)\*\*\*/g, '**$1**')
-    .replace(/\*\*\*([^*]+)\*\*/g, '**$1**');
-  const lines = text.split('\n');
-  return lines.map((line, i) => {
-    // Bỏ dấu trích dẫn > ở đầu dòng (mô hình hay dùng khi gợi ý hành động).
-    const trimmed = line.trim().replace(/^>\s?/, '');
-    if (!trimmed) return <div key={i} className="h-2" />;
-    const heading = trimmed.match(/^#{1,4}\s+(.*)$/);
-    if (heading) {
-      return (
-        <div key={i} className="font-lora font-bold text-[#2F3E6B] mt-1.5 first:mt-0">
-          {renderInline(heading[1].replace(/\*\*/g, ''), `h${i}`)}
-        </div>
-      );
-    }
-    if (/^[-•]\s+/.test(trimmed)) {
-      return (
-        <div key={i} className="flex gap-1.5 pl-1">
-          <span className="text-[#2F3E6B] font-bold">•</span>
-          <span className="flex-1">{renderInline(trimmed.replace(/^[-•]\s+/, ''), `b${i}`)}</span>
-        </div>
-      );
-    }
-    return <div key={i}>{renderInline(trimmed, `p${i}`)}</div>;
-  });
-}
-
 export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   students,
   studentStates,
@@ -134,6 +82,13 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   // bóng chat là cùng một cuộc trò chuyện, lưu bền trong trình duyệt.
   const { messages, busy } = useAssistantChat();
   const [input, setInput] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 3500);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ctx: AssistantContext = useMemo(
@@ -315,7 +270,48 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
                     </div>
                   )}
                   <div className="text-sm text-stone-800 leading-relaxed">
-                    {m.role === 'assistant' && !m.isError ? renderRichText(m.text) : m.text}
+                    {m.role === 'assistant' && !m.isError ? (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                          strong: ({ children }) => (
+                            <strong className="font-bold text-[#2F3E6B]">{children}</strong>
+                          ),
+                          em: ({ children }) => <em className="italic">{children}</em>,
+                          h1: ({ children }) => (
+                            <div className="font-lora font-bold text-[#2F3E6B] mt-2 first:mt-0 mb-1">{children}</div>
+                          ),
+                          h2: ({ children }) => (
+                            <div className="font-lora font-bold text-[#2F3E6B] mt-2 first:mt-0 mb-1">{children}</div>
+                          ),
+                          h3: ({ children }) => (
+                            <div className="font-lora font-bold text-[#2F3E6B] mt-2 first:mt-0 mb-1">{children}</div>
+                          ),
+                          h4: ({ children }) => (
+                            <div className="font-lora font-bold text-[#2F3E6B] mt-2 first:mt-0 mb-1">{children}</div>
+                          ),
+                          ul: ({ children }) => <ul className="list-disc pl-5 mb-1.5 space-y-0.5">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-5 mb-1.5 space-y-0.5">{children}</ol>,
+                          li: ({ children }) => <li>{children}</li>,
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-2 border-[#C9BFA9] pl-3 my-1.5 text-stone-600">{children}</blockquote>
+                          ),
+                          a: ({ children, href }) => (
+                            <a href={href} target="_blank" rel="noreferrer" className="underline text-[#2F3E6B]">
+                              {children}
+                            </a>
+                          ),
+                          code: ({ children }) => (
+                            <code className="bg-[#FAF5EB] border border-[#E6DCC8] rounded px-1 text-[13px]">{children}</code>
+                          ),
+                        }}
+                      >
+                        {m.text}
+                      </ReactMarkdown>
+                    ) : (
+                      m.text
+                    )}
                   </div>
                   {m.chart && m.chart.rows.length > 0 && (
                     <div className="bg-white border border-[#E6DCC8] rounded-2xl p-3">
@@ -389,15 +385,23 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
               type="button"
               disabled={busy}
               onClick={() => {
-                if (window.confirm('Xóa toàn bộ lịch sử trò chuyện với Trợ lý phân tích?')) {
+                if (confirmClear) {
                   clearAssistantChat();
+                  setConfirmClear(false);
+                } else {
+                  setConfirmClear(true);
                 }
               }}
-              className="shrink-0 w-11 h-11 rounded-2xl border border-[#E6DCC8] text-[#78716C] flex items-center justify-center hover:bg-[#FAF5EB] hover:text-red-700 transition disabled:opacity-40"
+              className={`shrink-0 h-11 rounded-2xl border flex items-center justify-center gap-1.5 transition disabled:opacity-40 ${
+                confirmClear
+                  ? 'px-3 bg-red-600 border-red-600 text-white text-xs font-bold'
+                  : 'w-11 border-[#E6DCC8] text-[#78716C] hover:bg-[#FAF5EB] hover:text-red-700'
+              }`}
               aria-label="Xóa lịch sử trò chuyện"
               title="Xóa lịch sử trò chuyện (áp dụng cho cả tab và bong bóng chat)"
             >
               <Trash2 className="w-5 h-5" />
+              {confirmClear && <span>Xóa hết?</span>}
             </button>
           )}
           <textarea

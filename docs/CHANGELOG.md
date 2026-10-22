@@ -1,3 +1,7 @@
+## 2026-10-22 (VÁ LƯU BỀN + ĐỊNH DẠNG TRỢ LÝ — từ kết quả kiểm chứng)
+
+Kiểm chứng độc lập phát hiện 3 điểm và đã vá cả ba: (1) lịch sử chat của Trợ lý mất sau khi tải lại trang trong môi trường kiểm chứng — key lưu lịch sử chưa nằm trong danh sách bảo vệ của bootstrapStorage nên có thể bị đợt dọn schema quét mất; nay đã thêm 'mam_van_assistant_chat_v1' vào protectedKeys theo đúng nguyên tắc "dữ liệu thật của người dùng không bị dọn theo schema". (2) Nút xóa lịch sử dùng hộp thoại xác nhận native (window.confirm) — khó thao tác/xác nhận trong nhiều bối cảnh; nay đổi sang xác nhận tại chỗ: bấm lần 1 nút chuyển đỏ "Xóa hết?", bấm lần 2 mới xóa, tự hủy sau 3,5 giây. (3) Bộ render markdown tự chế liên tục sót các biến thể mô hình viết lệch (dấu * thừa, trích dẫn >); nay thay bằng thư viện react-markdown + remark-gfm với định dạng theo bảng màu của app.
+
 ## 2026-10-22 (ĐỒNG NHẤT + LƯU BỀN LỊCH SỬ TRÒ CHUYỆN TRỢ LÝ — theo yêu cầu chủ dự án)
 
 Lịch sử trò chuyện của Trợ lý phân tích được đưa về MỘT kho dùng chung (assistantChatStore): tab Trợ lý trong mục Phân tích và bong bóng chat nổi đọc/ghi cùng một cuộc hội thoại — hỏi ở nơi này thì nơi kia thấy ngay, trạng thái "đang truy vấn" cũng dùng chung (không gửi trùng từ hai nơi), và lịch sử được lưu bền vào bộ nhớ trình duyệt (tối đa 80 tin nhắn gần nhất) nên tải lại trang không mất. Có nút thùng rác cạnh ô nhập để xóa toàn bộ lịch sử khi cần (xóa một nơi là sạch cả hai).
