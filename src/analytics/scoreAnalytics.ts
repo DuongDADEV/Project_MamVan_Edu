@@ -177,39 +177,26 @@ export function computeWeeklyScoreTrends(
     const weekEnd = now - w * ONE_WEEK;
     const weekLabel = `Tuần ${6 - w}`;
 
-    let sum7A2 = 0;
-    let count7A2 = 0;
-    let sum7A3 = 0;
-    let count7A3 = 0;
-
+    // Điểm TB tuần tính từ TOÀN BỘ kết quả thật trong tuần — trước đây code
+    // chia đôi theo 2 lớp demo '7A2'/'7A3' (mọi học sinh thật đều rơi vào
+    // nhóm '7A3' bịa); đã bỏ hẳn cách chia đó.
+    let sum = 0;
+    let totalCount = 0;
     Object.values(allStates).forEach((st) => {
-      const is7A2 = st.profile.grade?.includes('7A2');
       (st.questionResults || []).forEach((q) => {
         if (q.timestamp >= weekStart && q.timestamp < weekEnd) {
-          const score = q.scoreRatio * 10;
-          if (is7A2) {
-            sum7A2 += score;
-            count7A2++;
-          } else {
-            sum7A3 += score;
-            count7A3++;
-          }
+          sum += q.scoreRatio * 10;
+          totalCount++;
         }
       });
     });
-
-    const avg7A2 = count7A2 === 0 ? 0 : Math.round((sum7A2 / count7A2) * 10) / 10;
-    const avg7A3 = count7A3 === 0 ? 0 : Math.round((sum7A3 / count7A3) * 10) / 10;
-    const totalCount = count7A2 + count7A3;
-    const overallAvg = totalCount === 0 ? 0 : Math.round(((sum7A2 + sum7A3) / totalCount) * 10) / 10;
+    const overallAvg = totalCount === 0 ? 0 : Math.round((sum / totalCount) * 10) / 10;
 
     trends.push({
       weekLabel,
       weekTimestamp: weekStart,
       averageScore: overallAvg,
       attemptCount: totalCount,
-      class7A2Score: avg7A2,
-      class7A3Score: avg7A3,
     });
   }
 
@@ -275,7 +262,8 @@ export function computeClassComparison(
 export function computeStudentScoreRankings(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
-  filter: AnalyticsFilter
+  filter: AnalyticsFilter,
+  classes: { id: string; name: string }[] = []
 ): StudentRankingRow[] {
   const students = filterStudents(allStudents, filter);
   const dateRange = getFilterDateRange(filter);
@@ -302,7 +290,12 @@ export function computeStudentScoreRankings(
       rank: 1,
       studentId: s.id,
       studentName: s.name,
-      className: s.class_id === 'class_7a2' ? '7A2' : '7A3',
+      // Tên lớp THẬT: tra trong danh sách lớp của giáo viên; không có thì
+      // lấy khối/lớp ghi trong hồ sơ của chính học sinh; tuyệt đối không
+      // gán nhãn lớp bịa theo kiểu thời demo ('7A2'/'7A3').
+      className:
+        classes.find((c) => c.id === s.class_id)?.name ||
+        (state?.profile?.grade ? state.profile.grade.replace(/^Lớp\s*/i, '') : '—'),
       studentCode: s.student_code || s.username.toUpperCase(),
       averageScore,
       totalAttempts: attemptCount,

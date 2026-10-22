@@ -80,7 +80,7 @@ export const ScoreAnalyticsTab: React.FC<ScoreAnalyticsTabProps> = ({
 
   // 5. Bảng điểm nội bộ có thể sắp xếp
   const rankingList = useMemo(() => {
-    const raw = computeStudentScoreRankings(studentStates, students, filters);
+    const raw = computeStudentScoreRankings(studentStates, students, filters, classes);
     return [...raw].sort((a: StudentRankingRow, b: StudentRankingRow) => {
       const valA = a[sortField];
       const valB = b[sortField];

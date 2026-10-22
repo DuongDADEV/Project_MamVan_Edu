@@ -1,3 +1,7 @@
+## 2026-10-22 (TIẾP RÀ SOÁT — SỬA NHÃN LỚP BỊA Ở PHÂN TÍCH ĐIỂM)
+
+Phiên kiểm chứng sau đợt xóa dữ liệu mẫu phát hiện bảng điểm nội bộ giáo viên ghi lớp "7A3" cho cả 10 học sinh (thật: 7A4). Gốc rễ: code thời demo gán nhãn theo điều kiện cứng — lớp nào không phải mã demo 'class_7a2' thì mặc định '7A3'; xu hướng điểm tuần cũng chia đôi học sinh theo 2 lớp demo đó. Đã sửa: tên lớp ở bảng điểm tra từ danh sách lớp THẬT của giáo viên (dự phòng: khối/lớp trong hồ sơ của chính học sinh, không có nữa thì để '—'); xu hướng tuần bỏ hẳn cách chia lớp bịa, chỉ tính điểm trung bình từ toàn bộ kết quả thật. Kiểm chứng lại ngân hàng câu hỏi bằng truy vấn REST trực tiếp: cả 27 câu của gv001 đều trả về đúng — con số 0 trong phiên kiểm chứng trước là lỗi nạp nhất thời của phiên trình duyệt đó, không phải lỗi dữ liệu/code (sẽ kiểm chứng lại trực quan riêng ngân hàng).
+
 ## 2026-10-22 (RÀ SOÁT TOÀN DIỆN + XÓA SẠCH DỮ LIỆU MẪU — theo lệnh chủ dự án)
 
 Yêu cầu: mọi con số trên màn hình phải truy được nguồn trong cơ sở dữ liệu, không hiển thị bừa. Kết quả rà soát: DB sạch (22 bảng không có dòng mẫu); vấn đề nằm ở CODE — file dữ liệu mẫu `src/data/mockData.ts` (1.038 dòng) vẫn được 17 file tham chiếu và nhiều màn hình dùng nó làm dự phòng. Đã xử lý toàn bộ:

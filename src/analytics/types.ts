@@ -76,8 +76,6 @@ export interface WeeklyScoreTrend {
   weekTimestamp: number;
   averageScore: number;
   attemptCount: number;
-  class7A2Score?: number;
-  class7A3Score?: number;
 }
 
 export interface ClassComparisonItem {
