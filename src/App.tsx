@@ -7,14 +7,7 @@ import {
   ThemeId,
   Topic,
 } from './types.ts';
-import {
-  DEMO_STUDENTS,
-  createInitialStateHs001,
-  createInitialStateHs002,
-  VIDEOS,
-  QUIZZES,
-  QUESTIONS_BANK,
-} from './data/mockData.ts';
+import { createFreshStudentState } from './services/mock/seedData.ts';
 import { REWARDS_CATALOG } from './data/rewards.ts';
 import { XP_CONFIG, ATTENDANCE_CONFIG, TIME_CONFIG, getEffectiveXpConfig } from './config.ts';
 import { awardXP, XP_KEYS } from './logic/xpEngine.ts';
@@ -81,6 +74,40 @@ import { AdminPortal } from './screens/admin/AdminPortal.tsx';
 
 const USER_STORAGE_KEY = 'vo_muc_active_user';
 const STATE_STORAGE_PREFIX = 'vo_muc_student_state_';
+
+// State TRỐNG trung tính dùng khi khởi tạo / sau đăng xuất, trong lúc chờ
+// dữ liệu thật từ máy chủ: mọi số liệu = 0, hồ sơ lấy từ phiên đăng nhập đã
+// lưu (nếu khớp tài khoản). TUYỆT ĐỐI không dùng state mẫu — dữ liệu demo
+// đã gỡ khỏi dự án (theo yêu cầu chủ dự án 22/10: mọi con số trên màn hình
+// phải truy được nguồn trong cơ sở dữ liệu).
+function buildEmptyStudentState(studentId: string): StudentState {
+  let name = 'Học sinh';
+  let username = studentId;
+  let grade = '';
+  try {
+    const raw = localStorage.getItem('mam_van_auth_session');
+    const sess = raw ? JSON.parse(raw) : null;
+    if (sess?.user && (sess.user.id === studentId || sess.user.username === studentId)) {
+      name = sess.user.name || name;
+      username = sess.user.username || username;
+      grade = sess.user.grade || '';
+    }
+  } catch {}
+  const st = createFreshStudentState(
+    {
+      id: studentId,
+      name,
+      username,
+      class_id: '',
+      status: 'active',
+      has_logged_in: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as any,
+    grade || 'Lớp'
+  );
+  return { ...st, profile: { ...st.profile, grade } };
+}
 
 export default function App() {
   // 1. Quản lý Phiên đăng nhập (Session) - Hỗ trợ student, teacher, admin
@@ -190,9 +217,9 @@ export default function App() {
       }
       const legacySaved = localStorage.getItem(STATE_STORAGE_PREFIX + currentStudentId);
       if (legacySaved) return rolloverStudentState(JSON.parse(legacySaved));
-      return currentStudentId === 'hs002' ? createInitialStateHs002() : createInitialStateHs001();
+      return buildEmptyStudentState(currentStudentId);
     } catch {
-      return createInitialStateHs001();
+      return buildEmptyStudentState(currentStudentId);
     }
   });
 
@@ -525,7 +552,7 @@ export default function App() {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
-    const fresh = createInitialStateHs001();
+    const fresh = buildEmptyStudentState(currentStudentId);
     lastSavedStateJsonRef.current = JSON.stringify(fresh);
     setStudentState(fresh);
     setActiveFlow(null);
@@ -573,15 +600,6 @@ export default function App() {
     } else {
       handleLogout();
     }
-  };
-
-  // 8. Đặt lại dữ liệu demo
-  const handleResetData = (targetId?: 'hs001' | 'hs002') => {
-    const id = targetId || (currentSession?.role === 'student' ? currentSession.user.id : 'hs001');
-    const fresh = id === 'hs002' ? createInitialStateHs002() : createInitialStateHs001();
-    setStudentState(fresh);
-    attemptService.saveStudentState(id, fresh);
-    showToast('Đã đặt lại dữ liệu demo thành công!');
   };
 
   // 9. Điểm danh hôm nay (+2 XP và tưới cây)
@@ -856,14 +874,27 @@ export default function App() {
         ) : activeFlow?.type === 'homework' ? (
           /* Luồng làm BTVN cô giao */
           (() => {
-            const targetQuiz =
-              (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId) ||
-              QUIZZES[activeFlow.homeworkQuizId || 'quiz_homework_special'] ||
-              QUIZZES.quiz_homework_special;
+            // CHỈ dùng bài tập THẬT từ máy chủ — không còn bài mẫu chết cứng
+            // để thay thế khi không tìm thấy (đã gỡ mockData).
+            const targetQuiz = (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId);
+
+            if (!targetQuiz) {
+              return (
+                <div className="w-full max-w-2xl mx-auto py-16 px-4 text-center space-y-4">
+                  <p className="font-bold text-[#2F3E6B]">Bài tập này không còn tồn tại hoặc đang được tải lại.</p>
+                  <button
+                    onClick={() => setActiveFlow(null)}
+                    className="px-5 py-2.5 rounded-full bg-[#2F3E6B] text-white text-sm font-bold hover:opacity-90 active:scale-95 transition"
+                  >
+                    Quay lại
+                  </button>
+                </div>
+              );
+            }
 
             const qList = (targetQuiz.questionIds || [])
-              .map((id) => (rawQuestions ? rawQuestions[id] : null) || (QUESTIONS_BANK as any)[id])
-              .filter(Boolean);
+              .map((id) => (rawQuestions ? rawQuestions[id] : null))
+              .filter((q): q is NonNullable<typeof q> => !!q);
 
             const xpEarned = Math.max(0, Math.floor(targetQuiz.xp || 0));
 
@@ -1091,7 +1122,6 @@ export default function App() {
         <DevPanel
           state={studentState}
           onUpdateState={setStudentState}
-          onResetData={handleResetData}
         />
       )}
 

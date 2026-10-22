@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { VideoLesson, Topic, StudentState, Quiz } from '../types.ts';
 import { XP_CONFIG, TOTAL_VIDEO_XP } from '../config.ts';
 import { useLiveQuery, contentService, quizService, QuizWithMeta } from '../services/index.ts';
-import { QUIZZES } from '../data/mockData.ts';
 import {
   Clock,
   Play,
@@ -178,10 +177,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     ['content']
   );
 
-  const effectiveQuizzes = quizzes || [
-    ...Object.values(QUIZZES),
-    ...(liveQuizzes || []),
-  ];
+  // CHỈ dùng bài tập THẬT từ máy chủ — không gộp bài mẫu (đã gỡ mockData).
+  const effectiveQuizzes = quizzes || [...(liveQuizzes || [])];
 
   const { status, completedStepsCount, totalStepsCount, maxXP, isFlowCompleted, isInProgress } =
     getVideoCardStatus(video, topic, state, effectiveQuizzes);

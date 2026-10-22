@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
-import { VIDEOS, QUIZZES, QUESTIONS_BANK } from '../data/mockData.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
 import { recordStepCompletion } from '../logic/xpEngine.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
@@ -57,14 +56,14 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     () => contentService.getVideoLessons(undefined, true),
     ['content']
   );
+  // CHỈ hiện đúng video được yêu cầu từ dữ liệu thật. Không thấy = không
+  // hiện gì (màn hình báo không tìm thấy) — TUYỆT ĐỐI không thay bằng video
+  // mẫu hay video khác (đã gỡ mockData + fallback thay thế).
   const video = useMemo(() => {
     if (liveVideo && !liveVideo.deleted_at) return liveVideo;
-    if (VIDEOS[videoId]) return VIDEOS[videoId];
     if (allVideos && allVideos.length > 0) {
       const match = allVideos.find((v) => v.id === videoId && !v.deleted_at);
       if (match) return match;
-      const fallback = allVideos.find((v) => v.status === 'published' && !v.deleted_at);
-      if (fallback) return fallback;
     }
     return null;
   }, [liveVideo, videoId, allVideos]);
@@ -99,10 +98,10 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     cappedNotice?: string;
   } | null>(null);
 
-  const quizzesMap: Record<string, Quiz> = useMemo(() => ({
-    ...QUIZZES,
-    ...(liveQuizzes ? Object.fromEntries(liveQuizzes.map((q) => [q.id, q])) : {}),
-  }), [liveQuizzes]);
+  const quizzesMap: Record<string, Quiz> = useMemo(
+    () => (liveQuizzes ? Object.fromEntries(liveQuizzes.map((q) => [q.id, q])) : {}),
+    [liveQuizzes]
+  );
 
   const questionsMap: Record<string, Question> = useMemo(() => {
     let localStored: Record<string, Question> = {};
@@ -110,8 +109,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       const raw = typeof window !== 'undefined' ? localStorage.getItem('mam_van_questions') : null;
       if (raw) localStored = JSON.parse(raw);
     } catch {}
+    // Chỉ câu hỏi thật: bộ đệm của máy + dữ liệu máy chủ (đã gỡ ngân hàng mẫu).
     return {
-      ...QUESTIONS_BANK,
       ...localStored,
       ...(liveQuestions || {}),
     };

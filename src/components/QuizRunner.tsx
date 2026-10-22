@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Question, Quiz, QuestionResult, EssaySubmission } from '../types.ts';
-import { QUESTIONS_BANK } from '../data/mockData.ts';
 import { SKILL_METADATA } from '../logic/mastery.ts';
 import { MamMuc } from './MamMuc.tsx';
 import { Clock, CheckCircle2, XCircle, AlertCircle, Send, ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react';
@@ -35,7 +34,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     customQuestions && customQuestions.length > 0
       ? customQuestions
       : (quiz.questionIds || [])
-          .map((id) => localStoredQuestions[id] || QUESTIONS_BANK[id])
+          .map((id) => localStoredQuestions[id])
           .filter(Boolean);
 
   const [currentIndex, setCurrentIndex] = useState(0);

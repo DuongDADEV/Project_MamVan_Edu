@@ -3,10 +3,9 @@ import {
   RadarMasteryItem,
   AnalyticsFilter,
 } from './types.ts';
-import { StudentState, SkillLevel } from '../types.ts';
+import { StudentState, SkillLevel, Question } from '../types.ts';
 import { StudentAccount, TopicWithMeta } from '../services/types.ts';
 import { calculateLevelMastery, calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
-import { QUESTIONS_BANK } from '../data/mockData.ts';
 
 const ONE_WEEK = 7 * 86400000;
 
@@ -16,7 +15,10 @@ export function computeStudentProfileData(
   allStudents: StudentAccount[],
   topics: TopicWithMeta[],
   filter?: AnalyticsFilter,
-  allClasses?: { id: string; name: string }[]
+  allClasses?: { id: string; name: string }[],
+  // Ngân hàng câu hỏi THẬT (từ máy chủ) để tra nội dung/đáp án — không còn
+  // ngân hàng mẫu; tra không thấy thì ghi rõ thay vì bịa số liệu.
+  questions?: Record<string, Question>
 ): StudentProfileFullData | null {
   const account = allStudents.find((s) => s.id === studentId);
   const state = allStates[studentId];
@@ -94,22 +96,29 @@ export function computeStudentProfileData(
     .slice(-15)
     .reverse()
     .map((r, i) => {
-      const qDef = QUESTIONS_BANK[r.questionId];
+      const qDef = questions?.[r.questionId];
       const top = topics.find((t) => t.id === r.topicId);
       const isPass = r.scoreRatio >= 0.5;
 
       return {
         id: `att_${r.questionId}_${i}`,
         timestamp: r.timestamp,
-        quizTitle: `Kiểm tra năng lực: ${top?.title || 'Ngữ văn 7'}`,
+        quizTitle: top?.title ? `Kiểm tra năng lực: ${top.title}` : 'Bài kiểm tra theo chủ đề',
         topicTitle: top?.title || 'Chủ đề',
         score: Math.round(r.scoreRatio * 10 * 10) / 10,
         maxScore: 10,
         isPass,
         level: r.level,
-        questionPrompt: qDef?.prompt || 'Câu hỏi luyện tập',
-        selectedAnswer: isPass ? (Array.isArray(qDef?.answer) ? qDef?.answer[0] : qDef?.answer) : 'Lựa chọn chưa chính xác',
-        correctAnswer: Array.isArray(qDef?.answer) ? qDef?.answer.join(', ') : qDef?.answer,
+        // Hệ thống KHÔNG lưu đáp án học sinh đã chọn trong kết quả làm bài —
+        // tuyệt đối không suy diễn/bịa lựa chọn; chỉ hiện đáp án đúng khi tra
+        // được câu hỏi thật trong ngân hàng máy chủ.
+        questionPrompt: qDef?.prompt || 'Câu hỏi không còn trong ngân hàng',
+        selectedAnswer: undefined,
+        correctAnswer: qDef
+          ? Array.isArray((qDef as any).answer)
+            ? (qDef as any).answer.join(', ')
+            : (qDef as any).answer
+          : undefined,
       };
     });
 

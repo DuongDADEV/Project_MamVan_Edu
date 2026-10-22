@@ -1,3 +1,14 @@
+## 2026-10-22 (RÀ SOÁT TOÀN DIỆN + XÓA SẠCH DỮ LIỆU MẪU — theo lệnh chủ dự án)
+
+Yêu cầu: mọi con số trên màn hình phải truy được nguồn trong cơ sở dữ liệu, không hiển thị bừa. Kết quả rà soát: DB sạch (22 bảng không có dòng mẫu); vấn đề nằm ở CODE — file dữ liệu mẫu `src/data/mockData.ts` (1.038 dòng) vẫn được 17 file tham chiếu và nhiều màn hình dùng nó làm dự phòng. Đã xử lý toàn bộ:
+
+- **Màn hình học sinh:** Học bài + thẻ video không còn gộp bài tập mẫu vào danh sách thật (số bước/XP tối đa hết bị phồng); màn video bỏ cả dự phòng video mẫu lẫn việc tự thay bằng video khác (không thấy = báo không tìm thấy); màn lý thuyết, thẻ "học tiếp", màn làm bài, màn kết quả, luồng bài tập về nhà (bỏ bài mẫu chết cứng `quiz_homework_special`) — tất cả chỉ dùng dữ liệu thật, thiếu thì hiện trạng thái rỗng/không tồn tại.
+- **State học sinh:** state khởi tạo đổi thành state TRỐNG trung tính (mọi số = 0, hồ sơ từ phiên đăng nhập) thay cho state mẫu 310 XP — hết số bịa ở frame đầu; gỡ việc tự gieo state mẫu hs001 trong kho local; gỡ hẳn tính năng "Đặt lại dữ liệu demo" (App + DevPanel).
+- **Phân tích giáo viên:** tab hồ sơ học sinh không còn BỊA "đáp án học sinh đã chọn" (hệ thống vốn không lưu lựa chọn — trước đây suy diễn từ đúng/sai + ngân hàng mẫu); nội dung câu hỏi/đáp án đúng tra từ ngân hàng THẬT truyền vào, không thấy thì ghi rõ "Câu hỏi không còn trong ngân hàng"; tab phân tích câu hỏi + hồ sơ không còn mặc định chạy trên ngân hàng mẫu.
+- **Kho bài tự luận (máy chủ):** đề bài/mức độ tra thẳng từ bảng `questions` thật thay cho ngân hàng mẫu; bỏ nhãn bịa "Cảm nghĩ về bài thơ…" và tên lớp bịa "7A1" (thay bằng nhãn trung tính / "Không rõ lớp").
+- **Xóa hẳn `src/data/mockData.ts`**; danh mục huy hiệu (cấu hình sản phẩm) tách sang `src/data/badges.ts`, danh mục quà vốn ở `src/data/rewards.ts`. Cấu hình cứng còn lại (catalog quà/huy hiệu, cấu hình XP mặc định) là định nghĩa sản phẩm trong code — mọi bản ghi phát sinh (XP, huy hiệu đã mở, yêu cầu quà) đều ở DB.
+- **Dữ liệu:** đặt lại state của hs001 về 0 (nền 310 XP đến từ các phiên kiểm chứng của đội phát triển; 9 học sinh còn lại vốn 0 XP). Lịch sử làm bài ở các bảng tiến độ giữ nguyên.
+
 ## 2026-10-22 (SỬA LỖI: học sinh lúc hiện đúng người, lúc hiện thành học sinh mẫu khác)
 
 - **Triệu chứng:** cùng tài khoản hs001, có lần trang chủ hiện đúng "Nguyễn Minh An — Lớp 7A4", có lần lại hiện "Nguyễn Minh Anh — Lớp 7A2" với XP nền của dữ liệu mẫu.

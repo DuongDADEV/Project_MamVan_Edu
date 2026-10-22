@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StudentState, Topic } from '../types.ts';
-import { BADGES_CATALOG, TOPICS } from '../data/mockData.ts';
+import { BADGES_CATALOG } from '../data/badges.ts';
 import { TREE_STAGES_CONFIG } from '../config.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';

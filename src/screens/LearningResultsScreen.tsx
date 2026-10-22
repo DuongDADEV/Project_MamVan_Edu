@@ -4,7 +4,7 @@ import { StudentState, Topic } from '../types.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
 import { countLearningSteps } from '../logic/studentStateUtils.ts';
 import { formatScore } from '../utils/scoreFormat.ts';
-import { BADGES_CATALOG } from '../data/mockData.ts';
+import { BADGES_CATALOG } from '../data/badges.ts';
 
 interface LearningResultsScreenProps {
   state: StudentState;

@@ -28,7 +28,6 @@ import { StudentState, EssaySubmission, RewardRequest, Question } from '../../..
 import { computeStudentProfileData } from '../../../analytics/studentProfileAnalytics.ts';
 import { StudentProfileFullData, RadarMasteryItem } from '../../../analytics/types.ts';
 import { printReport } from '../../../utils/exportUtils.ts';
-import { QUESTIONS_BANK } from '../../../data/mockData.ts';
 import { attemptService } from '../../../services/index.ts';
 
 interface StudentProfileTabProps {
@@ -58,7 +57,7 @@ export const StudentProfileTab: React.FC<StudentProfileTabProps> = ({
   topics,
   essays,
   rewards,
-  questions = QUESTIONS_BANK,
+  questions = {},
   selectedStudentId,
   onSelectStudentId,
   onRefreshData,
@@ -77,7 +76,8 @@ export const StudentProfileTab: React.FC<StudentProfileTabProps> = ({
       students,
       topics as any,
       undefined,
-      classes
+      classes,
+      questions as any
     );
   }, [selectedStudentId, studentStates, students, topics, classes]);
 

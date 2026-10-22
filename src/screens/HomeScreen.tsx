@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StudentState, Topic } from '../types.ts';
-import { TOPICS, VIDEOS, REWARDS_CATALOG, QUIZZES } from '../data/mockData.ts';
+import { REWARDS_CATALOG } from '../data/rewards.ts';
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
@@ -79,7 +79,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Xác định bài học tiếp tục / bắt đầu
   const currentVideo = state.currentProgress
-    ? ((liveVideos || []).find((v) => v.id === state.currentProgress?.itemId) || VIDEOS[state.currentProgress?.itemId])
+    ? ((liveVideos || []).find((v) => v.id === state.currentProgress?.itemId) || null)
     : null;
 
   const firstAvailableVideo = React.useMemo(() => {

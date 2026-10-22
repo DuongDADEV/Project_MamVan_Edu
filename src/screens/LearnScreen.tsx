@@ -6,7 +6,6 @@ import { MamMuc } from '../components/MamMuc.tsx';
 import { Video, BookOpen, CheckCircle, Clock, ArrowRight, Filter, Sparkles, Layers, ListOrdered, PenLine, Play } from 'lucide-react';
 import { deriveFlowItems } from '../logic/flowOrder.ts';
 import { useLiveQuery, contentService, quizService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
-import { QUIZZES } from '../data/mockData.ts';
 
 interface LearnScreenProps {
   state: StudentState;
@@ -57,10 +56,8 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
     ['content']
   );
 
-  const allQuizzes: Quiz[] = useMemo(() => [
-    ...Object.values(QUIZZES),
-    ...(liveQuizzes || []),
-  ], [liveQuizzes]);
+  // CHỈ dùng bài tập THẬT từ máy chủ — không gộp bài mẫu (đã gỡ mockData).
+  const allQuizzes: Quiz[] = useMemo(() => [...(liveQuizzes || [])], [liveQuizzes]);
 
   const videosMap: Record<string, VideoLesson> = liveVideos
     ? Object.fromEntries(liveVideos.map((v) => [v.id, v]))

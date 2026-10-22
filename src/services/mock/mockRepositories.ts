@@ -64,7 +64,6 @@ import {
   AIGradingConfig,
   SkillLevel,
 } from '../../types.ts';
-import { createInitialStateHs001, QUESTIONS_BANK } from '../../data/mockData.ts';
 import { REWARDS_CATALOG } from '../../data/rewards.ts';
 
 export const STORAGE_SCHEMA_VERSION = 'mam_van_v4_real_data';
@@ -1836,10 +1835,7 @@ export class MockAttemptRepository implements AttemptRepository {
         }
       } catch {}
     }
-    // Nếu vẫn rỗng, luôn nạp sẵn state hs001 để đảm bảo có dữ liệu
-    if (Object.keys(states).length === 0) {
-      states['hs001'] = createInitialStateHs001();
-    }
+    // Không còn gieo state mẫu khi rỗng — rỗng là rỗng (dữ liệu demo đã gỡ).
     return states;
   }
 }
@@ -2066,9 +2062,10 @@ export class MockEssayRepository implements EssayRepository {
         const masteryLevel: SkillLevel = original.skillLevel || 'VAN_DUNG';
         const isPassed = grading.totalScore >= 5;
         const quizzes = readStorage<QuizWithMeta[]>(STORAGE_KEYS.QUIZZES, []);
+        const localQuestions = readStorage<Record<string, any>>(STORAGE_KEYS.QUESTIONS, {});
         const essayTopicId =
           quizzes.find((q) => q.id === original.quizId)?.topicId ||
-          (QUESTIONS_BANK as any)[original.questionId || '']?.topicId;
+          localQuestions[original.questionId || '']?.topicId;
         if (!st.questionResults) st.questionResults = [];
         if (essayTopicId) {
           st.questionResults.push({

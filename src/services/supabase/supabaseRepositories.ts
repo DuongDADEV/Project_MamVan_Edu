@@ -59,7 +59,6 @@ import { createFreshStudentState } from '../mock/seedData.ts';
 import { getLocalTodayStr } from '../../logic/studentStateUtils.ts';
 import { syncEventBus } from '../mock/eventBus.ts';
 import { QuestionType } from '../../types.ts';
-import { QUESTIONS_BANK } from '../../data/mockData.ts';
 import { REWARDS_CATALOG } from '../../data/rewards.ts';
 import {
   PayloadItem,
@@ -1336,6 +1335,31 @@ export const supabaseAttemptRepo = new SupabaseAttemptRepository();
 // 5. SUPABASE ESSAY REPOSITORY (BÀI TẬP LÀM VĂN & CHẤM ĐIỂM)
 // ==============================================================================
 export class SupabaseEssayRepository implements EssayRepository {
+  // Tra câu hỏi THẬT từ bảng questions (payload đầy đủ) — thay cho ngân hàng
+  // mẫu đã gỡ. Không tra được thì trả undefined để nơi gọi ghi nhãn trung
+  // tính, tuyệt đối không bịa đề bài/đáp án.
+  private async lookupRealQuestion(
+    questionId?: string
+  ): Promise<{ prompt?: string; level?: string; topicId?: string } | undefined> {
+    if (!questionId || !isSupabaseReady()) return undefined;
+    try {
+      const { data } = await supabase
+        .from('questions')
+        .select('topic_id, level, payload')
+        .eq('id', questionId)
+        .maybeSingle();
+      if (!data) return undefined;
+      const p = (data as any).payload || {};
+      return {
+        prompt: p.prompt || undefined,
+        level: p.level || (data as any).level || undefined,
+        topicId: p.topicId || (data as any).topic_id || undefined,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   async getSubmissions(filter?: {
     classId?: string;
     status?: 'PENDING_TEACHER' | 'AI_SUGGESTED' | 'GRADED' | 'ALL';
@@ -1402,8 +1426,9 @@ export class SupabaseEssayRepository implements EssayRepository {
         return cleanLocalList;
       }
 
-      const remoteList: EssaySubmission[] = (data || []).map((e: any) => {
-        const qInfo = (QUESTIONS_BANK as any)[e.question_id];
+      const remoteList: EssaySubmission[] = await Promise.all(
+        (data || []).map(async (e: any) => {
+          const qInfo = await this.lookupRealQuestion(e.question_id);
         const submittedTime = new Date(e.created_at || Date.now()).getTime();
         return {
           id: e.id,
@@ -1412,10 +1437,10 @@ export class SupabaseEssayRepository implements EssayRepository {
           studentId: e.student_id,
           studentName: e.students?.name || 'Học sinh',
           classId: e.class_id,
-          className: e.classes?.name || '7A1',
-          promptTitle: qInfo?.prompt || 'Cảm nghĩ về bài thơ / văn bản',
+          className: e.classes?.name || 'Không rõ lớp',
+          promptTitle: qInfo?.prompt || 'Bài viết tự luận',
           quizTitle: 'Bài tập làm văn',
-          prompt: qInfo?.prompt || 'Viết đoạn văn theo yêu cầu',
+          prompt: qInfo?.prompt || '',
           content: e.content,
           wordCount: e.word_count || (e.content ? e.content.trim().split(/\s+/).length : 0),
           submittedAt: submittedTime,
@@ -1432,10 +1457,11 @@ export class SupabaseEssayRepository implements EssayRepository {
               : undefined,
             suggestedAt: e.created_at,
           } : undefined,
-          skillLevel: qInfo?.level || 'VAN_DUNG',
-          hoursWaiting: Math.max(0, Math.floor((Date.now() - submittedTime) / 3600000)),
-        };
-      });
+          skillLevel: (qInfo?.level as any) || 'VAN_DUNG',
+            hoursWaiting: Math.max(0, Math.floor((Date.now() - submittedTime) / 3600000)),
+          };
+        })
+      );
 
       // HỢP NHẤT hai nguồn (remote ưu tiên, local chỉ là phần đệm chưa kịp đồng bộ)
       const map = new Map<string, EssaySubmission>();
@@ -1756,7 +1782,7 @@ export class SupabaseEssayRepository implements EssayRepository {
                 const currentQResults = Array.isArray(stRow.question_results) ? stRow.question_results : [];
                 const isPassed = grading.totalScore >= 5;
                 // Chủ đề/mức độ THẬT của câu hỏi (không gán cứng chủ đề thơ + VẬN DỤNG)
-                const qInfo2 = (QUESTIONS_BANK as any)[updated.question_id || ''];
+                const qInfo2 = await this.lookupRealQuestion(updated.question_id || '');
                 let essayTopicId: string | undefined = qInfo2?.topicId;
                 if (!essayTopicId && updated.quiz_id) {
                   try {
@@ -1793,7 +1819,7 @@ export class SupabaseEssayRepository implements EssayRepository {
           const item = await this.getSubmissionById(id);
           if (item) return item;
 
-          const qInfo = (QUESTIONS_BANK as any)[updated.question_id];
+          const qInfo = await this.lookupRealQuestion(updated.question_id);
           return {
             id: updated.id,
             questionId: updated.question_id || 'q_essay_01',
@@ -1801,10 +1827,10 @@ export class SupabaseEssayRepository implements EssayRepository {
             studentId: updated.student_id,
             studentName: updated.students?.name || 'Học sinh',
             classId: updated.class_id,
-            className: updated.classes?.name || '7A1',
-            promptTitle: qInfo?.prompt || 'Cảm nghĩ về bài thơ / văn bản',
+            className: updated.classes?.name || 'Không rõ lớp',
+            promptTitle: qInfo?.prompt || 'Bài viết tự luận',
             quizTitle: 'Bài tập làm văn',
-            questionPrompt: qInfo?.prompt || 'Viết đoạn văn theo yêu cầu',
+            questionPrompt: qInfo?.prompt || '',
             content: updated.content,
             wordCount: updated.word_count || 0,
             submittedAt: new Date(updated.created_at || Date.now()).getTime(),

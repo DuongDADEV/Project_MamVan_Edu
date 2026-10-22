@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Question, Quiz, QuestionResult, EssaySubmission, SkillLevel } from '../types.ts';
-import { QUESTIONS_BANK } from '../data/mockData.ts';
 import { SKILL_METADATA, generateMamMucFeedback, calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from './MamMuc.tsx';
 import { CheckCircle2, XCircle, Award, ArrowRight, RotateCcw, BookOpen, Sparkles, Star } from 'lucide-react';
@@ -179,7 +178,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
           {quiz.questionIds.map((qId, idx) => {
             // Ưu tiên danh sách câu hỏi THẬT đã dùng khi làm bài (câu GV tạo/AI sinh
             // không có trong ngân hàng tĩnh) — tránh câu hỏi biến mất khỏi màn xem lại
-            const q = (questions || []).find((qq) => qq.id === qId) || QUESTIONS_BANK[qId];
+            const q = (questions || []).find((qq) => qq.id === qId);
             if (!q) return null;
             const res = results.find((r) => r.questionId === qId);
             const isEssay = q.type === 'essay';

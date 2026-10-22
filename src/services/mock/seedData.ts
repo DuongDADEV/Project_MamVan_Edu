@@ -9,15 +9,6 @@ import {
   QuestionWithMeta,
   AuditLog,
 } from '../types.ts';
-import {
-  TOPICS,
-  VIDEOS,
-  THEORIES,
-  QUIZZES,
-  QUESTIONS_BANK,
-  createInitialStateHs001,
-  createInitialStateHs002,
-} from '../../data/mockData.ts';
 import { REWARDS_CATALOG } from '../../data/rewards.ts';
 import {
   EssaySubmission,

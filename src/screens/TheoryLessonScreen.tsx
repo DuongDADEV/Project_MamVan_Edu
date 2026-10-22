@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
-import { THEORIES, QUIZZES, QUESTIONS_BANK } from '../data/mockData.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
 import { recordStepCompletion } from '../logic/xpEngine.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
@@ -54,7 +53,8 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     ['content'],
     [theoryId]
   );
-  const theory = liveTheory || THEORIES[theoryId];
+  // Chỉ lý thuyết THẬT từ máy chủ — không dự phòng bằng bản mẫu (đã gỡ mockData).
+  const theory = liveTheory || null;
 
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(undefined, false),
@@ -91,7 +91,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   }, [secondsLeft, isUnderstoodAlready]);
 
   const quizzesMap: Record<string, Quiz> = useMemo(() => ({
-    ...QUIZZES,
     ...(liveQuizzes ? Object.fromEntries(liveQuizzes.map((q) => [q.id, q])) : {}),
   }), [liveQuizzes]);
 
@@ -102,7 +101,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       if (raw) localStored = JSON.parse(raw);
     } catch {}
     return {
-      ...QUESTIONS_BANK,
       ...localStored,
       ...(liveQuestions || {}),
     };

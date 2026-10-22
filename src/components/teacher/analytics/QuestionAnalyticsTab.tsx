@@ -13,7 +13,6 @@ import { StudentAccount } from '../../../services/types.ts';
 import { StudentState, Question } from '../../../types.ts';
 import { computeQuestionAnalytics } from '../../../analytics/questionAnalytics.ts';
 import { exportToExcel } from '../../../utils/exportUtils.ts';
-import { QUESTIONS_BANK } from '../../../data/mockData.ts';
 
 interface QuestionAnalyticsTabProps {
   students: StudentAccount[];
@@ -26,7 +25,7 @@ interface QuestionAnalyticsTabProps {
 export const QuestionAnalyticsTab: React.FC<QuestionAnalyticsTabProps> = ({
   students,
   studentStates,
-  questions = QUESTIONS_BANK,
+  questions = {},
   filters,
   onOpenQuestionEditor,
 }) => {
