@@ -15,6 +15,7 @@ import {
   StudentRepository,
   AttemptRepository,
   EssayRepository,
+  AIAccuracyMetrics,
   RewardRepository,
   RewardItem,
   RewardRequest,
@@ -2108,12 +2109,7 @@ export class SupabaseEssayRepository implements EssayRepository {
   saveGradingConfig(config: Partial<AIGradingConfig>): Promise<AIGradingConfig> {
     return mockEssayRepo.saveGradingConfig(config);
   }
-  getAIAccuracyMetrics(): Promise<{
-    averageDiff: number;
-    highDiffRatio: number;
-    weeklyTrends: { week: string; diff: number; total: number }[];
-    diffByCriterion: { name: string; diff: number }[];
-  }> {
+  getAIAccuracyMetrics(): Promise<AIAccuracyMetrics | null> {
     return mockEssayRepo.getAIAccuracyMetrics();
   }
 }

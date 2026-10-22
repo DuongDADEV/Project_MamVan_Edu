@@ -16,6 +16,7 @@ import {
   QuestionWithMeta,
   AttemptRepository,
   EssayRepository,
+  AIAccuracyMetrics,
   RewardRepository,
   EnrichedRewardRequest,
   SystemSettings,
@@ -2227,52 +2228,75 @@ export class MockEssayRepository implements EssayRepository {
     return updated;
   }
 
-  async getAIAccuracyMetrics(): Promise<{
-    averageDiff: number;
-    highDiffRatio: number;
-    weeklyTrends: { week: string; diff: number; total: number }[];
-    diffByCriterion: { name: string; diff: number }[];
-  }> {
+  async getAIAccuracyMetrics(): Promise<AIAccuracyMetrics | null> {
     const all = await this.getSubmissions();
     const gradedWithDiff = all.filter((e) => e.status === 'GRADED' && e.ai_vs_teacher_diff !== undefined);
 
+    // Chưa có bài nào vừa có gợi ý AI vừa có điểm chốt của giáo viên -> CHƯA
+    // ĐỦ DỮ LIỆU, trả null để giao diện báo rõ (trước đây trả số mẫu bịa:
+    // 0.35, xu hướng tuần, diff theo tiêu chí chế sẵn).
     if (gradedWithDiff.length === 0) {
-      return {
-        averageDiff: 0.35,
-        highDiffRatio: 10,
-        weeklyTrends: [
-          { week: 'Tuần 1', diff: 0.6, total: 4 },
-          { week: 'Tuần 2', diff: 0.4, total: 7 },
-          { week: 'Tuần 3', diff: 0.35, total: 11 },
-          { week: 'Tuần 4', diff: 0.25, total: 14 },
-        ],
-        diffByCriterion: [
-          { name: 'Nội dung ý', diff: 0.35 },
-          { name: 'Bố cục & Liên kết', diff: 0.2 },
-          { name: 'Dùng từ đặt câu', diff: 0.15 },
-          { name: 'Sáng tạo cảm xúc', diff: 0.45 },
-        ],
-      };
+      return null;
     }
 
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+
     const totalDiff = gradedWithDiff.reduce((acc, curr) => acc + (curr.ai_vs_teacher_diff || 0), 0);
-    const avg = Math.round((totalDiff / gradedWithDiff.length) * 10) / 10;
+    const avg = r2(totalDiff / gradedWithDiff.length);
     const highCount = gradedWithDiff.filter((e) => (e.ai_vs_teacher_diff || 0) > 1.5).length;
     const highRatio = Math.round((highCount / gradedWithDiff.length) * 100);
+
+    // Xu hướng theo tuần THẬT: gom bài theo tuần (thứ Hai) của thời điểm
+    // chốt điểm (gradedAt, thiếu thì dùng submittedAt), tính chênh TB tuần đó.
+    const weekMap = new Map<number, { sum: number; total: number }>();
+    gradedWithDiff.forEach((e) => {
+      const ts = e.gradedAt || e.submittedAt || 0;
+      const d = new Date(ts);
+      const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      const key = monday.getTime();
+      const bucket = weekMap.get(key) || { sum: 0, total: 0 };
+      bucket.sum += e.ai_vs_teacher_diff || 0;
+      bucket.total += 1;
+      weekMap.set(key, bucket);
+    });
+    const weeklyTrends = Array.from(weekMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([key, b]) => {
+        const d = new Date(key);
+        return {
+          week: `Tuần ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+          diff: r2(b.sum / b.total),
+          total: b.total,
+        };
+      });
+
+    // Độ chênh theo tiêu chí THẬT: ghép cặp điểm tiêu chí của giáo viên
+    // (rubricScores) với điểm tiêu chí AI gợi ý (aiSuggestion.rubricScores)
+    // theo đúng tên tiêu chí, lấy trung bình |GV - AI| của từng tiêu chí.
+    const critMap = new Map<string, { sum: number; total: number }>();
+    gradedWithDiff.forEach((e) => {
+      const aiScores = e.aiSuggestion?.rubricScores || [];
+      if (aiScores.length === 0) return;
+      (e.rubricScores || []).forEach((rs) => {
+        const ai = aiScores.find((a) => a.criterionName === rs.criterionName);
+        if (!ai) return;
+        const bucket = critMap.get(rs.criterionName) || { sum: 0, total: 0 };
+        bucket.sum += Math.abs((rs.score || 0) - (ai.score || 0));
+        bucket.total += 1;
+        critMap.set(rs.criterionName, bucket);
+      });
+    });
+    const diffByCriterion = Array.from(critMap.entries())
+      .map(([name, b]) => ({ name, diff: r2(b.sum / b.total) }))
+      .sort((a, b) => b.diff - a.diff);
 
     return {
       averageDiff: avg,
       highDiffRatio: highRatio,
-      weeklyTrends: [
-        { week: 'Tuần 3', diff: avg + 0.1, total: gradedWithDiff.length },
-        { week: 'Tuần 4', diff: avg, total: gradedWithDiff.length },
-      ],
-      diffByCriterion: [
-        { name: 'Nội dung ý & Cảm thụ', diff: Math.round(avg * 1.1 * 10) / 10 },
-        { name: 'Bố cục & Liên kết', diff: Math.round(avg * 0.7 * 10) / 10 },
-        { name: 'Dùng từ & Chính tả', diff: Math.round(avg * 0.5 * 10) / 10 },
-        { name: 'Sáng tạo & Cảm xúc', diff: Math.round(avg * 1.2 * 10) / 10 },
-      ],
+      gradedCount: gradedWithDiff.length,
+      weeklyTrends,
+      diffByCriterion,
     };
   }
 }

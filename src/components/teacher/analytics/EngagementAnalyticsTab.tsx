@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import {
   Calendar,
-  Flame,
+  CalendarCheck,
   Video,
   TrendingDown,
   Info,
@@ -25,6 +25,7 @@ import {
   computeWeeklyAttendance,
   computeLearningFunnel,
   computeVideoAnalytics,
+  computeLongestAttendanceStreak,
 } from '../../../analytics/engagementAnalytics.ts';
 import { exportToExcel } from '../../../utils/exportUtils.ts';
 
@@ -56,7 +57,7 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
     return computeLearningFunnel(studentStates, students.length);
   }, [studentStates, students.length]);
 
-  // 2. Điểm danh theo tuần & chạm trần XP
+  // 2. Điểm danh theo tuần
   const weeklyAttendance: WeeklyAttendancePoint[] = useMemo(() => {
     return computeWeeklyAttendance(studentStates, filters);
   }, [studentStates, filters]);
@@ -67,13 +68,17 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
   }, []);
 
   // 4. Bảng học sinh: Thời gian học tích cực & Chuyên cần
+  // Phút học tích cực = giây học GHI THẬT trong state (hôm nay + phiên liên tục),
+  // cùng nguồn với thẻ Tổng quan. Hệ thống không đo "thời gian mở web" và khái
+  // niệm trần XP đã bãi bỏ — không hiển thị hai chỉ số đó nữa; thay bằng chuỗi
+  // ngày điểm danh liên tục dài nhất đếm từ attendanceHistory thật.
   const studentRank = useMemo(() => {
     return students.map((s) => {
       const st = studentStates[s.id];
-      const activeMinutes = Math.round((st?.activeSecondsToday || 0) / 60) + (st?.attendanceHistory?.length || 0) * 28;
-      const webOpenMinutes = Math.round(activeMinutes * 1.35) + 15;
+      const activeMinutes = Math.round(
+        ((st?.activeSecondsToday || 0) + (st?.activeSecondsContinuous || 0)) / 60
+      );
       const attendanceDays = st?.attendanceHistory?.length || 0;
-      const xpCeilingHits = attendanceDays >= 12 ? Math.floor(attendanceDays / 3) : 0;
 
       return {
         studentId: s.id,
@@ -81,22 +86,23 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
         // Tên lớp tra từ danh sách lớp thật — không gán nhãn lớp bịa theo class_id
         className: (classes || []).find((c) => c.id === s.class_id)?.name || '',
         activeLearningMinutes: activeMinutes,
-        webOpenEstimatedMinutes: webOpenMinutes,
         attendanceDaysCount: attendanceDays,
-        xpCeilingHitsCount: xpCeilingHits,
+        longestStreakDays: computeLongestAttendanceStreak(st?.attendanceHistory),
       };
     }).sort((a, b) => b.activeLearningMinutes - a.activeLearningMinutes);
-  }, [students, studentStates]);
+  }, [students, studentStates, classes]);
 
-  const totalCeilingHits = useMemo(() => {
-    return weeklyAttendance.reduce((sum, w) => sum + w.xpCeilingReachCount, 0);
-  }, [weeklyAttendance]);
+  const totalAttendanceDays = useMemo(() => {
+    return studentRank.reduce((sum, s) => sum + s.attendanceDaysCount, 0);
+  }, [studentRank]);
 
+  // Chưa có học sinh nào trong phạm vi lọc -> chưa có dữ liệu, để null hiện "—"
+  // (trước đây mặc định bịa 85%).
   const avgAttendanceRate = useMemo(() => {
-    if (weeklyAttendance.length === 0) return 85;
+    if (students.length === 0 || weeklyAttendance.length === 0) return null;
     const sum = weeklyAttendance.reduce((acc, w) => acc + w.attendanceRate, 0);
     return Math.round(sum / weeklyAttendance.length);
-  }, [weeklyAttendance]);
+  }, [weeklyAttendance, students.length]);
 
   const handleExportStudentsEngagement = () => {
     exportToExcel(
@@ -104,9 +110,8 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
         'Họ và tên': s.studentName,
         'Lớp': s.className ? `Lớp ${s.className}` : '',
         'Học tích cực (phút)': s.activeLearningMinutes,
-        'Thời gian mở web (phút)': s.webOpenEstimatedMinutes,
         'Số buổi điểm danh': s.attendanceDaysCount,
-        'Số lần chạm trần XP': s.xpCeilingHitsCount,
+        'Chuỗi ngày điểm danh liên tục dài nhất (ngày)': s.longestStreakDays,
       })),
       'thoi_gian_hoc_hoc_sinh',
       'Thời gian học & chuyên cần'
@@ -123,20 +128,24 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
             <Calendar className="w-4 h-4 text-[#2F3E6B]" />
           </div>
           <div className="text-2xl font-bold font-lora text-[#2F3E6B] mt-1">
-            {avgAttendanceRate}%
+            {avgAttendanceRate === null ? '—' : `${avgAttendanceRate}%`}
           </div>
-          <p className="text-[11px] text-[#78716C] mt-0.5">Tỉ lệ tham gia điểm danh trung bình</p>
+          <p className="text-[11px] text-[#78716C] mt-0.5">
+            {avgAttendanceRate === null
+              ? 'Chưa có dữ liệu điểm danh'
+              : 'Tỉ lệ tham gia điểm danh trung bình'}
+          </p>
         </div>
 
         <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-xs text-[#78716C]">
-            <span>Số lần chạm trần XP</span>
-            <Flame className="w-4 h-4 text-[#F59E0B]" />
+            <span>Tổng số buổi điểm danh</span>
+            <CalendarCheck className="w-4 h-4 text-[#F59E0B]" />
           </div>
           <div className="text-2xl font-bold font-lora text-[#2F3E6B] mt-1">
-            {totalCeilingHits} lượt
+            {totalAttendanceDays} buổi
           </div>
-          <p className="text-[11px] text-[#78716C] mt-0.5">Đạt hạn mức rèn luyện tối đa trong ngày</p>
+          <p className="text-[11px] text-[#78716C] mt-0.5">Tổng số ngày học sinh đã điểm danh trên hệ thống</p>
         </div>
 
         <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl p-4 shadow-xs">
@@ -246,7 +255,6 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
             tableColumns={[
               { key: 'weekLabel', label: 'Tuần học' },
               { key: 'attendanceRate', label: 'Tỉ lệ điểm danh (%)' },
-              { key: 'xpCeilingReachCount', label: 'Số HS chạm trần XP' },
             ]}
             exportFileName="diem_danh_tuan"
           >
@@ -321,7 +329,7 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
           </div>
         </div>
 
-        {/* Bảng so sánh thời gian học tích cực vs mở web (7 phần) */}
+        {/* Bảng thời gian học tích cực & chuyên cần theo học sinh (7 phần) */}
         <div className="lg:col-span-7 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl p-5 sm:p-6 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E6DCC8]">
             <div>
@@ -329,7 +337,7 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
                 Thời gian học tích cực theo từng học sinh
               </h3>
               <p className="text-xs text-[#78716C] mt-0.5">
-                So sánh giữa thời gian học tích cực (Active Learning) và thời gian mở trang web
+                Phút học tích cực ghi nhận thực tế trên hệ thống, số buổi điểm danh và chuỗi ngày học liên tục
               </p>
             </div>
 
@@ -350,9 +358,8 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
                   <th className="p-3 font-bold">Học sinh</th>
                   <th className="p-3 font-bold">Lớp</th>
                   <th className="p-3 font-bold text-right">Học tích cực (phút)</th>
-                  <th className="p-3 font-bold text-right">Mở web (phút)</th>
                   <th className="p-3 font-bold text-right">Buổi điểm danh</th>
-                  <th className="p-3 font-bold text-right">Chạm trần XP</th>
+                  <th className="p-3 font-bold text-right">Chuỗi ngày học dài nhất</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E6DCC8]/60">
@@ -369,16 +376,13 @@ export const EngagementAnalyticsTab: React.FC<EngagementAnalyticsTabProps> = ({
                     <td className="p-3 text-right font-bold text-[#2F3E6B]">
                       {st.activeLearningMinutes} phút
                     </td>
-                    <td className="p-3 text-right text-[#78716C]">
-                      {st.webOpenEstimatedMinutes} phút
-                    </td>
                     <td className="p-3 text-right text-[#4B5563]">
                       {st.attendanceDaysCount} buổi
                     </td>
                     <td className="p-3 text-right">
-                      {st.xpCeilingHitsCount > 0 ? (
+                      {st.longestStreakDays > 0 ? (
                         <span className="px-2 py-0.5 rounded-full bg-[#F59E0B]/15 text-[#D97706] font-bold text-[10px]">
-                          {st.xpCeilingHitsCount} lần
+                          {st.longestStreakDays} ngày
                         </span>
                       ) : (
                         <span className="text-[#9CA3AF]">—</span>

@@ -84,7 +84,7 @@ export interface ClassComparisonItem {
   studentCount: number;
   averageScore: number;
   passRate: number; // % >= 5.0
-  activeMinutesPerWeek: number;
+  activeMinutesPerWeek: number; // Phút học tích cực TB/HS tính từ giây học ghi thật (không chia theo tuần)
   solidMasteryRate: number; // % học sinh đạt Vững
 }
 
@@ -151,14 +151,15 @@ export interface QuestionAnalyticsItem {
 export interface DailyActiveTimePoint {
   dateLabel: string; // '22/09', '23/09'...
   timestamp: number;
-  activeMinutes: number;
+  // Số học sinh có điểm danh trong ngày — nguồn thật duy nhất theo ngày mà
+  // state ghi được. Hệ thống KHÔNG lưu giây học theo từng ngày nên tuyệt đối
+  // không suy diễn "phút học/ngày" từ số ngày điểm danh.
   studentActiveCount: number;
 }
 
 export interface WeeklyAttendancePoint {
   weekLabel: string;
   attendanceRate: number; // %
-  xpCeilingReachCount: number; // Số học sinh chạm trần XP
 }
 
 export interface FunnelStepItem {
@@ -204,7 +205,8 @@ export interface StudentProfileFullData {
   }[];
   weeklyActivity: {
     weekLabel: string;
-    activeMinutes: number;
+    // Chỉ số ngày điểm danh THẬT trong tuần. Hệ thống không lưu phút học theo
+    // tuần nên không kèm trường phút suy diễn.
     daysAttended: number;
   }[];
   teacherNote: string;

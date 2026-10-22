@@ -14,7 +14,10 @@ const ONE_DAY = 86400000;
 const ONE_WEEK = 7 * ONE_DAY;
 
 /**
- * Thời gian học tích cực (ALT) theo ngày (LineChart)
+ * Hoạt động học theo ngày (LineChart): số học sinh có điểm danh trong ngày.
+ * State chỉ ghi attendanceHistory theo ngày + giây học của NGÀY HIỆN TẠI —
+ * không có phút học theo từng ngày trong quá khứ, nên không suy diễn phút
+ * từ số học sinh có mặt (trước đây cộng cứng 32 phút/HS là số bịa).
  */
 export function computeDailyALT(
   allStates: Record<string, StudentState>,
@@ -35,22 +38,17 @@ export function computeDailyALT(
     const dateLabel = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
     const ymd = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
 
-    let activeMinutes = 0;
     let studentActiveCount = 0;
 
     Object.values(states).forEach((st) => {
-      const hasAttended = st.attendanceHistory?.includes(ymd);
-      if (hasAttended) {
+      if (st.attendanceHistory?.includes(ymd)) {
         studentActiveCount++;
-        // 25-45 phút mỗi học sinh có mặt
-        activeMinutes += 32;
       }
     });
 
     points.push({
       dateLabel,
       timestamp: dayTimestamp,
-      activeMinutes: Math.round(activeMinutes),
       studentActiveCount,
     });
   }
@@ -59,14 +57,35 @@ export function computeDailyALT(
 }
 
 /**
- * Điểm danh theo tuần và số học sinh chạm trần XP
+ * Chuỗi ngày điểm danh liên tục dài nhất từ attendanceHistory thật
+ * (danh sách ngày 'YYYY-MM-DD'). Không có ngày nào -> 0.
+ */
+export function computeLongestAttendanceStreak(attendanceHistory?: string[]): number {
+  const days = Array.from(new Set(attendanceHistory || [])).sort();
+  let longest = 0;
+  let run = 0;
+  let prevMs: number | null = null;
+  days.forEach((d) => {
+    const t = new Date(d + 'T00:00:00').getTime();
+    if (Number.isNaN(t)) return;
+    run = prevMs !== null && t - prevMs === ONE_DAY ? run + 1 : 1;
+    if (run > longest) longest = run;
+    prevMs = t;
+  });
+  return longest;
+}
+
+/**
+ * Tỉ lệ điểm danh theo tuần
  */
 export function computeWeeklyAttendance(
   allStates: Record<string, StudentState>,
   filter: AnalyticsFilter
 ): WeeklyAttendancePoint[] {
-  // Tính từ attendanceHistory THẬT của học sinh cho 6 tuần gần nhất (thứ Hai -> Chủ nhật).
-  // xpCeilingReachCount: số học sinh có tổng XP cộng trong tuần (theo xpLogs) đạt trần tuần.
+  // Tính từ attendanceHistory THẬT của học sinh cho 6 tuần gần nhất (thứ Hai -> Chủ nhật):
+  // tỉ lệ = số học sinh có ít nhất 1 ngày điểm danh trong tuần / tổng số học sinh.
+  // (Khái niệm "chạm trần XP tuần 900" đã bị bãi bỏ cùng mô hình trần XP —
+  // không còn đếm ở đây nữa.)
   const states = Object.values(allStates || {});
   const totalStudents = Math.max(1, states.length);
   const points: WeeklyAttendancePoint[] = [];
@@ -83,23 +102,17 @@ export function computeWeeklyAttendance(
     const endMs = weekEnd.getTime();
 
     let attended = 0;
-    let ceilingReach = 0;
     states.forEach((st) => {
       const days = (st.attendanceHistory || []).filter((d) => {
         const t = new Date(d + 'T00:00:00').getTime();
         return t >= startMs && t < endMs;
       });
       if (days.length > 0) attended++;
-      const xpInWeek = (st.xpLogs || [])
-        .filter((l) => l.timestamp >= startMs && l.timestamp < endMs)
-        .reduce((sum, l) => sum + (l.actualXp || 0), 0);
-      if (xpInWeek >= 900) ceilingReach++;
     });
 
     points.push({
       weekLabel: `Tuần ${6 - w}`,
       attendanceRate: Math.round((attended / totalStudents) * 100),
-      xpCeilingReachCount: ceilingReach,
     });
   }
   return points;

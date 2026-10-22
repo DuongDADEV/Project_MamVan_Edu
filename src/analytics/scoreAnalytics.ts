@@ -226,7 +226,9 @@ export function computeClassComparison(
           scoreCount++;
           if (q.scoreRatio >= 0.5) passCount++;
         });
-        totalMinutes += Math.round(((state.activeSecondsToday || 0) + (state.attendanceHistory?.length || 0) * 1800) / 60 / 6);
+        // Phút học GHI THẬT (giây hôm nay + giây phiên liên tục) — bỏ phép
+        // bịa "mỗi ngày điểm danh = 1800 giây" và phép chia 6 tuần vô căn cứ.
+        totalMinutes += Math.round(((state.activeSecondsToday || 0) + (state.activeSecondsContinuous || 0)) / 60);
       }
     });
 
@@ -284,7 +286,8 @@ export function computeStudentScoreRankings(
     const averageScore = attemptCount === 0 ? 0 : Math.round((totalScore / attemptCount) * 10) / 10;
     const masteryStatus = averageScore >= 8.0 ? 'SOLID' : averageScore >= 5.5 ? 'PROGRESSING' : 'NEEDS_REVIEW';
     const statusLabel = averageScore >= 8.0 ? 'Vững' : averageScore >= 5.5 ? 'Đang tiến bộ' : 'Cần ôn lại';
-    const activeMinutesTotal = Math.round(((state?.activeSecondsToday || 0) + (state?.attendanceHistory?.length || 0) * 1800) / 60);
+    // Phút học GHI THẬT trong state — không cộng 1800 giây/ngày điểm danh (số bịa).
+    const activeMinutesTotal = Math.round(((state?.activeSecondsToday || 0) + (state?.activeSecondsContinuous || 0)) / 60);
 
     return {
       rank: 1,

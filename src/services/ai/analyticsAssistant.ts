@@ -385,7 +385,6 @@ async function executeTool(
           },
           hoatDongTuan: profile.weeklyActivity.map((w) => ({
             tuan: w.weekLabel,
-            phutHoc: w.activeMinutes,
             ngayDiemDanh: w.daysAttended,
           })),
         },
@@ -396,11 +395,13 @@ async function executeTool(
       const attendance = computeWeeklyAttendance(ctx.studentStates, f);
       const alt = computeDailyALT(ctx.studentStates, ctx.students, f);
       const last7Alt = alt.slice(-7);
-      const avgAlt =
+      // Trung bình số học sinh có điểm danh mỗi ngày trong 7 ngày qua (số thật
+      // từ attendanceHistory — hệ thống không lưu phút học theo ngày).
+      const avgActiveStudents =
         last7Alt.length === 0
           ? 0
           : Math.round(
-              (last7Alt.reduce((s, p) => s + p.activeMinutes, 0) / last7Alt.length) * 10
+              (last7Alt.reduce((s, p) => s + p.studentActiveCount, 0) / last7Alt.length) * 10
             ) / 10;
       const scopedIds = filterStudents(ctx.students, f).map((s) => s.id);
       let sessions: any = null;
@@ -435,7 +436,7 @@ async function executeTool(
         evidence,
         data: {
           diemDanh6Tuan: seriesRows,
-          phutHocTBNgay7NgayQua: avgAlt,
+          hocSinhHoatDongTBNgay7NgayQua: avgActiveStudents,
           phienDangNhap: sessions,
           baiTapDaGiao: assignments,
         },

@@ -146,7 +146,7 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
     return generatePedagogicalInsights(studentStates, topics as any, filters);
   }, [studentStates, topics, filters]);
 
-  // 4. Dữ liệu biểu đồ 1: Xu hướng thời gian học tích cực theo ngày (LineChart)
+  // 4. Dữ liệu biểu đồ 1: Số học sinh hoạt động theo ngày (LineChart)
   const dailyEngagement = useMemo(() => {
     return computeDailyALT(studentStates, students, filters);
   }, [students, studentStates, filters]);
@@ -539,20 +539,19 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
 
       {/* 3 BIỂU ĐỒ TỔNG QUAN RECHARTS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Biểu đồ 1: Xu hướng thời gian học tích cực theo ngày (LineChart) */}
+        {/* Biểu đồ 1: Số học sinh hoạt động theo ngày (LineChart) */}
         <AccessibleChartWrapper
-          title="Thời gian học tích cực theo ngày"
-          subtitle="Tổng số phút cả lớp học tập tập trung trong từng ngày"
-          unitNote="Phút/ngày"
+          title="Học sinh hoạt động theo ngày"
+          subtitle="Số học sinh có điểm danh trong từng ngày"
+          unitNote="Học sinh/ngày"
           empty={dailyEngagement.length === 0}
           tableData={dailyEngagement}
           tableColumns={[
             { key: 'dateLabel', label: 'Ngày' },
-            { key: 'activeMinutes', label: 'Tổng số phút' },
             { key: 'studentActiveCount', label: 'Số học sinh tham gia' },
           ]}
-          exportFileName="thoi_gian_hoc_tich_cuc_ngay"
-          pedagogicalNote="Thời gian tích cực chỉ tính khi học sinh đang tương tác (làm bài, rê chuột, gõ văn bản), không tính thời gian treo máy."
+          exportFileName="hoc_sinh_hoat_dong_ngay"
+          pedagogicalNote="Đếm từ lịch sử điểm danh thật của học sinh. Hệ thống chưa lưu phút học theo từng ngày nên biểu đồ không hiển thị phút học theo ngày."
         >
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={dailyEngagement} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -568,12 +567,12 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
                   fontSize: '12px',
                   color: '#2F3E6B',
                 }}
-                formatter={(val: any) => [`${val} phút`, 'Thời gian tích cực']}
+                formatter={(val: any) => [`${val} học sinh`, 'Học sinh hoạt động']}
               />
               <Line
                 type="monotone"
-                dataKey="activeMinutes"
-                name="Tổng phút học"
+                dataKey="studentActiveCount"
+                name="Số học sinh hoạt động"
                 stroke={PALETTE.muc}
                 strokeWidth={2.5}
                 dot={{ r: 3, fill: PALETTE.datNung }}

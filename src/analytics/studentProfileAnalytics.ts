@@ -122,9 +122,11 @@ export function computeStudentProfileData(
       };
     });
 
-  // Thời gian học theo 6 tuần
+  // Hoạt động theo 6 tuần: chỉ đếm ngày điểm danh THẬT trong tuần.
+  // (Trước đây nhân cứng 32 phút/ngày thành "phút học" — số bịa; hệ thống
+  // không lưu phút học theo tuần nên không hiển thị chỉ số đó.)
   const now = Date.now();
-  const weeklyActivity: { weekLabel: string; activeMinutes: number; daysAttended: number }[] = [];
+  const weeklyActivity: { weekLabel: string; daysAttended: number }[] = [];
 
   for (let w = 5; w >= 0; w--) {
     const wStart = now - (w + 1) * ONE_WEEK;
@@ -135,11 +137,8 @@ export function computeStudentProfileData(
       return t >= wStart && t < wEnd;
     }).length;
 
-    const activeMinutes = daysAttended * 32;
-
     weeklyActivity.push({
       weekLabel: `Tuần ${6 - w}`,
-      activeMinutes,
       daysAttended,
     });
   }

@@ -337,12 +337,20 @@ export interface EssayRepository {
   deleteGradedSample(id: string): Promise<void>;
   getGradingConfig(): Promise<AIGradingConfig>;
   saveGradingConfig(config: Partial<AIGradingConfig>): Promise<AIGradingConfig>;
-  getAIAccuracyMetrics(): Promise<{
-    averageDiff: number;
-    highDiffRatio: number;
-    weeklyTrends: { week: string; diff: number; total: number }[];
-    diffByCriterion: { name: string; diff: number }[];
-  }>;
+  getAIAccuracyMetrics(): Promise<AIAccuracyMetrics | null>;
+}
+
+/**
+ * Chỉ số độ tin cậy AI chấm bài — TẤT CẢ đều tính từ bài đã có gợi ý AI và
+ * điểm chốt của giáo viên. Chưa có bài nào như vậy -> null (chưa đủ dữ liệu),
+ * tuyệt đối không trả số mẫu.
+ */
+export interface AIAccuracyMetrics {
+  averageDiff: number; // Độ chênh |điểm GV chốt - điểm AI gợi ý| trung bình
+  highDiffRatio: number; // % bài có độ chênh > 1.5 điểm
+  gradedCount: number; // Số bài dùng để tính (có cả gợi ý AI lẫn điểm chốt)
+  weeklyTrends: { week: string; diff: number; total: number }[]; // Theo tuần chốt điểm thật
+  diffByCriterion: { name: string; diff: number }[]; // Ghép cặp rubricScores GV vs aiSuggestion theo tên tiêu chí
 }
 
 // ========================
