@@ -86,7 +86,7 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
 
   useEffect(() => {
     if (!confirmClear) return;
-    const t = setTimeout(() => setConfirmClear(false), 3500);
+    const t = setTimeout(() => setConfirmClear(false), 6000);
     return () => clearTimeout(t);
   }, [confirmClear]);
   const scrollRef = useRef<HTMLDivElement>(null);
