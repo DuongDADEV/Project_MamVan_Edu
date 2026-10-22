@@ -1,3 +1,12 @@
+## 2026-10-22 (GỘP PHIẾU CHẤM VÀO HÀNG ĐỢI CHẤM BÀI — theo lệnh chủ dự án)
+
+Trước đây hàng đợi "Chấm bài" chỉ đọc bảng bài nộp tự luận (đang 0 bài) nên hiện "Cần chấm 0", trong khi 39 phiếu chờ chấm thật (câu tự luận học sinh nộp qua bài được giao / luồng học, lưu ở bảng phiếu chấm của nhánh tiến độ) chỉ xem/chấm được ở màn Tiến độ bài làm. Nay gộp về một mối:
+
+- Hàng đợi chấm đọc thêm phiếu chờ + phiếu đã chấm của đúng phạm vi học sinh thuộc giáo viên (id phiếu mang tiền tố riêng), hiển thị cạnh bài nộp thường: đúng học sinh, đúng lớp, đề bài thật từ bảng câu hỏi, nguồn bài (tên bài tập/hoạt động) làm tiêu đề, thời gian chờ thật.
+- Quy đổi thang điểm hai chiều: hàng đợi chấm thang 10, phiếu tính theo điểm tối đa riêng của từng câu (2/3/4 điểm) — điểm đã chấm hiển thị quy về thang 10, khi chốt điểm ở hàng đợi thì quy ngược về thang của câu trước khi ghi.
+- Chốt điểm tại hàng đợi ghi ngược về ĐÚNG nguồn: phiếu → ĐÃ CHẤM (kèm điểm, nhận xét, rubric, người chấm theo UUID phiên đăng nhập), câu trả lời → đã chấm, tổng điểm của lượt làm tính lại — nên số "chờ chấm" ở màn Tiến độ tự khớp ngay vì cùng một bảng. Kèm kiểm toán + thông báo học sinh + ghi năng lực như bài nộp thường; nháp chấm của phiếu lưu bền trên máy và tự xóa khi chốt.
+- Tài khoản/mật khẩu giữ nguyên theo ý chủ dự án.
+
 ## 2026-10-22 (TIẾP RÀ SOÁT — SỬA NHÃN LỚP BỊA Ở PHÂN TÍCH ĐIỂM)
 
 Phiên kiểm chứng sau đợt xóa dữ liệu mẫu phát hiện bảng điểm nội bộ giáo viên ghi lớp "7A3" cho cả 10 học sinh (thật: 7A4). Gốc rễ: code thời demo gán nhãn theo điều kiện cứng — lớp nào không phải mã demo 'class_7a2' thì mặc định '7A3'; xu hướng điểm tuần cũng chia đôi học sinh theo 2 lớp demo đó. Đã sửa: tên lớp ở bảng điểm tra từ danh sách lớp THẬT của giáo viên (dự phòng: khối/lớp trong hồ sơ của chính học sinh, không có nữa thì để '—'); xu hướng tuần bỏ hẳn cách chia lớp bịa, chỉ tính điểm trung bình từ toàn bộ kết quả thật. Kiểm chứng lại ngân hàng câu hỏi bằng truy vấn REST trực tiếp: cả 27 câu của gv001 đều trả về đúng — con số 0 trong phiên kiểm chứng trước là lỗi nạp nhất thời của phiên trình duyệt đó, không phải lỗi dữ liệu/code (sẽ kiểm chứng lại trực quan riêng ngân hàng).

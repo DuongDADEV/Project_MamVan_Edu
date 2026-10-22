@@ -73,6 +73,11 @@ import {
   resolveContentOwnerId,
 } from './payloadStore.ts';
 import { generateUsername, generateFriendlyPassword, generateStudentCode } from '../mock/credentialUtils.ts';
+import {
+  getPendingReviews,
+  getGradedReviews,
+  gradePendingAnswer,
+} from './biRepository.ts';
 
 /**
  * Đẩy 1 bản ghi lên Supabase cho các thao tác TẠO MỚI: thất bại thì thử lại
@@ -1375,16 +1380,17 @@ export class SupabaseEssayRepository implements EssayRepository {
     // TÁCH THEO GIÁO VIÊN: giáo viên chỉ thấy bài nộp của học sinh thuộc các
     // lớp của mình — kể cả khi nơi gọi không truyền bộ lọc lớp.
     let scopeClassIds: Set<string> | null = null;
+    let scopeStudentIds: Set<string> | null = null;
     const sessUser = getSessionUser();
     if (sessUser?.role === 'teacher' && isSupabaseReady()) {
       const tid = sessionTeacherId();
       if (tid) {
         const scope = await getTeacherScopeIds(tid);
         scopeClassIds = new Set(scope.classIds);
-        const scopeStudentIds = new Set(scope.studentIds);
+        scopeStudentIds = new Set(scope.studentIds);
         cleanLocalList = cleanLocalList.filter(
           (e) =>
-            scopeStudentIds.has(e.studentId) ||
+            scopeStudentIds!.has(e.studentId) ||
             (e.classId ? scopeClassIds!.has(e.classId) : false)
         );
       }
@@ -1475,6 +1481,101 @@ export class SupabaseEssayRepository implements EssayRepository {
         merged = merged.filter(
           (e) => e.quizId === filter.quizId || e.questionId === filter.quizId
         );
+      }
+
+      // GỘP PHIẾU CHẤM TỪ LUỒNG BÀI TẬP/HOẠT ĐỘNG (answer_reviews): câu tự
+      // luận học sinh nộp qua bài được giao / luồng học tạo phiếu chờ riêng ở
+      // nhánh tiến độ — nay hiện CHUNG trong hàng đợi chấm này (id dạng
+      // 'review:<mã phiếu>'). Chấm tại đây ghi ngược về đúng phiếu, xem
+      // gradeSubmission nhánh 'review:'. Điểm hiển thị quy về thang 10; điểm
+      // gốc của phiếu tính theo điểm tối đa riêng của câu (maxScore).
+      try {
+        let reviewStudentIds: string[] | null = null;
+        if (scopeStudentIds) reviewStudentIds = Array.from(scopeStudentIds);
+        else if (filter?.studentId) reviewStudentIds = [filter.studentId];
+        else if (sessUser?.role === 'student') reviewStudentIds = [sessUser.id];
+        else {
+          const { data: allSt } = await supabase.from('students').select('id');
+          reviewStudentIds = (allSt || []).map((s: any) => s.id as string);
+        }
+        if (reviewStudentIds.length) {
+          const wantPending = filter?.status !== 'GRADED';
+          const wantGraded =
+            filter?.status !== 'PENDING_TEACHER' && filter?.status !== 'AI_SUGGESTED';
+          const [pend, grad] = await Promise.all([
+            wantPending ? getPendingReviews(reviewStudentIds) : Promise.resolve([]),
+            wantGraded ? getGradedReviews(reviewStudentIds) : Promise.resolve([]),
+          ]);
+          const reviews = [
+            ...pend.map((r) => ({ r, graded: false })),
+            ...grad.map((r) => ({ r, graded: true })),
+          ];
+          if (reviews.length) {
+            const { data: stRows } = await supabase
+              .from('students')
+              .select('id, class_id')
+              .in('id', reviewStudentIds);
+            const classByStudent = new Map<string, string>(
+              (stRows || []).map((s: any) => [s.id, s.class_id])
+            );
+            const { data: clRows } = await supabase.from('classes').select('id, name');
+            const reviewClassName = new Map<string, string>(
+              (clRows || []).map((c: any) => [c.id, c.name])
+            );
+            const qCache = new Map<string, { level?: string } | undefined>();
+            let reviewDrafts: Record<string, any> = {};
+            try {
+              reviewDrafts = JSON.parse(
+                localStorage.getItem('mam_van_review_drafts') || '{}'
+              );
+            } catch {}
+            for (const { r, graded } of reviews) {
+              const stClassId = classByStudent.get(r.studentId);
+              if (filter?.classId && filter.classId !== 'all' && stClassId !== filter.classId) {
+                continue;
+              }
+              if (!qCache.has(r.questionId)) {
+                qCache.set(r.questionId, await this.lookupRealQuestion(r.questionId));
+              }
+              const qInfo = qCache.get(r.questionId);
+              const submittedTime = r.createdAt ? new Date(r.createdAt).getTime() : Date.now();
+              const maxScore = r.maxScore && r.maxScore > 0 ? r.maxScore : 10;
+              const ratio =
+                graded && r.scoreAwarded != null ? r.scoreAwarded / maxScore : undefined;
+              const content = r.responseText || '';
+              merged.push({
+                id: `review:${r.reviewId}`,
+                questionId: r.questionId,
+                quizId: r.questionId,
+                studentId: r.studentId,
+                studentName: r.studentName,
+                classId: stClassId || '',
+                className: (stClassId && reviewClassName.get(stClassId)) || 'Không rõ lớp',
+                promptTitle: r.questionPrompt || 'Bài viết tự luận',
+                quizTitle: r.sourceTitle || 'Bài tập làm văn',
+                questionPrompt: r.questionPrompt || '',
+                content,
+                wordCount: content.trim() ? content.trim().split(/\s+/).length : 0,
+                submittedAt: submittedTime,
+                status: graded ? 'GRADED' : 'PENDING_TEACHER',
+                teacherFeedback: graded ? r.feedback || undefined : undefined,
+                totalScore: ratio != null ? Math.round(ratio * 1000) / 100 : undefined,
+                finalRatio: ratio,
+                skillLevel: (qInfo?.level as any) || 'VAN_DUNG',
+                hoursWaiting: graded
+                  ? 0
+                  : Math.max(0, Math.floor((Date.now() - submittedTime) / 3600000)),
+                teacherDraft:
+                  !graded && reviewDrafts[`review:${r.reviewId}`]
+                    ? reviewDrafts[`review:${r.reviewId}`]
+                    : undefined,
+              });
+            }
+            merged.sort((a, b) => b.submittedAt - a.submittedAt);
+          }
+        }
+      } catch (revErr) {
+        console.warn('[SupabaseEssay] Bỏ qua gộp phiếu chấm vào hàng đợi:', revErr);
       }
 
       // HỢP NHẤT ĐỊNH DANH HỌC SINH + KHỬ TRÙNG BÀI:
@@ -1672,6 +1773,19 @@ export class SupabaseEssayRepository implements EssayRepository {
       teacherFeedback?: string;
     }
   ): Promise<EssaySubmission> {
+    // Phiếu gộp: nháp chấm lưu ở bộ nhớ máy (theo đúng id phiếu) — phiếu
+    // không có cột nháp riêng trên DB.
+    if (id.startsWith('review:') && typeof localStorage !== 'undefined') {
+      try {
+        const store = JSON.parse(localStorage.getItem('mam_van_review_drafts') || '{}');
+        store[id] = draft;
+        localStorage.setItem('mam_van_review_drafts', JSON.stringify(store));
+      } catch {}
+      const item = await this.getSubmissionById(id);
+      if (item) return { ...item, teacherDraft: draft };
+      throw new Error('Không tìm thấy bài viết');
+    }
+
     if (isSupabaseReady() && isUUID(id)) {
       try {
         const payload: Record<string, any> = {};
@@ -1715,6 +1829,124 @@ export class SupabaseEssayRepository implements EssayRepository {
     },
     teacherActorId: string
   ): Promise<EssaySubmission> {
+    // PHIẾU CHẤM GỘP (id 'review:<mã phiếu>'): ghi điểm về ĐÚNG phiếu
+    // answer_reviews + câu trả lời + tổng lượt làm qua gradePendingAnswer.
+    // Hàng đợi chấm theo thang 10, phiếu tính theo điểm tối đa riêng của
+    // câu — quy đổi tại đây. Hiệu ứng phụ (kiểm toán / thông báo / năng lực)
+    // làm giống hệt nhánh bài nộp thường bên dưới.
+    if (isSupabaseReady() && id.startsWith('review:')) {
+      const reviewId = id.slice('review:'.length);
+      const { data: rev, error: revErr } = await supabase
+        .from('answer_reviews')
+        .select('*')
+        .eq('review_id', reviewId)
+        .maybeSingle();
+      if (revErr || !rev) throw new Error('Không tìm thấy phiếu chấm của bài này.');
+      const { data: ans } = await supabase
+        .from('attempt_answers')
+        .select('*')
+        .eq('answer_id', rev.answer_id)
+        .maybeSingle();
+      if (!ans) throw new Error('Không tìm thấy câu trả lời gắn với phiếu chấm.');
+      const { data: att } = await supabase
+        .from('attempts')
+        .select('student_id')
+        .eq('attempt_id', ans.attempt_id)
+        .maybeSingle();
+      const studentId = att?.student_id as string | undefined;
+      const maxScore = Number(ans.max_score) > 0 ? Number(ans.max_score) : 10;
+      const answerScore = Math.round(((grading.totalScore / 10) * maxScore) * 100) / 100;
+      // Cột người chấm trong DB là UUID — màn chấm truyền mã giáo viên dạng
+      // chữ ('gv001') nên quy về UUID thật của phiên đăng nhập.
+      const reviewerId =
+        (isUUID(teacherActorId) ? teacherActorId : null) ||
+        sessionTeacherId() ||
+        teacherActorId;
+      await gradePendingAnswer(
+        { reviewId, answerId: rev.answer_id, attemptId: ans.attempt_id },
+        answerScore,
+        grading.teacherFeedback,
+        reviewerId,
+        grading.rubricScores
+      );
+      syncEventBus.emit('essay');
+      try {
+        const store = JSON.parse(localStorage.getItem('mam_van_review_drafts') || '{}');
+        if (store[id]) {
+          delete store[id];
+          localStorage.setItem('mam_van_review_drafts', JSON.stringify(store));
+        }
+      } catch {}
+
+      try {
+        await auditRepo.log({
+          actor_id: teacherActorId,
+          actor_name: 'Thầy/Cô',
+          actor_role: 'teacher',
+          action: 'GRADE_ESSAY',
+          target_type: 'essay',
+          target_id: id,
+          target_name: `Bài viết của ${studentId}`,
+          details: { totalScore: grading.totalScore },
+        });
+        if (studentId && typeof localStorage !== 'undefined') {
+          const annos = JSON.parse(localStorage.getItem('mam_van_announcements') || '[]');
+          annos.unshift({
+            id: 'anno_' + Date.now(),
+            title: 'Bài viết đã được chấm',
+            content: `Thầy/cô đã chấm bài viết của em. Điểm: ${grading.totalScore}/10. Hãy xem nhận xét chi tiết nhé!`,
+            type: 'essay_graded',
+            targetClassIds: ['all'],
+            studentId,
+            created_at: new Date().toISOString(),
+          });
+          localStorage.setItem('mam_van_announcements', JSON.stringify(annos));
+        }
+      } catch (sideErr) {
+        console.warn('[SupabaseEssay] Lỗi ghi audit/thông báo sau chấm phiếu:', sideErr);
+      }
+
+      if (studentId) {
+        try {
+          const { data: stRow } = await supabase
+            .from('student_states')
+            .select('*')
+            .eq('student_id', studentId)
+            .maybeSingle();
+          if (stRow) {
+            const qInfo2 = await this.lookupRealQuestion(ans.question_id || '');
+            if (qInfo2?.topicId) {
+              const currentQResults = Array.isArray(stRow.question_results)
+                ? stRow.question_results
+                : [];
+              await supabase
+                .from('student_states')
+                .update({
+                  question_results: [
+                    ...currentQResults,
+                    {
+                      questionId: ans.question_id || id,
+                      level: qInfo2?.level || 'VAN_DUNG',
+                      isCorrect: grading.totalScore >= 5,
+                      scoreRatio: grading.finalRatio || grading.totalScore / 10,
+                      timestamp: Date.now(),
+                      topicId: qInfo2.topicId,
+                    },
+                  ],
+                })
+                .eq('student_id', studentId);
+            }
+          }
+        } catch (e) {
+          console.warn('[SupabaseEssay] Không cập nhật được mastery học sinh (phiếu):', e);
+        }
+      }
+
+      const item = await this.getSubmissionById(id);
+      if (item) return item;
+      throw new Error('Đã chốt điểm nhưng không tải lại được bài.');
+    }
+
     if (isSupabaseReady() && isUUID(id)) {
       try {
         const payload = {

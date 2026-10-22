@@ -90,6 +90,8 @@ export interface BiPendingReview {
   reviewId: string;
   answerId: string;
   attemptId: string;
+  studentId: string;
+  questionId: string;
   studentName: string;
   sourceTitle: string;
   questionPrompt: string;
@@ -98,6 +100,9 @@ export interface BiPendingReview {
   maxScore: number | null;
   rubricText: string | null;
   createdAt: string | null;
+  scoreAwarded?: number | null;
+  feedback?: string | null;
+  reviewedAt?: string | null;
 }
 
 export interface BiFlowStep {
@@ -329,8 +334,11 @@ export async function getAttemptsWithAnswers(studentIds: string[]): Promise<BiAt
   }));
 }
 
-/** Hàng chờ chấm: các phiếu review PENDING của học sinh thuộc giáo viên. */
-export async function getPendingReviews(studentIds: string[]): Promise<BiPendingReview[]> {
+/** Đọc phiếu review theo trạng thái của học sinh thuộc giáo viên. */
+async function getReviewsByStatus(
+  studentIds: string[],
+  status: 'PENDING' | 'GRADED'
+): Promise<BiPendingReview[]> {
   if (!isSupabaseReady() || !studentIds.length) return [];
   const names = await studentNameMap(studentIds);
   const { data: atts } = await supabase
@@ -342,7 +350,7 @@ export async function getPendingReviews(studentIds: string[]): Promise<BiPending
   const { data: reviews } = await supabase
     .from('answer_reviews')
     .select('*')
-    .eq('review_status', 'PENDING')
+    .eq('review_status', status)
     .order('created_at', { ascending: true });
   const myReviews = (reviews || []).filter((r: any) => r.answer_id);
   if (!myReviews.length) return [];
@@ -387,6 +395,8 @@ export async function getPendingReviews(studentIds: string[]): Promise<BiPending
       reviewId: r.review_id,
       answerId: r.answer_id,
       attemptId: ans.attempt_id,
+      studentId: att.student_id,
+      questionId: ans.question_id,
       studentName: names.get(att.student_id) || 'Học sinh',
       sourceTitle: att.assignment_id
         ? asgMap.get(att.assignment_id) || att.assignment_id
@@ -397,17 +407,31 @@ export async function getPendingReviews(studentIds: string[]): Promise<BiPending
       maxScore: ans.max_score,
       rubricText: rubric,
       createdAt: r.created_at,
+      scoreAwarded: r.score_awarded != null ? Number(r.score_awarded) : null,
+      feedback: r.feedback ?? null,
+      reviewedAt: r.reviewed_at ?? null,
     });
   }
   return out;
 }
 
+/** Hàng chờ chấm: các phiếu review PENDING của học sinh thuộc giáo viên. */
+export async function getPendingReviews(studentIds: string[]): Promise<BiPendingReview[]> {
+  return getReviewsByStatus(studentIds, 'PENDING');
+}
+
+/** Phiếu đã chấm (để hàng đợi chấm hiển thị cả lịch sử chấm). */
+export async function getGradedReviews(studentIds: string[]): Promise<BiPendingReview[]> {
+  return getReviewsByStatus(studentIds, 'GRADED');
+}
+
 /** Chấm 1 câu chờ: ghi review + điểm câu + tính lại tổng của lượt làm. */
 export async function gradePendingAnswer(
-  review: BiPendingReview,
+  review: Pick<BiPendingReview, 'reviewId' | 'answerId' | 'attemptId'>,
   score: number,
   feedback: string,
-  teacherId: string
+  teacherId: string,
+  rubricScores?: unknown
 ): Promise<void> {
   const now = new Date().toISOString();
   const { error: e1 } = await supabase
@@ -418,6 +442,7 @@ export async function gradePendingAnswer(
       review_status: 'GRADED',
       reviewed_at: now,
       reviewer_id: teacherId,
+      ...(rubricScores !== undefined ? { rubric_scores: rubricScores as any } : {}),
     })
     .eq('review_id', review.reviewId);
   if (e1) throw new Error(e1.message);
