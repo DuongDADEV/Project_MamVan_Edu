@@ -13,6 +13,7 @@ import { TeacherProgressScreen } from './teacher/TeacherProgressScreen.tsx';
 import { TeacherRewardsScreen } from './teacher/TeacherRewardsScreen.tsx';
 import { TeacherAnalyticsScreen, AnalyticsTabKey } from './teacher/TeacherAnalyticsScreen.tsx';
 import { TeacherSettingsScreen } from './teacher/TeacherSettingsScreen.tsx';
+import { AnalyticsAssistantBubble } from '../components/teacher/AnalyticsAssistantBubble.tsx';
 import {
   classService,
   studentService,
@@ -344,6 +345,18 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
           </main>
         </div>
       </div>
+
+      {/* Bong bóng chat Trợ lý phân tích — mở hỏi đáp số liệu từ mọi màn hình */}
+      <AnalyticsAssistantBubble
+        classes={classes || []}
+        students={students || []}
+        studentStates={studentStates || {}}
+        topics={topics || []}
+        essays={allEssays || []}
+        rewards={allRewards || []}
+        questions={portalData?.questions ?? {}}
+        teacherId={teacher.id}
+      />
     </div>
   );
 };

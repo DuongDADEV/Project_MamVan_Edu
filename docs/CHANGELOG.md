@@ -1,3 +1,7 @@
+## 2026-10-22 (BỔ SUNG: BONG BÓNG CHAT TRỢ LÝ PHÂN TÍCH — theo yêu cầu chủ dự án)
+
+Ngoài tab trong mục Phân tích, Trợ lý phân tích nay có thêm bong bóng chat nổi ở góc phải dưới của cổng giáo viên: hiện ở mọi màn hình (Tổng quan, Nội dung, Chấm bài, Tiến độ…), bấm vào mở khung chat ngay tại chỗ với cùng 6 công cụ và cùng bộ lọc chung của trang Phân tích nên số liệu luôn khớp; đóng/mở lại không mất nội dung hội thoại.
+
 ## 2026-10-22 (TRỢ LÝ PHÂN TÍCH AI — GIAI ĐOẠN 1, theo phương án chủ dự án duyệt)
 
 Mục Phân tích có thêm tab đầu tiên "Trợ lý phân tích AI": giáo viên hỏi bằng lời thường, Gemini chọn công cụ truy vấn phù hợp trong 6 công cụ (tổng quan lớp / so sánh chủ đề / phổ điểm / phân tích câu hỏi / hồ sơ học sinh / hoạt động học tập), hệ thống chạy đúng các hàm tính mà các tab cố định đang dùng trên dữ liệu thật, AI chỉ diễn đạt kết quả, nêu bằng chứng (số học sinh · số lượt trả lời · khoảng thời gian) và đề xuất bước tiếp theo + câu hỏi nối tiếp. Biểu đồ (cột/đường) do AI khai báo loại và trục qua một công cụ riêng, nhưng số liệu vẽ lấy nguyên văn từ kết quả công cụ — AI không chạm vào dữ liệu điểm. Rào chắn: mẫu quá ít thì trợ lý phải nói "chưa đủ dữ liệu" thay vì kết luận; trợ lý không tự giao bài/đổi điểm; chưa nhập khóa Gemini ở Cài đặt thì hiện hướng dẫn thay vì trả lời bịa. Các tab biểu đồ cố định giữ nguyên như chủ dự án đã duyệt.

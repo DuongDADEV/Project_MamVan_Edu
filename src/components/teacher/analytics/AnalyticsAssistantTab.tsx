@@ -40,6 +40,8 @@ interface AnalyticsAssistantTabProps {
   questions: Record<string, Question>;
   filters: AnalyticsFilter;
   teacherId?: string;
+  /** Dạng gọn cho bong bóng chat nổi: bỏ thẻ giới thiệu, khung chat chiếm toàn bộ chiều cao. */
+  compact?: boolean;
 }
 
 interface ChatMsg {
@@ -73,6 +75,7 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   questions,
   filters,
   teacherId,
+  compact = false,
 }) => {
   const [hasKey, setHasKey] = useState<boolean>(() => !!getGeminiApiKey());
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -149,7 +152,11 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
 
   if (!hasKey) {
     return (
-      <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-8 text-center space-y-4">
+      <div
+        className={`bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-8 text-center space-y-4 ${
+          compact ? 'h-full overflow-y-auto flex flex-col justify-center' : ''
+        }`}
+      >
         <div className="w-14 h-14 mx-auto rounded-2xl bg-[#2F3E6B] text-white flex items-center justify-center">
           <KeyRound className="w-7 h-7" />
         </div>
@@ -174,8 +181,9 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Thẻ giới thiệu + nguyên tắc số liệu */}
+    <div className={compact ? 'h-full flex flex-col' : 'space-y-4'}>
+      {/* Thẻ giới thiệu + nguyên tắc số liệu (ẩn ở dạng bong bóng gọn) */}
+      {!compact && (
       <div className="bg-[#2F3E6B] text-white rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row gap-4 sm:items-center">
         <div className="w-12 h-12 shrink-0 rounded-2xl bg-white/10 flex items-center justify-center">
           <Sparkles className="w-6 h-6" />
@@ -192,10 +200,22 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
           </p>
         </div>
       </div>
+      )}
 
       {/* Khung hội thoại */}
-      <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl overflow-hidden">
-        <div ref={scrollRef} className="max-h-[560px] overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div
+        className={`bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl overflow-hidden ${
+          compact ? 'flex-1 flex flex-col min-h-0' : ''
+        }`}
+      >
+        <div
+          ref={scrollRef}
+          className={
+            compact
+              ? 'flex-1 min-h-0 overflow-y-auto p-4 space-y-4'
+              : 'max-h-[560px] overflow-y-auto p-4 sm:p-6 space-y-4'
+          }
+        >
           {messages.length === 0 && (
             <div className="space-y-4 py-4">
               <p className="text-sm text-[#78716C] text-center">
