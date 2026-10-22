@@ -85,10 +85,17 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   });
 }
 
-function renderRichText(text: string): React.ReactNode {
+function renderRichText(rawText: string): React.ReactNode {
+  // Chuẩn hóa các lệch chuẩn markdown mô hình hay mắc: đóng đậm bằng ***
+  // (thừa một dấu *) và ***bao cả cụm*** → quy hết về **đậm**.
+  const text = rawText
+    .replace(/\*\*\*([^*]+)\*\*\*/g, '**$1**')
+    .replace(/\*\*([^*]+)\*\*\*/g, '**$1**')
+    .replace(/\*\*\*([^*]+)\*\*/g, '**$1**');
   const lines = text.split('\n');
   return lines.map((line, i) => {
-    const trimmed = line.trim();
+    // Bỏ dấu trích dẫn > ở đầu dòng (mô hình hay dùng khi gợi ý hành động).
+    const trimmed = line.trim().replace(/^>\s?/, '');
     if (!trimmed) return <div key={i} className="h-2" />;
     const heading = trimmed.match(/^#{1,4}\s+(.*)$/);
     if (heading) {
