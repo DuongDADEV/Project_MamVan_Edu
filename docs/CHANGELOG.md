@@ -1,3 +1,9 @@
+## 2026-10-22 (TRỢ LÝ PHÂN TÍCH AI — GIAI ĐOẠN 1, theo phương án chủ dự án duyệt)
+
+Mục Phân tích có thêm tab đầu tiên "Trợ lý phân tích AI": giáo viên hỏi bằng lời thường, Gemini chọn công cụ truy vấn phù hợp trong 6 công cụ (tổng quan lớp / so sánh chủ đề / phổ điểm / phân tích câu hỏi / hồ sơ học sinh / hoạt động học tập), hệ thống chạy đúng các hàm tính mà các tab cố định đang dùng trên dữ liệu thật, AI chỉ diễn đạt kết quả, nêu bằng chứng (số học sinh · số lượt trả lời · khoảng thời gian) và đề xuất bước tiếp theo + câu hỏi nối tiếp. Biểu đồ (cột/đường) do AI khai báo loại và trục qua một công cụ riêng, nhưng số liệu vẽ lấy nguyên văn từ kết quả công cụ — AI không chạm vào dữ liệu điểm. Rào chắn: mẫu quá ít thì trợ lý phải nói "chưa đủ dữ liệu" thay vì kết luận; trợ lý không tự giao bài/đổi điểm; chưa nhập khóa Gemini ở Cài đặt thì hiện hướng dẫn thay vì trả lời bịa. Các tab biểu đồ cố định giữ nguyên như chủ dự án đã duyệt.
+
+Kèm sửa một lỗi dây chuyền phát hiện trong lúc làm: cổng giáo viên trước đây KHÔNG truyền ngân hàng câu hỏi vào màn Phân tích, khiến tab Phân tích câu hỏi và phần tra cứu câu hỏi trong Hồ sơ học sinh luôn nhận ngân hàng rỗng (hiện 0 dù kho có 27 câu) — nay cổng đã nạp và truyền đúng ngân hàng thật.
+
 ## 2026-10-22 (GỘP PHIẾU CHẤM VÀO HÀNG ĐỢI CHẤM BÀI — theo lệnh chủ dự án)
 
 Trước đây hàng đợi "Chấm bài" chỉ đọc bảng bài nộp tự luận (đang 0 bài) nên hiện "Cần chấm 0", trong khi 39 phiếu chờ chấm thật (câu tự luận học sinh nộp qua bài được giao / luồng học, lưu ở bảng phiếu chấm của nhánh tiến độ) chỉ xem/chấm được ở màn Tiến độ bài làm. Nay gộp về một mối:

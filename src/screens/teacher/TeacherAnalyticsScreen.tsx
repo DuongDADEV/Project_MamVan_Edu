@@ -15,10 +15,11 @@ import { MasteryAnalyticsTab } from '../../components/teacher/analytics/MasteryA
 import { QuestionAnalyticsTab } from '../../components/teacher/analytics/QuestionAnalyticsTab.tsx';
 import { EngagementAnalyticsTab } from '../../components/teacher/analytics/EngagementAnalyticsTab.tsx';
 import { StudentProfileTab } from '../../components/teacher/analytics/StudentProfileTab.tsx';
+import { AnalyticsAssistantTab } from '../../components/teacher/analytics/AnalyticsAssistantTab.tsx';
 import { ClassItem, StudentAccount } from '../../services/types.ts';
 import { StudentState, EssaySubmission, RewardRequest, Question } from '../../types.ts';
 
-export type AnalyticsTabKey = 'score' | 'mastery' | 'questions' | 'engagement' | 'profile';
+export type AnalyticsTabKey = 'assistant' | 'score' | 'mastery' | 'questions' | 'engagement' | 'profile';
 
 interface TeacherAnalyticsScreenProps {
   classes: ClassItem[];
@@ -28,6 +29,7 @@ interface TeacherAnalyticsScreenProps {
   essays: EssaySubmission[];
   rewards: RewardRequest[];
   questions?: Record<string, Question>;
+  teacherId?: string;
   initialTab?: AnalyticsTabKey;
   initialStudentId?: string;
   onRefreshData?: () => void;
@@ -51,7 +53,8 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
   essays,
   rewards,
   questions,
-  initialTab = 'score',
+  teacherId,
+  initialTab = 'assistant',
   initialStudentId,
   onRefreshData,
   onOpenQuestionEditor,
@@ -93,6 +96,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
   };
 
   const TABS = [
+    { key: 'assistant' as AnalyticsTabKey, label: 'Trợ lý phân tích AI', icon: Sparkles },
     { key: 'score' as AnalyticsTabKey, label: 'Điểm số', icon: TrendingUp },
     { key: 'mastery' as AnalyticsTabKey, label: 'Kỹ năng / Mastery 4 mức', icon: Award },
     { key: 'questions' as AnalyticsTabKey, label: 'Phân tích câu hỏi', icon: HelpCircle },
@@ -151,6 +155,20 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
 
       {/* NỘI DUNG TỪNG TAB */}
       <div>
+        {activeTab === 'assistant' && (
+          <AnalyticsAssistantTab
+            students={students}
+            studentStates={studentStates}
+            classes={classes}
+            topics={topics}
+            essays={essays}
+            rewards={rewards}
+            questions={questions ?? {}}
+            filters={filters}
+            teacherId={teacherId}
+          />
+        )}
+
         {activeTab === 'score' && (
           <ScoreAnalyticsTab
             students={students}

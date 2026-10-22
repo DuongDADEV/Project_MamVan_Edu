@@ -18,6 +18,7 @@ import {
   studentService,
   contentService,
   essayService,
+  quizService,
   rewardService,
   auditService,
   attemptService,
@@ -27,7 +28,7 @@ import {
   StudentAccount,
   AuditLog,
 } from '../services/index.ts';
-import { StudentState, EssaySubmission, RewardRequest } from '../types.ts';
+import { StudentState, EssaySubmission, RewardRequest, Question } from '../types.ts';
 import { AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { MamMuc } from '../components/MamMuc.tsx';
 
@@ -45,6 +46,7 @@ interface TeacherPortalData {
   allEssays: EssaySubmission[];
   allRewards: RewardRequest[];
   auditLogs: AuditLog[];
+  questions: Record<string, Question>;
 }
 
 export const TeacherPortal: React.FC<TeacherPortalProps> = ({
@@ -56,7 +58,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [openAddStudentInitially, setOpenAddStudentInitially] = useState(false);
-  const [analyticsInitialTab, setAnalyticsInitialTab] = useState<AnalyticsTabKey>('score');
+  const [analyticsInitialTab, setAnalyticsInitialTab] = useState<AnalyticsTabKey>('assistant');
   const [analyticsInitialStudentId, setAnalyticsInitialStudentId] = useState<string | undefined>(undefined);
 
   // Gộp các truy vấn dùng chung thành 1 Promise.all tối ưu
@@ -75,6 +77,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         allEssays,
         allRewards,
         auditLogs,
+        questions,
       ] = await Promise.all([
         classService.getClasses(teacher.id),
         studentService.getStudents(),
@@ -83,6 +86,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         essayService.getSubmissions({ status: 'ALL' }),
         rewardService.getRequests(),
         auditService.getLogs({ limit: 100 }),
+        quizService.getQuestions(),
       ]);
       return {
         classes: classes || [],
@@ -92,9 +96,10 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         allEssays: allEssays || [],
         allRewards: allRewards || [],
         auditLogs: auditLogs || [],
+        questions: questions || {},
       };
     },
-    ['class', 'student', 'state', 'content', 'essay', 'reward', 'audit'],
+    ['class', 'student', 'state', 'content', 'essay', 'reward', 'audit', 'quiz'],
     [teacher.id]
   );
 
@@ -320,6 +325,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   topics={topics || []}
                   essays={allEssays || []}
                   rewards={allRewards || []}
+                  questions={portalData?.questions ?? {}}
+                  teacherId={teacher.id}
                   initialTab={analyticsInitialTab}
                   initialStudentId={analyticsInitialStudentId}
                   onRefreshData={refreshPortalData}
