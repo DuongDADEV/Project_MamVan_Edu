@@ -68,15 +68,23 @@ let msgSeq = 1;
 /** Render nhẹ markdown của trợ lý (đậm **, tiêu đề #, ##, ###, gạch đầu dòng)
  *  — tránh thêm thư viện ngoài cho một nhu cầu hiển thị nhỏ. */
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') ? (
-      <strong key={`${keyPrefix}-${i}`} className="font-bold text-[#2F3E6B]">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={`${keyPrefix}-${i}`}>{part}</span>
-    )
-  );
+  return text.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/g).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={`${keyPrefix}-${i}`} className="font-bold text-[#2F3E6B]">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return (
+        <em key={`${keyPrefix}-${i}`} className="italic">
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    return <span key={`${keyPrefix}-${i}`}>{part}</span>;
+  });
 }
 
 function renderRichText(text: string): React.ReactNode {

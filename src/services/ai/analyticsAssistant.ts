@@ -641,11 +641,15 @@ export async function askAnalyticsAssistant(
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
 
+  // gemini-2.0-flash đã bị Google khai tử (lỗi kiểm chứng 22/10 — các model
+  // chính chạm giới hạn trong chốc lát là chuỗi dự phòng rơi xuống model chết
+  // và báo lỗi oan). Thay bằng flash-lite + gemma làm tầng dự phòng sâu.
   const candidateModels = [
     getGeminiModel(),
     'gemini-flash-latest',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
+    'gemini-2.5-flash-lite',
+    'gemma-4-31b-it',
   ].filter((m, i, arr) => !!m && arr.indexOf(m) === i);
 
   const contents: any[] = history.map((h) => ({
@@ -731,7 +735,7 @@ export async function askAnalyticsAssistant(
       lastError = err;
       // Chỉ thử model kế tiếp khi lỗi thuộc về model/kết nối; lỗi dữ liệu
       // (vd câu hỏi sai) thì dừng ngay.
-      if (err?.status && ![404, 429, 500, 503].includes(err.status)) throw err;
+      if (err?.status && ![400, 404, 429, 500, 503].includes(err.status)) throw err;
     }
   }
   throw lastError || new Error('Không kết nối được Gemini.');
