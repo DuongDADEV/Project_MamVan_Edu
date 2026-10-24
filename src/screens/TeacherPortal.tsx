@@ -245,6 +245,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
             >
               {currentTab === 'overview' && (
                 <TeacherOverviewScreen
+                  teacherId={teacher.id}
                   teacherName={teacher.name}
                   classes={classes || []}
                   students={students || []}
