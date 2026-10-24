@@ -105,6 +105,50 @@ function EmptyNote(props: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Chiều cao vùng cuộn cho đúng 7 dòng: đo từ render thực tế (chiều cao
+ * thead + chiều cao dòng lớn nhất trong 7 dòng đầu), không giả định số px
+ * — vì chiều cao header thay đổi theo số dòng xuống dòng của tiêu đề cột
+ * theo độ rộng thẻ, và chiều cao dòng thay đổi theo font/border. Khi ≤ 7
+ * dòng thì không giới hạn (cao tự nhiên, không cuộn). Đo lại khi số dòng
+ * đổi, khi bảng/thẻ đổi kích thước (ResizeObserver) và khi cửa sổ resize.
+ */
+function useSevenRowMaxHeight(rowCount: number) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const measure = () => {
+      const table = container.querySelector('table');
+      const thead = table?.querySelector('thead');
+      const rows = table?.querySelectorAll('tbody tr');
+      if (!table || !thead || !rows || rows.length === 0) return;
+      if (rows.length <= 7) {
+        setMaxHeight((prev) => (prev === undefined ? prev : undefined));
+        return;
+      }
+      let rowH = 0;
+      for (let i = 0; i < 7; i++) {
+        rowH = Math.max(rowH, (rows[i] as HTMLElement).offsetHeight);
+      }
+      const next = thead.offsetHeight + rowH * 7;
+      setMaxHeight((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(container);
+    const table = container.querySelector('table');
+    if (table) ro.observe(table);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [rowCount]);
+  return { containerRef, maxHeight };
+}
+
 export const PbixOverviewSection: React.FC<Props> = ({
   raw,
   classes,
@@ -196,6 +240,10 @@ export const PbixOverviewSection: React.FC<Props> = ({
       .filter((st): st is StudentState => Boolean(st));
     return computeTopicCompletionTable(topics, quizzes, questions, states);
   }, [selectedStudent, scopedStudents, topics, quizzes, questions, studentStates]);
+
+  // Vùng cuộn 7 dòng cho bảng học sinh + bảng chủ đề (đo từ render thực tế).
+  const studentsScroll = useSevenRowMaxHeight(dashboard.studentsTable.length);
+  const topicsScroll = useSevenRowMaxHeight(topicTable.length);
 
   // Mặc định khoảng ngày = khoảng dữ liệu thật (áp một lần khi nạp xong; sau
   // đó người dùng tự chỉnh, không tự ghi đè lại).
@@ -355,11 +403,15 @@ export const PbixOverviewSection: React.FC<Props> = ({
             <EmptyNote>Chưa có học sinh trong phạm vi đang lọc.</EmptyNote>
           ) : (
             <>
-            <div className="flex-1 min-h-0 max-h-[316px] overflow-x-auto overflow-y-auto">
-              {/* 316px = header 2 dòng (~57px) + đúng 7 dòng học sinh (7×37px);
-                  tên + gợi ý truncate 1 dòng nên mỗi dòng đúng 37px; từ dòng
-                  thứ 8 trở đi chỉ thấy khi cuộn trong bảng. */}
-              <table className="w-full text-sm table-fixed">
+            <div
+              ref={studentsScroll.containerRef}
+              className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+              style={studentsScroll.maxHeight !== undefined ? { maxHeight: studentsScroll.maxHeight } : undefined}
+            >
+              {/* Chiều cao đo từ render thực tế (thead + 7 dòng đầu): lúc chưa
+                  cuộn thấy đúng 7 dòng học sinh, từ dòng thứ 8 trở đi chỉ
+                  thấy khi cuộn trong bảng. */}
+              <table className="w-full text-sm table-fixed border-separate border-spacing-0">
                 <colgroup>
                   <col style={{ width: '22%' }} />
                   <col style={{ width: '22%' }} />
@@ -368,16 +420,21 @@ export const PbixOverviewSection: React.FC<Props> = ({
                   <col style={{ width: '30%' }} />
                 </colgroup>
                 <thead>
-                  <tr className="text-left text-stone-500 border-b">
-                    <th className="py-2 pr-3 font-semibold sticky top-0 z-10 bg-white">Họ tên</th>
-                    <th className="py-2 pr-3 font-semibold sticky top-0 z-10 bg-white">Hoạt động gần nhất</th>
-                    <th className="py-2 pr-3 font-semibold text-right sticky top-0 z-10 bg-white">Số bài chưa nộp</th>
-                    <th className="py-2 pr-3 font-semibold text-right sticky top-0 z-10 bg-white">Tỷ lệ đạt điểm cá nhân</th>
-                    <th className="py-2 font-semibold sticky top-0 z-10 bg-white">Gợi ý theo dõi</th>
+                  <tr className="text-left text-stone-500">
+                    <th className="py-2 pr-3 font-semibold sticky top-0 z-10 bg-white border-b">Họ tên</th>
+                    <th className="py-2 pr-3 font-semibold sticky top-0 z-10 bg-white border-b">Hoạt động gần nhất</th>
+                    <th className="py-2 pr-3 font-semibold text-right sticky top-0 z-10 bg-white border-b">Số bài chưa nộp</th>
+                    <th className="py-2 pr-3 font-semibold text-right sticky top-0 z-10 bg-white border-b">Tỷ lệ đạt điểm cá nhân</th>
+                    <th className="py-2 font-semibold sticky top-0 z-10 bg-white border-b">Gợi ý theo dõi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dashboard.studentsTable.map((r) => (
+                  {dashboard.studentsTable.map((r, rowIdx) => {
+                    const cellBorder =
+                      rowIdx === dashboard.studentsTable.length - 1
+                        ? ''
+                        : 'border-b border-stone-100';
+                    return (
                     <tr
                       key={r.studentId}
                       onClick={() =>
@@ -386,21 +443,22 @@ export const PbixOverviewSection: React.FC<Props> = ({
                         )
                       }
                       title="Bấm để xem riêng học sinh này trên mọi panel (bấm lại để bỏ chọn)"
-                      className={`border-b border-stone-100 last:border-0 cursor-pointer hover:bg-indigo-50/60 ${
+                      className={`cursor-pointer hover:bg-indigo-50/60 ${
                         selectedStudentId === r.studentId ? 'bg-indigo-50' : ''
                       }`}
                     >
-                      <td className="py-2 pr-3 font-medium truncate" title={r.name}>{r.name}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
+                      <td className={`py-2 pr-3 font-medium truncate ${cellBorder}`} title={r.name}>{r.name}</td>
+                      <td className={`py-2 pr-3 whitespace-nowrap ${cellBorder}`}>
                         {formatVNDateTime(r.lastLoginAt)}
                       </td>
-                      <td className="py-2 pr-3 text-right">{r.unsubmitted}</td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className={`py-2 pr-3 text-right ${cellBorder}`}>{r.unsubmitted}</td>
+                      <td className={`py-2 pr-3 text-right ${cellBorder}`}>
                         {formatOneDecimalPercent(r.personalRate)}
                       </td>
-                      <td className="py-2 truncate" title={r.suggestion}>{r.suggestion}</td>
+                      <td className={`py-2 truncate ${cellBorder}`} title={r.suggestion}>{r.suggestion}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -485,7 +543,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-3">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-3 flex flex-col self-start">
           <CardTitle
             right={
               <span className="text-xs text-stone-500">{topicTable.length} chủ đề</span>
@@ -503,29 +561,50 @@ export const PbixOverviewSection: React.FC<Props> = ({
             </EmptyNote>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div
+                ref={topicsScroll.containerRef}
+                className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+                style={topicsScroll.maxHeight !== undefined ? { maxHeight: topicsScroll.maxHeight } : undefined}
+              >
+                {/* Chiều cao đo từ render thực tế (thead + 7 dòng đầu): lúc chưa
+                    cuộn thấy đúng 7 chủ đề, từ chủ đề thứ 8 trở đi chỉ thấy
+                    khi cuộn trong bảng; header dính đầu khi cuộn. Bảng dùng
+                    table-fixed + colgroup cộng đúng 100% nên vừa chiều rộng
+                    thẻ, không còn thanh cuộn ngang ở desktop. */}
+                <table className="w-full text-sm table-fixed border-separate border-spacing-0">
+                  <colgroup>
+                    <col style={{ width: '34%' }} />
+                    <col style={{ width: '24%' }} />
+                    <col style={{ width: '24%' }} />
+                    <col style={{ width: '18%' }} />
+                  </colgroup>
                   <thead>
-                    <tr className="text-left text-xs text-stone-500 border-b">
-                      <th className="py-2 pr-2 font-semibold">Chủ đề</th>
-                      <th className="py-2 px-2 font-semibold text-right">Học sinh hoàn thành</th>
-                      <th className="py-2 px-2 font-semibold text-right">Tổng số học sinh</th>
-                      <th className="py-2 pl-2 font-semibold text-right">% hoàn thành</th>
+                    <tr className="text-left text-xs text-stone-500">
+                      <th className="py-2 pr-2 font-semibold sticky top-0 z-10 bg-white border-b">Chủ đề</th>
+                      <th className="py-2 px-1 font-semibold text-right sticky top-0 z-10 bg-white border-b">Học sinh hoàn thành</th>
+                      <th className="py-2 px-1 font-semibold text-right sticky top-0 z-10 bg-white border-b">Tổng số học sinh</th>
+                      <th className="py-2 pl-1 font-semibold text-right sticky top-0 z-10 bg-white border-b">% hoàn thành</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {topicTable.map((row) => (
-                      <tr key={row.topicId} className="border-b last:border-0">
-                        <td className="py-2 pr-2 max-w-[140px] truncate" title={row.title}>
+                    {topicTable.map((row, rowIdx) => {
+                      const cellBorder =
+                        rowIdx === topicTable.length - 1
+                          ? ''
+                          : 'border-b border-stone-100';
+                      return (
+                      <tr key={row.topicId}>
+                        <td className={`py-2 pr-2 truncate ${cellBorder}`} title={row.title}>
                           {row.title}
                         </td>
-                        <td className="py-2 px-2 text-right">{row.completed}</td>
-                        <td className="py-2 px-2 text-right">{row.total}</td>
-                        <td className="py-2 pl-2 text-right font-semibold">
+                        <td className={`py-2 px-1 text-right ${cellBorder}`}>{row.completed}</td>
+                        <td className={`py-2 px-1 text-right ${cellBorder}`}>{row.total}</td>
+                        <td className={`py-2 pl-1 text-right font-semibold ${cellBorder}`}>
                           {formatWholePercent(row.rate)}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
