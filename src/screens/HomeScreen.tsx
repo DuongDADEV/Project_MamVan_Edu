@@ -5,7 +5,6 @@ import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
-import { getStudentAssignments } from '../services/supabase/biRepository.ts';
 import { AssignedHomeworkSection } from '../components/student/AssignedHomeworkSection.tsx';
 import type { NavTab } from '../components/Navbar.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
@@ -109,24 +108,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const isQuizCompleted = (qId: string) =>
     (state.completedSteps || []).includes(`quiz_completed:${qId}`);
 
-  // Nhiệm vụ tuần (24/10): liệt kê bài tập được giao từ CÙNG nguồn với mục
-  // "Bài tập được giao" — bài BI (assignments/targets) + BTVN quiz — sắp xếp
-  // theo hạn nộp, hiển thị tối đa 4 bài. Trước đây thẻ chỉ nhìn BTVN quiz nên
-  // học sinh có bài BI được giao vẫn thấy trạng thái trống.
-  const [biHomework, setBiHomework] = useState<any[]>([]);
-  useEffect(() => {
-    let alive = true;
-    getStudentAssignments(state.profile.id)
-      .then((r) => {
-        if (alive) setBiHomework(r || []);
-      })
-      .catch(() => {
-        if (alive) setBiHomework([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [state.profile.id]);
+  // Nhiệm vụ tuần (25/10, quyết định của chủ dự án): TRỞ VỀ như trước đợt 2 —
+  // thẻ CHỈ liệt kê BTVN quiz, KHÔNG gộp bài BI từ getStudentAssignments nữa.
+  // Hậu quả đã được chấp nhận: học sinh có bài BI được giao vẫn thấy thẻ này
+  // trống; danh sách đầy đủ nằm ở mục Bài tập (mục đó vẫn dùng
+  // getStudentAssignments, không đụng tới ở đây).
 
   const toDueMs = (v?: string | null): number | null => {
     if (!v) return null;
@@ -145,31 +131,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       done: isQuizCompleted(q.id),
       bestScoreText: null as string | null,
     }));
-    const biItems = (biHomework || []).map((r: any) => {
-      const attempts = r.attempts || [];
-      const done = r.status === 'SUBMITTED' || attempts.length > 0;
-      let bestScoreText: string | null = null;
-      if (attempts.length > 0) {
-        const scored = attempts.filter((a: any) => a.score_awarded != null && a.max_score != null);
-        if (scored.length > 0) {
-          const best = scored.reduce((acc: any, cur: any) =>
-            Number(cur.score_awarded) / Number(cur.max_score) > Number(acc.score_awarded) / Number(acc.max_score) ? cur : acc
-          );
-          bestScoreText = `Điểm cao nhất: ${best.score_awarded}/${best.max_score}`;
-        }
-      }
-      return {
-        key: `assignment:${r.assignmentId}`,
-        source: 'assignment' as const,
-        id: r.assignmentId,
-        title: r.title,
-        questionCount: r.questionCount || 0,
-        dueMs: toDueMs(r.dueAt),
-        done,
-        bestScoreText,
-      };
-    });
-    const all = [...quizItems, ...biItems];
+    const all = [...quizItems];
     all.sort((a, b) => {
       if (a.dueMs === null && b.dueMs === null) return a.title.localeCompare(b.title);
       if (a.dueMs === null) return 1;
@@ -178,7 +140,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     });
     return all;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [homeworkQuizzes, biHomework]);
+  }, [homeworkQuizzes]);
 
   const fmtWeeklyDue = (ms: number): string => {
     const d = new Date(ms);

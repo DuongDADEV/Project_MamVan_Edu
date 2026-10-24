@@ -73,7 +73,7 @@ import {
   sessionTeacherId,
   resolveContentOwnerId,
 } from './payloadStore.ts';
-import { generateUsername, generateFriendlyPassword, generateStudentCode } from '../mock/credentialUtils.ts';
+import { generateUsername, generateFriendlyPassword, generateStudentCode, generateUUID } from '../mock/credentialUtils.ts';
 import {
   getPendingReviews,
   getGradedReviews,
@@ -2120,14 +2120,151 @@ export const supabaseEssayRepo = new SupabaseEssayRepository();
 // 6. SUPABASE REWARD REPOSITORY (QUÀ TẶNG & YÊU CẦU ĐỔI QUÀ)
 // ==============================================================================
 export class SupabaseRewardRepository implements RewardRepository {
+  // Mốc quà giáo viên tạo lưu trên Supabase (bảng reward_tiers, migration_012)
+  // để học sinh mọi máy đều thấy mốc của giáo viên phụ trách lớp mình.
+  // AN TOÀN THỨ TỰ TRIỂN KHAI: nếu Supabase chưa sẵn sàng hoặc bảng chưa
+  // tồn tại (SQL chưa chạy) / lỗi đọc-ghi thì fallback về mốc local cũ
+  // (mock repo, key mam_van_rewards) — app không vỡ. Mốc local cũ KHÔNG tự
+  // bay sang Supabase; giáo viên tạo lại mốc 1 lần sau khi chạy SQL.
+  // Ngữ nghĩa hợp nhất không đổi (hướng c 24/10): 5 mốc mặc định
+  // REWARDS_CATALOG + mốc kho, khử trùng theo id, lọc theo giáo viên —
+  // phần đó nằm ở data/rewards.ts và các màn hình, không nằm ở đây.
+  private rowToReward(row: any): RewardItem {
+    return {
+      id: row.id,
+      requiredXp: row.required_xp ?? row.xp_cost ?? 0,
+      xpCost: row.xp_cost ?? row.required_xp ?? 0,
+      requiredAttendanceDays: row.required_attendance_days ?? 4,
+      tierKey: row.tier_key,
+      teaserDescription: row.teaser_description || 'Món quà bí mật thú vị',
+      secret: {
+        name: row.secret_name || 'Món quà bí mật',
+        description: row.secret_description || 'Chi tiết quà tặng dành cho học sinh chăm chỉ.',
+      },
+      isPhysical: row.is_physical ?? false,
+      name: row.name ?? undefined,
+      description: row.description ?? undefined,
+      stock: row.stock ?? undefined,
+      isActive: row.is_active ?? true,
+      teacherId: row.teacher_id ?? undefined,
+    };
+  }
+
+  // Cùng ngưỡng suy tierKey với mock repo (theo XP yêu cầu).
+  private tierKeyForXp(xpReq: number): RewardItem['tierKey'] {
+    return xpReq <= 300 ? 'HAT' : xpReq <= 500 ? 'LA' : xpReq <= 700 ? 'HOA' : 'VANG';
+  }
+
   async getRewards(): Promise<RewardItem[]> {
-    return mockRewardRepo.getRewards();
+    if (!isSupabaseReady()) {
+      return mockRewardRepo.getRewards();
+    }
+    try {
+      const { data, error } = await supabase
+        .from('reward_tiers')
+        .select('*')
+        .order('required_xp', { ascending: true });
+      if (error || !data) {
+        if (error) console.error('[SupabaseReward] Lỗi đọc reward_tiers, fallback local:', error.message);
+        return mockRewardRepo.getRewards();
+      }
+      return data.map((row: any) => this.rowToReward(row));
+    } catch (e) {
+      console.error('[SupabaseReward] Lỗi đọc reward_tiers, fallback local:', e);
+      return mockRewardRepo.getRewards();
+    }
   }
+
   async saveReward(reward: Partial<RewardItem>): Promise<RewardItem> {
-    return mockRewardRepo.saveReward(reward);
+    if (!isSupabaseReady()) {
+      return mockRewardRepo.saveReward(reward);
+    }
+    try {
+      // Gộp với dòng hiện có (nếu sửa) để không xóa trường không truyền lên,
+      // đúng ngữ nghĩa mock (…cur, …reward).
+      let cur: RewardItem | null = null;
+      if (reward.id) {
+        const { data } = await supabase.from('reward_tiers').select('*').eq('id', reward.id).maybeSingle();
+        if (data) cur = this.rowToReward(data);
+      }
+      const xpReq = reward.requiredXp ?? cur?.requiredXp ?? 300;
+      const merged: RewardItem = {
+        ...(cur ?? {}),
+        ...reward,
+        id: reward.id || cur?.id || 'reward_' + generateUUID(),
+        requiredXp: xpReq,
+        xpCost: xpReq,
+        tierKey: reward.tierKey || cur?.tierKey || this.tierKeyForXp(xpReq),
+        requiredAttendanceDays: reward.requiredAttendanceDays ?? cur?.requiredAttendanceDays ?? 4,
+        teaserDescription: reward.teaserDescription || cur?.teaserDescription || 'Món quà bí mật thú vị',
+        secret: reward.secret || cur?.secret || { name: 'Món quà bí mật', description: 'Chi tiết quà tặng dành cho học sinh chăm chỉ.' },
+        isActive: reward.isActive ?? cur?.isActive ?? true,
+      } as RewardItem;
+      const row = {
+        id: merged.id,
+        teacher_id: merged.teacherId ?? null,
+        required_xp: merged.requiredXp,
+        xp_cost: merged.xpCost,
+        required_attendance_days: merged.requiredAttendanceDays,
+        tier_key: merged.tierKey,
+        teaser_description: merged.teaserDescription,
+        secret_name: merged.secret?.name ?? 'Món quà bí mật',
+        secret_description: merged.secret?.description ?? 'Chi tiết quà tặng dành cho học sinh chăm chỉ.',
+        is_physical: merged.isPhysical ?? false,
+        name: merged.name ?? null,
+        description: merged.description ?? null,
+        stock: merged.stock ?? null,
+        is_active: merged.isActive ?? true,
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from('reward_tiers').upsert(row, { onConflict: 'id' }).select('*').single();
+      if (error || !data) {
+        if (error) console.error('[SupabaseReward] Lỗi ghi reward_tiers, fallback local:', error.message);
+        return mockRewardRepo.saveReward(reward);
+      }
+      const saved = this.rowToReward(data);
+      await auditRepo.log({
+        actor_id: 'teacher_001',
+        actor_name: 'Thầy/Cô',
+        actor_role: 'teacher',
+        action: reward.id ? 'UPDATE_REWARD_MILESTONE' : 'CREATE_REWARD_MILESTONE',
+        target_type: 'reward',
+        target_id: saved.id,
+        target_name: `Mốc quà: ${saved.teaserDescription.slice(0, 30)}...`,
+        details: { requiredXp: saved.requiredXp, requiredAttendanceDays: saved.requiredAttendanceDays },
+      });
+      syncEventBus.emit('reward');
+      return saved;
+    } catch (e) {
+      console.error('[SupabaseReward] Lỗi ghi reward_tiers, fallback local:', e);
+      return mockRewardRepo.saveReward(reward);
+    }
   }
+
   async deleteReward(id: string): Promise<void> {
-    return mockRewardRepo.deleteReward(id);
+    if (!isSupabaseReady()) {
+      return mockRewardRepo.deleteReward(id);
+    }
+    try {
+      const { error } = await supabase.from('reward_tiers').delete().eq('id', id);
+      if (error) {
+        console.error('[SupabaseReward] Lỗi xóa reward_tiers, fallback local:', error.message);
+        return mockRewardRepo.deleteReward(id);
+      }
+      await auditRepo.log({
+        actor_id: 'teacher_001',
+        actor_name: 'Thầy/Cô',
+        actor_role: 'teacher',
+        action: 'DELETE_REWARD_MILESTONE',
+        target_type: 'reward',
+        target_id: id,
+        target_name: id,
+      });
+      syncEventBus.emit('reward');
+    } catch (e) {
+      console.error('[SupabaseReward] Lỗi xóa reward_tiers, fallback local:', e);
+      return mockRewardRepo.deleteReward(id);
+    }
   }
 
   async getRequests(filter?: {

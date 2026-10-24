@@ -834,10 +834,28 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           onDeleteItem={handleDeleteItem}
         />
 
-        {/* Right Pane: Selected Item Editor + dải luồng học ở DƯỚI trình soạn
-            (đổi 24/10 theo yêu cầu chủ dự án: thanh công cụ của trình soạn phải
-            nằm trên cùng, dải luồng chuyển xuống dưới trình soạn) */}
+        {/* Right Pane: dải luồng học TRÊN CÙNG, trên cả hàng công cụ của trình
+            soạn (đổi 25/10 theo vạch đen chủ dự án vẽ ở mép trên; 24/10 dải nằm
+            dưới trình soạn). Dải render ở shell chung nên mọi trình soạn
+            (video/lý thuyết/quiz/bài tập) đều thấy cùng một vị trí; menu
+            '+ Thêm bài' (z-50) vẫn phủ lên thanh công cụ sticky (z-20) bên dưới. */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        {/* Dải luồng học — TRÊN CÙNG khung phải, trên cả hàng công cụ.
+            Đầy đủ chức năng: bấm nút tròn mở đúng bài, kéo-thả đổi thứ tự,
+            '+ Thêm bài' mở menu 3 loại. */}
+        {stripTopic && (
+          <TopicFlowStrip
+            topicTitle={stripTopic.title}
+            items={stripItems}
+            activeKey={activeFlowKey}
+            onSelect={(item) => {
+              if (item.type === 'quiz') setQuizInitialTab('questions');
+              setSelectedItem({ type: item.type, id: item.id });
+            }}
+            onAdd={(kind) => handleCreateNewManual(kind, stripTopic.id)}
+            onReorder={handleFlowReorder}
+          />
+        )}
         {selectedItem?.type === 'assignment' && teacher ? (
           <AssignmentEditor
             key={selectedItem.id}
@@ -1021,22 +1039,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               Bạn có thể nhấn vào bất kỳ mục nào trên cây chủ đề để chỉnh sửa, hoặc bấm dòng "+ Tạo mới" ngay dưới mỗi chủ đề trên cây để thêm bài giảng.
             </p>
           </div>
-        )}
-        {/* Dải luồng học — nằm DƯỚI trình soạn để thanh công cụ của trình soạn
-            lên trên cùng (yêu cầu 24/10). Dải vẫn đầy đủ chức năng: bấm nút
-            tròn mở đúng bài, kéo-thả đổi thứ tự, '+ Thêm bài' mở menu 3 loại. */}
-        {stripTopic && (
-          <TopicFlowStrip
-            topicTitle={stripTopic.title}
-            items={stripItems}
-            activeKey={activeFlowKey}
-            onSelect={(item) => {
-              if (item.type === 'quiz') setQuizInitialTab('questions');
-              setSelectedItem({ type: item.type, id: item.id });
-            }}
-            onAdd={(kind) => handleCreateNewManual(kind, stripTopic.id)}
-            onReorder={handleFlowReorder}
-          />
         )}
         </div>
       </div>
