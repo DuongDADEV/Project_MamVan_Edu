@@ -1189,11 +1189,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                   <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Nhẹ - Siêu tốc)</option>
                   <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Suy luận chuyên sâu, bản xem trước)</option>
                   <option value="gemini-flash-latest">gemini-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định & Thông minh)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn)</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Ngữ văn phân tích sâu)</option>
                 </select>
                 <p className="text-[11px] text-[#6B7280]">
                   Gợi ý: Hệ thống hỗ trợ đa model và tự động chuyển model dự phòng khi có tình trạng nghẽn token.

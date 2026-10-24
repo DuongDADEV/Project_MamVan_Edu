@@ -16,6 +16,7 @@
  */
 
 import { getGeminiApiKey, getGeminiModel } from './index.ts';
+import { DEAD_GEMINI_MODELS } from './GeminiAIService.ts';
 import { StudentState, EssaySubmission, RewardRequest, Question } from '../../types.ts';
 import { StudentAccount, ClassItem } from '../types.ts';
 import { AnalyticsFilter } from '../../analytics/types.ts';
@@ -1733,26 +1734,24 @@ export async function askAnalyticsAssistant(
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
 
-  // gemini-2.0-flash đã bị Google khai tử (lỗi kiểm chứng 22/10 — các model
-  // chính chạm giới hạn trong chốc lát là chuỗi dự phòng rơi xuống model chết
-  // và báo lỗi oan). Thay bằng flash-lite + gemma làm tầng dự phòng sâu.
-  // Chuỗi model (25/10, gốc rễ lỗi key mới): Google đã khai tử dòng 2.x
-  // đối với key/project mới — key mới gọi 2.5-flash/2.5-pro/2.5-flash-lite
-  // đều 404, 2.0 đã mất với mọi người. Nên tên thế hệ mới (gợi ý từ chính
-  // lỗi Google trả; nguồn thứ cấp, CHƯA kiểm chứng bằng key thật nên KHÔNG
-  // hardcode duy nhất một tên) đứng ĐẦU chuỗi, sau model đã lưu của giáo
-  // viên; tên cũ giữ ở CUỐI làm dự phòng (404 rồi tự rơi qua, vô hại);
-  // gemini-flash-latest giữ trong chuỗi ở đầu nhóm alias/dự phòng.
+  // Chuỗi model (25/10, dọn sau gốc rễ 429): Google đã khai tử dòng 2.x/1.x
+  // đối với key/project mới — key mới gọi 2.5-flash/2.5-pro/2.5-flash-lite/
+  // 2.0/1.5 đều 404, nên các tên chết đã CẮT KHỎI mọi chuỗi (giữ lại chỉ tốn
+  // call lãng phí); tên thế hệ mới đứng ĐẦU chuỗi, sau model đã lưu của giáo
+  // viên (model đã lưu nếu là tên chết thì bị bỏ qua, KHÔNG đổi giá trị đã
+  // lưu); gemini-flash-latest ở nhóm alias/dự phòng; gemma-4-31b-it làm tầng
+  // dự phòng sâu; gemini-3.1-pro-preview để CUỐI chuỗi (không có free tier,
+  // chỉ là fallback cho project có thanh toán). Tên 3.x đã kiểm chứng sống
+  // bằng Network thật 25/10 (3.8-flash 429 = hết quota, không phải chết;
+  // 3.5-flash-lite 400 = lỗi riêng model; pro-preview 429 = không free tier).
   const candidateModels = [
     getGeminiModel(),
     'gemini-3.8-flash',
     'gemini-3.5-flash-lite',
-    'gemini-3.1-pro-preview',
     'gemini-flash-latest',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
     'gemma-4-31b-it',
-  ].filter((m, i, arr) => !!m && arr.indexOf(m) === i);
+    'gemini-3.1-pro-preview',
+  ].filter((m, i, arr) => !!m && arr.indexOf(m) === i && !DEAD_GEMINI_MODELS.has(m));
 
   const contents: any[] = history.map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',

@@ -1981,11 +1981,6 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                   <option value="gemini-3.5-flash-lite">Mầm AI-3.5-flash-lite (Nhẹ - Siêu tốc)</option>
                   <option value="gemini-3.1-pro-preview">Mầm AI-3.1-pro-preview (Suy luận chuyên sâu, bản xem trước)</option>
                   <option value="gemini-flash-latest">Mầm AI-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
-                  <option value="gemini-2.5-flash">Mầm AI-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
-                  <option value="gemini-2.0-flash">Mầm AI-2.0-flash (Ổn định & Thông minh)</option>
-                  <option value="gemini-1.5-flash">Mầm AI-1.5-flash (Bản tiêu chuẩn)</option>
-                  <option value="gemini-2.5-pro">Mầm AI-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
-                  <option value="gemini-1.5-pro">Mầm AI-1.5-pro (Ngữ văn phân tích sâu)</option>
                 </select>
               </div>
 

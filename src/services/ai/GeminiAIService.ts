@@ -4,7 +4,9 @@
  * Gọi trực tiếp REST API của Google Generative Language:
  * https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
  * 
- * Tự động thử nghiệm các model (thế hệ mới 3.x -> flash-latest -> 2.x/1.x cũ làm dự phòng)
+ * Tự động thử nghiệm các model (thế hệ mới 3.x -> flash-latest -> pro-preview
+ * cuối chuỗi cho project có thanh toán; các model 2.x/1.x đã khai tử đã cắt
+ * khỏi mọi chuỗi từ 25/10 vì luôn 404 với key mới)
  * RAG Grounding 100% bám sát ngữ liệu nguồn theo chuẩn Mầm AI Studio
  */
 
@@ -21,6 +23,23 @@ import {
   AIExtractedSource,
 } from './AIService.ts';
 import { Question, KeyPoint, TheoryBlock } from '../../types.ts';
+
+/**
+ * Các tên model Google đã khai tử với key/project mới (luôn 404 — đã xác
+ * nhận bằng Network thật 25/10). Mọi chuỗi gọi đều lọc bỏ các tên này để
+ * khỏi tốn call lãng phí; giá trị model đã lưu của người dùng KHÔNG bị đổi,
+ * chỉ bị bỏ qua trong chuỗi nếu nó là tên chết.
+ */
+export const DEAD_GEMINI_MODELS: ReadonlySet<string> = new Set([
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-pro',
+]);
 
 export class GeminiAIService implements AIService {
   private apiKey: string;
@@ -39,15 +58,9 @@ export class GeminiAIService implements AIService {
       this.model,
       'gemini-3.8-flash',
       'gemini-3.5-flash-lite',
-      'gemini-3.1-pro-preview',
       'gemini-flash-latest',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash',
-      'gemini-2.5-pro',
-      'gemini-1.5-pro',
-    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
+      'gemini-3.1-pro-preview',
+    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx && !DEAD_GEMINI_MODELS.has(m));
 
     let lastError: Error | null = null;
 
@@ -186,19 +199,13 @@ export class GeminiAIService implements AIService {
       preferredModel,
       'gemini-3.8-flash',
       'gemini-3.5-flash-lite',
-      'gemini-3.1-pro-preview',
       'gemini-flash-latest',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash',
-      'gemini-2.5-pro',
-      'gemini-1.5-pro',
-    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
+      'gemini-3.1-pro-preview',
+    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx && !DEAD_GEMINI_MODELS.has(m));
 
     let lastError = '';
     // Ghi nhận kết quả từng model để thông báo thất bại tự chẩn đoán được
-    // (dạng "model: status + mảnh message", vd "gemini-2.5-flash: HTTP 404 ...").
+    // (dạng "model: status + mảnh message", vd "gemini-3.8-flash: HTTP 429 ...").
     const attempts: string[] = [];
     const recordAttempt = (model: string, detail: string) => {
       attempts.push(`${model}: ${detail.slice(0, 80)}`);
@@ -224,9 +231,6 @@ export class GeminiAIService implements AIService {
                 ],
               },
             ],
-            generationConfig: {
-              thinkingConfig: { thinkingBudget: 0 },
-            },
           }),
         });
 
