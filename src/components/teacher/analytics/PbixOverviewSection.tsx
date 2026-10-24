@@ -641,13 +641,17 @@ export const PbixOverviewSection: React.FC<Props> = ({
           ) : (
             <div style={{ width: '100%', height: 300 }} className="min-w-0">
               <ResponsiveContainer>
-                <BarChart data={thinkingChartData} layout="vertical" margin={{ left: 8, right: 72 }}>
+                {/* 25/10: bottom 28 + nhãn trục X 12px — tiêu đề 'Tỷ lệ điểm đạt'
+                    không còn bị cắt nửa dưới ở mép dưới thẻ (trước đây margin
+                    không có bottom, mặc định 5px, mà nhãn kế thừa cỡ chữ app
+                    16–20px nên tràn mép dưới SVG). */}
+                <BarChart data={thinkingChartData} layout="vertical" margin={{ left: 8, right: 72, bottom: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     type="number"
                     domain={[0, 1]}
                     tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
-                    label={{ value: 'Tỷ lệ điểm đạt', position: 'insideBottom', offset: -2 }}
+                    label={{ value: 'Tỷ lệ điểm đạt', position: 'insideBottom', offset: -2, fontSize: 12 }}
                   />
                   <YAxis type="category" dataKey="label" width={150} />
                   <Tooltip
@@ -685,12 +689,15 @@ export const PbixOverviewSection: React.FC<Props> = ({
           ) : (
             <div style={{ width: '100%', height: 300 }} className="min-w-0">
               <ResponsiveContainer>
-                <LineChart data={dashboardSel.dailyChart} margin={{ left: 8, right: 24, top: 28 }}>
+                {/* 25/10: bottom 28 + nhãn trục X 12px — tiêu đề 'Ngày' không còn
+                    bị cắt nửa dưới ở mép dưới thẻ (cùng nguyên nhân như biểu
+                    đồ cột: margin cũ không có bottom, nhãn kế thừa cỡ chữ app). */}
+                <LineChart data={dashboardSel.dailyChart} margin={{ left: 8, right: 24, top: 28, bottom: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
                     tickFormatter={(d: string) => formatVNDate(d).slice(0, 5)}
-                    label={{ value: 'Ngày', position: 'insideBottomRight', offset: -2 }}
+                    label={{ value: 'Ngày', position: 'insideBottomRight', offset: -2, fontSize: 12 }}
                   />
                   <YAxis
                     allowDecimals={false}

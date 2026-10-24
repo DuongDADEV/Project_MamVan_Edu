@@ -207,44 +207,49 @@ export const Navbar: React.FC<NavbarProps> = ({
             bỏ hết thanh kéo dọc/ngang): nội dung xếp gọn để vừa khung hình
             ở chiều cao thông thường, khối cuối (thẻ XP + chip họ tên) vẫn
             ghim cuối sidebar nhờ flex-col + shrink-0, không bị đẩy xuống
-            dưới nếp gấp. Ghi đè quyết định 24/10 (vùng nav cuộn nội bộ). */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {/* Brand Header */}
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-            <div className="flex items-center text-left min-w-0">
-              <BrandHeaderLockup
-                size="md"
-                showSlogan={true}
-                sloganText="Ngữ văn lớp 7"
-              />
-            </div>
-
-            {/* Action buttons (Theme switcher) */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              {onOpenNotification && (
-                <NotificationBell
-                  notifications={notifications}
-                  unreadCount={unreadNotificationCount}
-                  seenIds={seenNotificationIds}
-                  onOpen={onOpenNotification}
-                  onMarkAllRead={onMarkAllNotificationsRead || (() => {})}
-                  align="left"
-                />
-              )}
-              {onOpenThemeSelector && (
-                <button
-                  type="button"
-                  onClick={onOpenThemeSelector}
-                  className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-indigo-50 hover:text-[#4F46E5] text-slate-500 transition-all hover:scale-105"
-                  title={`Đổi phong cách màu (Đang dùng: ${currentThemeInfo.name})`}
-                >
-                  <Palette className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            dưới nếp gấp. Ghi đè quyết định 24/10 (vùng nav cuộn nội bộ).
+            25/10 sửa popup thông báo bị cắt ở mép phải sidebar: brand row
+            (chứa chuông) dời RA NGOÀI hộp overflow-hidden — chỉ danh sách
+            nav ở trong hộp đó — nên dropdown chuông (w-80, left-0, z-50)
+            không còn bị ancestor cắt, mở trọn vẹn sang phải trên nội dung
+            chính; aside và layout root đều không có overflow-hidden. */}
+        {/* Brand Header — ngoài hộp overflow-hidden (25/10: popup chuông không bị cắt ở mép phải sidebar) */}
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 shrink-0">
+          <div className="flex items-center text-left min-w-0">
+            <BrandHeaderLockup
+              size="md"
+              showSlogan={true}
+              sloganText="Ngữ văn lớp 7"
+            />
           </div>
 
-          {/* Navigation Links */}
+          {/* Action buttons (Theme switcher) */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onOpenNotification && (
+              <NotificationBell
+                notifications={notifications}
+                unreadCount={unreadNotificationCount}
+                seenIds={seenNotificationIds}
+                onOpen={onOpenNotification}
+                onMarkAllRead={onMarkAllNotificationsRead || (() => {})}
+                align="left"
+              />
+            )}
+            {onOpenThemeSelector && (
+              <button
+                type="button"
+                onClick={onOpenThemeSelector}
+                className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-indigo-50 hover:text-[#4F46E5] text-slate-500 transition-all hover:scale-105"
+                title={`Đổi phong cách màu (Đang dùng: ${currentThemeInfo.name})`}
+              >
+                <Palette className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {/* Navigation Links — chỉ nav ở trong hộp overflow-hidden */}
           <nav className="space-y-1" aria-label="Điều hướng chính">
             {navItems.map((item) => {
               const Icon = item.icon;
