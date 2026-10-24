@@ -197,6 +197,12 @@ export class GeminiAIService implements AIService {
     ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
 
     let lastError = '';
+    // Ghi nhận kết quả từng model để thông báo thất bại tự chẩn đoán được
+    // (dạng "model: status + mảnh message", vd "gemini-2.5-flash: HTTP 404 ...").
+    const attempts: string[] = [];
+    const recordAttempt = (model: string, detail: string) => {
+      attempts.push(`${model}: ${detail.slice(0, 80)}`);
+    };
 
     for (const model of modelsToTry) {
       try {
@@ -238,13 +244,16 @@ export class GeminiAIService implements AIService {
         } else {
           const errJson = await res.json().catch(() => null);
           lastError = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+          recordAttempt(model, `HTTP ${res.status} ${lastError}`);
 
-          // Nếu lỗi xác thực API Key (401, 403, 400 hoặc API_KEY_INVALID), dừng ngay không thử model khác
+          // Chỉ dừng ngay khi lỗi xác thực thật (401/403 hoặc message mang dấu
+          // hiệu xác thực). Mọi status khác — 400 vì lý do riêng của model,
+          // 404, 429, 500, 503 — đều thử model tiếp theo, vì một model lỗi
+          // không có nghĩa key sai hay các model còn lại cũng lỗi.
           if (
             res.status === 401 ||
             res.status === 403 ||
-            res.status === 400 ||
-            lastError.includes('API_KEY') ||
+            lastError.includes('API_KEY_INVALID') ||
             lastError.includes('UNAUTHENTICATED') ||
             lastError.includes('invalid authentication credentials')
           ) {
@@ -257,12 +266,16 @@ export class GeminiAIService implements AIService {
         }
       } catch (err: any) {
         lastError = err.message || 'Lỗi mạng';
+        recordAttempt(model, lastError);
       }
     }
 
     return {
       success: false,
-      message: `Không thể kết nối Google AI Studio: ${lastError}`,
+      message:
+        attempts.length > 0
+          ? `Không thể kết nối Google AI Studio. Kết quả từng model: ${attempts.join('; ')}`
+          : `Không thể kết nối Google AI Studio: ${lastError}`,
       latencyMs: Date.now() - startTime,
     };
   }

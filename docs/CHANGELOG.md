@@ -1,3 +1,11 @@
+## 2026-10-25 (NÚT KIỂM TRA KẾT NỐI AI: THU HẸP ĐIỀU KIỆN DỪNG CHUỖI + THÔNG BÁO THẤT BẠI LIỆT KÊ TỪNG MODEL)
+
+Vòng sửa theo phân tích gốc rễ phần key Gemini (chủ dự án báo vẫn lỗi sau đợt 3d73043): chuỗi thử model của nút Kiểm tra kết nối trước đây DỪNG NGAY khi gặp bất kỳ lỗi 400 nào, rồi báo "Khóa API không hợp lệ" — nhưng 400 không chỉ có nghĩa key sai, một model trả 400 vì lý do riêng của nó cũng làm cả chuỗi chết yểu dù model sau đó chạy được, và thông báo thất bại chỉ hiện lỗi cuối cùng nên không chẩn đoán được.
+
+- **Thu hẹp điều kiện dừng (src/services/ai/GeminiAIService.ts, chỉ hàm testConnection)**: nay CHỈ dừng ngay khi lỗi xác thực thật — status 401 hoặc 403, hoặc message chứa API_KEY_INVALID / UNAUTHENTICATED / "invalid authentication credentials". Mọi status khác (400 vì lý do riêng của model, 404, 429, 500, 503, lỗi mạng) đều thử model tiếp theo trong chuỗi. Thứ tự chuỗi và logic dedupe giữ nguyên; thông báo dừng vì xác thực ("Khóa API không hợp lệ hoặc chưa được kích hoạt trên Google Cloud: ...") giữ nguyên.
+- **Thông báo thất bại tự chẩn đoán**: khi thử hết chuỗi mà không model nào thành công, thông báo nay liệt kê gọn kết quả từng model đã thử (dạng "model: HTTP status + mảnh message", vd "gemini-2.5-flash: HTTP 404 ...; gemini-3.8-flash: HTTP 429 ...") thay vì chỉ hiện lỗi cuối cùng — lần test sau đọc một dòng là biết model nào lỗi gì. Thông báo thành công (kèm workingModel) và thông báo key trống giữ nguyên.
+- KHÔNG ĐỔI: model mặc định, endpoint v1beta, chuỗi trợ lý ở analyticsAssistant.ts (đã retry trên [400,404,429,500,503] nên không đụng tới), chuỗi content-gen, và không đọc/ghi/in key ra bất cứ đâu (key chỉ nằm trong localStorage trình duyệt của chủ dự án). Sơ đồ KHÔNG đổi đợt này: đã grep TREE/REL_DEFS/HTML — không nút nào mô tả điều kiện dừng hay định dạng thông báo của testConnection (nút AI chỉ nhắc chuỗi model trợ lý), nên không sinh lại sơ đồ, site giữ bản fd15945.
+
 ## 2026-10-25 (POPUP THÔNG BÁO HỌC SINH HẾT BỊ CẮT Ở MÉP PHẢI SIDEBAR + TIÊU ĐỀ TRỤC DƯỚI 2 BIỂU ĐỒ TỔNG QUAN HẾT BỊ CẮT NỬA DƯỚI)
 
 Vòng sửa theo 2 lỗi chủ dự án xác nhận bằng mắt 03:19–03:22 25/10 (hs001 + gv001).
