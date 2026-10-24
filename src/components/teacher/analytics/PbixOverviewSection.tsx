@@ -626,16 +626,22 @@ export const PbixOverviewSection: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Hàng 3: mức tư duy + đường đăng nhập theo ngày */}
+      {/* Hàng 3: mức tư duy + đường đăng nhập theo ngày.
+          Chống cắt nội dung (25/10): chữ trong biểu đồ Recharts không đặt
+          fontSize riêng nên kế thừa cỡ chữ của app (16px, tới 20px nếu chọn
+          cỡ lớn) — lề phải 72px để nhãn % cuối thanh (kể cả 100%) vừa trọn,
+          trục Y rộng 150px để nhãn mức dài vừa, lề trên biểu đồ đường 28px
+          để nhãn giá trị trên đỉnh không bị cắt; thẻ + khung biểu đồ có
+          min-w-0 để lưới 12 cột co đúng chiều rộng cột, không tràn khung. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5 min-w-0">
           <CardTitle>Tỷ lệ điểm đạt theo mức tư duy</CardTitle>
           {dashboardSel.thinkingChart.length === 0 ? (
             <EmptyNote>Chưa có câu trả lời đã chấm trong phạm vi đang lọc.</EmptyNote>
           ) : (
-            <div style={{ width: '100%', height: 300 }}>
+            <div style={{ width: '100%', height: 300 }} className="min-w-0">
               <ResponsiveContainer>
-                <BarChart data={thinkingChartData} layout="vertical" margin={{ left: 8, right: 40 }}>
+                <BarChart data={thinkingChartData} layout="vertical" margin={{ left: 8, right: 72 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     type="number"
@@ -643,7 +649,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
                     tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
                     label={{ value: 'Tỷ lệ điểm đạt', position: 'insideBottom', offset: -2 }}
                   />
-                  <YAxis type="category" dataKey="label" width={110} />
+                  <YAxis type="category" dataKey="label" width={150} />
                   <Tooltip
                     formatter={(value: any, _name: any, props: any) => [
                       `${Math.round(Number(value) * 100)}% (${props?.payload?.gradedCount ?? 0} câu đã chấm)`,
@@ -667,7 +673,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-7">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-7 min-w-0">
           <CardTitle>
             <span className="inline-flex items-center gap-2">
               <Info size={16} className="text-stone-400" />
@@ -677,9 +683,9 @@ export const PbixOverviewSection: React.FC<Props> = ({
           {dashboardSel.dailyChart.length === 0 ? (
             <EmptyNote>Chưa có phiên đăng nhập trong phạm vi đang lọc.</EmptyNote>
           ) : (
-            <div style={{ width: '100%', height: 300 }}>
+            <div style={{ width: '100%', height: 300 }} className="min-w-0">
               <ResponsiveContainer>
-                <LineChart data={dashboardSel.dailyChart} margin={{ left: 8, right: 24, top: 12 }}>
+                <LineChart data={dashboardSel.dailyChart} margin={{ left: 8, right: 24, top: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
