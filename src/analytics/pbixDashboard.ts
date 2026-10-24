@@ -512,6 +512,17 @@ export function computePbixDashboard(input: PbixComputeInput): PbixDashboard {
     .sort((a, b) => b.rate - a.rate || a.label.localeCompare(b.label));
 
   // --- Biểu đồ đường: số học sinh đăng nhập theo ngày (DISTINCTCOUNT) ---
+  // 0-fill (25/10): chuỗi phải đủ MỌI ngày trong khoảng ngày đang chọn để
+  // đường nối liền mạch — ngày không có phiên nào = 0. Trước đây chuỗi thưa
+  // chỉ gồm ngày có đăng nhập nên khi chọn một học sinh chỉ đăng nhập 1 hôm,
+  // biểu đồ chỉ còn 1 chấm đơn độc (trục dồn lại 1 mốc, trông như "bị chèn")
+  // và không phân biệt được "không đăng nhập" với "không có dữ liệu". Với
+  // chuỗi đủ ngày, học sinh 1 hôm đăng nhập vẽ thành đường gấp khúc liên tục
+  // 0–1–0 suốt khoảng ngày (giữ nguyên dạng Line, không đổi sang cột, không
+  // đứt đoạn ở ngày 0 vì dữ liệu không còn null/ngày thiếu). Khoảng = bộ lọc
+  // ngày; khi bộ lọc để trống thì dùng khoảng dữ liệu thật (sessionDateRange
+  // — cùng quy ước với mặc định ô lọc ngày ở section). Không có phiên nào
+  // thì chuỗi rỗng như cũ (hiện ghi chú trống).
   const perDay = new Map<string, Set<string>>();
   for (const s of scopedSessions) {
     if (!inDateRange(s.loginDate, dateFrom, dateTo)) continue;
@@ -519,9 +530,14 @@ export function computePbixDashboard(input: PbixComputeInput): PbixDashboard {
     set.add(s.studentId);
     perDay.set(s.loginDate, set);
   }
-  const dailyChart: PbixDailyRow[] = [...perDay.entries()]
-    .map(([date, set]) => ({ date, students: set.size }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const rangeFrom = dateFrom ?? sessionDateRange?.min ?? null;
+  const rangeTo = dateTo ?? sessionDateRange?.max ?? null;
+  const dailyChart: PbixDailyRow[] = [];
+  if (rangeFrom && rangeTo && rangeFrom <= rangeTo) {
+    for (let d = rangeFrom; d <= rangeTo; d = addDays(d, 1)) {
+      dailyChart.push({ date: d, students: perDay.get(d)?.size ?? 0 });
+    }
+  }
 
   return {
     anchorDate,

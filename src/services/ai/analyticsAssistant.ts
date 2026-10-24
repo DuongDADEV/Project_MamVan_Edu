@@ -1811,7 +1811,12 @@ export async function askAnalyticsAssistant(
             functionResponse: { name, response: { result: outcome.data } },
           });
         }
-        contents.push({ role: 'user', parts: responseParts });
+        // Chuẩn Gemini API: functionResponse PHẢI nằm trong Content role
+        // 'function' — gửi kèm role 'user' là sai chuẩn và là nghi phạm số 1
+        // cho lỗi 500 "Internal error encountered" ở lượt gọi sau khi có kết
+        // quả công cụ (25/10). Chỉ đổi role của push này; history ban đầu
+        // giữ role 'user', parts của model giữ role 'model'.
+        contents.push({ role: 'function', parts: responseParts });
       }
 
       // Hết vòng gọi hàm mà chưa có câu trả lời: ép mô hình trả lời bằng
