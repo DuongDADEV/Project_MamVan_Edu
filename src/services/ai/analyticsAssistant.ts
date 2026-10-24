@@ -1736,8 +1736,18 @@ export async function askAnalyticsAssistant(
   // gemini-2.0-flash đã bị Google khai tử (lỗi kiểm chứng 22/10 — các model
   // chính chạm giới hạn trong chốc lát là chuỗi dự phòng rơi xuống model chết
   // và báo lỗi oan). Thay bằng flash-lite + gemma làm tầng dự phòng sâu.
+  // Chuỗi model (25/10, gốc rễ lỗi key mới): Google đã khai tử dòng 2.x
+  // đối với key/project mới — key mới gọi 2.5-flash/2.5-pro/2.5-flash-lite
+  // đều 404, 2.0 đã mất với mọi người. Nên tên thế hệ mới (gợi ý từ chính
+  // lỗi Google trả; nguồn thứ cấp, CHƯA kiểm chứng bằng key thật nên KHÔNG
+  // hardcode duy nhất một tên) đứng ĐẦU chuỗi, sau model đã lưu của giáo
+  // viên; tên cũ giữ ở CUỐI làm dự phòng (404 rồi tự rơi qua, vô hại);
+  // gemini-flash-latest giữ trong chuỗi ở đầu nhóm alias/dự phòng.
   const candidateModels = [
     getGeminiModel(),
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-pro-preview',
     'gemini-flash-latest',
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',

@@ -1977,6 +1977,9 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                   onChange={(e) => setModalModelInput(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
                 >
+                  <option value="gemini-3.8-flash">Mầm AI-3.8-flash (Thế hệ mới 3.8 - Siêu tốc)</option>
+                  <option value="gemini-3.5-flash-lite">Mầm AI-3.5-flash-lite (Nhẹ - Siêu tốc)</option>
+                  <option value="gemini-3.1-pro-preview">Mầm AI-3.1-pro-preview (Suy luận chuyên sâu, bản xem trước)</option>
                   <option value="gemini-flash-latest">Mầm AI-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
                   <option value="gemini-2.5-flash">Mầm AI-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
                   <option value="gemini-2.0-flash">Mầm AI-2.0-flash (Ổn định & Thông minh)</option>

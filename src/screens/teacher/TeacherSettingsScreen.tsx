@@ -1185,6 +1185,9 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                   onChange={(e) => setGeminiModelInput(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-[#D1C7B7] bg-[#FAF5EB]/50 text-xs text-[#2F3E6B] font-bold focus:outline-none focus:border-[#E2704A]"
                 >
+                  <option value="gemini-3.8-flash">gemini-3.8-flash (Thế hệ mới 3.8 - Siêu tốc)</option>
+                  <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Nhẹ - Siêu tốc)</option>
+                  <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Suy luận chuyên sâu, bản xem trước)</option>
                   <option value="gemini-flash-latest">gemini-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
                   <option value="gemini-2.5-flash">gemini-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
                   <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định & Thông minh)</option>

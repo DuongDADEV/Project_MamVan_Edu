@@ -4,7 +4,7 @@
  * Gọi trực tiếp REST API của Google Generative Language:
  * https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
  * 
- * Tự động thử nghiệm các model (gemini-2.5-flash -> gemini-1.5-flash -> gemini-1.5-pro)
+ * Tự động thử nghiệm các model (thế hệ mới 3.x -> flash-latest -> 2.x/1.x cũ làm dự phòng)
  * RAG Grounding 100% bám sát ngữ liệu nguồn theo chuẩn Mầm AI Studio
  */
 
@@ -26,7 +26,7 @@ export class GeminiAIService implements AIService {
   private apiKey: string;
   private model: string;
 
-  constructor(apiKey: string, model: string = 'gemini-2.5-flash') {
+  constructor(apiKey: string, model: string = 'gemini-3.8-flash') {
     this.apiKey = apiKey.trim();
     this.model = model.trim();
   }
@@ -37,6 +37,9 @@ export class GeminiAIService implements AIService {
   private async callGemini(prompt: string, systemInstruction?: string): Promise<string> {
     const candidateModels = [
       this.model,
+      'gemini-3.8-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-pro-preview',
       'gemini-flash-latest',
       'gemini-2.5-flash',
       'gemini-2.0-flash',
@@ -167,7 +170,7 @@ export class GeminiAIService implements AIService {
    */
   static async testConnection(
     apiKey: string,
-    preferredModel: string = 'gemini-2.5-flash'
+    preferredModel: string = 'gemini-3.8-flash'
   ): Promise<{ success: boolean; message: string; latencyMs: number; workingModel?: string }> {
     const startTime = Date.now();
     const cleanKey = apiKey.trim();
@@ -181,6 +184,9 @@ export class GeminiAIService implements AIService {
 
     const modelsToTry = [
       preferredModel,
+      'gemini-3.8-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-pro-preview',
       'gemini-flash-latest',
       'gemini-2.5-flash',
       'gemini-2.0-flash',
