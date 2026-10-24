@@ -1,3 +1,11 @@
+## 2026-10-25 (SƠ ĐỒ: SỬA NHÃN MODEL CONTENT-GEN — 2.5-FLASH ĐÃ CHẾT → FLASH-LATEST + CHUỖI FALLBACK HIỆN TẠI)
+
+Đợt dc65980 cắt model chết khỏi code nhưng sót nhãn sơ đồ: nút content-gen trong TREE vẫn ghi "(model AI-2.5-flash)" trong khi tên đó đã bị lọc khỏi mọi chuỗi gọi và dropdown qua tập DEAD_GEMINI_MODELS. Đợt này CHỈ sửa nhãn đó, KHÔNG đụng code app, KHÔNG deploy lại app.
+
+- Nhãn mới: "Sinh bằng Gemini (model AI-flash-latest mặc định; fallback 3.8-flash → 3.5-flash-lite → 3.1-pro-preview; tên đã khai tử 2.x/1.x bị lọc khỏi chuỗi)" — khớp thực tế code: getGeminiModel mặc định flash-latest; chuỗi callGemini sau lọc là model đã lưu (bỏ qua nếu là tên chết) → 3.8-flash → 3.5-flash-lite → flash-latest → 3.1-pro-preview; dropdown Xưởng chỉ còn 4 option sống. Phần còn lại của nút (lỗi thì bản dự phòng MockAI + báo rõ) giữ nguyên vì luồng đó không đổi.
+- Kèm theo: luật khớp code-map cho nút này trong resolve_code_map.py được đổi theo đúng văn bản mới (chỉ đổi chuỗi khớp, không đổi file/hàm gắn kèm) để nút giữ nguyên chú thích 📁/ƒ; REL_DEFS không đổi (không quan hệ nào nhắc tới nút này).
+- Kiểm tra sau khi sinh lại: 308 nút, 29/29 quan hệ, code-map 307/307, 0 vấn đề; "2.5-flash" còn 0 lần trong sơ đồ; nút giữ đủ chú thích (GeminiAIService.ts, index.ts, MockAIService.ts; GeminiAIService, SmartAIService, getLastAiFallback, MockAIService).
+
 ## 2026-10-25 (DỌN CHUỖI MODEL AI: CẮT MODEL ĐÃ KHAI TỬ KHỎI MỌI CHUỖI + DROPDOWN + BỎ THINKINGCONFIG KHỎI NÚT TEST)
 
 Vòng dọn theo gốc rễ đã chốt 03:50 25/10 từ Network của chủ dự án (chuỗi test chạy [2.5-flash 404, 3.8-flash 429, 3.5-flash-lite 400, 3.1-pro-preview 429, flash-latest pending] — 429 trên 3.8-flash là hết quota free tier trong ngày, key HỢP LỆ, không phải lỗi key hay tên model): code vẫn lãng phí call vào các model Google đã khóa với key mới (luôn 404) và nút test gửi kèm thinkingConfig trong khi chỉ cần một câu chào.
