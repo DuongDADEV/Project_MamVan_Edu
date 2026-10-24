@@ -700,12 +700,20 @@ export const PbixOverviewSection: React.FC<Props> = ({
                     formatter={(value: any) => [`${value} học sinh`, 'Số học sinh']}
                     labelFormatter={(d: any) => `Ngày ${formatVNDate(String(d))}`}
                   />
+                  {/* Nhãn 0/1 vẽ thẳng, không animation: Recharts 3 chỉ vẽ
+                      nhãn của Line khi không còn animation (showLabels =
+                      !isAnimating) — để animation mặc định thì nhãn đã cấu
+                      hình sẵn không bao giờ hiện trên tab này (cùng cơ chế
+                      từng làm thanh Bar nhấp nháy; Bar đã tắt animation
+                      nên nhãn % của nó hiện bình thường). Tắt animation
+                      của Line thì nhãn 0/1 vẽ ngay và đứng yên. */}
                   <Line
                     type="linear"
                     dataKey="students"
                     stroke={LINE_BLUE}
                     strokeWidth={2}
                     dot={{ r: 3 }}
+                    isAnimationActive={false}
                   >
                     <LabelList dataKey="students" position="top" />
                   </Line>
