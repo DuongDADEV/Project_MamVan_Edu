@@ -1,3 +1,9 @@
+## 2026-10-25 (TỔNG QUAN: XÓA GHI CHÚ DƯỚI BẢNG TIẾN ĐỘ THEO CHỦ ĐỀ)
+
+Vòng sửa nhỏ theo lệnh chủ dự án 02:04 25/10 (ảnh bảng chủ đề kèm đoạn ghi chú giải thích bên dưới; chủ dự án muốn khung panel chỉ còn tiêu đề + bảng).
+
+- **Xóa toàn bộ đoạn ghi chú giải thích dưới bảng "Tiến độ hoàn thành luồng theo chủ đề"**: đoạn bắt đầu bằng "% hoàn thành = học sinh hoàn thành toàn bộ luồng của chủ đề (xem trọn video, học xong lý thuyết, làm đúng hết phần chấm tự động) trên tổng số học sinh trong lớp đang chọn. Bảng chỉ chịu lọc lớp — không chịu lọc ngày hay luồng. Khi đã chọn một học sinh, bảng chỉ tính riêng em đó (mỗi chủ đề 0% hoặc 100%)." đã được gỡ khỏi PbixOverviewSection (cả phần tĩnh lẫn phần hiển thị có điều kiện khi đang chọn học sinh). Sau khi xóa, panel chỉ còn tiêu đề + bảng. KHÔNG đụng tới gì khác: bảng, các cột, giá trị, sắp xếp, chip cross-filter, các bộ lọc còn lại, các panel khác giữ nguyên. Sơ đồ giữ nguyên (nút bảng chủ đề trong sơ đồ mô tả cột/định nghĩa/hành vi lọc của bảng — những thứ vẫn đúng sau khi gỡ đoạn chữ giải thích trên giao diện — nên không nhắc tới ghi chú này và không cần sửa).
+
 ## 2026-10-25 (TỔNG QUAN: BẢNG HỌC SINH CHỈ HIỆN 7 DÒNG + XÓA HẲN NÚT LỌC THEO LUỒNG)
 
 Vòng sửa nhỏ theo 2 lệnh chủ dự án 01:55–01:56 25/10 (ảnh bảng học sinh hiện đủ 10 em; ảnh nút lọc luồng vẫn còn sau khi vòng trước báo nó đã inert).

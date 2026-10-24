@@ -529,14 +529,6 @@ export const PbixOverviewSection: React.FC<Props> = ({
                   </tbody>
                 </table>
               </div>
-              <p className="mt-3 text-xs leading-relaxed text-stone-500">
-                % hoàn thành = học sinh hoàn thành toàn bộ luồng của chủ đề
-                (xem trọn video, học xong lý thuyết, làm đúng hết phần chấm tự
-                động) trên tổng số học sinh trong lớp đang chọn. Bảng chỉ chịu
-                lọc lớp — không chịu lọc ngày hay luồng.
-                {selectedStudent &&
-                  ' Khi đã chọn một học sinh, bảng chỉ tính riêng em đó (mỗi chủ đề 0% hoặc 100%).'}
-              </p>
             </>
           )}
         </div>
