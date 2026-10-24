@@ -1,21 +1,25 @@
 /**
  * Phần dưới banner của tab Tổng quan — dựng lại trang "Tổng quan" của file
- * Power BI Dashboard_MamVan__1.pbix: bộ lọc + 4 KPI + 2 bảng + 3 biểu đồ.
+ * Power BI Dashboard_MamVan__1.pbix: bộ lọc + 4 KPI + 3 bảng + 2 biểu đồ.
  * Mọi con số do computePbixDashboard tính từ dữ liệu Supabase thật bằng đúng
  * công thức DAX (xem pbixDashboard.ts). KHÔNG hardcode số từ ảnh pbix.
  *
  * Bố cục bám trang pbix (desktop rộng): hàng KPI trên cùng; tiếp theo là
- * bảng học sinh + bảng bài giao + biểu đồ luồng; cuối là biểu đồ mức tư duy
+ * bảng học sinh + bảng bài giao + bảng chủ đề; cuối là biểu đồ mức tư duy
  * + biểu đồ đường đăng nhập theo ngày. Màu: thanh cam đào + đường xanh dương
  * theo ảnh pbix; thẻ trắng trên nền be của app.
+ *
+ * Cross-filter (25/10): bấm một dòng trong bảng học sinh để xem riêng em đó
+ * trên mọi panel còn lại (KPI nộp bài / điểm đạt / chờ chấm, bảng bài giao,
+ * bảng chủ đề, 2 biểu đồ); KPI Hoạt động 7 ngày giữ mức toàn lớp vì công
+ * thức pbix đếm DISTINCT học sinh.
  */
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users,
   BookOpenCheck,
   Hourglass,
   Target,
-  BarChart3,
   Info,
 } from 'lucide-react';
 import {
@@ -30,12 +34,14 @@ import {
   Line,
   LabelList,
 } from 'recharts';
-import type { ClassItem } from '../../../services/types.ts';
+import type { ClassItem, TopicWithMeta, QuizWithMeta } from '../../../services/types.ts';
+import type { Question, StudentState } from '../../../types.ts';
 import type { PbixRawData } from '../../../analytics/pbixDashboardData.ts';
 import {
   computePbixDashboard,
-  flowName,
+  computeTopicCompletionTable,
   formatOneDecimalPercent,
+  formatScore1dp,
   formatVNDate,
   formatVNDateTime,
   formatWholePercent,
@@ -58,6 +64,11 @@ interface Props {
   filters: PbixOverviewFilters;
   onFiltersChange: (f: PbixOverviewFilters) => void;
   loading: boolean;
+  /** Chủ đề + quiz + câu hỏi + states của portal (để tính bảng chủ đề). */
+  topics: TopicWithMeta[];
+  quizzes: QuizWithMeta[];
+  questions: Record<string, Question>;
+  studentStates: Record<string, StudentState>;
 }
 
 const BAR_PEACH = '#E0957A';
@@ -102,6 +113,10 @@ export const PbixOverviewSection: React.FC<Props> = ({
   filters,
   onFiltersChange,
   loading,
+  topics,
+  quizzes,
+  questions,
+  studentStates,
 }) => {
   // Học sinh trong phạm vi lớp đang chọn (lớp áp cho mọi visual).
   const scopedStudents = useMemo(() => {
@@ -134,6 +149,57 @@ export const PbixOverviewSection: React.FC<Props> = ({
       }),
     [scopedStudents, raw, filters.dateFrom, filters.dateTo, filters.flow, todayKey],
   );
+
+  // Cross-filter: bấm một dòng học sinh để xem riêng em đó trên mọi panel
+  // còn lại (kiểu cross-filter của Power BI). Bảng học sinh vẫn hiện đủ
+  // các dòng để đổi sang em khác. KPI "Hoạt động 7 ngày" giữ mức toàn lớp
+  // vì công thức pbix đếm DISTINCT học sinh — "số ngày em đó đăng nhập"
+  // là một chỉ số khác, không phải công thức gốc nên không tự đổi.
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const selectedStudent = useMemo(
+    () => scopedStudents.find((s) => s.supaId === selectedStudentId) ?? null,
+    [scopedStudents, selectedStudentId],
+  );
+  // Đổi lớp lọc làm học sinh đang chọn ra khỏi phạm vi → tự bỏ chọn.
+  useEffect(() => {
+    if (selectedStudentId && !selectedStudent) setSelectedStudentId(null);
+  }, [selectedStudentId, selectedStudent]);
+  // Chạy tính toán lần 2 với đúng 1 học sinh cho mọi panel trừ bảng học sinh
+  // và KPI Hoạt động 7 ngày (giữ mức toàn lớp). Không chọn ai thì dùng chung
+  // kết quả toàn lớp, không tính thừa.
+  const dashboardSel = useMemo(() => {
+    if (!selectedStudent) return dashboard;
+    return computePbixDashboard({
+      students: [selectedStudent],
+      sessions: raw.sessions,
+      targets: raw.targets,
+      assignments: raw.assignments,
+      attempts: raw.attempts,
+      answers: raw.answers,
+      questionLevels: raw.questionLevels,
+      activities: raw.activities,
+      progress: raw.progress,
+      filters: {
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        flow: filters.flow,
+      },
+      todayKey,
+    });
+  }, [selectedStudent, dashboard, raw, filters.dateFrom, filters.dateTo, filters.flow, todayKey]);
+
+  // Bảng chủ đề: chỉ chịu lọc lớp (qua scopedStudents); trạng thái hoàn
+  // thành không gắn ngày nên không chịu lọc ngày, và trải mọi luồng nên
+  // không chịu lọc luồng. State tra theo cả 2 khóa (supaId/appId). Khi đã
+  // chọn một học sinh, bảng tính riêng cho em đó (tổng số = 1, mỗi chủ đề
+  // 0% hoặc 100%).
+  const topicTable = useMemo(() => {
+    const list = selectedStudent ? [selectedStudent] : scopedStudents;
+    const states = list
+      .map((s) => studentStates[s.supaId] ?? studentStates[s.appId])
+      .filter((st): st is StudentState => Boolean(st));
+    return computeTopicCompletionTable(topics, quizzes, questions, states);
+  }, [selectedStudent, scopedStudents, topics, quizzes, questions, studentStates]);
 
   // Mặc định khoảng ngày = khoảng dữ liệu thật (áp một lần khi nạp xong; sau
   // đó người dùng tự chỉnh, không tự ghi đè lại).
@@ -234,6 +300,28 @@ export const PbixOverviewSection: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* Chỉ báo cross-filter: đang xem riêng một học sinh */}
+      {selectedStudent && (
+        <div className="bg-indigo-50 rounded-2xl border border-indigo-200 shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-2 text-sm font-bold text-[#2F3E6B]">
+            Đang xem: {selectedStudent.name}
+            <button
+              type="button"
+              aria-label="Bỏ chọn học sinh"
+              onClick={() => setSelectedStudentId(null)}
+              className="w-6 h-6 rounded-full bg-white border border-indigo-200 text-[#2F3E6B] text-sm leading-none hover:bg-indigo-100 cursor-pointer"
+            >
+              ✕
+            </button>
+          </span>
+          <span className="text-xs text-stone-600">
+            Các panel dưới đây chỉ hiện dữ liệu của em này (trừ KPI Hoạt động 7
+            ngày vẫn tính toàn lớp). Bấm lại vào dòng em đó trong bảng học sinh
+            hoặc bấm ✕ để trở về xem toàn bộ.
+          </span>
+        </div>
+      )}
+
       {loading && (
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 text-sm text-stone-500">
           Đang tải dữ liệu dashboard…
@@ -261,32 +349,32 @@ export const PbixOverviewSection: React.FC<Props> = ({
         <KpiCard
           icon={<BookOpenCheck size={16} />}
           label="Tỷ lệ nộp bài"
-          value={formatWholePercent(dashboard.submissionRate)}
+          value={formatWholePercent(dashboardSel.submissionRate)}
           sub={
-            dashboard.totalTargets > 0
-              ? `${dashboard.submittedTargets}/${dashboard.totalTargets} lượt giao đã nộp`
+            dashboardSel.totalTargets > 0
+              ? `${dashboardSel.submittedTargets}/${dashboardSel.totalTargets} lượt giao đã nộp`
               : 'Chưa có bài được giao'
           }
         />
         <KpiCard
           icon={<Hourglass size={16} />}
           label="Câu trả lời chờ chấm"
-          value={String(dashboard.pendingAnswers)}
+          value={String(dashboardSel.pendingAnswers)}
           sub="Câu trả lời đang chờ chấm"
         />
         <KpiCard
           icon={<Target size={16} />}
           label="Tỷ lệ điểm đạt"
-          value={formatWholePercent(dashboard.passRate)}
+          value={formatWholePercent(dashboardSel.passRate)}
           sub={
-            dashboard.passRate !== null
-              ? `${dashboard.gradedScoreSum}/${dashboard.gradedMaxSum} điểm (câu đã chấm)`
+            dashboardSel.passRate !== null
+              ? `${formatScore1dp(dashboardSel.gradedScoreSum)}/${formatScore1dp(dashboardSel.gradedMaxSum)} điểm (câu đã chấm)`
               : 'Chưa có câu trả lời đã chấm'
           }
         />
       </div>
 
-      {/* Hàng 2: bảng học sinh + bảng bài giao + biểu đồ luồng */}
+      {/* Hàng 2: bảng học sinh + bảng bài giao + bảng chủ đề */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5">
           <CardTitle
@@ -301,20 +389,31 @@ export const PbixOverviewSection: React.FC<Props> = ({
           {dashboard.studentsTable.length === 0 ? (
             <EmptyNote>Chưa có học sinh trong phạm vi đang lọc.</EmptyNote>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[300px]">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-stone-500 border-b">
-                    <th className="py-2 pr-3 font-semibold">Họ tên</th>
-                    <th className="py-2 pr-3 font-semibold">Hoạt động gần nhất</th>
-                    <th className="py-2 pr-3 font-semibold text-right">Số bài chưa nộp</th>
-                    <th className="py-2 pr-3 font-semibold text-right">Tỷ lệ đạt điểm cá nhân</th>
-                    <th className="py-2 font-semibold">Gợi ý theo dõi</th>
+                    <th className="py-2 pr-3 font-semibold sticky top-0 z-10 bg-white">Họ tên</th>
+                    <th className="py-2 pr-3 font-semibold sticky top-0 z-10 bg-white">Hoạt động gần nhất</th>
+                    <th className="py-2 pr-3 font-semibold text-right sticky top-0 z-10 bg-white">Số bài chưa nộp</th>
+                    <th className="py-2 pr-3 font-semibold text-right sticky top-0 z-10 bg-white">Tỷ lệ đạt điểm cá nhân</th>
+                    <th className="py-2 font-semibold sticky top-0 z-10 bg-white">Gợi ý theo dõi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dashboard.studentsTable.map((r) => (
-                    <tr key={r.studentId} className="border-b border-stone-100 last:border-0">
+                    <tr
+                      key={r.studentId}
+                      onClick={() =>
+                        setSelectedStudentId(
+                          selectedStudentId === r.studentId ? null : r.studentId,
+                        )
+                      }
+                      title="Bấm để xem riêng học sinh này trên mọi panel (bấm lại để bỏ chọn)"
+                      className={`border-b border-stone-100 last:border-0 cursor-pointer hover:bg-indigo-50/60 ${
+                        selectedStudentId === r.studentId ? 'bg-indigo-50' : ''
+                      }`}
+                    >
                       <td className="py-2 pr-3 font-medium">{r.name}</td>
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {formatVNDateTime(r.lastLoginAt)}
@@ -326,22 +425,24 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       <td className="py-2">{r.suggestion}</td>
                     </tr>
                   ))}
-                  {dashboard.studentsTotal && (
-                    <tr className="font-bold bg-stone-50">
-                      <td className="py-2 pr-3">Tổng cộng</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
+                </tbody>
+                {dashboard.studentsTotal && (
+                  <tfoot>
+                    <tr className="font-bold">
+                      <td className="py-2 pr-3 sticky bottom-0 z-10 bg-stone-50">Tổng cộng</td>
+                      <td className="py-2 pr-3 whitespace-nowrap sticky bottom-0 z-10 bg-stone-50">
                         {formatVNDateTime(dashboard.studentsTotal.lastLoginAt)}
                       </td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className="py-2 pr-3 text-right sticky bottom-0 z-10 bg-stone-50">
                         {dashboard.studentsTotal.unsubmitted}
                       </td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className="py-2 pr-3 text-right sticky bottom-0 z-10 bg-stone-50">
                         {formatOneDecimalPercent(dashboard.studentsTotal.overallRate)}
                       </td>
-                      <td className="py-2">{dashboard.studentsTotal.suggestion}</td>
+                      <td className="py-2 sticky bottom-0 z-10 bg-stone-50">{dashboard.studentsTotal.suggestion}</td>
                     </tr>
-                  )}
-                </tbody>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}
@@ -349,7 +450,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
 
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-4">
           <CardTitle>Tiến độ bài được giao</CardTitle>
-          {dashboard.assignmentsTable.length === 0 ? (
+          {dashboardSel.assignmentsTable.length === 0 ? (
             <EmptyNote>Chưa có bài được giao cho lớp đang lọc.</EmptyNote>
           ) : (
             <div className="overflow-x-auto">
@@ -364,7 +465,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {dashboard.assignmentsTable.map((r) => (
+                  {dashboardSel.assignmentsTable.map((r) => (
                     <tr key={r.assignmentId} className="border-b border-stone-100 last:border-0">
                       <td className="py-2 pr-3 font-medium">{r.title}</td>
                       <td className="py-2 pr-3 text-right">{r.assigned}</td>
@@ -373,20 +474,20 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       <td className="py-2 text-right">{formatWholePercent(r.rate)}</td>
                     </tr>
                   ))}
-                  {dashboard.assignmentsTotal && (
+                  {dashboardSel.assignmentsTotal && (
                     <tr className="font-bold bg-stone-50">
                       <td className="py-2 pr-3">Tổng cộng</td>
                       <td className="py-2 pr-3 text-right">
-                        {dashboard.assignmentsTotal.assigned}
+                        {dashboardSel.assignmentsTotal.assigned}
                       </td>
                       <td className="py-2 pr-3 text-right">
-                        {dashboard.assignmentsTotal.submitted}
+                        {dashboardSel.assignmentsTotal.submitted}
                       </td>
                       <td className="py-2 pr-3 text-right">
-                        {dashboard.assignmentsTotal.unsubmitted}
+                        {dashboardSel.assignmentsTotal.unsubmitted}
                       </td>
                       <td className="py-2 text-right">
-                        {formatWholePercent(dashboard.assignmentsTotal.rate)}
+                        {formatWholePercent(dashboardSel.assignmentsTotal.rate)}
                       </td>
                     </tr>
                   )}
@@ -399,52 +500,56 @@ export const PbixOverviewSection: React.FC<Props> = ({
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-3">
           <CardTitle
             right={
-              filters.flow ? (
-                <span className="text-xs text-stone-500">{flowName(filters.flow)}</span>
-              ) : undefined
+              <span className="text-xs text-stone-500">{topicTable.length} chủ đề</span>
             }
           >
-            Tiến độ học theo luồng
+            Tiến độ hoàn thành luồng theo chủ đề
           </CardTitle>
-          {!dashboard.hasProgressData ? (
-            <div className="py-6 text-center">
-              <BarChart3 size={28} className="mx-auto text-stone-300" />
-              <p className="mt-2 text-sm font-semibold text-stone-600">
-                Chưa có dữ liệu tiến độ luồng
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-stone-500">
-                Bảng tiến độ bước học (student_activity_progress) chưa tồn tại
-                trong Supabase nên chưa tính được tỉ lệ hoàn thành từng bước
-                luồng. Dữ liệu này chỉ có trong file Power BI/Excel mẫu, chưa
-                từng được nạp lên Supabase. Khi app ghi nhận tiến độ bước học,
-                biểu đồ sẽ tự hiện — không dùng lượt làm bài thay thế vì làm
-                bài khác với hoàn thành bước học.
-              </p>
-            </div>
+          {topics.length === 0 ? (
+            <EmptyNote>Chưa có chủ đề trong phạm vi đang lọc.</EmptyNote>
+          ) : topicTable.length > 0 && topicTable[0].total === 0 ? (
+            <EmptyNote>
+              {selectedStudent
+                ? 'Chưa có dữ liệu trạng thái của học sinh đang chọn.'
+                : 'Chưa có học sinh trong phạm vi đang lọc.'}
+            </EmptyNote>
           ) : (
-            <div style={{ width: '100%', height: 300 }}>
-              <ResponsiveContainer>
-                <BarChart data={dashboard.flowChart} layout="vertical" margin={{ left: 8, right: 40 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    type="number"
-                    domain={[0, 1]}
-                    tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
-                  />
-                  <YAxis type="category" dataKey="stepLabel" width={130} />
-                  <Tooltip
-                    formatter={(value: any) => [`${Math.round(Number(value) * 100)}%`, 'Tỷ lệ hoàn thành']}
-                  />
-                  <Bar dataKey="rate" fill={BAR_PEACH}>
-                    <LabelList
-                      dataKey="rate"
-                      position="right"
-                      formatter={(v: any) => `${Math.round(Number(v) * 100)}%`}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-stone-500 border-b">
+                      <th className="py-2 pr-2 font-semibold">Chủ đề</th>
+                      <th className="py-2 px-2 font-semibold text-right">Học sinh hoàn thành</th>
+                      <th className="py-2 px-2 font-semibold text-right">Tổng số học sinh</th>
+                      <th className="py-2 pl-2 font-semibold text-right">% hoàn thành</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topicTable.map((row) => (
+                      <tr key={row.topicId} className="border-b last:border-0">
+                        <td className="py-2 pr-2 max-w-[140px] truncate" title={row.title}>
+                          {row.title}
+                        </td>
+                        <td className="py-2 px-2 text-right">{row.completed}</td>
+                        <td className="py-2 px-2 text-right">{row.total}</td>
+                        <td className="py-2 pl-2 text-right font-semibold">
+                          {formatWholePercent(row.rate)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-stone-500">
+                % hoàn thành = học sinh hoàn thành toàn bộ luồng của chủ đề
+                (xem trọn video, học xong lý thuyết, làm đúng hết phần chấm tự
+                động) trên tổng số học sinh trong lớp đang chọn. Bảng chỉ chịu
+                lọc lớp — không chịu lọc ngày hay luồng.
+                {selectedStudent &&
+                  ' Khi đã chọn một học sinh, bảng chỉ tính riêng em đó (mỗi chủ đề 0% hoặc 100%).'}
+              </p>
+            </>
           )}
         </div>
       </div>
@@ -453,12 +558,12 @@ export const PbixOverviewSection: React.FC<Props> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5">
           <CardTitle>Tỷ lệ điểm đạt theo mức tư duy</CardTitle>
-          {dashboard.thinkingChart.length === 0 ? (
+          {dashboardSel.thinkingChart.length === 0 ? (
             <EmptyNote>Chưa có câu trả lời đã chấm trong phạm vi đang lọc.</EmptyNote>
           ) : (
             <div style={{ width: '100%', height: 300 }}>
               <ResponsiveContainer>
-                <BarChart data={dashboard.thinkingChart} layout="vertical" margin={{ left: 8, right: 40 }}>
+                <BarChart data={dashboardSel.thinkingChart} layout="vertical" margin={{ left: 8, right: 40 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     type="number"
@@ -493,12 +598,12 @@ export const PbixOverviewSection: React.FC<Props> = ({
               Số học sinh đăng nhập theo ngày
             </span>
           </CardTitle>
-          {dashboard.dailyChart.length === 0 ? (
+          {dashboardSel.dailyChart.length === 0 ? (
             <EmptyNote>Chưa có phiên đăng nhập trong phạm vi đang lọc.</EmptyNote>
           ) : (
             <div style={{ width: '100%', height: 300 }}>
               <ResponsiveContainer>
-                <LineChart data={dashboard.dailyChart} margin={{ left: 8, right: 24, top: 12 }}>
+                <LineChart data={dashboardSel.dailyChart} margin={{ left: 8, right: 24, top: 12 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"

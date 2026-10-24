@@ -252,6 +252,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   studentStates={studentStates || {}}
                   topics={topics || []}
                   quizzes={quizzes || []}
+                  questions={portalData?.questions ?? {}}
                   essays={allEssays || []}
                   rewards={allRewards || []}
                   auditLogs={auditLogs || []}

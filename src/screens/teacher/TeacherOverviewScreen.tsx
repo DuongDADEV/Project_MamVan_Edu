@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Sparkles, PlusCircle } from 'lucide-react';
 import { TeacherNavTab } from '../../components/teacher/TeacherSidebar.tsx';
-import { AuditLog, ClassItem, StudentAccount } from '../../services/types.ts';
-import { StudentState, EssaySubmission, RewardRequest } from '../../types.ts';
+import { AuditLog, ClassItem, StudentAccount, TopicWithMeta, QuizWithMeta } from '../../services/types.ts';
+import { StudentState, EssaySubmission, RewardRequest, Question } from '../../types.ts';
 import { MamMuc } from '../../components/MamMuc.tsx';
 import {
   PbixOverviewSection,
@@ -18,8 +18,10 @@ interface TeacherOverviewScreenProps {
   classes: ClassItem[];
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
-  topics: Array<{ id: string; title: string; videoIds?: string[]; theoryId?: string }>;
-  quizzes?: Array<{ id: string; topicId?: string }>;
+  topics: TopicWithMeta[];
+  quizzes?: QuizWithMeta[];
+  /** Bản ghi câu hỏi của portal (Question; chỉ dùng id/type để tính hoàn thành chủ đề). */
+  questions: Record<string, Question>;
   essays: EssaySubmission[];
   rewards: RewardRequest[];
   auditLogs: AuditLog[];
@@ -61,6 +63,10 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
   teacherName,
   classes,
   students,
+  studentStates,
+  topics,
+  quizzes,
+  questions,
   onOpenAddStudentModal,
   teacherId,
 }) => {
@@ -137,7 +143,7 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
       </div>
 
       {/* DASHBOARD THEO FILE POWER BI (25/10, lệnh chủ dự án: sửa hết phần
-          dưới banner theo pbix) — 3 slicer + 4 KPI + 2 bảng + 3 biểu đồ,
+          dưới banner theo pbix) — 3 slicer + 4 KPI + 3 bảng + 2 biểu đồ,
           mọi số tính từ Supabase bằng đúng công thức DAX. Các tab khác của
           Phân tích (điểm số, câu hỏi, trợ lý AI + bubble) không đụng tới. */}
       <PbixOverviewSection
@@ -161,6 +167,10 @@ export const TeacherOverviewScreen: React.FC<TeacherOverviewScreenProps> = ({
         filters={filters}
         onFiltersChange={setFilters}
         loading={loading}
+        topics={topics}
+        quizzes={quizzes ?? []}
+        questions={questions}
+        studentStates={studentStates}
       />
     </div>
   );

@@ -45,14 +45,24 @@
  *   biểu đồ mức tư duy và cột Tỷ lệ đạt điểm cá nhân (qua submitted_date);
  *   KHÔNG áp cho KPI Hoạt động 7 ngày, KPI Câu trả lời chờ chấm, bảng bài
  *   được giao, số bài chưa nộp, hoạt động gần nhất và gợi ý theo dõi.
- * - Theo luồng: CHỈ áp cho biểu đồ Tiến độ học theo luồng.
+ * - Theo luồng: từ 25/10 KHÔNG còn áp cho visual nào — panel luồng cũ đã
+ *   thay bằng bảng chủ đề tính từ states (không theo luồng, không theo ngày).
  *
- * ĐIỂM HỞ: bảng student_activity_progress KHÔNG tồn tại trong Supabase của
- * app (chỉ có trong file pbix/Excel mẫu) nên biểu đồ luồng không có dữ liệu
- * thật. Module này KHÔNG bịa tiến độ từ lượt làm bài (attempts ≠ hoàn thành
- * bước học); biểu đồ nhận progress = [] và UI hiện trạng thái trống trung
- * thực cho tới khi có bảng tiến độ.
+ * TIẾN ĐỘ THEO CHỦ ĐỀ (từ 25/10, thay biểu đồ luồng): bảng tính từ states
+ * của học sinh trong phạm vi lớp qua isTopicFullyComplete — đúng định nghĩa
+ * hoàn thành chủ đề của app. Bảng student_activity_progress tồn tại từ
+ * migration_013 với hàng hoàn thành hoạt động quiz backfill từ attempt_answers,
+ * nhưng bảng chủ đề KHÔNG đọc bảng đó (chưa có writer trực tiếp nên dữ liệu
+ * sẽ cũ ngay); bảng progress để dành cho bước ghi trực tiếp sau này.
  */
+
+import { isTopicFullyComplete } from '../logic/topicCompletion.ts';
+import {
+  TopicWithMeta,
+  QuizWithMeta,
+  QuestionWithMeta,
+} from '../services/types.ts';
+import { Question, StudentState } from '../types.ts';
 
 // ---------- Hàng dữ liệu thô (do pbixDashboardData.ts nạp từ Supabase) ----------
 
@@ -316,6 +326,14 @@ export function formatWholePercent(rate: number | null): string {
 export function formatOneDecimalPercent(rate: number | null): string {
   if (rate === null || rate === undefined) return '—';
   return `${(rate * 100).toFixed(1)}%`;
+}
+
+/**
+ * Làm tròn điểm hiển thị về 1 chữ số thập phân (sửa lỗi cộng số thực ra
+ * 180.20000000000002). Chỉ dùng để hiển thị, không đổi công thức tính.
+ */
+export function formatScore1dp(v: number): string {
+  return String(Math.round(v * 10) / 10);
 }
 
 // ---------- Tính toán chính ----------
@@ -594,4 +612,54 @@ export function computePbixDashboard(input: PbixComputeInput): PbixDashboard {
     flowOptions,
     sessionDateRange,
   };
+}
+
+// ---------- Bảng Tiến độ hoàn thành luồng theo chủ đề (25/10) ----------
+
+/**
+ * Một hàng của bảng: số học sinh hoàn thành CHỦ ĐỀ trên tổng số học sinh
+ * trong phạm vi lớp đang chọn. "Hoàn thành chủ đề" = đúng định nghĩa
+ * isTopicFullyComplete của app (mọi mục luồng đều xong: video xem trọn
+ * luồng, lý thuyết học xong, quiz làm đúng hết phần chấm tự động; chủ đề
+ * rỗng không bao giờ tính là hoàn thành). Bảng chỉ chịu lọc lớp — trạng
+ * thái hoàn thành không gắn ngày nên không chịu lọc ngày, và hoàn thành
+ * chủ đề trải mọi luồng nên không chịu lọc luồng.
+ */
+export interface TopicCompletionRow {
+  topicId: string;
+  title: string;
+  completed: number;
+  total: number;
+  rate: number;
+}
+
+export function computeTopicCompletionTable(
+  topics: TopicWithMeta[],
+  quizzes: QuizWithMeta[],
+  questions: Record<string, Question>,
+  states: StudentState[],
+): TopicCompletionRow[] {
+  const total = states.length;
+  const rows = topics.map((topic) => {
+    const completed = states.filter((st) =>
+      isTopicFullyComplete(
+        topic,
+        quizzes,
+        // isTopicFullyComplete chỉ đọc id/type của câu hỏi; bản ghi Question
+        // của portal không mang trường ContentMetadata nên ép kiểu tại đây.
+        questions as Record<string, QuestionWithMeta>,
+        st.completedSteps ?? [],
+        st.questionResults ?? [],
+      ),
+    ).length;
+    return {
+      topicId: topic.id,
+      title: topic.title,
+      completed,
+      total,
+      rate: total > 0 ? completed / total : 0,
+    };
+  });
+  rows.sort((a, b) => b.rate - a.rate || a.title.localeCompare(b.title));
+  return rows;
 }
