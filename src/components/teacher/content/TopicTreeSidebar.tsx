@@ -28,6 +28,7 @@ import {
   Copy,
   FileEdit,
   ChevronsRight,
+  ChevronsLeft,
 } from 'lucide-react';
 
 export type ContentItemType = 'topic' | 'video' | 'theory' | 'quiz' | 'assignment';
@@ -43,6 +44,9 @@ interface TopicTreeSidebarProps {
   // khung phải; bấm nút mở lại thì cây trở lại.
   collapsed?: boolean;
   onExpandTree?: () => void;
+  // Nút thu gọn toàn bộ panel thành rail (24/10 theo yêu cầu chủ dự án):
+  // tái dùng đúng rail khi mở trình soạn, bấm mở lại thì cây trở lại.
+  onCollapseTree?: () => void;
   topics: TopicWithMeta[];
   videos: VideoLessonWithMeta[];
   theories: TheoryLessonWithMeta[];
@@ -64,6 +68,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   teacherId,
   collapsed = false,
   onExpandTree,
+  onCollapseTree,
   topics,
   videos,
   theories,
@@ -189,11 +194,23 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
           cột hiện cây chủ đề; bấm tab "Bài tập & đánh giá" thì đúng vị trí
           đó thay bằng danh sách bài kiểm tra. Mỗi tab có nút Thêm riêng. */}
       <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8]">
-        <div className="flex items-center gap-2 min-w-0">
-          <Layers className="w-4 h-4 text-[#2F3E6B] shrink-0" />
-          <h3 className="font-lora font-bold text-sm text-[#2F3E6B] whitespace-nowrap">
-            Cây chủ đề
-          </h3>
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Layers className="w-4 h-4 text-[#2F3E6B] shrink-0" />
+            <h3 className="font-lora font-bold text-sm text-[#2F3E6B] whitespace-nowrap">
+              Cây chủ đề
+            </h3>
+          </div>
+          {onCollapseTree && (
+            <button
+              type="button"
+              onClick={onCollapseTree}
+              className="p-1.5 rounded-lg bg-white border border-[#E6DCC8] text-[#2F3E6B] hover:border-[#2F3E6B] transition shrink-0"
+              title="Thu gọn cây chủ đề thành thanh rail"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="flex gap-1 mt-3 p-1 rounded-xl bg-white border border-[#E6DCC8]">

@@ -82,6 +82,35 @@ interface TheoryDraftItem {
   teacherId?: string;
 }
 
+/** Chuyển blocks lý thuyết AI thành sections của bài lý thuyết (dùng chung cho
+ *  cả luồng đẩy từ Studio và luồng đẩy trực tiếp từ thẻ nháp). */
+function blocksToSections(blocks: any[]): any[] {
+  const sections: any[] = [];
+  let currentSec: any = null;
+  for (const b of blocks) {
+    if (b.type === 'heading' || !currentSec) {
+      if (currentSec) sections.push(currentSec);
+      currentSec = {
+        id: 'sec_' + (b.id || Date.now() + Math.random().toString(36).substring(2, 5)),
+        title: b.content || 'Nội dung bài học',
+        body: [],
+        takeaway: '',
+      };
+    } else if (b.type === 'paragraph' && b.content) {
+      currentSec.body.push(b.content);
+    } else if (b.type === 'takeaway' && (b.takeawayText || b.content)) {
+      currentSec.takeaway = b.takeawayText || b.content;
+    } else if (b.type === 'example') {
+      currentSec.example = {
+        text: b.exampleText || b.content || '',
+        analysis: b.exampleAnalysis || '',
+      };
+    }
+  }
+  if (currentSec) sections.push(currentSec);
+  return sections;
+}
+
 function readQuestionDraftSets(): QuestionDraftSet[] {
   const out: QuestionDraftSet[] = [];
   try {
@@ -248,6 +277,58 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
       setDraftsVersion((v) => v + 1);
     } catch (e) {
       alert('Không thể đưa câu hỏi vào Ngân hàng. Vui lòng thử lại.');
+    }
+  };
+
+  // Đẩy bản nháp LÝ THUYẾT vào học liệu — đối tác của handlePushDraftQuestions
+  // nhưng đích đến KHÁC: lý thuyết là học liệu, không phải câu hỏi, nên nó trở
+  // thành bài lý thuyết (trạng thái nháp) trong cây nội dung của chủ đề đó, chứ
+  // không nhét vào ngân hàng câu hỏi. CHUYỂN HẲN: đẩy xong xóa luôn khóa nháp.
+  // Chỉ chính giáo viên tạo ra nháp mới được đẩy.
+  const handlePushDraftTheory = async (item: TheoryDraftItem) => {
+    if (item.teacherId && item.teacherId !== teacherId) {
+      alert('Bản nháp này thuộc về giáo viên khác — thầy/cô không thể chuyển nó vào học liệu của mình.');
+      return;
+    }
+    let blocks: any[] = [];
+    let title = item.title;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(item.key) || 'null');
+      blocks = parsed?.data?.blocks || [];
+      title = parsed?.data?.title || item.title;
+    } catch {
+      blocks = [];
+    }
+    if (blocks.length === 0) {
+      alert('Bản nháp này không còn nội dung để đưa vào học liệu.');
+      return;
+    }
+    const topicId = topics.some((t) => t.id === item.topicId)
+      ? item.topicId
+      : topics.some((t) => t.id === formTopicId)
+        ? formTopicId
+        : '';
+    if (!topicId) {
+      alert('Bản nháp này chưa gắn chủ đề nào — thầy/cô mở trong Studio để chọn chủ đề rồi đẩy lại.');
+      return;
+    }
+    const topicTitle = topics.find((t) => t.id === topicId)?.title || 'chủ đề đã chọn';
+    try {
+      await contentService.saveTheoryLesson({
+        title,
+        topicId,
+        sections: blocksToSections(blocks),
+        blocks,
+        status: 'draft',
+        isAiGenerated: true,
+        isTeacherReviewed: true,
+      } as any);
+      localStorage.removeItem(item.key);
+      showToast(`🎉 Đã đưa lý thuyết "${title}" vào học liệu của chủ đề "${topicTitle}"!`);
+      onRefreshData?.();
+      setDraftsVersion((v) => v + 1);
+    } catch (e) {
+      alert('Không thể đưa lý thuyết vào học liệu. Vui lòng thử lại.');
     }
   };
 
@@ -490,33 +571,10 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         showToast('🎉 Đã lưu bài giảng video & ý trọng tâm vào Ngân hàng học liệu!');
       } else if (payload.type === 'theory') {
         const blocks = payload.data.blocks || [];
-        let sections = payload.data.sections || [];
-
-        // Nếu có blocks mà thiếu sections, tự động convert blocks thành sections
-        if ((!sections || sections.length === 0) && blocks.length > 0) {
-          let currentSec: any = null;
-          for (const b of blocks) {
-            if (b.type === 'heading' || !currentSec) {
-              if (currentSec) sections.push(currentSec);
-              currentSec = {
-                id: 'sec_' + (b.id || Date.now() + Math.random().toString(36).substring(2, 5)),
-                title: b.content || 'Nội dung bài học',
-                body: [],
-                takeaway: '',
-              };
-            } else if (b.type === 'paragraph' && b.content) {
-              currentSec.body.push(b.content);
-            } else if (b.type === 'takeaway' && (b.takeawayText || b.content)) {
-              currentSec.takeaway = b.takeawayText || b.content;
-            } else if (b.type === 'example') {
-              currentSec.example = {
-                text: b.exampleText || b.content || '',
-                analysis: b.exampleAnalysis || '',
-              };
-            }
-          }
-          if (currentSec) sections.push(currentSec);
-        }
+        const sections =
+          payload.data.sections && payload.data.sections.length > 0
+            ? payload.data.sections
+            : blocksToSections(blocks);
 
         await contentService.saveTheoryLesson({
           ...payload.data,
@@ -1607,6 +1665,8 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
             <p className="text-xs text-amber-700 mt-1">
               Mọi nội dung Mầm AI tạo ra đều nằm ở đây trước. Thầy/cô duyệt từng câu, tích chọn
               những câu đạt rồi bấm đẩy vào Ngân hàng — chưa duyệt thì chưa vào Ngân hàng.
+              Bản nháp lý thuyết thì bấm "Đưa vào học liệu" để thành bài lý thuyết trong cây
+              nội dung của chủ đề (lý thuyết không vào ngân hàng câu hỏi).
             </p>
           </div>
 
@@ -1753,6 +1813,14 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePushDraftTheory(item)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors"
+                  title="Tạo thành bài lý thuyết trong cây nội dung của chủ đề, xong xóa bản nháp này"
+                >
+                  Đưa vào học liệu
+                </button>
                 <button
                   type="button"
                   onClick={() => handleReviewDraftInStudio(item.topicId, 'theory')}

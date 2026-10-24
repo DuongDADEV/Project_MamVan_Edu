@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StudentState, Topic } from '../types.ts';
 import { REWARDS_CATALOG } from '../data/rewards.ts';
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
+import { getStudentAssignments } from '../services/supabase/biRepository.ts';
 import { AssignedHomeworkSection } from '../components/student/AssignedHomeworkSection.tsx';
+import type { NavTab } from '../components/Navbar.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
 import { ChestIllustration } from '../components/rewards/ChestIllustration.tsx';
 import { getChestTierConfig } from '../config.ts';
@@ -47,7 +49,7 @@ interface HomeScreenProps {
   onSelectTheory: (theoryId: string) => void;
   onSelectHomework: (homeworkQuizId?: string) => void;
   onOpenAssignment?: (assignmentId: string) => void;
-  onNavigateTab: (tab: 'learn' | 'tree' | 'rewards' | 'profile') => void;
+  onNavigateTab: (tab: NavTab) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -104,11 +106,81 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const isQuizCompleted = (qId: string) =>
     (state.completedSteps || []).includes(`quiz_completed:${qId}`);
 
-  // Ưu tiên bài tập chưa làm
-  const pendingHomework = homeworkQuizzes.find((hw) => !isQuizCompleted(hw.id));
-  const completedHomework = homeworkQuizzes.find((hw) => isQuizCompleted(hw.id));
-  const activeHomework = pendingHomework || completedHomework;
-  const isHomeworkCompleted = !pendingHomework && !!completedHomework;
+  // Nhiệm vụ tuần (24/10): liệt kê bài tập được giao từ CÙNG nguồn với mục
+  // "Bài tập được giao" — bài BI (assignments/targets) + BTVN quiz — sắp xếp
+  // theo hạn nộp, hiển thị tối đa 4 bài. Trước đây thẻ chỉ nhìn BTVN quiz nên
+  // học sinh có bài BI được giao vẫn thấy trạng thái trống.
+  const [biHomework, setBiHomework] = useState<any[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getStudentAssignments(state.profile.id)
+      .then((r) => {
+        if (alive) setBiHomework(r || []);
+      })
+      .catch(() => {
+        if (alive) setBiHomework([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [state.profile.id]);
+
+  const toDueMs = (v?: string | null): number | null => {
+    if (!v) return null;
+    const ms = new Date(v).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  };
+
+  const weeklyTasks = React.useMemo(() => {
+    const quizItems = homeworkQuizzes.map((q) => ({
+      key: `quiz:${q.id}`,
+      source: 'quiz' as const,
+      id: q.id,
+      title: q.title,
+      questionCount: (q.questionIds || []).length,
+      dueMs: toDueMs(q.dueDate),
+      done: isQuizCompleted(q.id),
+      bestScoreText: null as string | null,
+    }));
+    const biItems = (biHomework || []).map((r: any) => {
+      const attempts = r.attempts || [];
+      const done = r.status === 'SUBMITTED' || attempts.length > 0;
+      let bestScoreText: string | null = null;
+      if (attempts.length > 0) {
+        const scored = attempts.filter((a: any) => a.score_awarded != null && a.max_score != null);
+        if (scored.length > 0) {
+          const best = scored.reduce((acc: any, cur: any) =>
+            Number(cur.score_awarded) / Number(cur.max_score) > Number(acc.score_awarded) / Number(acc.max_score) ? cur : acc
+          );
+          bestScoreText = `Điểm cao nhất: ${best.score_awarded}/${best.max_score}`;
+        }
+      }
+      return {
+        key: `assignment:${r.assignmentId}`,
+        source: 'assignment' as const,
+        id: r.assignmentId,
+        title: r.title,
+        questionCount: r.questionCount || 0,
+        dueMs: toDueMs(r.dueAt),
+        done,
+        bestScoreText,
+      };
+    });
+    const all = [...quizItems, ...biItems];
+    all.sort((a, b) => {
+      if (a.dueMs === null && b.dueMs === null) return a.title.localeCompare(b.title);
+      if (a.dueMs === null) return 1;
+      if (b.dueMs === null) return -1;
+      return a.dueMs - b.dueMs;
+    });
+    return all;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeworkQuizzes, biHomework]);
+
+  const fmtWeeklyDue = (ms: number): string => {
+    const d = new Date(ms);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  };
 
   // Lời chào theo giờ
   const currentHour = new Date().getHours();
@@ -359,7 +431,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {activeTopics.map((topic, idx) => {
+            {/* Chỉ hiện tối đa 4 thẻ chủ đề (24/10); xem toàn bộ bằng nút
+                "Tất cả bài học" → mục Học bài, vốn đã liệt kê đầy đủ. */}
+            {activeTopics.slice(0, 4).map((topic, idx) => {
               const visual = topicVisuals[idx % topicVisuals.length];
               const Icon = visual.icon;
 
@@ -604,68 +678,70 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           />
         </div>
 
-        {/* Bài tập về nhà đặc biệt (BTVN từ giáo viên) */}
+        {/* Nhiệm vụ tuần: bài tập được giao (tối đa 4 bài, nhiều hơn thì Xem tất cả) */}
         <div className="edtech-card rounded-3xl p-6 border-indigo-100 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span
-                className={`text-xs font-extrabold px-3 py-1 rounded-full ${
-                  isHomeworkCompleted
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-purple-100 text-[#8B5CF6]'
-                }`}
-              >
-                {isHomeworkCompleted
-                  ? 'Đã hoàn thành ✓'
-                  : activeHomework?.dueDate
-                  ? `Hạn nộp: ${activeHomework.dueDate}`
-                  : 'Nhiệm vụ tuần'}
+              <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-purple-100 text-[#8B5CF6]">
+                {weeklyTasks.length > 0 ? `Nhiệm vụ tuần · ${weeklyTasks.length} bài` : 'Nhiệm vụ tuần'}
               </span>
-              <span
-                className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${
-                  isHomeworkCompleted
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                }`}
-              >
-                +{activeHomework?.xp || 20} XP
+              <span className="text-xs font-black px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200">
+                +20 XP
               </span>
             </div>
 
             <h3 className="font-extrabold text-base text-[#1E1B4B] mb-2">
-              {activeHomework
-                ? activeHomework.title
-                : 'Chưa có bài tập về nhà mới'}
+              {weeklyTasks.length > 0 ? 'Bài tập được giao' : 'Chưa có bài tập về nhà mới'}
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed mb-5">
-              {isHomeworkCompleted
-                ? 'Em đã hoàn thành xuất sắc bài tập này! Em có thể làm lại để nâng cao kết quả và củng cố tư duy.'
-                : activeHomework
-                ? (activeHomework as any).description ||
-                  'Bài tập rèn luyện do cô giáo giao riêng! Làm bài để tích lũy XP và rèn luyện kỹ năng nhé.'
-                : 'Thầy/cô chưa giao thêm bài tập về nhà mới cho lớp. Bạn hãy luyện tập các bài học trong kho tri thức nhé!'}
-            </p>
+            {weeklyTasks.length === 0 ? (
+              <p className="text-xs text-slate-600 leading-relaxed mb-5">
+                Thầy/cô chưa giao thêm bài tập về nhà mới cho lớp. Bạn hãy luyện tập các bài học trong kho tri thức nhé!
+              </p>
+            ) : (
+              <div className="space-y-2.5 mb-4">
+                {weeklyTasks.slice(0, 4).map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/70 border border-indigo-100/70"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-[#1E1B4B] truncate">{item.title}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {item.questionCount} câu
+                        {item.dueMs !== null && <> · Hạn nộp: {fmtWeeklyDue(item.dueMs)}</>}
+                        {item.bestScoreText && (
+                          <>
+                            {' '}
+                            · <span className="font-bold text-[#2F6B4F]">{item.bestScoreText}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        item.done ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {item.done ? 'Đã nộp' : 'Chưa nộp'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        item.source === 'quiz'
+                          ? onSelectHomework(item.id)
+                          : onOpenAssignment?.(item.id)
+                      }
+                      className="shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#10B981] to-[#059669] text-white text-xs font-bold hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer"
+                    >
+                      {item.done ? 'Làm lại' : 'Làm bài'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {activeHomework ? (
-            isHomeworkCompleted ? (
-              <button
-                onClick={() => onSelectHomework(activeHomework.id)}
-                className="w-full py-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm border border-emerald-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-              >
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span>Xem lại / Làm lại bài</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => onSelectHomework(activeHomework.id)}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-bold text-sm hover:brightness-105 active:scale-[0.99] transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <FileCheck className="w-4 h-4" />
-                <span>Làm bài BTVN ngay (+{activeHomework?.xp || 20} XP)</span>
-              </button>
-            )
-          ) : (
+          {weeklyTasks.length === 0 ? (
             <button
               onClick={() => onNavigateTab('learn')}
               className="w-full py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-[#4F46E5] font-bold text-sm border border-indigo-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -673,7 +749,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <BookOpen className="w-4 h-4 text-[#4F46E5]" />
               <span>Đến kho bài học rèn luyện</span>
             </button>
-          )}
+          ) : weeklyTasks.length > 4 ? (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('assignments')}
+              className="w-full py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-[#4F46E5] font-bold text-sm border border-indigo-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>Xem tất cả ({weeklyTasks.length} bài) →</span>
+            </button>
+          ) : null}
         </div>
       </div>
 

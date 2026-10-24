@@ -203,8 +203,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* ================= DESKTOP SIDEBAR ================= */}
       <aside className="hidden md:flex flex-col w-64 lg:w-72 bg-white border-r border-slate-100/90 h-screen sticky top-0 shrink-0 p-5 lg:p-6 justify-between select-none shadow-[2px_0_16px_-4px_rgba(79,70,229,0.03)] z-30">
-        {/* Brand & Menu */}
-        <div>
+        {/* Brand & Menu — cuộn nội bộ khi cao quá viewport để khối cuối
+            (thẻ XP + chip họ tên) luôn nằm trong khung nhìn, không bị đẩy
+            xuống dưới nếp gấp (24/10 theo yêu cầu chủ dự án) */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Brand Header */}
           <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
             <div className="flex items-center text-left">
@@ -280,8 +282,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
         </div>
 
-        {/* Bottom Stats & Profile Card */}
-        <div className="space-y-3 pt-4 border-t border-slate-100">
+        {/* Bottom Stats & Profile Card — ghim cuối sidebar */}
+        <div className="space-y-3 pt-4 border-t border-slate-100 shrink-0">
           {/* Card Thời gian & XP ngày */}
           <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/50 border border-indigo-100/70 text-xs space-y-2 shadow-xs">
             <div className="flex items-center justify-between text-[#1E1B4B]">

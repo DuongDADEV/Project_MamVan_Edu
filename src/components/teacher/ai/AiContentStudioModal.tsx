@@ -491,6 +491,14 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
         isTeacherReviewed: true,
       },
     });
+    // Xóa khóa nháp NGAY tại đây (không trông chờ effect autosave chạy khi
+    // modal đóng — đóng modal cùng nhịp state có thể khiến effect xóa khóa
+    // không bao giờ chạy, nháp đã duyệt vẫn nằm lại mục Bản nháp).
+    try {
+      localStorage.removeItem(theoryDraftStorageKey);
+    } catch {
+      // Bỏ qua
+    }
     setReviewTheoryDraft(null);
     setIsTheoryReviewOpen(false);
     onClose();

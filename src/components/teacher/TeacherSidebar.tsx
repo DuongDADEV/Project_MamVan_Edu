@@ -13,7 +13,6 @@ import {
   GraduationCap,
   Sparkles,
   HelpCircle,
-  ClipboardList,
 } from 'lucide-react';
 import { BrandWordmark } from '../MamVanLogo.tsx';
 
@@ -23,7 +22,6 @@ export type TeacherNavTab =
   | 'content'
   | 'question_bank'
   | 'grading'
-  | 'progress'
   | 'rewards'
   | 'analytics'
   | 'settings';
@@ -75,11 +73,6 @@ export const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
       label: 'Chấm bài',
       icon: PenTool,
       badge: pendingGradingCount > 0 ? pendingGradingCount : undefined,
-    },
-    {
-      id: 'progress' as TeacherNavTab,
-      label: 'Tiến độ bài làm',
-      icon: ClipboardList,
     },
     {
       id: 'rewards' as TeacherNavTab,

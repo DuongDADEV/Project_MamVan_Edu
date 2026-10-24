@@ -112,10 +112,15 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     selectedItem?.type === 'quiz' ||
     selectedItem?.type === 'assignment';
   const [treeUserExpanded, setTreeUserExpanded] = useState(false);
+  // Thu gọn panel cây bằng nút "Thu gọn" ở tiêu đề panel (24/10 theo yêu cầu
+  // chủ dự án): tái dùng đúng rail khi mở trình soạn; bấm mở lại thì cây trở
+  // lại đầy đủ. Trạng thái này chỉ sống trong phiên xem trang (không ghi đè
+  // persist đóng/mở từng chủ đề theo giáo viên đã có từ đợt 1).
+  const [treeManualCollapsed, setTreeManualCollapsed] = useState(false);
   useEffect(() => {
     setTreeUserExpanded(false);
   }, [selectedItem?.id, selectedItem?.type]);
-  const treeCollapsed = editorOpen && !treeUserExpanded;
+  const treeCollapsed = (editorOpen || treeManualCollapsed) && !treeUserExpanded;
 
   // Mặc định chọn video đầu tiên nếu chưa chọn mục nào
   useEffect(() => {
@@ -800,7 +805,14 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         <TopicTreeSidebar
           teacherId={teacherId}
           collapsed={treeCollapsed}
-          onExpandTree={() => setTreeUserExpanded(true)}
+          onExpandTree={() => {
+            setTreeUserExpanded(true);
+            setTreeManualCollapsed(false);
+          }}
+          onCollapseTree={() => {
+            setTreeManualCollapsed(true);
+            setTreeUserExpanded(false);
+          }}
           topics={topics}
           videos={videos}
           theories={theories}
@@ -822,21 +834,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           onDeleteItem={handleDeleteItem}
         />
 
-        {/* Right Pane: dải luồng học + Selected Item Editor */}
+        {/* Right Pane: Selected Item Editor + dải luồng học ở DƯỚI trình soạn
+            (đổi 24/10 theo yêu cầu chủ dự án: thanh công cụ của trình soạn phải
+            nằm trên cùng, dải luồng chuyển xuống dưới trình soạn) */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          {stripTopic && (
-            <TopicFlowStrip
-              topicTitle={stripTopic.title}
-              items={stripItems}
-              activeKey={activeFlowKey}
-              onSelect={(item) => {
-                if (item.type === 'quiz') setQuizInitialTab('questions');
-                setSelectedItem({ type: item.type, id: item.id });
-              }}
-              onAdd={(kind) => handleCreateNewManual(kind, stripTopic.id)}
-              onReorder={handleFlowReorder}
-            />
-          )}
         {selectedItem?.type === 'assignment' && teacher ? (
           <AssignmentEditor
             key={selectedItem.id}
@@ -886,13 +887,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               }
               await quizService.saveQuiz(updatedQuiz);
             }}
-            onPublish={(warnings, isBlocked) => {
-              if (isBlocked) {
-                alert('Vui lòng sửa các lỗi nghiêm trọng được cảnh báo trước khi xuất bản!');
-                return;
-              }
-              handleOpenPublishModalForCurrent();
-            }}
+            onPublish={handleOpenPublishModalForCurrent}
             onPreviewStudent={(draftQuiz, draftQuestions) =>
               handlePreviewStudent('quiz', draftQuiz, draftQuestions)
             }
@@ -1026,6 +1021,22 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               Bạn có thể nhấn vào bất kỳ mục nào trên cây chủ đề để chỉnh sửa, hoặc bấm dòng "+ Tạo mới" ngay dưới mỗi chủ đề trên cây để thêm bài giảng.
             </p>
           </div>
+        )}
+        {/* Dải luồng học — nằm DƯỚI trình soạn để thanh công cụ của trình soạn
+            lên trên cùng (yêu cầu 24/10). Dải vẫn đầy đủ chức năng: bấm nút
+            tròn mở đúng bài, kéo-thả đổi thứ tự, '+ Thêm bài' mở menu 3 loại. */}
+        {stripTopic && (
+          <TopicFlowStrip
+            topicTitle={stripTopic.title}
+            items={stripItems}
+            activeKey={activeFlowKey}
+            onSelect={(item) => {
+              if (item.type === 'quiz') setQuizInitialTab('questions');
+              setSelectedItem({ type: item.type, id: item.id });
+            }}
+            onAdd={(kind) => handleCreateNewManual(kind, stripTopic.id)}
+            onReorder={handleFlowReorder}
+          />
         )}
         </div>
       </div>

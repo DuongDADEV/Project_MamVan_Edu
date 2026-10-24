@@ -9,7 +9,6 @@ import { ClassesAndStudentsScreen } from './teacher/ClassesAndStudentsScreen.tsx
 import { TeacherContentScreen } from './teacher/TeacherContentScreen.tsx';
 import { TeacherQuestionBankScreen } from './teacher/TeacherQuestionBankScreen.tsx';
 import { TeacherGradingScreen } from './teacher/TeacherGradingScreen.tsx';
-import { TeacherProgressScreen } from './teacher/TeacherProgressScreen.tsx';
 import { TeacherRewardsScreen } from './teacher/TeacherRewardsScreen.tsx';
 import { TeacherAnalyticsScreen, AnalyticsTabKey } from './teacher/TeacherAnalyticsScreen.tsx';
 import { TeacherSettingsScreen } from './teacher/TeacherSettingsScreen.tsx';
@@ -306,14 +305,6 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   selectedClassId={selectedClassId}
                   pendingCount={pendingEssays.length}
                   onRefreshData={refreshPortalData}
-                />
-              )}
-
-              {currentTab === 'progress' && (
-                <TeacherProgressScreen
-                  teacher={teacher}
-                  classes={classes || []}
-                  students={students || []}
                 />
               )}
 

@@ -30,6 +30,11 @@ export function computeScoreDistribution(
   let b3 = 0; // 6.5 - 7.9
   let b4 = 0; // 8.0 - 10
   let totalWithScores = 0;
+  // Thành viên từng khoảng (24/10 — để công cụ trả kèm tên học sinh).
+  const m1: { id: string; ten: string; diemTB: number }[] = [];
+  const m2: { id: string; ten: string; diemTB: number }[] = [];
+  const m3: { id: string; ten: string; diemTB: number }[] = [];
+  const m4: { id: string; ten: string; diemTB: number }[] = [];
 
   students.forEach((s) => {
     const st = allStates[s.id];
@@ -55,27 +60,29 @@ export function computeScoreDistribution(
     if (attemptCount > 0) {
       totalWithScores++;
       const avgScore = Math.round((totalScore / attemptCount) * 10) / 10;
-      if (avgScore < 5.0) b1++;
-      else if (avgScore < 6.5) b2++;
-      else if (avgScore < 8.0) b3++;
-      else b4++;
+      const member = { id: s.id, ten: s.name, diemTB: avgScore };
+      if (avgScore < 5.0) { b1++; m1.push(member); }
+      else if (avgScore < 6.5) { b2++; m2.push(member); }
+      else if (avgScore < 8.0) { b3++; m3.push(member); }
+      else { b4++; m4.push(member); }
     }
   });
 
   if (totalWithScores === 0) {
     return [
-      { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: 0, percentage: 0, color: '#E2704A' },
-      { rangeLabel: '5.0 – 6.4 (Trung bình)', count: 0, percentage: 0, color: '#F59E0B' },
-      { rangeLabel: '6.5 – 7.9 (Khá)', count: 0, percentage: 0, color: '#3B82F6' },
-      { rangeLabel: '8.0 – 10 (Giỏi)', count: 0, percentage: 0, color: '#10B981' },
+      { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: 0, percentage: 0, color: '#E2704A', hocSinh: [] },
+      { rangeLabel: '5.0 – 6.4 (Trung bình)', count: 0, percentage: 0, color: '#F59E0B', hocSinh: [] },
+      { rangeLabel: '6.5 – 7.9 (Khá)', count: 0, percentage: 0, color: '#3B82F6', hocSinh: [] },
+      { rangeLabel: '8.0 – 10 (Giỏi)', count: 0, percentage: 0, color: '#10B981', hocSinh: [] },
     ];
   }
 
+  const byScoreDesc = (a: { diemTB: number }, b: { diemTB: number }) => b.diemTB - a.diemTB;
   return [
-    { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: b1, percentage: Math.round((b1 / totalWithScores) * 100), color: '#E2704A' },
-    { rangeLabel: '5.0 – 6.4 (Trung bình)', count: b2, percentage: Math.round((b2 / totalWithScores) * 100), color: '#F59E0B' },
-    { rangeLabel: '6.5 – 7.9 (Khá)', count: b3, percentage: Math.round((b3 / totalWithScores) * 100), color: '#3B82F6' },
-    { rangeLabel: '8.0 – 10 (Giỏi)', count: b4, percentage: Math.round((b4 / totalWithScores) * 100), color: '#10B981' },
+    { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: b1, percentage: Math.round((b1 / totalWithScores) * 100), color: '#E2704A', hocSinh: m1.sort(byScoreDesc) },
+    { rangeLabel: '5.0 – 6.4 (Trung bình)', count: b2, percentage: Math.round((b2 / totalWithScores) * 100), color: '#F59E0B', hocSinh: m2.sort(byScoreDesc) },
+    { rangeLabel: '6.5 – 7.9 (Khá)', count: b3, percentage: Math.round((b3 / totalWithScores) * 100), color: '#3B82F6', hocSinh: m3.sort(byScoreDesc) },
+    { rangeLabel: '8.0 – 10 (Giỏi)', count: b4, percentage: Math.round((b4 / totalWithScores) * 100), color: '#10B981', hocSinh: m4.sort(byScoreDesc) },
   ];
 }
 

@@ -54,6 +54,9 @@ export interface ScoreDistributionBucket {
   count: number;
   percentage: number;
   color: string;
+  // Danh sách học sinh trong khoảng (24/10 — để trợ lý trả lời được câu hỏi
+  // "tên học sinh điểm khá" bằng tên thật thay vì chỉ trả số lượng).
+  hocSinh?: { id: string; ten: string; diemTB: number }[];
 }
 
 export interface TopicScoreComparison {

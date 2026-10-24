@@ -25,7 +25,6 @@ import {
   Save,
   UploadCloud,
   CheckCircle2,
-  AlertTriangle,
   HelpCircle,
   Clock,
   Shuffle,
@@ -487,99 +486,17 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   }, [title, kind, topicId, isUnlimitedTime, timeLimitMinutes, xp, questions, shuffleQuestions, shuffleOptions, dueDate]);
 
   // ==========================================
-  // KIỂM TRA CHẤT LƯỢNG TRƯỚC KHI XUẤT BẢN
-  // ==========================================
+  // (Đã gỡ runQualityCheck 24/10 theo yêu cầu chủ dự án: không còn hộp cảnh báo
+  // chất lượng "Lưu ý chất lượng bài kiểm tra" / "Có lỗi cần sửa trước khi xuất
+  // bản", không còn chặn xuất bản vì thiếu câu hỏi hay sai số câu tiêu chuẩn.)
 
-  const runQualityCheck = () => {
-    const criticalErrors: string[] = [];
-    const lightWarnings: string[] = [];
-
-    if (!title.trim()) {
-      criticalErrors.push('Tiêu đề bài kiểm tra không được để trống.');
-    }
-
-    if (questions.length === 0) {
-      criticalErrors.push('Bài kiểm tra phải có ít nhất 1 câu hỏi.');
-    }
-
-    // Kiểm tra từng câu hỏi
-    questions.forEach((q, idx) => {
-      const qNum = idx + 1;
-      if (!String(q.prompt || '').trim()) {
-        criticalErrors.push(`Câu ${qNum}: Đề bài đang để trống.`);
-      }
-
-      // Kiểm tra đáp án: phải tồn tại VÀ phải nằm trong danh sách phương án
-      if (q.type === 'single') {
-        if (!q.answer) {
-          criticalErrors.push(`Câu ${qNum} (Trắc nghiệm): Chưa chọn đáp án đúng.`);
-        } else {
-          const opts = q.options || [];
-          const letters = opts.map((_, i) => String.fromCharCode(65 + i));
-          if (!opts.includes(q.answer as string) && !letters.includes(String(q.answer))) {
-            criticalErrors.push(
-              `Câu ${qNum} (Trắc nghiệm): Đáp án đúng không còn nằm trong danh sách phương án (có thể do đã xóa/sửa phương án).`
-            );
-          }
-        }
-      } else if (q.type === 'multi') {
-        const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
-        if (ans.length === 0) {
-          criticalErrors.push(`Câu ${qNum} (Chọn nhiều): Chưa đánh dấu đáp án đúng.`);
-        } else {
-          const opts = q.options || [];
-          const letters = opts.map((_, i) => String.fromCharCode(65 + i));
-          if (ans.some((a) => !opts.includes(a) && !letters.includes(a))) {
-            criticalErrors.push(
-              `Câu ${qNum} (Chọn nhiều): Có đáp án đúng không còn nằm trong danh sách phương án.`
-            );
-          }
-        }
-      } else if (q.type === 'fill') {
-        const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
-        if (ans.length === 0 || ans.every((a) => !String(a || '').trim())) {
-          criticalErrors.push(`Câu ${qNum} (Điền từ): Ô trống chưa cấu hình đáp án chấp nhận.`);
-        }
-      }
-    });
-
-    // Cảnh báo nhẹ (không chặn)
-    const expectedCount = QUIZ_KIND_CONFIG[kind].defaultCount;
-    if (questions.length !== expectedCount) {
-      lightWarnings.push(
-        `Số câu hỏi (${questions.length} câu) khác với số câu tiêu chuẩn của ${QUIZ_KIND_CONFIG[kind].name} (${expectedCount} câu).`
-      );
-    }
-
-    // Thiếu câu phân tích / vận dụng
-    const hasHigherOrder = questions.some(
-      (q) => q.level === 'PHAN_TICH' || q.level === 'VAN_DUNG'
-    );
-    if (!hasHigherOrder && questions.length > 2) {
-      lightWarnings.push(
-        'Bài kiểm tra chưa có câu hỏi ở mức Phân tích hoặc Vận dụng (Hệ thống Mastery Check sẽ không đo lường trọn vẹn năng lực học sinh).'
-      );
-    }
-
-    // Thời gian bất hợp lý
-    if (!isUnlimitedTime && timeLimitMinutes <= 2 && questions.length >= 5) {
-      lightWarnings.push(
-        `Thời gian làm bài (${timeLimitMinutes} phút) quá ngắn cho ${questions.length} câu hỏi.`
-      );
-    }
-
-    return { criticalErrors, lightWarnings };
-  };
-
-  const { criticalErrors, lightWarnings } = runQualityCheck();
-  const isPublishBlocked = criticalErrors.length > 0;
-
+  // Gỡ hộp cảnh báo chất lượng + chặn xuất bản (24/10 theo yêu cầu chủ dự án):
+  // nút xuất bản luôn lưu bản đang soạn rồi mở hộp thoại xuất bản, không còn
+  // chặn vì thiếu câu hỏi / sai số câu tiêu chuẩn / thiếu đáp án.
   const handlePublishClick = async () => {
     // Lưu bản đang soạn vào database trước khi xuất bản để không mất dữ liệu
-    if (!isPublishBlocked) {
-      await performSave();
-    }
-    onPublish([...criticalErrors, ...lightWarnings], isPublishBlocked);
+    await performSave();
+    onPublish([], false);
   };
 
   return (
@@ -674,52 +591,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           <button
             type="button"
             onClick={handlePublishClick}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all shadow-xs ${
-              isPublishBlocked
-                ? 'bg-rose-600 hover:bg-rose-700'
-                : 'bg-emerald-600 hover:bg-emerald-700'
-            }`}
-            title={isPublishBlocked ? 'Còn lỗi nghiêm trọng chặn xuất bản' : 'Cập nhật lên web học sinh'}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all shadow-xs bg-emerald-600 hover:bg-emerald-700"
+            title="Cập nhật lên web học sinh"
           >
             <UploadCloud className="w-3.5 h-3.5" />
             <span>Cập nhật lên web học sinh</span>
           </button>
         </div>
       </div>
-
-      {/* Quality Check Alert Banner */}
-      {(criticalErrors.length > 0 || lightWarnings.length > 0) && (
-        <div
-          className={`px-4 py-2.5 border-b text-xs flex items-start gap-2.5 ${
-            criticalErrors.length > 0
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-amber-50 border-amber-200 text-amber-800'
-          }`}
-        >
-          <AlertTriangle
-            className={`w-4 h-4 shrink-0 mt-0.5 ${
-              criticalErrors.length > 0 ? 'text-rose-600' : 'text-amber-600'
-            }`}
-          />
-          <div className="flex-1 space-y-0.5">
-            <span className="font-bold">
-              {criticalErrors.length > 0
-                ? 'Có lỗi cần sửa trước khi xuất bản:'
-                : 'Lưu ý chất lượng bài kiểm tra:'}
-            </span>
-            <ul className="list-disc list-inside space-y-0.5 pl-1 text-[11px]">
-              {criticalErrors.map((err, i) => (
-                <li key={`err_${i}`} className="font-medium text-rose-700">
-                  {err}
-                </li>
-              ))}
-              {lightWarnings.map((w, i) => (
-                <li key={`warn_${i}`}>{w}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
 
       {/* AI Generated Review Banner */}
       {questions.some((q) => q.isAiGenerated && !q.isTeacherReviewed) && (

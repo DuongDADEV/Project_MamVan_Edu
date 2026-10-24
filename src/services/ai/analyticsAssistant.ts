@@ -7,6 +7,9 @@
  *   và đề xuất bước tiếp theo. AI không tự sinh số.
  * - Công cụ chỉ đọc dữ liệu thuộc phạm vi giáo viên đang đăng nhập (dữ liệu
  *   truyền vào đã được cổng giáo viên lọc theo chủ sở hữu).
+ * - Từ 24/10: trợ lý có thêm công cụ GHI (tạo/xuất bản/sửa/xóa/chấm/duyệt)
+ *   đi qua đúng service/repository mà UI dùng, vẫn trong phạm vi giáo viên
+ *   đó — không vượt sang giáo viên khác, không đụng cài đặt cấp hệ thống.
  * - Biểu đồ: AI chỉ được KHAI BÁO (loại/tựa/trục) qua công cụ render_chart;
  *   số liệu vẽ lấy nguyên văn từ kết quả công cụ đã chạy — AI không chạm
  *   vào dữ liệu điểm.
@@ -39,7 +42,20 @@ import {
 import {
   getSessionsSummary,
   getAssignmentsProgress,
+  getTeacherAssignments,
+  createAssignment,
+  updateAssignment,
+  getAssignmentDetail,
+  getPendingReviews,
+  gradePendingAnswer,
 } from '../supabase/biRepository.ts';
+import {
+  supabaseContentRepo as contentRepo,
+  supabaseQuizRepo as quizRepo,
+  supabaseEssayRepo as essayRepo,
+  supabaseRewardRepo as rewardRepo,
+} from '../supabase/supabaseRepositories.ts';
+import { REWARDS_CATALOG } from '../../data/rewards.ts';
 
 export interface AssistantContext {
   students: StudentAccount[];
@@ -83,6 +99,32 @@ const TOOL_LABELS: Record<string, string> = {
   get_question_analysis: 'Phân tích câu hỏi',
   get_student_profile: 'Hồ sơ học sinh',
   get_learning_activity: 'Hoạt động học tập',
+  list_class_students: 'Danh sách học sinh',
+  list_topics: 'Danh sách chủ đề',
+  list_quizzes: 'Danh sách bài kiểm tra',
+  list_assignments: 'Danh sách bài tập đã giao',
+  list_questions: 'Danh sách câu hỏi',
+  get_essay_detail: 'Chi tiết bài tự luận',
+  list_pending_essays: 'Bài tự luận chờ chấm',
+  list_pending_reviews: 'Bài chờ chấm (BI)',
+  list_reward_requests: 'Yêu cầu quà chờ duyệt',
+  create_topic: 'Tạo chủ đề',
+  create_video_draft: 'Tạo nháp video',
+  create_theory_draft: 'Tạo nháp lý thuyết',
+  publish_content: 'Xuất bản học liệu',
+  unpublish_content: 'Gỡ xuất bản học liệu',
+  create_quiz: 'Tạo bài kiểm tra',
+  create_question: 'Tạo câu hỏi',
+  publish_quiz: 'Xuất bản bài kiểm tra',
+  create_assignment: 'Giao bài tập (BI)',
+  update_assignment: 'Sửa bài tập (BI)',
+  grade_essay: 'Chấm bài tự luận',
+  grade_pending_review: 'Chấm bài chờ duyệt (BI)',
+  approve_reward_request: 'Duyệt yêu cầu quà',
+  reject_reward_request: 'Từ chối yêu cầu quà',
+  delete_content: 'Xóa học liệu',
+  delete_quiz: 'Xóa bài kiểm tra',
+  delete_question: 'Xóa câu hỏi',
 };
 
 const norm = (x?: string) =>
@@ -160,6 +202,54 @@ interface ToolOutcome {
     defaultType: 'bar' | 'line';
   };
 }
+
+// ---- Công cụ HÀNH ĐỘNG (24/10): phạm vi = dữ liệu của chính giáo viên ----
+// Mọi công cụ ghi đối chiếu tên/id với ctx trước khi chạm service. Không tìm
+// thấy trong phạm vi thì ném lỗi "không tìm thấy ... trong phạm vi của
+// thầy/cô" — case ghi bắt lỗi này và trả về dạng error để mô hình báo lại,
+// tuyệt đối không bịa id, không chạm dữ liệu giáo viên khác, không đụng cài
+// đặt cấp hệ thống. Các tool ghi đi qua ĐÚNG service/repository mà UI dùng
+// (contentRepo/quizRepo/essayRepo/rewardRepo/biRepository) nên validation +
+// phân tách theo giáo viên của các service được giữ nguyên.
+const actorOf = (ctx: AssistantContext): string => ctx.teacherId || '';
+const ownClassIds = (ctx: AssistantContext): string[] => ctx.classes.map((c) => c.id);
+const findClassByName = (ctx: AssistantContext, nameOrId?: string) =>
+  ctx.classes.find((c) => c.id === nameOrId || norm(c.name) === norm(nameOrId));
+const findStudentByName = (ctx: AssistantContext, nameOrId: string, classId?: string) =>
+  ctx.students.find(
+    (s) => (s.id === nameOrId || norm(s.name) === norm(nameOrId)) && (!classId || s.class_id === classId)
+  );
+const findTopicByTitle = (ctx: AssistantContext, titleOrId: string) =>
+  ctx.topics.find((t) => t.id === titleOrId || norm(t.title) === norm(titleOrId));
+const scopeErr = (what: string, extra?: string) =>
+  new Error(
+    `Không tìm thấy ${what} trong phạm vi của thầy/cô${extra ? ` (${extra})` : ''}. Chỉ xử lý dữ liệu thuộc các lớp của thầy/cô, không dùng dữ liệu ngoài phạm vi.`
+  );
+function resolveClassIds(ctx: AssistantContext, classNames?: string[]): string[] {
+  if (!classNames || classNames.length === 0) return ownClassIds(ctx);
+  const ids: string[] = [];
+  for (const n of classNames) {
+    const c = findClassByName(ctx, n);
+    if (!c) throw scopeErr(`lớp "${n}"`, `các lớp của thầy/cô: ${ctx.classes.map((x) => x.name).join(', ') || 'không có lớp nào'}`);
+    ids.push(c.id);
+  }
+  return ids;
+}
+function resolveClassForAssignment(ctx: AssistantContext, className?: string): string {
+  if (className) {
+    const c = findClassByName(ctx, className);
+    if (!c) throw scopeErr(`lớp "${className}"`, `các lớp của thầy/cô: ${ctx.classes.map((x) => x.name).join(', ')}`);
+    return c.id;
+  }
+  if (ctx.classes.length === 1) return ctx.classes[0].id;
+  throw new Error(
+    `Chưa rõ giao cho lớp nào — thầy/cô đang quản lý ${ctx.classes.length} lớp: ${ctx.classes.map((x) => x.name).join(', ')}. Hãy nêu tên lớp.`
+  );
+}
+const trunc = (s: any, n: number): string => {
+  const t = String(s ?? '');
+  return t.length > n ? t.slice(0, n) + '…' : t;
+};
 
 async function executeTool(
   name: string,
@@ -268,6 +358,9 @@ async function executeTool(
         khoangDiem: b.rangeLabel,
         soHocSinh: b.count,
         phanTram: b.percentage,
+        // Danh sách học sinh trong khoảng (24/10) — để trả lời câu hỏi tên
+        // theo mức điểm bằng tên thật + điểm TB, không chỉ số lượng.
+        hocSinh: (b.hocSinh || []).map((m) => ({ ten: m.ten, diemTB: m.diemTB })),
       }));
       return {
         evidence,
@@ -450,6 +543,698 @@ async function executeTool(
       };
     }
 
+    // ============ CÔNG CỤ ĐỌC BỔ SUNG (24/10 — phục vụ hành động) ============
+    case 'list_class_students': {
+      let list = ctx.students;
+      let lop = 'tất cả lớp của thầy/cô';
+      if (args.className) {
+        const c = findClassByName(ctx, args.className);
+        if (!c) return { evidence, data: { error: `Không tìm thấy lớp "${args.className}" trong phạm vi của thầy/cô.` } };
+        list = list.filter((s) => s.class_id === c.id);
+        lop = c.name;
+      }
+      return {
+        evidence,
+        data: {
+          lop,
+          soHocSinh: list.length,
+          hocSinh: list.map((s) => ({ id: s.id, ten: s.name })),
+        },
+      };
+    }
+
+    case 'list_topics': {
+      return {
+        evidence,
+        data: { chuDe: ctx.topics.map((t) => ({ id: t.id, tieuDe: t.title })) },
+      };
+    }
+
+    case 'list_quizzes': {
+      try {
+        let topicId: string | undefined;
+        if (args.topicTitle) {
+          const t = findTopicByTitle(ctx, args.topicTitle);
+          if (!t) throw scopeErr(`chủ đề "${args.topicTitle}"`);
+          topicId = t.id;
+        }
+        const all = await quizRepo.getQuizzes();
+        const topicIds = new Set(ctx.topics.map((t) => t.id));
+        const owned = all.filter(
+          (q) =>
+            (!ctx.teacherId || (q as any).teacher_id === ctx.teacherId || (q as any).teacher_id === undefined || topicIds.has(q.topicId)) &&
+            (!topicId || q.topicId === topicId)
+        );
+        return {
+          evidence,
+          data: {
+            baiKiemTra: owned.map((q) => ({
+              id: q.id,
+              tieuDe: q.title,
+              loai: q.kind,
+              chuDe: ctx.topics.find((t) => t.id === q.topicId)?.title || q.topicId,
+              trangThai: q.status,
+            })),
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Liệt kê bài kiểm tra thất bại.' } };
+      }
+    }
+
+    case 'list_assignments': {
+      try {
+        if (!ctx.teacherId) throw new Error('Không xác định được giáo viên đang đăng nhập nên không liệt kê được bài tập đã giao.');
+        const list = await getTeacherAssignments(ctx.teacherId);
+        return {
+          evidence,
+          data: {
+            baiTap: list.map((a) => ({
+              id: a.id,
+              tieuDe: a.title,
+              daXuatBan: a.published,
+              hanNop: a.dueAt,
+              soCau: a.questionCount,
+              soHocSinhDuocGiao: a.targetCount,
+              soBaiDaNop: a.submittedCount,
+            })),
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Liệt kê bài tập thất bại.' } };
+      }
+    }
+
+    case 'list_questions': {
+      try {
+        let topicId: string | undefined;
+        if (args.topicTitle) {
+          const t = findTopicByTitle(ctx, args.topicTitle);
+          if (!t) throw scopeErr(`chủ đề "${args.topicTitle}"`);
+          topicId = t.id;
+        }
+        const all = Object.values(ctx.questions || {});
+        const filtered = topicId ? all.filter((q) => q.topicId === topicId) : all;
+        return {
+          evidence,
+          data: {
+            cauHoi: filtered.slice(0, 100).map((q) => ({
+              id: q.id,
+              deBai: trunc(q.prompt, 160),
+              loai: q.type,
+              chuDe: ctx.topics.find((t) => t.id === q.topicId)?.title || q.topicId || '(ngân hàng chung)',
+            })),
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Liệt kê câu hỏi thất bại.' } };
+      }
+    }
+
+    case 'get_essay_detail': {
+      const e = ctx.essays.find((x) => x.id === args.essayId);
+      if (!e) return { evidence, data: { error: `Không tìm thấy bài tự luận "${args.essayId}" trong phạm vi của thầy/cô.` } };
+      return {
+        evidence,
+        data: {
+          id: e.id,
+          hocSinh: e.studentName || ctx.students.find((s) => s.id === e.studentId)?.name || e.studentId,
+          deBai: e.questionPrompt || e.promptTitle || '',
+          noiDung: e.content,
+          soTu: e.wordCount,
+          ngayNop: new Date(e.submittedAt).toISOString(),
+          trangThai: e.status,
+          nhanXetGiaoVien: e.teacherFeedback || null,
+        },
+      };
+    }
+
+    case 'list_pending_essays': {
+      const pending = ctx.essays.filter((e) => e.status === 'PENDING_TEACHER' || e.status === 'AI_SUGGESTED');
+      return {
+        evidence,
+        data: {
+          baiChoCham: pending.map((e) => ({
+            id: e.id,
+            hocSinh: e.studentName || ctx.students.find((s) => s.id === e.studentId)?.name || e.studentId,
+            deBai: trunc(e.questionPrompt || e.promptTitle || '', 120),
+            ngayNop: new Date(e.submittedAt).toISOString(),
+            trangThai: e.status,
+          })),
+        },
+      };
+    }
+
+    case 'list_pending_reviews': {
+      try {
+        const list = await getPendingReviews(ctx.students.map((s) => s.id));
+        return {
+          evidence,
+          data: {
+            baiChoCham: list.slice(0, 20).map((r) => ({
+              reviewId: r.reviewId,
+              hocSinh: r.studentName,
+              bai: r.sourceTitle,
+              deBai: trunc(r.questionPrompt, 160),
+              baiLam: r.responseText,
+              diemToiDa: r.maxScore,
+            })),
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Liệt kê bài chờ chấm thất bại.' } };
+      }
+    }
+
+    case 'list_reward_requests': {
+      const wanted = args.status || 'PENDING_APPROVAL';
+      const list = ctx.rewards.filter((r) => (wanted === 'ALL' ? true : r.status === wanted));
+      return {
+        evidence,
+        data: {
+          yeuCau: list.map((r: any) => ({
+            id: r.id,
+            hocSinh: r.studentName || r.studentId || '(không rõ học sinh)',
+            qua: REWARDS_CATALOG.find((t) => t.id === r.rewardId)?.secret?.name || REWARDS_CATALOG.find((t) => t.id === r.rewardId)?.name || r.rewardId,
+            trangThai: r.status,
+            ngayGui: new Date(r.requestedAt).toISOString(),
+          })),
+        },
+      };
+    }
+
+    // ============ CÔNG CỤ GHI (24/10 — toàn quyền trong phạm vi giáo viên) ============
+    case 'create_topic': {
+      try {
+        if (!args.title?.trim()) throw new Error('Cần tiêu đề chủ đề.');
+        const saved = await contentRepo.saveTopic({
+          title: args.title.trim(),
+          shortDesc: args.shortDesc || '',
+          tag: args.tag || '',
+          videoIds: [],
+          theoryId: '',
+          colorScheme: '#2F3E6B',
+          status: 'draft',
+          class_ids: ownClassIds(ctx),
+          teacher_id: ctx.teacherId,
+        } as any);
+        return { evidence, data: { daTao: { loai: 'chuDe', id: saved.id, tieuDe: saved.title, trangThai: 'nháp' } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Tạo chủ đề thất bại.' } };
+      }
+    }
+
+    case 'create_video_draft': {
+      try {
+        if (!args.topic || !args.title?.trim()) throw new Error('Cần tên chủ đề và tiêu đề bài giảng.');
+        const topic = findTopicByTitle(ctx, args.topic);
+        if (!topic) throw scopeErr(`chủ đề "${args.topic}"`);
+        const saved = await contentRepo.saveVideoLesson({
+          topicId: topic.id,
+          title: args.title.trim(),
+          durationSec: 600,
+          subtopics: [],
+          summaryPoints: [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
+          practiceQuizId: '',
+          quickTestId: '',
+          masteryCheckId: '',
+          status: 'draft',
+          class_ids: ownClassIds(ctx),
+          teacher_id: ctx.teacherId,
+        } as any);
+        const full = await contentRepo.getTopicById(topic.id);
+        if (full) {
+          const vids = Array.isArray(full.videoIds) ? full.videoIds : [];
+          await contentRepo.saveTopic({
+            ...full,
+            videoIds: vids.includes(saved.id) ? vids : [...vids, saved.id],
+            flowOrder: [...(full.flowOrder || []), `video:${saved.id}`],
+          });
+        }
+        return { evidence, data: { daTao: { loai: 'video', id: saved.id, tieuDe: saved.title, chuDe: topic.title, trangThai: 'nháp (đã gắn vào luồng chủ đề)' } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Tạo nháp video thất bại.' } };
+      }
+    }
+
+    case 'create_theory_draft': {
+      try {
+        if (!args.topic || !args.title?.trim()) throw new Error('Cần tên chủ đề và tiêu đề bài lý thuyết.');
+        const topic = findTopicByTitle(ctx, args.topic);
+        if (!topic) throw scopeErr(`chủ đề "${args.topic}"`);
+        const blocks = args.content
+          ? [{ id: 'b_1', type: 'paragraph', content: args.content }]
+          : [
+              { id: 'b_1', type: 'heading', level: 2, content: '1. Khái niệm và nhận diện' },
+              { id: 'b_2', type: 'paragraph', content: 'Gõ nội dung lý thuyết tại đây...' },
+            ];
+        const saved = await contentRepo.saveTheoryLesson({
+          topicId: topic.id,
+          title: args.title.trim(),
+          minReadSeconds: 25,
+          kind: 'general_topic',
+          sections: [],
+          blocks,
+          practiceQuizId: '',
+          testQuizId: '',
+          status: 'draft',
+          class_ids: ownClassIds(ctx),
+          teacher_id: ctx.teacherId,
+        } as any);
+        const full = await contentRepo.getTopicById(topic.id);
+        if (full) {
+          await contentRepo.saveTopic({
+            ...full,
+            flowOrder: [...(full.flowOrder || []), `theory:${saved.id}`],
+          });
+        }
+        return { evidence, data: { daTao: { loai: 'lyThuyet', id: saved.id, tieuDe: saved.title, chuDe: topic.title, trangThai: 'nháp (đã gắn vào luồng chủ đề)' } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Tạo nháp lý thuyết thất bại.' } };
+      }
+    }
+
+    case 'publish_content':
+    case 'unpublish_content': {
+      try {
+        const isPublish = name === 'publish_content';
+        const type = args.type as 'topic' | 'video' | 'theory';
+        if (!['topic', 'video', 'theory'].includes(type)) throw new Error('Loại học liệu phải là topic, video hoặc theory.');
+        if (!args.target) throw new Error('Cần tên hoặc id học liệu.');
+        let id = '';
+        let tieuDe = '';
+        if (type === 'topic') {
+          const t = findTopicByTitle(ctx, args.target);
+          if (!t) throw scopeErr(`chủ đề "${args.target}"`);
+          id = t.id;
+          tieuDe = t.title;
+        } else {
+          const getById = type === 'video' ? contentRepo.getVideoLessonById.bind(contentRepo) : contentRepo.getTheoryLessonById.bind(contentRepo);
+          const item: any = await getById(args.target);
+          const topicIds = new Set(ctx.topics.map((t) => t.id));
+          if (!item || (ctx.teacherId && item.teacher_id && item.teacher_id !== ctx.teacherId && !topicIds.has(item.topicId))) {
+            throw scopeErr(`${type === 'video' ? 'bài giảng video' : 'bài lý thuyết'} "${args.target}"`);
+          }
+          id = item.id;
+          tieuDe = item.title;
+        }
+        if (isPublish) {
+          const classIds = resolveClassIds(ctx, args.classNames);
+          await contentRepo.publishContent(type, id, { classIds, notifyStudent: !!args.notifyStudent }, actorOf(ctx));
+          const classNames = ctx.classes.filter((c) => classIds.includes(c.id)).map((c) => c.name);
+          return { evidence, data: { daXuatBan: { loai: type, id, tieuDe, cacLop: classNames, thongBaoHocSinh: !!args.notifyStudent } } };
+        }
+        await contentRepo.unpublishContent(type, id, actorOf(ctx));
+        return { evidence, data: { daGoXuatBan: { loai: type, id, tieuDe } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Xuất bản/gỡ xuất bản thất bại.' } };
+      }
+    }
+
+    case 'create_quiz': {
+      try {
+        if (!args.title?.trim()) throw new Error('Cần tiêu đề bài kiểm tra.');
+        const kind = args.kind as string;
+        if (!['practice', 'quick', 'mastery', 'reading', 'final', 'homework'].includes(kind)) {
+          throw new Error('Loại bài phải là practice, quick, mastery, reading, final hoặc homework.');
+        }
+        if (!args.topic) throw new Error('Cần tên chủ đề của bài kiểm tra.');
+        const topic = findTopicByTitle(ctx, args.topic);
+        if (!topic) throw scopeErr(`chủ đề "${args.topic}"`);
+        const saved = await quizRepo.saveQuiz({
+          title: args.title.trim(),
+          kind: kind as any,
+          topicId: topic.id,
+          timeLimitMinutes: args.timeLimitMinutes ?? (kind === 'quick' ? 7 : kind === 'mastery' ? 15 : undefined),
+          xp: args.xp ?? (kind === 'mastery' ? 20 : 10),
+          questionIds: [],
+          status: 'draft',
+          class_ids: ownClassIds(ctx),
+          teacher_id: ctx.teacherId,
+        } as any);
+        return { evidence, data: { daTao: { loai: 'quiz', id: saved.id, tieuDe: saved.title, loaiBai: kind, chuDe: topic.title, trangThai: 'nháp' } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Tạo bài kiểm tra thất bại.' } };
+      }
+    }
+
+    case 'create_question': {
+      try {
+        if (!args.prompt?.trim()) throw new Error('Cần nội dung câu hỏi (prompt).');
+        const typeMap: Record<string, string> = {
+          single: 'single', SINGLE_CHOICE: 'single',
+          multi: 'multi', MULTIPLE_CHOICE: 'multi',
+          fill: 'fill', FILL_IN: 'fill',
+          essay: 'essay', ESSAY: 'essay',
+        };
+        const type = typeMap[args.type] || typeMap[String(args.type || '').toUpperCase()];
+        if (!type) throw new Error('Loại câu hỏi phải là single, multi, fill hoặc essay.');
+        if ((type === 'single' || type === 'multi') && (!Array.isArray(args.options) || args.options.length < 2)) {
+          throw new Error('Câu trắc nghiệm cần ít nhất 2 lựa chọn (options).');
+        }
+        if ((type === 'single' || type === 'multi' || type === 'fill') && !args.answer) {
+          throw new Error('Câu này cần đáp án đúng (answer).');
+        }
+        let topicId = '';
+        let chuDe = '(ngân hàng chung — không gắn chủ đề cụ thể)';
+        if (args.topic) {
+          const t = findTopicByTitle(ctx, args.topic);
+          if (!t) throw scopeErr(`chủ đề "${args.topic}"`);
+          topicId = t.id;
+          chuDe = t.title;
+        }
+        const answer = type === 'single' ? (Array.isArray(args.answer) ? args.answer[0] : args.answer) : args.answer;
+        const saved = await quizRepo.saveQuestion({
+          id: 'q_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          type: type as any,
+          level: 'THONG_HIEU',
+          difficulty: 'TB',
+          prompt: args.prompt.trim(),
+          topicId,
+          options: args.options,
+          answer,
+          explanation: args.explanation || '',
+          points: 10,
+          minWords: type === 'essay' ? 120 : undefined,
+          teacher_id: ctx.teacherId,
+        } as any);
+        return { evidence, data: { daTao: { loai: 'cauHoi', id: saved.id, deBai: trunc(args.prompt, 120), loaiCauHoi: type, chuDe } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Tạo câu hỏi thất bại.' } };
+      }
+    }
+
+    case 'publish_quiz': {
+      try {
+        if (!args.target) throw new Error('Cần tên hoặc id bài kiểm tra.');
+        let quiz: any = null;
+        const inCtx = (ctx.quizzes || []).find((q) => q.id === args.target);
+        if (inCtx) {
+          quiz = await quizRepo.getQuizById(inCtx.id);
+        } else {
+          const found = await quizRepo.getQuizById(args.target);
+          const topicIds = new Set(ctx.topics.map((t) => t.id));
+          if (found && (!ctx.teacherId || !found.teacher_id || found.teacher_id === ctx.teacherId || topicIds.has(found.topicId))) {
+            quiz = found;
+          }
+        }
+        if (!quiz) {
+          // Tìm theo tiêu đề trong danh sách trực tiếp
+          const all = await quizRepo.getQuizzes();
+          const topicIds = new Set(ctx.topics.map((t) => t.id));
+          quiz = all.find(
+            (q) =>
+              norm(q.title) === norm(args.target) &&
+              (!ctx.teacherId || !q.teacher_id || q.teacher_id === ctx.teacherId || topicIds.has(q.topicId))
+          );
+        }
+        if (!quiz) throw scopeErr(`bài kiểm tra "${args.target}"`);
+        const classIds = resolveClassIds(ctx, args.classNames);
+        const published = await quizRepo.publishQuiz(quiz.id, { classIds, notifyStudent: !!args.notifyStudent }, actorOf(ctx));
+        return {
+          evidence,
+          data: {
+            daXuatBan: {
+              loai: 'quiz',
+              id: published.id,
+              tieuDe: published.title,
+              cacLop: ctx.classes.filter((c) => classIds.includes(c.id)).map((c) => c.name),
+              thongBaoHocSinh: !!args.notifyStudent,
+            },
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Xuất bản bài kiểm tra thất bại.' } };
+      }
+    }
+
+    case 'create_assignment': {
+      try {
+        if (!ctx.teacherId) throw new Error('Không xác định được giáo viên đang đăng nhập nên không giao được bài tập.');
+        if (!args.title?.trim()) throw new Error('Cần tiêu đề bài tập.');
+        if (!Array.isArray(args.questionIds) || args.questionIds.length === 0) {
+          throw new Error('Cần ít nhất 1 câu hỏi (questionIds) — dùng list_questions để lấy id câu hỏi trong ngân hàng của thầy/cô.');
+        }
+        for (const qid of args.questionIds) {
+          if (!ctx.questions[qid]) throw scopeErr(`câu hỏi "${qid}"`, 'câu hỏi không thuộc ngân hàng của thầy/cô');
+        }
+        const classId = resolveClassForAssignment(ctx, args.className);
+        let studentIds: string[];
+        if (Array.isArray(args.studentNames) && args.studentNames.length > 0) {
+          studentIds = [];
+          for (const n of args.studentNames) {
+            const s = findStudentByName(ctx, n, classId);
+            if (!s) throw scopeErr(`học sinh "${n}"`, `học sinh lớp ${ctx.classes.find((c) => c.id === classId)?.name || classId}`);
+            studentIds.push(s.id);
+          }
+        } else {
+          studentIds = ctx.students.filter((s) => s.class_id === classId).map((s) => s.id);
+        }
+        if (studentIds.length === 0) throw new Error('Không có học sinh nào để giao bài.');
+        const id = await createAssignment({
+          teacherId: ctx.teacherId,
+          classId,
+          title: args.title.trim(),
+          questionIds: args.questionIds,
+          studentIds,
+          dueAt: args.dueAt || null,
+          isTimed: !!args.isTimed,
+          timeLimitMinutes: args.isTimed ? args.timeLimitMinutes ?? null : null,
+        });
+        return {
+          evidence,
+          data: {
+            daTaoVaGiao: {
+              loai: 'baiTapBI',
+              id,
+              tieuDe: args.title.trim(),
+              soCau: args.questionIds.length,
+              soHocSinh: studentIds.length,
+              lop: ctx.classes.find((c) => c.id === classId)?.name || classId,
+            },
+            luuY: 'Bài tập BI được giao ngay khi tạo (học sinh thấy trong mục Bài tập).',
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Giao bài tập thất bại.' } };
+      }
+    }
+
+    case 'update_assignment': {
+      try {
+        if (!ctx.teacherId) throw new Error('Không xác định được giáo viên đang đăng nhập nên không sửa được bài tập.');
+        if (!args.target) throw new Error('Cần tên hoặc id bài tập.');
+        const summaries = await getTeacherAssignments(ctx.teacherId);
+        const summary = summaries.find((a) => a.id === args.target || norm(a.title) === norm(args.target));
+        if (!summary) throw scopeErr(`bài tập "${args.target}"`);
+        const detail = await getAssignmentDetail(summary.id);
+        if (!detail) throw new Error(`Không đọc được chi tiết bài tập "${summary.title}".`);
+        const progress = await getAssignmentsProgress(ctx.teacherId, ctx.students.map((s) => s.id));
+        const prog = progress.find((a) => a.id === summary.id);
+        const currentStudentIds = (prog?.targets || []).map((t) => t.studentId);
+        let classId: string | null;
+        if (args.className) {
+          const c = findClassByName(ctx, args.className);
+          if (!c) throw scopeErr(`lớp "${args.className}"`);
+          classId = c.id;
+        } else {
+          const classesOfTargets = [...new Set(currentStudentIds.map((sid) => ctx.students.find((s) => s.id === sid)?.class_id).filter(Boolean))];
+          classId = classesOfTargets.length === 1 ? (classesOfTargets[0] as string) : null;
+          if (classesOfTargets.length > 1) throw new Error('Bài tập đang giao cho nhiều lớp — hãy nêu tên lớp khi sửa.');
+        }
+        let studentIds = currentStudentIds;
+        if (Array.isArray(args.studentNames) && args.studentNames.length > 0) {
+          studentIds = [];
+          for (const n of args.studentNames) {
+            const s = findStudentByName(ctx, n, classId || undefined);
+            if (!s) throw scopeErr(`học sinh "${n}"`);
+            studentIds.push(s.id);
+          }
+        }
+        await updateAssignment(summary.id, {
+          title: args.title ?? detail.title,
+          classId,
+          dueAt: args.dueAt ?? detail.dueAt,
+          isTimed: args.isTimed ?? detail.isTimed,
+          timeLimitMinutes: args.isTimed ?? detail.isTimed ? args.timeLimitMinutes ?? detail.timeLimitMinutes : null,
+          xpReward: args.xpReward ?? detail.xpReward,
+          questionIds: args.questionIds ?? detail.questions.map((q) => q.id),
+          studentIds,
+          publish: summary.published,
+        });
+        return {
+          evidence,
+          data: {
+            daSua: {
+              loai: 'baiTapBI',
+              id: summary.id,
+              tieuDe: args.title ?? detail.title,
+              giuNguyenCauHoi: !args.questionIds,
+              giuNguyenHocSinh: !args.studentNames,
+            },
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Sửa bài tập thất bại.' } };
+      }
+    }
+
+    case 'grade_essay': {
+      try {
+        const e = ctx.essays.find((x) => x.id === args.essayId);
+        if (!e) throw scopeErr(`bài tự luận "${args.essayId}"`);
+        const totalScore = Number(args.totalScore);
+        if (Number.isNaN(totalScore) || totalScore < 0 || totalScore > 10) {
+          throw new Error('Điểm chấm phải từ 0 đến 10.');
+        }
+        await essayRepo.gradeSubmission(
+          e.id,
+          {
+            teacherFeedback: args.teacherFeedback || '',
+            rubricScores: args.rubricScores || [],
+            totalScore,
+            finalRatio: totalScore / 10,
+          },
+          actorOf(ctx)
+        );
+        return {
+          evidence,
+          data: {
+            daCham: {
+              loai: 'tuLuan',
+              id: e.id,
+              hocSinh: e.studentName || ctx.students.find((s) => s.id === e.studentId)?.name || e.studentId,
+              diem: totalScore,
+            },
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Chấm bài tự luận thất bại.' } };
+      }
+    }
+
+    case 'grade_pending_review': {
+      try {
+        const list = await getPendingReviews(ctx.students.map((s) => s.id));
+        const r = list.find((x) => x.reviewId === args.reviewId);
+        if (!r) throw scopeErr(`phiếu chấm "${args.reviewId}"`, 'phiếu không còn chờ chấm hoặc không thuộc lớp của thầy/cô');
+        const score = Number(args.score);
+        if (Number.isNaN(score) || score < 0 || (r.maxScore != null && score > r.maxScore)) {
+          throw new Error(`Điểm chấm phải từ 0 đến ${r.maxScore ?? 'thang điểm của câu'}.`);
+        }
+        await gradePendingAnswer(
+          { reviewId: r.reviewId, answerId: r.answerId, attemptId: r.attemptId },
+          score,
+          args.feedback || '',
+          actorOf(ctx)
+        );
+        return {
+          evidence,
+          data: { daCham: { loai: 'phieuChamBI', reviewId: r.reviewId, hocSinh: r.studentName, bai: r.sourceTitle, diem: score } },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Chấm phiếu chờ duyệt thất bại.' } };
+      }
+    }
+
+    case 'approve_reward_request':
+    case 'reject_reward_request': {
+      try {
+        const req: any = ctx.rewards.find((r) => r.id === args.requestId);
+        if (!req) throw scopeErr(`yêu cầu quà "${args.requestId}"`);
+        if (req.status !== 'PENDING_APPROVAL') {
+          throw new Error(`Yêu cầu quà này đang ở trạng thái ${req.status}, không còn chờ duyệt.`);
+        }
+        const status = name === 'approve_reward_request' ? 'APPROVED' : 'REJECTED';
+        await rewardRepo.updateRequestStatus(req.id, status as any, args.reason || undefined, actorOf(ctx));
+        return {
+          evidence,
+          data: {
+            daXuLyYeuCauQua: {
+              id: req.id,
+              hocSinh: req.studentName || req.studentId || '(không rõ học sinh)',
+              ketQua: status === 'APPROVED' ? 'Đã duyệt' : 'Đã từ chối',
+            },
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Xử lý yêu cầu quà thất bại.' } };
+      }
+    }
+
+    case 'delete_content': {
+      try {
+        const type = args.type as 'topic' | 'video' | 'theory';
+        if (!['topic', 'video', 'theory'].includes(type)) throw new Error('Loại học liệu phải là topic, video hoặc theory.');
+        if (!args.target) throw new Error('Cần tên hoặc id học liệu.');
+        let id = '';
+        let tieuDe = '';
+        if (type === 'topic') {
+          const t = findTopicByTitle(ctx, args.target);
+          if (!t) throw scopeErr(`chủ đề "${args.target}"`);
+          id = t.id;
+          tieuDe = t.title;
+        } else {
+          const getById = type === 'video' ? contentRepo.getVideoLessonById.bind(contentRepo) : contentRepo.getTheoryLessonById.bind(contentRepo);
+          const item: any = await getById(args.target);
+          const topicIds = new Set(ctx.topics.map((t) => t.id));
+          if (!item || (ctx.teacherId && item.teacher_id && item.teacher_id !== ctx.teacherId && !topicIds.has(item.topicId))) {
+            throw scopeErr(`${type === 'video' ? 'bài giảng video' : 'bài lý thuyết'} "${args.target}"`);
+          }
+          id = item.id;
+          tieuDe = item.title;
+        }
+        if (type === 'topic') await contentRepo.deleteTopic(id, actorOf(ctx));
+        else if (type === 'video') await contentRepo.deleteVideoLesson(id, actorOf(ctx));
+        else await contentRepo.deleteTheoryLesson(id, actorOf(ctx));
+        return { evidence, data: { daXoa: { loai: type, id, tieuDe } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Xóa học liệu thất bại.' } };
+      }
+    }
+
+    case 'delete_quiz': {
+      try {
+        if (!args.target) throw new Error('Cần tên hoặc id bài kiểm tra.');
+        let quiz: any = null;
+        const inCtx = (ctx.quizzes || []).find((q) => q.id === args.target);
+        if (inCtx) quiz = await quizRepo.getQuizById(inCtx.id);
+        if (!quiz) {
+          const found = await quizRepo.getQuizById(args.target);
+          const topicIds = new Set(ctx.topics.map((t) => t.id));
+          if (found && (!ctx.teacherId || !found.teacher_id || found.teacher_id === ctx.teacherId || topicIds.has(found.topicId))) {
+            quiz = found;
+          }
+        }
+        if (!quiz) {
+          const all = await quizRepo.getQuizzes();
+          const topicIds = new Set(ctx.topics.map((t) => t.id));
+          quiz = all.find(
+            (q) =>
+              norm(q.title) === norm(args.target) &&
+              (!ctx.teacherId || !q.teacher_id || q.teacher_id === ctx.teacherId || topicIds.has(q.topicId))
+          );
+        }
+        if (!quiz) throw scopeErr(`bài kiểm tra "${args.target}"`);
+        await quizRepo.deleteQuiz(quiz.id, actorOf(ctx));
+        return { evidence, data: { daXoa: { loai: 'quiz', id: quiz.id, tieuDe: quiz.title } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Xóa bài kiểm tra thất bại.' } };
+      }
+    }
+
+    case 'delete_question': {
+      try {
+        if (!args.questionId) throw new Error('Cần id câu hỏi.');
+        const q = ctx.questions[args.questionId];
+        if (!q) throw scopeErr(`câu hỏi "${args.questionId}"`, 'câu hỏi không thuộc ngân hàng của thầy/cô');
+        await quizRepo.deleteQuestion(q.id, actorOf(ctx));
+        return { evidence, data: { daXoa: { loai: 'cauHoi', id: q.id, deBai: trunc(q.prompt, 120) } } };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Xóa câu hỏi thất bại.' } };
+      }
+    }
+
     default:
       return { evidence, data: { error: `Không có công cụ ${name}` } };
   }
@@ -487,7 +1272,7 @@ const FUNCTION_DECLARATIONS: any[] = [
   },
   {
     name: 'get_score_distribution',
-    description: 'Phổ điểm của lớp: số học sinh trong từng khoảng điểm (chưa đạt / trung bình / khá / giỏi).',
+    description: 'Phổ điểm của lớp: số học sinh trong từng khoảng điểm (chưa đạt / trung bình / khá / giỏi), mỗi khoảng kèm danh sách học sinh (tên + điểm TB) trong khoảng đó. Dùng công cụ này khi giáo viên hỏi tên học sinh ở một mức điểm (vd "học sinh điểm khá là những ai").',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -537,6 +1322,264 @@ const FUNCTION_DECLARATIONS: any[] = [
       },
     },
   },
+  // ---- Công cụ đọc bổ sung + công cụ ghi (24/10) ----
+  {
+    name: 'list_class_students',
+    description: 'Liệt kê học sinh của một lớp (id + tên) — dùng trước khi giao bài, chấm bài hoặc gọi tên học sinh.',
+    parameters: { type: 'OBJECT', properties: { className: { type: 'STRING', description: 'Tên lớp; bỏ trống = tất cả lớp của giáo viên.' } } },
+  },
+  {
+    name: 'list_topics',
+    description: 'Liệt kê các chủ đề của giáo viên (id + tiêu đề) — dùng trước khi tạo/xuất bản/xóa học liệu theo tên chủ đề.',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
+    name: 'list_quizzes',
+    description: 'Liệt kê bài kiểm tra của giáo viên (id, tiêu đề, loại, chủ đề, trạng thái) — dùng trước khi xuất bản/xóa bài kiểm tra theo tên.',
+    parameters: { type: 'OBJECT', properties: { topicTitle: { type: 'STRING', description: 'Lọc theo tên chủ đề; bỏ trống = tất cả.' } } },
+  },
+  {
+    name: 'list_assignments',
+    description: 'Liệt kê bài tập BI đã giao của giáo viên (id, tiêu đề, đã xuất bản, hạn nộp, số câu, số học sinh được giao, số bài đã nộp) — dùng trước khi sửa bài tập theo tên.',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
+    name: 'list_questions',
+    description: 'Liệt kê câu hỏi trong ngân hàng riêng của giáo viên (id, đề bài rút gọn, loại, chủ đề) — dùng trước khi giao bài tập (lấy questionIds) hoặc xóa câu hỏi.',
+    parameters: { type: 'OBJECT', properties: { topicTitle: { type: 'STRING', description: 'Lọc theo tên chủ đề; bỏ trống = tất cả.' } } },
+  },
+  {
+    name: 'get_essay_detail',
+    description: 'Đọc toàn bộ nội dung một bài tự luận (đề bài, bài làm, trạng thái, nhận xét cũ) — dùng trước khi chấm bài.',
+    parameters: { type: 'OBJECT', properties: { essayId: { type: 'STRING' } } },
+  },
+  {
+    name: 'list_pending_essays',
+    description: 'Liệt kê bài tự luận đang chờ chấm (id, học sinh, đề bài, ngày nộp).',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
+    name: 'list_pending_reviews',
+    description: 'Liệt kê phiếu chấm BI đang chờ (reviewId, học sinh, bài, đề bài, bài làm, điểm tối đa) — dùng trước khi chấm phiếu chờ duyệt.',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
+    name: 'list_reward_requests',
+    description: 'Liệt kê yêu cầu quà của học sinh (id, học sinh, quà, trạng thái) — mặc định chỉ yêu cầu chờ duyệt.',
+    parameters: { type: 'OBJECT', properties: { status: { type: 'STRING', description: 'PENDING_APPROVAL (mặc định), APPROVED, REJECTED hoặc ALL.' } } },
+  },
+  {
+    name: 'create_topic',
+    description: 'Tạo chủ đề mới ở trạng thái nháp (chưa xuất bản, học sinh chưa thấy).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title: { type: 'STRING' },
+        shortDesc: { type: 'STRING' },
+        tag: { type: 'STRING' },
+      },
+    },
+  },
+  {
+    name: 'create_video_draft',
+    description: 'Tạo nháp bài giảng video trong một chủ đề (trạng thái nháp, đã gắn vào luồng chủ đề).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        topic: { type: 'STRING', description: 'Tên hoặc id chủ đề.' },
+        title: { type: 'STRING' },
+      },
+    },
+  },
+  {
+    name: 'create_theory_draft',
+    description: 'Tạo nháp bài lý thuyết trong một chủ đề (trạng thái nháp, đã gắn vào luồng chủ đề).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        topic: { type: 'STRING', description: 'Tên hoặc id chủ đề.' },
+        title: { type: 'STRING' },
+        content: { type: 'STRING', description: 'Nội dung đoạn mở đầu (tùy chọn).' },
+      },
+    },
+  },
+  {
+    name: 'publish_content',
+    description: 'Xuất bản học liệu (topic/video/theory) cho các lớp của giáo viên. Có thể kèm thông báo cho học sinh (notifyStudent=true gửi thông báo như khi xuất bản trên UI).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        type: { type: 'STRING', enum: ['topic', 'video', 'theory'] },
+        target: { type: 'STRING', description: 'Tên hoặc id học liệu.' },
+        classNames: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Tên các lớp; bỏ trống = tất cả lớp của giáo viên.' },
+        notifyStudent: { type: 'BOOLEAN' },
+      },
+    },
+  },
+  {
+    name: 'unpublish_content',
+    description: 'Gỡ xuất bản học liệu (topic/video/theory) — học sinh không còn thấy bài đó.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        type: { type: 'STRING', enum: ['topic', 'video', 'theory'] },
+        target: { type: 'STRING', description: 'Tên hoặc id học liệu.' },
+      },
+    },
+  },
+  {
+    name: 'create_quiz',
+    description: 'Tạo bài kiểm tra mới ở trạng thái nháp (chưa xuất bản). Loại: practice, quick, mastery, reading, final, homework.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title: { type: 'STRING' },
+        kind: { type: 'STRING', enum: ['practice', 'quick', 'mastery', 'reading', 'final', 'homework'] },
+        topic: { type: 'STRING', description: 'Tên hoặc id chủ đề.' },
+        timeLimitMinutes: { type: 'NUMBER' },
+        xp: { type: 'NUMBER' },
+      },
+    },
+  },
+  {
+    name: 'create_question',
+    description: 'Tạo câu hỏi mới vào ngân hàng riêng của giáo viên (có thể gắn chủ đề hoặc để trống = ngân hàng chung). Loại: single (trắc nghiệm 1 đáp án), multi (nhiều đáp án), fill (điền khuyết), essay (tự luận).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        topic: { type: 'STRING', description: 'Tên hoặc id chủ đề; bỏ trống = chỉ vào ngân hàng.' },
+        type: { type: 'STRING', enum: ['single', 'multi', 'fill', 'essay'] },
+        prompt: { type: 'STRING' },
+        options: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Các lựa chọn cho single/multi.' },
+        answer: { description: 'Đáp án đúng: chuỗi "A" cho single; mảng ["A","C"] cho multi; mảng đáp án cho fill.' },
+        explanation: { type: 'STRING' },
+      },
+    },
+  },
+  {
+    name: 'publish_quiz',
+    description: 'Xuất bản bài kiểm tra cho các lớp của giáo viên. Có thể kèm thông báo cho học sinh (notifyStudent=true).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        target: { type: 'STRING', description: 'Tên hoặc id bài kiểm tra.' },
+        classNames: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Tên các lớp; bỏ trống = tất cả lớp của giáo viên.' },
+        notifyStudent: { type: 'BOOLEAN' },
+      },
+    },
+  },
+  {
+    name: 'create_assignment',
+    description: 'Tạo và giao ngay bài tập BI (học sinh thấy trong mục Bài tập). Cần questionIds lấy từ list_questions. Không nêu lớp thì giao cho lớp duy nhất của giáo viên; nhiều lớp thì phải nêu tên lớp. Không nêu học sinh thì giao cho cả lớp.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title: { type: 'STRING' },
+        className: { type: 'STRING' },
+        questionIds: { type: 'ARRAY', items: { type: 'STRING' } },
+        studentNames: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Tên học sinh; bỏ trống = cả lớp.' },
+        dueAt: { type: 'STRING', description: 'Hạn nộp dạng ISO (vd 2026-10-30T00:00:00.000Z) hoặc bỏ trống.' },
+        isTimed: { type: 'BOOLEAN' },
+        timeLimitMinutes: { type: 'NUMBER' },
+      },
+    },
+  },
+  {
+    name: 'update_assignment',
+    description: 'Sửa bài tập BI đã giao (tiêu đề, hạn nộp, thời gian, XP, câu hỏi, học sinh). Trường nào không nêu thì giữ nguyên.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        target: { type: 'STRING', description: 'Tên hoặc id bài tập.' },
+        title: { type: 'STRING' },
+        className: { type: 'STRING' },
+        dueAt: { type: 'STRING' },
+        isTimed: { type: 'BOOLEAN' },
+        timeLimitMinutes: { type: 'NUMBER' },
+        xpReward: { type: 'NUMBER' },
+        questionIds: { type: 'ARRAY', items: { type: 'STRING' } },
+        studentNames: { type: 'ARRAY', items: { type: 'STRING' } },
+      },
+    },
+  },
+  {
+    name: 'grade_essay',
+    description: 'Chấm bài tự luận: ghi nhận xét + điểm (0–10) + điểm rubric (tùy chọn). Đọc bài trước bằng get_essay_detail.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        essayId: { type: 'STRING' },
+        totalScore: { type: 'NUMBER', description: 'Điểm từ 0 đến 10.' },
+        teacherFeedback: { type: 'STRING' },
+        rubricScores: { type: 'ARRAY', items: { type: 'OBJECT', properties: { criterionName: { type: 'STRING' }, score: { type: 'NUMBER' }, maxScore: { type: 'NUMBER' } } } },
+      },
+    },
+  },
+  {
+    name: 'grade_pending_review',
+    description: 'Chấm phiếu chờ duyệt BI (bài làm đã gộp từ bài tập): ghi điểm + nhận xét. Lấy reviewId từ list_pending_reviews.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        reviewId: { type: 'STRING' },
+        score: { type: 'NUMBER' },
+        feedback: { type: 'STRING' },
+      },
+    },
+  },
+  {
+    name: 'approve_reward_request',
+    description: 'Duyệt yêu cầu đổi quà của học sinh (trạng thái chờ duyệt).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        requestId: { type: 'STRING' },
+        reason: { type: 'STRING' },
+      },
+    },
+  },
+  {
+    name: 'reject_reward_request',
+    description: 'Từ chối yêu cầu đổi quà của học sinh (trạng thái chờ duyệt) — XP giữ sẽ được hoàn lại theo luồng của app.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        requestId: { type: 'STRING' },
+        reason: { type: 'STRING' },
+      },
+    },
+  },
+  {
+    name: 'delete_content',
+    description: 'Xóa học liệu (topic/video/theory) qua đúng luồng xóa của app. Xóa chủ đề sẽ xóa cả nội dung thuộc chủ đề đó theo luồng của app — chỉ xóa khi giáo viên nói rõ.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        type: { type: 'STRING', enum: ['topic', 'video', 'theory'] },
+        target: { type: 'STRING', description: 'Tên hoặc id học liệu.' },
+      },
+    },
+  },
+  {
+    name: 'delete_quiz',
+    description: 'Xóa bài kiểm tra qua đúng luồng xóa của app. Chỉ xóa khi giáo viên nói rõ.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        target: { type: 'STRING', description: 'Tên hoặc id bài kiểm tra.' },
+      },
+    },
+  },
+  {
+    name: 'delete_question',
+    description: 'Xóa câu hỏi khỏi ngân hàng của giáo viên qua đúng luồng xóa của app. Chỉ xóa khi giáo viên nói rõ.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        questionId: { type: 'STRING' },
+      },
+    },
+  },
   {
     name: 'render_chart',
     description:
@@ -572,8 +1615,10 @@ QUY TẮC BẮT BUỘC:
 2. Cần số liệu nào thì gọi công cụ tương ứng trước khi trả lời. Khi câu trả lời xoay quanh so sánh/phân bố/xu hướng và đã có dữ liệu, hãy gọi thêm render_chart để vẽ biểu đồ (dataSource = tên công cụ vừa cho dữ liệu; xKey/yKey phải là các khóa có thật trong dữ liệu đó).
 3. Nếu dữ liệu cho thấy mẫu quá ít (0 lượt làm, 0 học sinh có điểm...), phải nói rõ "chưa đủ dữ liệu" và KHÔNG kết luận học sinh yếu/giỏi.
 4. Nhận xét học sinh phải kèm bằng chứng cụ thể (lượt làm, điểm TB, khoảng thời gian). Không dán nhãn tiêu cực khi bằng chứng yếu.
-5. QUYỀN HẠN (đợt sửa 24/10 — cô giao toàn quyền, không từ chối vì quyền nữa): bạn hành động với toàn quyền của giáo viên trong phạm vi dữ liệu của giáo viên đó — cô hỏi gì, làm nấy, không từ chối với lý do "không có quyền/không được phép" khi yêu cầu nằm trong dữ liệu của giáo viên. Việc nào đã có công cụ thì làm thẳng bằng công cụ; việc nào chưa có công cụ ghi thì chuẩn bị sẵn toàn bộ nội dung/bước làm để giáo viên bấm một lần là xong, tuyệt đối không bắt giáo viên tự làm lại từ đầu và không viện cớ quyền hạn để thoái thác.
+5. HÀNH ĐỘNG TRỰC TIẾP (toàn quyền trong phạm vi của giáo viên): khi giáo viên yêu cầu LÀM việc — tạo/xuất bản/gỡ xuất bản/sửa/xóa chủ đề, video, lý thuyết, bài kiểm tra, câu hỏi, bài tập; chấm bài tự luận; duyệt/từ chối yêu cầu quà — thì gọi NGAY công cụ ghi tương ứng, không xin xác nhận thêm, không xin lỗi vì quyền, không từ chối vì quyền trong phạm vi dữ liệu của giáo viên. Sau mỗi hành động, báo kết quả cụ thể: đã tạo/cập nhật/xóa cái gì, tiêu đề, id. Mọi công cụ ghi đều đối chiếu tên/id với dữ liệu của giáo viên trước khi làm; nếu công cụ trả lỗi "không tìm thấy trong phạm vi" thì báo đúng lỗi đó và gợi ý tên đúng trong phạm vi, không đoán id. Việc nào chưa có công cụ ghi thì nói rõ giới hạn đó + chuẩn bị sẵn nội dung để giáo viên bấm một lần là xong, tuyệt đối không bắt giáo viên tự làm lại từ đầu.
 5b. KHÔNG hỏi ngược lại kiểu "thầy/cô muốn xem lớp nào/chủ đề nào" khi câu hỏi không nêu cụ thể: bộ lọc chung hiện tại CHÍNH LÀ phạm vi trả lời (để "Tất cả các lớp" nghĩa là mọi lớp của giáo viên; giáo viên có thể chỉ quản lý đúng 1 lớp). Cứ gọi công cụ theo đúng bộ lọc hiện tại, trả lời luôn và ghi rõ phạm vi đã áp dụng. Chỉ hỏi lại khi câu hỏi thật sự không xác định được cần số liệu gì.
+5c. Khi giáo viên hỏi TÊN học sinh ở một mức điểm (vd "điểm khá là những ai", "em biết tên học sinh điểm khá đó không"), gọi get_score_distribution rồi trả lời bằng tên thật + điểm TB lấy từ danh sách hocSinh của khoảng đó — tuyệt đối không xin lỗi vì "công cụ không cung cấp tên" hay "không có quyền xem tên", vì công cụ đã trả tên.
+5d. Tên lớp/chủ đề/học sinh/bài tập mơ hồ hoặc không tìm thấy: dùng công cụ liệt kê (list_class_students, list_topics, list_quizzes, list_assignments, list_questions) để đối chiếu rồi báo lại danh sách đúng trong phạm vi cho giáo viên chọn — không tự đoán đối tượng.
 6. Trả lời tiếng Việt, ngắn gọn, rõ cấu trúc (đoạn ngắn hoặc gạch đầu dòng). Xưng "em", gọi người dùng là "thầy/cô".
 7. Cuối MỖI câu trả lời, thêm một khối đúng định dạng sau (tối đa 3 câu hỏi gợi ý liên quan trực tiếp tới điều vừa phân tích):
 GOI_Y:
