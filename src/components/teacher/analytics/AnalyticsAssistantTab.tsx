@@ -85,6 +85,10 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   const { messages, busy } = useAssistantChat();
   const [input, setInput] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
+  // Mã lượt gửi tăng dần: để timer timeout và khối finally của một lượt cũ
+  // không bao giờ chạm vào trạng thái của lượt gửi mới hơn (sau khi timeout
+  // thoát busy, người dùng có thể gửi câu mới trong khi lượt cũ vẫn treo).
+  const sendSeq = useRef(0);
 
   useEffect(() => {
     if (!confirmClear) return;
@@ -127,29 +131,51 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
     appendAssistantMsg({ role: 'user', text });
     setInput('');
     setAssistantBusy(true);
-    try {
-      const reply = await askAnalyticsAssistant(history, ctx);
+    // Thoát kẹt (25/10): đường truy vấn + chờ Gemini hiện KHÔNG có
+    // timeout/abort nào nên model/mạng treo là bong bóng xoay mãi. Mốc 180
+    // giây: quá mốc thì tự thoát busy + báo lỗi trong khung chat để người
+    // dùng hỏi lại được. Không đổi prompt, tools hay cách truy vấn — chỉ
+    // thêm cơ chế thoát kẹt; request cũ về muộn sau mốc sẽ bị bỏ qua.
+    const mySeq = ++sendSeq.current;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      if (sendSeq.current !== mySeq) return;
+      timedOut = true;
       appendAssistantMsg({
         role: 'assistant',
-        text: reply.text,
-        toolRuns: reply.toolRuns,
-        chart: reply.chart,
-        followups: reply.followups,
-      });
-    } catch (err: any) {
-      if (err?.message === 'NO_API_KEY') {
-        setHasKey(false);
-      }
-      appendAssistantMsg({
-        role: 'assistant',
-        text:
-          err?.message === 'NO_API_KEY'
-            ? 'Chưa có khóa Gemini nên em chưa trả lời được. Thầy/cô nhập khóa ở mục Cài đặt → Mô hình Mầm AI rồi quay lại đây nhé.'
-            : `Em chưa truy vấn được lúc này (${err?.message || 'lỗi kết nối'}). Thầy/cô thử gửi lại câu hỏi giúp em.`,
+        text: 'Truy vấn quá lâu (quá 180 giây), em chưa nhận được kết quả. Thầy/cô thử hỏi lại giúp em.',
         isError: true,
       });
-    } finally {
       setAssistantBusy(false);
+    }, 180000);
+    try {
+      const reply = await askAnalyticsAssistant(history, ctx);
+      if (!timedOut) {
+        appendAssistantMsg({
+          role: 'assistant',
+          text: reply.text,
+          toolRuns: reply.toolRuns,
+          chart: reply.chart,
+          followups: reply.followups,
+        });
+      }
+    } catch (err: any) {
+      if (!timedOut) {
+        if (err?.message === 'NO_API_KEY') {
+          setHasKey(false);
+        }
+        appendAssistantMsg({
+          role: 'assistant',
+          text:
+            err?.message === 'NO_API_KEY'
+              ? 'Chưa có khóa Gemini nên em chưa trả lời được. Thầy/cô nhập khóa ở mục Cài đặt → Mô hình Mầm AI rồi quay lại đây nhé.'
+              : `Em chưa truy vấn được lúc này (${err?.message || 'lỗi kết nối'}). Thầy/cô thử gửi lại câu hỏi giúp em.`,
+          isError: true,
+        });
+      }
+    } finally {
+      clearTimeout(timer);
+      if (sendSeq.current === mySeq && !timedOut) setAssistantBusy(false);
     }
   };
 
