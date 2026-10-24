@@ -286,6 +286,7 @@ export interface RewardTier {
   description?: string;
   stock?: number; // Số lượng còn lại (tùy chọn)
   isActive?: boolean; // Bật/tắt hiển thị cho học sinh
+  teacherId?: string; // GV tạo mốc (hướng c 24/10); undefined = mốc cũ chưa gắn dấu
 }
 
 export type RewardItem = RewardTier;

@@ -13,6 +13,7 @@ import {
   RewardStatus,
   ClassItem,
 } from '../../services/types.ts';
+import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../../data/rewards.ts';
 import {
   rewardService,
   classService,
@@ -43,10 +44,12 @@ import {
 interface TeacherRewardsScreenProps {
   pendingCount?: number;
   selectedClassId?: string;
+  teacherId?: string;
 }
 
 export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
   selectedClassId: initialClassId,
+  teacherId,
 }) => {
   // Tabs: 'queue' (Hàng đợi) | 'catalog' (Danh mục mốc) | 'history' (Lịch sử)
   const [activeTab, setActiveTab] = useState<'queue' | 'catalog' | 'history'>('queue');
@@ -98,7 +101,15 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
   };
 
   const requests = rawRequests || [];
-  const rewardsList = rewards || [];
+  // Danh mục HỢP NHẤT (hướng c 24/10): mốc mặc định + mốc của chính GV này.
+  // Mốc mặc định chỉ xem (không sửa/xóa); mốc kho thuộc GV này thì quản lý được.
+  const ownDbRewards = useMemo(
+    () => filterDbRewardsForOwner(rewards || [], teacherId ?? null),
+    [rewards, teacherId]
+  );
+  const rewardsList = useMemo(() => mergeRewardTiers(ownDbRewards), [ownDbRewards]);
+  const ownDbRewardIds = useMemo(() => new Set(ownDbRewards.map((r) => r.id)), [ownDbRewards]);
+  const isDefaultReward = (id: string) => !ownDbRewardIds.has(id);
   const classList = classes || [];
 
   // Thống kê nhanh
@@ -251,7 +262,8 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
 
   // Lưu mốc quà
   const handleSaveMilestone = async (data: Partial<RewardItem>) => {
-    await rewardService.saveReward(data);
+    // Gắn dấu GV tạo mốc (hướng c 24/10); mốc sửa giữ dấu cũ, mốc mới lấy GV hiện tại.
+    await rewardService.saveReward({ ...data, teacherId: data.teacherId || teacherId });
     showNotification(data.id ? 'Đã cập nhật mốc quà tặng!' : 'Đã tạo mốc quà tặng mới thành công!');
     refreshRewards();
   };
@@ -828,14 +840,21 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
                       >
                         {tier.name} • {tier.sizeLabel}
                       </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isActive
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {isActive ? 'Đang mở' : 'Tạm ẩn'}
+                      <span className="flex items-center gap-1.5">
+                        {isDefaultReward(reward.id) && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                            Mặc định
+                          </span>
+                        )}
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isActive
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {isActive ? 'Đang mở' : 'Tạm ẩn'}
+                        </span>
                       </span>
                     </div>
 
@@ -916,29 +935,32 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
                       <span>Xem trước</span>
                     </button>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingMilestone(reward);
-                          setMilestoneModalOpen(true);
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#2F3E6B]/10 hover:bg-[#2F3E6B]/20 text-[#2F3E6B] text-[11px] font-bold transition-colors"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeletingRewardId(reward.id);
-                          setDeleteConfirmOpen(true);
-                        }}
-                        className="px-2 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 text-[11px] transition-colors"
-                        title="Xóa mốc quà"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {/* Mốc mặc định chỉ xem — không sửa/xóa được */}
+                    {!isDefaultReward(reward.id) && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingMilestone(reward);
+                            setMilestoneModalOpen(true);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#2F3E6B]/10 hover:bg-[#2F3E6B]/20 text-[#2F3E6B] text-[11px] font-bold transition-colors"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeletingRewardId(reward.id);
+                            setDeleteConfirmOpen(true);
+                          }}
+                          className="px-2 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 text-[11px] transition-colors"
+                          title="Xóa mốc quà"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

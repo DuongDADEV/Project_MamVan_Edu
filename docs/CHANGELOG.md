@@ -1,3 +1,13 @@
+## 2026-10-24 (GỘP MỐC QUÀ 2 NGUỒN — HƯỚNG C)
+
+User chốt hướng (c) "gộp cả hai nguồn lại" sau chẩn đoán đợt 2 (học sinh thấy danh mục cứng REWARDS_CATALOG, giáo viên thấy kho trống vì getSeedRewards trả []).
+
+- **Danh mục hợp nhất phía học sinh**: màn Đổi quà (RewardsScreen) nay hiện hợp nhất gồm 5 mốc mặc định + mốc giáo viên tự tạo trong kho thuộc giáo viên phụ trách lớp mình. Giáo viên của học sinh được tra qua tài khoản → lớp → teacherId của lớp; nếu tra không được thì chỉ hiện mốc chưa gắn dấu (không bao giờ lộ mốc của giáo viên khác). Khử trùng theo id: mốc trong kho thắng khi trùng id với mốc mặc định. Sắp xếp theo XP yêu cầu tăng dần. Lịch sử yêu cầu và rương đã mở cũng tra theo danh mục hợp nhất (quy tắc secret giữ nguyên: chưa mở chỉ hiện "Quà bí mật", đã mở mới hiện tên thật). Teaser "mốc gần đạt nhất" ở Trang chủ cũng tính theo danh mục hợp nhất để khỏi lệch với trang Đổi quà.
+- **Danh mục hợp nhất phía giáo viên**: tab Danh mục trong màn Quản lý quà nay hiện hợp nhất gồm 5 mốc mặc định (gắn nhãn "Mặc định", chỉ xem trước — không sửa/xóa được) + mốc giáo viên tự tạo thuộc chính giáo viên đó (thêm/sửa/xóa như trước). Mốc lưu mới được gắn teacherId khi lưu (sửa mốc cũ giữ dấu cũ, sửa mốc chưa gắn dấu thì nhận dấu của giáo viên đang sửa). Mốc cũ chưa gắn dấu vẫn hiện cho giáo viên (tương thích ngược).
+- **Kỹ thuật**: thêm trường tùy chọn teacherId vào RewardTier; 2 hàm thuần trong data/rewards.ts — mergeRewardTiers (gộp + khử trùng theo id + sắp xếp theo XP) và filterDbRewardsForOwner (lọc theo giáo viên, không mở rộng phạm vi). Kho quà vẫn là kho localStorage (repo Supabase ủy thác sang mock repo) nên không cần migration SQL. Luồng gửi yêu cầu của học sinh không đổi logic (tra catalog trước rồi kho dự phòng — 2 nguồn không trùng id qua UI nên giá không lệch); chỉ cập nhật chú thích cho đúng danh mục hợp nhất. Trợ lý AI tra tên quà và DevPanel giữ nguyên (ngoài phạm vi đợt này, không hồi quy).
+- **Kiểm chứng logic hợp nhất (script tạm, không commit)**: catalog 5 + kho 4 (1 trùng id, 1 của GV khác, 1 chưa gắn dấu, 1 của GV mình) → hợp nhất cho GV mình = 7 (trùng id lấy bản kho, mốc GV khác bị ẩn, mốc chưa gắn dấu giữ lại), sắp xếp đúng 100 → 999; GV không xác định được = 6 (chỉ mặc định + chưa gắn dấu).
+- **Sơ đồ hệ thống**: cập nhật theo đúng luật sơ đồ (xem chi tiết trong báo cáo đợt này).
+
 ## 2026-10-24 (ĐỢT 2 — NHÁP LÝ THUYẾT / TRÌNH SOẠN / CÂY CHỦ ĐỀ / TRANG TIẾN ĐỘ / MỐC QUÀ / SIDEBAR / TRANG CHỦ / TRỢ LÝ TÊN THEO MỨC ĐIỂM + CÔNG CỤ GHI)
 
 Đợt 2 trong đêm 24/10, tiếp nối đợt 1 cùng ngày (commit c291c45). Biểu đồ 4 mức năng lực của cả lớp vẫn TẠM GÁC theo dặn của chủ dự án nên đợt này KHÔNG đụng.

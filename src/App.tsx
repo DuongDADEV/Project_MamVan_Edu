@@ -704,8 +704,9 @@ export default function App() {
       return;
     }
 
-    // Giá XP lấy theo danh mục học sinh NHÌN THẤY (REWARDS_CATALOG tĩnh);
-    // danh mục GV tùy biến trong kho là nguồn dự phòng
+    // Giá XP lấy theo danh mục hợp nhất học sinh NHÌN THẤY (mặc định +
+    // mốc GV, hướng c 24/10); tra catalog trước rồi kho DB dự phòng — 2 nguồn
+    // không trùng id qua UI nên thứ tự tra không ảnh hưởng giá.
     let requiredXp = REWARDS_CATALOG.find((r) => r.id === rewardId)?.requiredXp || 0;
     if (!requiredXp) {
       try {

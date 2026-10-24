@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { StudentState, Topic } from '../types.ts';
-import { REWARDS_CATALOG } from '../data/rewards.ts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StudentState, Topic, RewardTier } from '../types.ts';
+import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../data/rewards.ts';
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
@@ -33,6 +33,9 @@ import {
   useLiveQuery,
   contentService,
   quizService,
+  rewardService,
+  classService,
+  studentService,
   VideoLessonWithMeta,
   QuizWithMeta,
 } from '../services/index.ts';
@@ -211,10 +214,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     mascotMood = 'proud';
   }
 
+  // Danh mục HỢP NHẤT cho mốc gần đạt nhất (hướng c 24/10 — như RewardsScreen).
+  const { data: homeDbRewards } = useLiveQuery<RewardTier[]>(() => rewardService.getRewards(), ['reward']);
+  const [homeTeacherId, setHomeTeacherId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const account = await studentService.getStudentById(state.profile.id);
+        const classId = account?.class_id;
+        if (!classId) {
+          if (!cancelled) setHomeTeacherId(null);
+          return;
+        }
+        const classes = await classService.getClasses();
+        if (!cancelled) setHomeTeacherId(classes.find((c) => c.id === classId)?.teacherId ?? null);
+      } catch {
+        if (!cancelled) setHomeTeacherId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.profile.id]);
+  const mergedHomeRewards = useMemo(() => {
+    if (homeTeacherId === undefined) return REWARDS_CATALOG;
+    return mergeRewardTiers(filterDbRewardsForOwner(homeDbRewards || [], homeTeacherId));
+  }, [homeDbRewards, homeTeacherId]);
+
   // Lấy dữ liệu quà gần đạt nhất: mốc đầu tiên chưa đạt, nếu đạt hết thì lấy mốc cao nhất
   const closestReward =
-    REWARDS_CATALOG.find((r) => (r.requiredXp ?? r.xpCost) > state.xpWeek) ||
-    REWARDS_CATALOG[REWARDS_CATALOG.length - 1];
+    mergedHomeRewards.find((r) => (r.requiredXp ?? r.xpCost) > state.xpWeek) ||
+    mergedHomeRewards[mergedHomeRewards.length - 1];
   const rewardXpPercent = Math.min(
     100,
     Math.round((state.xpWeek / Math.max(1, closestReward.xpCost)) * 100)

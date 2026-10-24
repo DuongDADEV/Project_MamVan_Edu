@@ -312,6 +312,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 <TeacherRewardsScreen
                   pendingCount={pendingRewards.length}
                   selectedClassId={selectedClassId}
+                  teacherId={teacher.id}
                 />
               )}
 

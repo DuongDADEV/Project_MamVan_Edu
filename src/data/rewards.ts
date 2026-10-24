@@ -7,6 +7,35 @@ import { RewardTier } from '../types.ts';
  * - Trường `secret` CHỈ được phép hiển thị sau khi giáo viên đã trao (GIVEN) và học sinh bấm "Mở rương" (OPENED).
  * - Mọi thẻ, đường lên rương, tooltip, aria-label và thông báo trước khi mở rương đều chỉ dùng `tierKey` và `teaserDescription`.
  */
+/**
+ * GỘP DANH MỤC QUÀ (hướng c, 24/10 — user chốt "gộp cả hai nguồn lại"):
+ * danh mục mặc định + mốc giáo viên tự tạo trong kho.
+ * - Khử trùng theo id: mốc trong kho thắng khi trùng id với mốc mặc định
+ *   (mốc kho là bản tùy biến đang có hiệu lực của giáo viên đó).
+ * - Sắp xếp theo XP yêu cầu tăng dần (thứ tự rương hiển thị).
+ */
+export function mergeRewardTiers(dbRewards: RewardTier[]): RewardTier[] {
+  const byId = new Map<string, RewardTier>();
+  for (const tier of REWARDS_CATALOG) byId.set(tier.id, tier);
+  for (const tier of dbRewards) byId.set(tier.id, tier);
+  return [...byId.values()].sort(
+    (a, b) => (a.requiredXp ?? a.xpCost) - (b.requiredXp ?? b.xpCost)
+  );
+}
+
+/**
+ * Lọc mốc trong kho theo giáo viên — KHÔNG bao giờ mở rộng phạm vi:
+ * - teacherId đã biết: giữ mốc chưa gắn dấu (tương thích ngược) + mốc của chính GV đó.
+ * - teacherId chưa biết (null/undefined): chỉ giữ mốc chưa gắn dấu.
+ */
+export function filterDbRewardsForOwner(
+  dbRewards: RewardTier[],
+  teacherId: string | null | undefined
+): RewardTier[] {
+  if (teacherId) return dbRewards.filter((r) => !r.teacherId || r.teacherId === teacherId);
+  return dbRewards.filter((r) => !r.teacherId);
+}
+
 export const REWARDS_CATALOG: RewardTier[] = [
   {
     id: 'reward_bookmark',
