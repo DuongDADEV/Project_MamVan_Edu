@@ -251,7 +251,7 @@ const trunc = (s: any, n: number): string => {
   return t.length > n ? t.slice(0, n) + '…' : t;
 };
 
-async function executeTool(
+export async function executeTool(
   name: string,
   args: any,
   ctx: AssistantContext
@@ -477,6 +477,15 @@ async function executeTool(
       if (!profile) {
         return { evidence, data: { found: false, lyDo: 'Học sinh chưa có dữ liệu học tập.' } };
       }
+      // Tiến độ theo chủ đề — dùng chung cho cả data lẫn series của
+      // render_chart (25/10: trước đây công cụ này không có series nên
+      // render_chart(dataSource=get_student_profile) không bao giờ vẽ được
+      // gì dù dữ liệu đã có sẵn, model đành xin lỗi "thiếu trường").
+      const tienDoChuDe = profile.topicMasteryList.map((t) => ({
+        chuDe: t.topicTitle,
+        phanTramHoanThanh: t.percentage,
+        trangThai: t.status,
+      }));
       return {
         evidence,
         data: {
@@ -489,11 +498,7 @@ async function executeTool(
             muc: r.levelName,
             diemPhanTram: r.selectedStudentScore ?? null,
           })),
-          tienDoChuDe: profile.topicMasteryList.map((t) => ({
-            chuDe: t.topicTitle,
-            phanTramHoanThanh: t.percentage,
-            trangThai: t.status,
-          })),
+          tienDoChuDe,
           lichSuLamBai: {
             tongLuot: profile.attemptHistory.length,
             ganNhat: profile.attemptHistory.slice(0, 5).map((h) => ({
@@ -507,6 +512,13 @@ async function executeTool(
             tuan: w.weekLabel,
             ngayDiemDanh: w.daysAttended,
           })),
+        },
+        series: {
+          rows: tienDoChuDe,
+          xKey: 'chuDe',
+          yKey: 'phanTramHoanThanh',
+          yLabel: '% hoàn thành',
+          defaultType: 'bar',
         },
       };
     }
@@ -1648,6 +1660,8 @@ QUY TẮC BẮT BUỘC:
 5d. Tên lớp/chủ đề/học sinh/bài tập mơ hồ hoặc không tìm thấy: dùng công cụ liệt kê (list_class_students, list_topics, list_quizzes, list_assignments, list_questions) để đối chiếu rồi báo lại danh sách đúng trong phạm vi cho giáo viên chọn — không tự đoán đối tượng.
 5e. Khi giáo viên hỏi ĐẾM theo trạng thái (vd "lớp 7A4 có bao nhiêu học sinh chưa có điểm", "mấy em chưa nộp bài"), gọi công cụ tương ứng — với chưa có điểm thì gọi get_score_distribution rồi TRẢ LỜI TRỰC TIẾP con số soHocSinhChuaCoDiem kèm tên trong hocSinhChuaCoDiem (gọi thêm list_class_students nếu cần tổng số lớp) — tuyệt đối không né sang đề nghị khác, không xin lỗi vì "không vẽ được" hay "không có quyền". Nếu giáo viên yêu cầu vẽ (vd "vẽ sơ đồ", "vẽ biểu đồ") hoặc câu trả lời có breakdown, gọi thêm render_chart với dataSource là công cụ vừa cho dữ liệu.
 5f. KHÔNG dùng câu "Em xin lỗi, em không thể..." với bất kỳ yêu cầu nào NẰM TRONG phạm vi công cụ: dữ liệu lớp mình, trả lời đếm/liệt kê/tên, vẽ biểu đồ từ dữ liệu có được, và mọi việc ghi đã có công cụ — phải làm luôn (trả lời + vẽ nếu được yêu cầu). Chỉ từ chối khi yêu cầu THỰC SỰ ngoài phạm vi (dữ liệu giáo viên khác, quản trị hệ thống, việc chưa có công cụ) — và khi đó từ chối ngắn gọn trong 1 câu + nói rõ việc thay thế làm được ngay (kèm nội dung chuẩn bị sẵn nếu là việc ghi chưa có công cụ).
+5g. "Vẽ sơ đồ tổng quan học sinh" LUÔN vẽ được: gọi get_student_profile lấy hồ sơ rồi gọi render_chart với dataSource = get_student_profile (series của công cụ này là tiến độ theo chủ đề: chuDe × phanTramHoanThanh, vẽ cột % hoàn thành). TUYỆT ĐỐI không nói công cụ thiếu trường — tienDoChuDe sinh ra chính cho việc này. Nếu hồ sơ không có dữ liệu chủ đề nào thì nói ngắn "chưa đủ dữ liệu" + hiện phần văn bản, không xin lỗi kiểu từ chối.
+5h. Tham chiếu mơ hồ không có tên: "học sinh này", "em đó", "bạn đó" mà hội thoại hiện tại chưa gọi tên học sinh nào thì HỎI LẠI học sinh nào — tuyệt đối không gọi công cụ với tên đoán mò hoặc tên rỗng (tên rỗng làm API lỗi).
 6. Trả lời tiếng Việt, ngắn gọn, rõ cấu trúc (đoạn ngắn hoặc gạch đầu dòng). Xưng "em", gọi người dùng là "thầy/cô".
 7. Cuối MỖI câu trả lời, thêm một khối đúng định dạng sau (tối đa 3 câu hỏi gợi ý liên quan trực tiếp tới điều vừa phân tích):
 GOI_Y:
@@ -1811,6 +1825,19 @@ export async function askAnalyticsAssistant(
       return { text: parsed.text, toolRuns, chart, followups: parsed.followups };
     } catch (err: any) {
       lastError = err;
+      // 400/INVALID_ARGUMENT (25/10): thử lại CÙNG contents qua model khác
+      // vô ích — model nào cũng 400, chỉ làm quay lâu rồi hiện hộp đỏ với
+      // text API thô. Dừng chuỗi ngay, trả câu hỏi làm rõ để giáo viên gửi
+      // lại thay vì retry.
+      const errMsg = String(err?.message || '');
+      if (err?.status === 400 || /invalid argument/i.test(errMsg)) {
+        return {
+          text: 'Yêu cầu vừa rồi không hợp lệ nên em không truy vấn được. Thầy/cô thử nói rõ hơn (vd tên học sinh, lớp hoặc chủ đề cần xem) rồi gửi lại giúp em.',
+          toolRuns,
+          chart,
+          followups: [],
+        };
+      }
       // Chỉ thử model kế tiếp khi lỗi thuộc về model/kết nối; lỗi dữ liệu
       // (vd câu hỏi sai) thì dừng ngay.
       if (err?.status && ![400, 404, 429, 500, 503].includes(err.status)) throw err;
