@@ -264,22 +264,22 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
         </div>
 
         {/* Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onPreviewStudent}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
             title="Mô phỏng trải nghiệm học sinh khi xem bài giảng"
           >
             <Eye className="w-3.5 h-3.5 text-[#2F3E6B]" />
-            <span>Xem trước như học sinh</span>
+            <span>Xem trước</span>
           </button>
 
           <button
             type="button"
             disabled={isSaving}
             onClick={handleSaveDraft}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
           >
             <Save className="w-3.5 h-3.5 text-[#8C7E6A]" />
             <span>{isSaving ? 'Đang lưu...' : 'Lưu nháp'}</span>
@@ -293,10 +293,11 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
               onPublish();
             }}
             disabled={isSaving || isUploading}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
+            title="Cập nhật lên web học sinh"
           >
             <UploadCloud className="w-3.5 h-3.5" />
-            <span>Cập nhật lên web học sinh</span>
+            <span>Cập nhật lên web</span>
           </button>
         </div>
       </div>

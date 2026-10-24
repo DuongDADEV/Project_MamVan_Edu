@@ -567,22 +567,22 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => onPreviewStudent(quiz, questions)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
             title="Làm thử bài bằng đúng giao diện học sinh (không tính điểm thật)"
           >
             <Eye className="w-3.5 h-3.5 text-[#2F3E6B]" />
-            <span>Xem trước như học sinh</span>
+            <span>Xem trước</span>
           </button>
 
           <button
             type="button"
             disabled={isSaving}
             onClick={performSave}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
           >
             <Save className="w-3.5 h-3.5 text-[#8C7E6A]" />
             <span>{isSaving ? 'Đang lưu...' : 'Lưu nháp'}</span>
@@ -591,11 +591,11 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           <button
             type="button"
             onClick={handlePublishClick}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all shadow-xs bg-emerald-600 hover:bg-emerald-700"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-white text-xs font-bold transition-all shadow-xs bg-emerald-600 hover:bg-emerald-700"
             title="Cập nhật lên web học sinh"
           >
             <UploadCloud className="w-3.5 h-3.5" />
-            <span>Cập nhật lên web học sinh</span>
+            <span>Cập nhật lên web</span>
           </button>
         </div>
       </div>

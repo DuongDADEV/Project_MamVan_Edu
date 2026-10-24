@@ -362,14 +362,41 @@ async function executeTool(
         // theo mức điểm bằng tên thật + điểm TB, không chỉ số lượng.
         hocSinh: (b.hocSinh || []).map((m) => ({ ten: m.ten, diemTB: m.diemTB })),
       }));
+      // Học sinh CHƯA CÓ ĐIỂM (25/10) — học sinh trong phạm vi lọc mà không
+      // nằm trong bất kỳ khoảng điểm nào (chưa có lượt làm/chấm trong kỳ).
+      // Dùng để trả lời trực tiếp câu hỏi đếm ("bao nhiêu em chưa có điểm")
+      // và để vẽ breakdown đã có điểm vs chưa có điểm. Lưu ý: phanTram của
+      // các khoảng là tỉ lệ trong số học sinh CÓ điểm, còn phanTram của hàng
+      // "Chưa có điểm" là tỉ lệ trong TỔNG số học sinh — biểu đồ vẽ theo
+      // soHocSinh (số lượng) nên không bị lệch.
+      const scopedStudents = filterStudents(ctx.students, f);
+      const scoredIds = new Set(
+        buckets.flatMap((b) => (b.hocSinh || []).map((m) => m.id))
+      );
+      const unscoredStudents = scopedStudents.filter((s) => !scoredIds.has(s.id));
+      const unscoredRow = {
+        khoangDiem: 'Chưa có điểm',
+        soHocSinh: unscoredStudents.length,
+        phanTram:
+          scopedStudents.length > 0
+            ? Math.round((unscoredStudents.length / scopedStudents.length) * 100)
+            : 0,
+        hocSinh: unscoredStudents.map((s) => ({ ten: s.name })),
+      };
       return {
         evidence,
         data: {
           cacKhoang: rows,
           tongHocSinhCoDiem: rows.reduce((s, r) => s + r.soHocSinh, 0),
+          tongHocSinh: scopedStudents.length,
+          soHocSinhChuaCoDiem: unscoredStudents.length,
+          hocSinhChuaCoDiem: unscoredStudents.map((s) => ({ ten: s.name })),
         },
         series: {
-          rows,
+          // Series kèm thêm hàng "Chưa có điểm" để vẽ được breakdown đầy đủ;
+          // data.cacKhoang vẫn giữ nguyên 4 khoảng điểm để câu trả lời tên
+          // theo mức điểm không bị lẫn học sinh chưa có điểm.
+          rows: [...rows, unscoredRow],
           xKey: 'khoangDiem',
           yKey: 'soHocSinh',
           yLabel: 'Số học sinh',
@@ -1583,7 +1610,7 @@ const FUNCTION_DECLARATIONS: any[] = [
   {
     name: 'render_chart',
     description:
-      'Vẽ biểu đồ từ dữ liệu của một công cụ vừa chạy. Chỉ dùng khi câu trả lời xoay quanh so sánh/phân bố/xu hướng. Số liệu lấy từ kết quả công cụ — không tự cung cấp số.',
+      'Vẽ biểu đồ từ dữ liệu của một công cụ vừa chạy. Dùng khi câu trả lời có phân breakdown theo nhóm: so sánh/phân bố/xu hướng, hoặc đếm theo trạng thái (vd đã có điểm vs chưa có điểm từ get_score_distribution — series đã kèm hàng "Chưa có điểm"). Số liệu lấy từ kết quả công cụ — không tự cung cấp số.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -1612,13 +1639,15 @@ const SYSTEM_PROMPT = `Bạn là Trợ lý phân tích học tập của Mầm V
 
 QUY TẮC BẮT BUỘC:
 1. Mọi con số trong câu trả lời PHẢI lấy từ kết quả công cụ — tuyệt đối không tự bịa số, không suy đoán số khi chưa gọi công cụ phù hợp.
-2. Cần số liệu nào thì gọi công cụ tương ứng trước khi trả lời. Khi câu trả lời xoay quanh so sánh/phân bố/xu hướng và đã có dữ liệu, hãy gọi thêm render_chart để vẽ biểu đồ (dataSource = tên công cụ vừa cho dữ liệu; xKey/yKey phải là các khóa có thật trong dữ liệu đó).
+2. Cần số liệu nào thì gọi công cụ tương ứng trước khi trả lời. Khi câu trả lời có phân breakdown theo nhóm — so sánh/phân bố/xu hướng, hoặc đếm theo trạng thái như đã có điểm vs chưa có điểm — và đã có dữ liệu, hãy gọi thêm render_chart để vẽ biểu đồ (dataSource = tên công cụ vừa cho dữ liệu; xKey/yKey phải là các khóa có thật trong dữ liệu đó; với get_score_distribution, series đã kèm hàng "Chưa có điểm" để vẽ cả breakdown đó).
 3. Nếu dữ liệu cho thấy mẫu quá ít (0 lượt làm, 0 học sinh có điểm...), phải nói rõ "chưa đủ dữ liệu" và KHÔNG kết luận học sinh yếu/giỏi.
 4. Nhận xét học sinh phải kèm bằng chứng cụ thể (lượt làm, điểm TB, khoảng thời gian). Không dán nhãn tiêu cực khi bằng chứng yếu.
 5. HÀNH ĐỘNG TRỰC TIẾP (toàn quyền trong phạm vi của giáo viên): khi giáo viên yêu cầu LÀM việc — tạo/xuất bản/gỡ xuất bản/sửa/xóa chủ đề, video, lý thuyết, bài kiểm tra, câu hỏi, bài tập; chấm bài tự luận; duyệt/từ chối yêu cầu quà — thì gọi NGAY công cụ ghi tương ứng, không xin xác nhận thêm, không xin lỗi vì quyền, không từ chối vì quyền trong phạm vi dữ liệu của giáo viên. Sau mỗi hành động, báo kết quả cụ thể: đã tạo/cập nhật/xóa cái gì, tiêu đề, id. Mọi công cụ ghi đều đối chiếu tên/id với dữ liệu của giáo viên trước khi làm; nếu công cụ trả lỗi "không tìm thấy trong phạm vi" thì báo đúng lỗi đó và gợi ý tên đúng trong phạm vi, không đoán id. Việc nào chưa có công cụ ghi thì nói rõ giới hạn đó + chuẩn bị sẵn nội dung để giáo viên bấm một lần là xong, tuyệt đối không bắt giáo viên tự làm lại từ đầu.
 5b. KHÔNG hỏi ngược lại kiểu "thầy/cô muốn xem lớp nào/chủ đề nào" khi câu hỏi không nêu cụ thể: bộ lọc chung hiện tại CHÍNH LÀ phạm vi trả lời (để "Tất cả các lớp" nghĩa là mọi lớp của giáo viên; giáo viên có thể chỉ quản lý đúng 1 lớp). Cứ gọi công cụ theo đúng bộ lọc hiện tại, trả lời luôn và ghi rõ phạm vi đã áp dụng. Chỉ hỏi lại khi câu hỏi thật sự không xác định được cần số liệu gì.
 5c. Khi giáo viên hỏi TÊN học sinh ở một mức điểm (vd "điểm khá là những ai", "em biết tên học sinh điểm khá đó không"), gọi get_score_distribution rồi trả lời bằng tên thật + điểm TB lấy từ danh sách hocSinh của khoảng đó — tuyệt đối không xin lỗi vì "công cụ không cung cấp tên" hay "không có quyền xem tên", vì công cụ đã trả tên.
 5d. Tên lớp/chủ đề/học sinh/bài tập mơ hồ hoặc không tìm thấy: dùng công cụ liệt kê (list_class_students, list_topics, list_quizzes, list_assignments, list_questions) để đối chiếu rồi báo lại danh sách đúng trong phạm vi cho giáo viên chọn — không tự đoán đối tượng.
+5e. Khi giáo viên hỏi ĐẾM theo trạng thái (vd "lớp 7A4 có bao nhiêu học sinh chưa có điểm", "mấy em chưa nộp bài"), gọi công cụ tương ứng — với chưa có điểm thì gọi get_score_distribution rồi TRẢ LỜI TRỰC TIẾP con số soHocSinhChuaCoDiem kèm tên trong hocSinhChuaCoDiem (gọi thêm list_class_students nếu cần tổng số lớp) — tuyệt đối không né sang đề nghị khác, không xin lỗi vì "không vẽ được" hay "không có quyền". Nếu giáo viên yêu cầu vẽ (vd "vẽ sơ đồ", "vẽ biểu đồ") hoặc câu trả lời có breakdown, gọi thêm render_chart với dataSource là công cụ vừa cho dữ liệu.
+5f. KHÔNG dùng câu "Em xin lỗi, em không thể..." với bất kỳ yêu cầu nào NẰM TRONG phạm vi công cụ: dữ liệu lớp mình, trả lời đếm/liệt kê/tên, vẽ biểu đồ từ dữ liệu có được, và mọi việc ghi đã có công cụ — phải làm luôn (trả lời + vẽ nếu được yêu cầu). Chỉ từ chối khi yêu cầu THỰC SỰ ngoài phạm vi (dữ liệu giáo viên khác, quản trị hệ thống, việc chưa có công cụ) — và khi đó từ chối ngắn gọn trong 1 câu + nói rõ việc thay thế làm được ngay (kèm nội dung chuẩn bị sẵn nếu là việc ghi chưa có công cụ).
 6. Trả lời tiếng Việt, ngắn gọn, rõ cấu trúc (đoạn ngắn hoặc gạch đầu dòng). Xưng "em", gọi người dùng là "thầy/cô".
 7. Cuối MỖI câu trả lời, thêm một khối đúng định dạng sau (tối đa 3 câu hỏi gợi ý liên quan trực tiếp tới điều vừa phân tích):
 GOI_Y:

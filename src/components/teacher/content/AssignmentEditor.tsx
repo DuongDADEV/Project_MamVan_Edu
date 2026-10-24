@@ -669,12 +669,12 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
       </div>
 
       {/* Thanh hành động */}
-      <div className="sticky bottom-0 mt-4 bg-[#FFFDF8]/95 backdrop-blur border-t border-[#E6DCC8] py-3 flex items-center gap-2 flex-wrap">
+      <div className="sticky bottom-0 mt-4 bg-[#FFFDF8]/95 backdrop-blur border-t border-[#E6DCC8] py-3 flex items-center gap-1.5 flex-wrap">
         <button
           type="button"
           disabled={saving}
           onClick={() => doSave(false)}
-          className="px-4 py-2.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold disabled:opacity-50"
+          className="px-3.5 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold disabled:opacity-50"
         >
           Lưu nháp
         </button>
@@ -682,7 +682,7 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
           type="button"
           disabled={saving}
           onClick={() => doSave(true)}
-          className="px-4 py-2.5 rounded-xl bg-[#B45309] hover:bg-[#92400E] text-white text-xs font-black flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+          className="px-3.5 py-2 rounded-xl bg-[#B45309] hover:bg-[#92400E] text-white text-xs font-black flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
         >
           <Send className="w-3.5 h-3.5" />
           {published ? 'Cập nhật bài đã giao' : 'Giao bài cho học sinh'}
