@@ -39,7 +39,6 @@ function loadInitialFilters(): PbixOverviewFilters {
     classIds: [],
     dateFrom: null,
     dateTo: null,
-    flow: null,
   };
   try {
     const raw = sessionStorage.getItem(FILTERS_STORAGE_KEY);
@@ -52,7 +51,6 @@ function loadInitialFilters(): PbixOverviewFilters {
         : [],
       dateFrom: typeof parsed.dateFrom === 'string' ? parsed.dateFrom : null,
       dateTo: typeof parsed.dateTo === 'string' ? parsed.dateTo : null,
-      flow: 'flow' in parsed ? (typeof parsed.flow === 'string' ? parsed.flow : null) : null,
     };
   } catch {
     return fallback;

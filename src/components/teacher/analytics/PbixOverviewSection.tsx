@@ -54,8 +54,6 @@ export interface PbixOverviewFilters {
   /** YYYY-MM-DD hoặc null = không giới hạn. */
   dateFrom: string | null;
   dateTo: string | null;
-  /** flow_type đang chọn, hoặc null = tất cả các luồng. */
-  flow: string | null;
 }
 
 interface Props {
@@ -143,11 +141,10 @@ export const PbixOverviewSection: React.FC<Props> = ({
         filters: {
           dateFrom: filters.dateFrom,
           dateTo: filters.dateTo,
-          flow: filters.flow,
         },
         todayKey,
       }),
-    [scopedStudents, raw, filters.dateFrom, filters.dateTo, filters.flow, todayKey],
+    [scopedStudents, raw, filters.dateFrom, filters.dateTo, todayKey],
   );
 
   // Cross-filter: bấm một dòng học sinh để xem riêng em đó trên mọi panel
@@ -182,11 +179,10 @@ export const PbixOverviewSection: React.FC<Props> = ({
       filters: {
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
-        flow: filters.flow,
       },
       todayKey,
     });
-  }, [selectedStudent, dashboard, raw, filters.dateFrom, filters.dateTo, filters.flow, todayKey]);
+  }, [selectedStudent, dashboard, raw, filters.dateFrom, filters.dateTo, todayKey]);
 
   // Bảng chủ đề: chỉ chịu lọc lớp (qua scopedStudents); trạng thái hoàn
   // thành không gắn ngày nên không chịu lọc ngày, và trải mọi luồng nên
@@ -218,7 +214,6 @@ export const PbixOverviewSection: React.FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raw.loaded, dashboard.sessionDateRange]);
 
-  const flowOptions = dashboard.flowOptions;
   const selectedClassValue =
     filters.classIds.length === 0 ? '__ALL__' : filters.classIds[0];
 
@@ -268,36 +263,6 @@ export const PbixOverviewSection: React.FC<Props> = ({
             }
           />
         </label>
-        <div className="flex flex-col gap-1 text-sm">
-          <span className="font-semibold text-stone-600">Theo luồng</span>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={`px-3 py-2 rounded-lg border text-sm ${
-                filters.flow === null
-                  ? 'bg-[#2F3E6B] text-white border-[#2F3E6B]'
-                  : 'bg-white border-stone-300'
-              }`}
-              onClick={() => onFiltersChange({ ...filters, flow: null })}
-            >
-              Tất cả các luồng
-            </button>
-            {flowOptions.map((f) => (
-              <button
-                key={f.flowType}
-                type="button"
-                className={`px-3 py-2 rounded-lg border text-sm ${
-                  filters.flow === f.flowType
-                    ? 'bg-[#2F3E6B] text-white border-[#2F3E6B]'
-                    : 'bg-white border-stone-300'
-                }`}
-                onClick={() => onFiltersChange({ ...filters, flow: f.flowType })}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Chỉ báo cross-filter: đang xem riêng một học sinh */}
@@ -376,7 +341,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
 
       {/* Hàng 2: bảng học sinh + bảng bài giao + bảng chủ đề */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5 flex flex-col">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5 flex flex-col self-start">
           <CardTitle
             right={
               <span className="text-xs text-stone-500">
@@ -390,7 +355,10 @@ export const PbixOverviewSection: React.FC<Props> = ({
             <EmptyNote>Chưa có học sinh trong phạm vi đang lọc.</EmptyNote>
           ) : (
             <>
-            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+            <div className="flex-1 min-h-0 max-h-[316px] overflow-x-auto overflow-y-auto">
+              {/* 316px = header 2 dòng (~57px) + đúng 7 dòng học sinh (7×37px);
+                  tên + gợi ý truncate 1 dòng nên mỗi dòng đúng 37px; từ dòng
+                  thứ 8 trở đi chỉ thấy khi cuộn trong bảng. */}
               <table className="w-full text-sm table-fixed">
                 <colgroup>
                   <col style={{ width: '22%' }} />
@@ -422,7 +390,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
                         selectedStudentId === r.studentId ? 'bg-indigo-50' : ''
                       }`}
                     >
-                      <td className="py-2 pr-3 font-medium">{r.name}</td>
+                      <td className="py-2 pr-3 font-medium truncate" title={r.name}>{r.name}</td>
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {formatVNDateTime(r.lastLoginAt)}
                       </td>
@@ -430,7 +398,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       <td className="py-2 pr-3 text-right">
                         {formatOneDecimalPercent(r.personalRate)}
                       </td>
-                      <td className="py-2">{r.suggestion}</td>
+                      <td className="py-2 truncate" title={r.suggestion}>{r.suggestion}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -458,7 +426,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       <td className="py-2 pr-3 text-right">
                         {formatOneDecimalPercent(dashboard.studentsTotal.overallRate)}
                       </td>
-                      <td className="py-2">{dashboard.studentsTotal.suggestion}</td>
+                      <td className="py-2 truncate" title={dashboard.studentsTotal.suggestion}>{dashboard.studentsTotal.suggestion}</td>
                     </tr>
                   </tbody>
                 </table>

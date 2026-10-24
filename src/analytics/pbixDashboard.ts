@@ -35,8 +35,6 @@
  *   THONG_HIEU → "2. Thông hiểu"; PHAN_TICH → "3. Phân tích";
  *   VAN_DUNG → "4. Vận dụng"; còn lại "Chưa xác định". Cột app tương ứng
  *   là questions.level (cùng miền giá trị).
- * - Ty_le_hoan_thanh_luong: DIVIDE(COUNTROWS(progress với COMPLETED),
- *   COUNTROWS(progress), 0) theo Step_Label.
  * - HS_dang_nhap_theo_ngay: DISTINCTCOUNT(student_id) theo login_date.
  *
  * PHẠM VI ÁP BỘ LỌC (theo visualInteractions + quan hệ của file pbix):
@@ -45,8 +43,10 @@
  *   biểu đồ mức tư duy và cột Tỷ lệ đạt điểm cá nhân (qua submitted_date);
  *   KHÔNG áp cho KPI Hoạt động 7 ngày, KPI Câu trả lời chờ chấm, bảng bài
  *   được giao, số bài chưa nộp, hoạt động gần nhất và gợi ý theo dõi.
- * - Theo luồng: từ 25/10 KHÔNG còn áp cho visual nào — panel luồng cũ đã
- *   thay bằng bảng chủ đề tính từ states (không theo luồng, không theo ngày).
+ * - Theo luồng: ĐÃ XÓA HẲN khỏi giao diện từ 25/10 (trước đó từ khi panel
+ *   luồng cũ thay bằng bảng chủ đề thì nút này đã inert — không áp cho
+ *   visual nào — nên chủ dự án yêu cầu xóa; code tính flowChart/flowOptions
+ *   cũng đã dọn cùng đợt).
  *
  * TIẾN ĐỘ THEO CHỦ ĐỀ (từ 25/10, thay biểu đồ luồng): bảng tính từ states
  * của học sinh trong phạm vi lớp qua isTopicFullyComplete — đúng định nghĩa
@@ -127,12 +127,10 @@ export interface PbixProgress {
 
 // ---------- Bộ lọc ----------
 
-export interface PbixDateFlowFilters {
+export interface PbixDateFilters {
   /** YYYY-MM-DD hoặc null = không giới hạn. */
   dateFrom: string | null;
   dateTo: string | null;
-  /** flow_type đang chọn, hoặc null = tất cả các luồng. */
-  flow: string | null;
 }
 
 // ---------- Kết quả tính toán ----------
@@ -173,13 +171,6 @@ export interface PbixDailyRow {
   students: number;
 }
 
-export interface PbixFlowRow {
-  stepLabel: string;
-  total: number;
-  completed: number;
-  rate: number;
-}
-
 export interface PbixDashboard {
   /** Ngày neo MAX(login_date) của phạm vi lớp, null = không có phiên nào. */
   anchorDate: string | null;
@@ -213,39 +204,11 @@ export interface PbixDashboard {
   } | null;
   thinkingChart: PbixThinkingRow[];
   dailyChart: PbixDailyRow[];
-  flowChart: PbixFlowRow[];
-  /** false khi không có dữ liệu tiến độ (bảng student_activity_progress chưa
-   * tồn tại) — UI hiện trạng thái trống thay vì biểu đồ. */
-  hasProgressData: boolean;
-  /** Các luồng thật có trong dữ liệu (để dựng ô chọn Theo luồng). */
-  flowOptions: { flowType: string; label: string }[];
   /** Khoảng ngày thật của phiên đăng nhập (để mặc định bộ lọc ngày). */
   sessionDateRange: { min: string; max: string } | null;
 }
 
 // ---------- Ánh xạ nhãn theo DAX ----------
-
-export function flowName(flowType: string): string {
-  if (flowType === 'VIDEO_FLOW') return 'Luồng Video';
-  if (flowType === 'THEORY_FLOW') return 'Luồng Lý thuyết chi tiết';
-  return flowType;
-}
-
-export function stepLabel(flowType: string, sequenceNo: number): string {
-  if (flowType === 'VIDEO_FLOW') {
-    if (sequenceNo === 1) return '01 · Video';
-    if (sequenceNo === 2) return '02 · Lý thuyết trọng tâm';
-    if (sequenceNo === 3) return '03 · Bài luyện tập';
-    if (sequenceNo === 4) return '04 · Bài kiểm tra 1';
-    if (sequenceNo === 5) return '05 · Bài kiểm tra 2';
-  }
-  if (flowType === 'THEORY_FLOW') {
-    if (sequenceNo === 1) return '01 · Lý thuyết chi tiết';
-    if (sequenceNo === 2) return '02 · Bài luyện tập';
-    if (sequenceNo === 3) return '03 · Bài kiểm tra';
-  }
-  return 'Khác';
-}
 
 export function thinkingLabel(level: string): string {
   if (level === 'NHAN_BIET') return '1. Nhận biết';
@@ -349,7 +312,7 @@ export interface PbixComputeInput {
   questionLevels: Record<string, string>;
   activities: PbixActivity[];
   progress: PbixProgress[];
-  filters: PbixDateFlowFilters;
+  filters: PbixDateFilters;
   /** Ngày hiện tại dạng YYYY-MM-DD (múi giờ Saigon) cho DATEDIFF của DAX. */
   todayKey: string;
 }
@@ -362,7 +325,7 @@ function inDateRange(dateKey: string, from: string | null, to: string | null): b
 
 export function computePbixDashboard(input: PbixComputeInput): PbixDashboard {
   const { students, sessions, targets, assignments, attempts, answers } = input;
-  const { dateFrom, dateTo, flow } = input.filters;
+  const { dateFrom, dateTo } = input.filters;
   const scopedIds = new Set(students.map((s) => s.supaId));
 
   const scopedSessions = sessions.filter((s) => scopedIds.has(s.studentId));
@@ -560,37 +523,6 @@ export function computePbixDashboard(input: PbixComputeInput): PbixDashboard {
     .map(([date, set]) => ({ date, students: set.size }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // --- Biểu đồ luồng (cần bảng student_activity_progress — chưa có) ---
-  const activityById = new Map(input.activities.map((a) => [a.id, a]));
-  const flowActivities = flow
-    ? input.activities.filter((a) => a.flowType === flow)
-    : input.activities;
-  const flowActivityIds = new Set(flowActivities.map((a) => a.id));
-  const byStep = new Map<string, { total: number; completed: number }>();
-  for (const p of input.progress) {
-    if (!scopedIds.has(p.studentId)) continue;
-    if (!flowActivityIds.has(p.activityId)) continue;
-    const act = activityById.get(p.activityId)!;
-    const label = stepLabel(act.flowType, act.sequenceNo);
-    const cur = byStep.get(label) ?? { total: 0, completed: 0 };
-    cur.total += 1;
-    if (p.progressStatus === 'COMPLETED') cur.completed += 1;
-    byStep.set(label, cur);
-  }
-  const flowChart: PbixFlowRow[] = [...byStep.entries()]
-    .map(([stepLabel, v]) => ({
-      stepLabel,
-      total: v.total,
-      completed: v.completed,
-      rate: v.total > 0 ? v.completed / v.total : 0,
-    }))
-    .sort((a, b) => b.rate - a.rate || a.stepLabel.localeCompare(b.stepLabel));
-  const hasProgressData = input.progress.length > 0;
-
-  const flowOptions = [...new Set(input.activities.map((a) => a.flowType))]
-    .sort()
-    .map((flowType) => ({ flowType, label: flowName(flowType) }));
-
   return {
     anchorDate,
     activeLast7,
@@ -607,9 +539,6 @@ export function computePbixDashboard(input: PbixComputeInput): PbixDashboard {
     assignmentsTotal,
     thinkingChart,
     dailyChart,
-    flowChart,
-    hasProgressData,
-    flowOptions,
     sessionDateRange,
   };
 }
