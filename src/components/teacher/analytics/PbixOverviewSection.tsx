@@ -245,6 +245,19 @@ export const PbixOverviewSection: React.FC<Props> = ({
   const studentsScroll = useSevenRowMaxHeight(dashboard.studentsTable.length);
   const topicsScroll = useSevenRowMaxHeight(topicTable.length);
 
+  // Dữ liệu biểu đồ mức tư duy: giữ nguyên tham chiếu qua các lần render
+  // không đổi giá trị — Recharts chạy lại animation thanh mỗi khi nhận mảng
+  // data mới, nên chỉ đổi tham chiếu khi giá trị thật sự đổi (đổi lọc,
+  // cross-filter). Khóa ký tự gồm đủ label + rate + gradedCount.
+  const thinkingChartKey = dashboardSel.thinkingChart
+    .map((r) => `${r.label}:${r.rate}:${r.gradedCount}`)
+    .join('|');
+  const thinkingChartData = useMemo(
+    () => dashboardSel.thinkingChart,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [thinkingChartKey],
+  );
+
   // Mặc định khoảng ngày = khoảng dữ liệu thật (áp một lần khi nạp xong; sau
   // đó người dùng tự chỉnh, không tự ghi đè lại).
   const dateDefaultsApplied = useRef(false);
@@ -389,7 +402,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
 
       {/* Hàng 2: bảng học sinh + bảng bài giao + bảng chủ đề */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5 flex flex-col self-start">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5 flex flex-col">
           <CardTitle
             right={
               <span className="text-xs text-stone-500">
@@ -543,7 +556,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-3 flex flex-col self-start">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-3 flex flex-col">
           <CardTitle
             right={
               <span className="text-xs text-stone-500">{topicTable.length} chủ đề</span>
@@ -622,7 +635,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
           ) : (
             <div style={{ width: '100%', height: 300 }}>
               <ResponsiveContainer>
-                <BarChart data={dashboardSel.thinkingChart} layout="vertical" margin={{ left: 8, right: 40 }}>
+                <BarChart data={thinkingChartData} layout="vertical" margin={{ left: 8, right: 40 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     type="number"
@@ -637,7 +650,11 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       'Tỷ lệ điểm đạt',
                     ]}
                   />
-                  <Bar dataKey="rate" fill={BAR_PEACH}>
+                  {/* Không animation lặp: thanh vẽ thẳng ở giá trị cuối và
+                      đứng yên — trước đây animation mặc định của Recharts chạy
+                      lại mỗi khi cây biểu đồ nhận dữ liệu/kích thước mới nên
+                      thanh nhấp nháy liên tục khi tab render lại. */}
+                  <Bar dataKey="rate" fill={BAR_PEACH} isAnimationActive={false}>
                     <LabelList
                       dataKey="rate"
                       position="right"
