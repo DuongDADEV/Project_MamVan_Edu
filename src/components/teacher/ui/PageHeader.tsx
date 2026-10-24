@@ -6,6 +6,9 @@ interface PageHeaderProps {
   badge?: React.ReactNode;
   actions?: React.ReactNode;
   breadcrumbs?: { label: string; onClick?: () => void }[];
+  // flush: bỏ khoảng dưới khối tiêu đề (mb-6 -> mb-0) để khối tiếp theo nằm
+  // sát ngay dưới, không còn khe. Mặc định false nên các màn khác không đổi.
+  flush?: boolean;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -14,9 +17,10 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   badge,
   actions,
   breadcrumbs,
+  flush,
 }) => {
   return (
-    <div className="mb-6 pb-4 border-b border-[#E6DCC8]/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className={`${flush ? 'mb-0' : 'mb-6'} pb-4 border-b border-[#E6DCC8]/80 flex flex-col md:flex-row md:items-center justify-between gap-4`}>
       <div>
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav className="flex items-center gap-1.5 text-xs text-[#6B7280] mb-1.5" aria-label="Breadcrumb">

@@ -791,10 +791,16 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   }, [topics]);
 
   return (
-    <div className="flex flex-col gap-6 flex-1 min-h-0 w-full max-w-full min-w-0">
+    <div className="flex flex-col gap-0 flex-1 min-h-0 w-full max-w-full min-w-0">
+      {/* gap-0 + PageHeader flush: điểm tiếp giáp tiêu đề -> dải luồng phải
+          SÁT 0 theo yêu cầu chủ dự án 25/10 (không còn khe trắng đã khoanh).
+          Các con còn lại của cột này đều là modal (fixed/null khi đóng) nên
+          gap-0 không ảnh hưởng chúng; khoảng dưới dải (mb-3 của strip) và
+          các khoảng khác giữ nguyên. */}
       {/* Page Header — nút "+ Tạo mới" ở đầu trang đã BỎ theo yêu cầu chủ
           dự án: tạo bài ngay trong cây / chi tiết chủ đề / dải luồng học */}
       <PageHeader
+        flush
         title="Nội dung học"
         subtitle="Quản lý chuyên đề, bài giảng video, lý thuyết tóm tắt và ngân hàng đề luyện tập"
       />

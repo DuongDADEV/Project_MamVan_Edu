@@ -1,3 +1,10 @@
+## 2026-10-25 (TIÊU ĐỀ NỘI DUNG HỌC SÁT DẢI LUỒNG — KHE 0)
+
+Sửa spacing thuần túy theo yêu cầu mới của chủ dự án ngày 25/10 (ưu tiên hơn bản "thu hẹp" trước đó): sau khi sửa, dải LUỒNG HỌC nằm sát ngay dưới khối tiêu đề "Nội dung học", margin/padding giữa hai khối = 0, không còn khe trắng nào ở chỗ đã khoanh. Không đổi vị trí các khối (dải vẫn trên cùng, trên cả hàng công cụ), không đổi nội dung, không đụng tới các màn khác. Sơ đồ KHÔNG đổi (không đổi nội dung mục, quan hệ hay file/hàm nào của mục nào) nên không sinh lại sơ đồ đợt này.
+
+- **Nguyên nhân khe trắng (đo từ code)**: khe giữa border dưới của khối tiêu đề và mép trên của dải = `mb-6` (24px) của PageHeader + `gap-6` (24px) của container cột ngoài trong TeacherContentScreen = 48px, cộng thêm `pb-4` (16px) nằm TRONG khối tiêu đề (giữa dòng mô tả và đường border). Vùng chứa dải (two-pane area, khung phải) và bản thân dải (TopicFlowStrip) không có margin/padding trên nào — không phải nguồn gây khe.
+- **Cách sửa**: PageHeader thêm prop tùy chọn `flush` (mặc định false, các màn khác gọi không kèm prop nên không đổi gì) — khi bật, margin dưới khối tiêu đề chuyển `mb-6` -> `mb-0`; TeacherContentScreen bật `flush` cho tiêu đề "Nội dung học" và đổi container cột ngoài từ `gap-6` -> `gap-0` (hai con in-flow duy nhất của cột là tiêu đề và vùng two-pane; các modal còn lại đều fixed/null khi đóng nên gap-0 không ảnh hưởng chúng). Kết quả: mép trên của dải chạm đúng đường border dưới của khối tiêu đề (0px ở điểm tiếp giáp). Giữ nguyên: `pb-4` + đường border của khối tiêu đề (thiết kế nội bộ của header, giống mọi trang giáo viên khác), `mb-3` dưới dải (khe giữa dải và hàng công cụ), menu "+ Thêm bài" (z-50) và thanh công cụ sticky (z-20) không xung đột.
+
 ## 2026-10-25 (NHIỆM VỤ TUẦN VỀ TRƯỚC ĐỢT 2 + DẢI LUỒNG LÊN TRÊN CÙNG + MỐC QUÀ LÊN SUPABASE)
 
 Ba việc trong một đợt, theo quyết định của chủ dự án ngày 25/10. Ghi chú chất lượng trong hộp thoại xuất bản (chưa quyết xóa hay giữ), biểu đồ 4 mức lớp (đã park), phân quyền trợ lý AI, RLS thật và mật khẩu tài khoản KHÔNG đụng trong đợt này.
