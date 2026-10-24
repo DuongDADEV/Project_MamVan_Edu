@@ -27,6 +27,7 @@ import {
   Sparkles,
   Copy,
   FileEdit,
+  ChevronsRight,
 } from 'lucide-react';
 
 export type ContentItemType = 'topic' | 'video' | 'theory' | 'quiz' | 'assignment';
@@ -37,6 +38,11 @@ export interface SelectedContentItem {
 }
 
 interface TopicTreeSidebarProps {
+  teacherId?: string;
+  // Khi trình soạn đang mở, cây thu gọn thành rail để vùng soạn chiếm toàn bộ
+  // khung phải; bấm nút mở lại thì cây trở lại.
+  collapsed?: boolean;
+  onExpandTree?: () => void;
   topics: TopicWithMeta[];
   videos: VideoLessonWithMeta[];
   theories: TheoryLessonWithMeta[];
@@ -55,6 +61,9 @@ interface TopicTreeSidebarProps {
 }
 
 export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
+  teacherId,
+  collapsed = false,
+  onExpandTree,
   topics,
   videos,
   theories,
@@ -80,14 +89,32 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
   }, [selectedItem]);
 
   const [pendingDelete, setPendingDelete] = useState<{ type: ContentItemType; id: string; label: string; title: string } | null>(null);
-  // Trạng thái thu gọn/mở rộng từng chủ đề
+  // Trạng thái thu gọn/mở rộng từng chủ đề — LƯU THEO GIÁO VIÊN để rời trang
+  // rồi quay lại vẫn giữ nguyên như lúc rời đi (đợt sửa 24/10: trước đây chỉ
+  // nằm trong bộ nhớ nên lần nào vào lại cũng mở hết ra). Chưa có trạng thái
+  // lưu thì mặc định mở như cũ; chủ đề mới (chưa có khóa) cũng mặc định mở
+  // nhờ phép kiểm `!== false` ở chỗ render.
+  const TREE_STORAGE_KEY = `mamvan_topic_tree_expanded:${teacherId || 'gv001'}`;
   const [expandedTopicIds, setExpandedTopicIds] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(TREE_STORAGE_KEY);
+      if (raw) return JSON.parse(raw) as Record<string, boolean>;
+    } catch {
+      // localStorage lỗi thì rơi về mặc định mở hết
+    }
     const initial: Record<string, boolean> = {};
     topics.forEach((t) => {
       initial[t.id] = true; // Mặc định mở rộng tất cả
     });
     return initial;
   });
+  useEffect(() => {
+    try {
+      localStorage.setItem(TREE_STORAGE_KEY, JSON.stringify(expandedTopicIds));
+    } catch {
+      // Bỏ qua lỗi quota
+    }
+  }, [expandedTopicIds, TREE_STORAGE_KEY]);
 
   // Menu tùy chọn đang mở
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -135,6 +162,26 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
         return 'Bài tập';
     }
   };
+
+  // Rail thu gọn khi trình soạn đang mở: chỉ còn nút mở lại để vùng soạn
+  // chiếm toàn bộ khung phải. Thoát soạn thì cây trở lại (do prop collapsed).
+  if (collapsed) {
+    return (
+      <div className="w-full md:w-14 flex md:flex-col flex-row items-center justify-center md:justify-start py-2 md:py-3 px-2 gap-2 bg-[#FFFDF8] border-r border-[#E6DCC8] rounded-2xl md:rounded-r-none shrink-0 shadow-xs">
+        <button
+          type="button"
+          onClick={onExpandTree}
+          className="p-2 rounded-xl bg-white border border-[#E6DCC8] text-[#2F3E6B] hover:border-[#2F3E6B] transition"
+          title="Mở lại cây chủ đề"
+        >
+          <ChevronsRight className="w-5 h-5" />
+        </button>
+        <span className="hidden md:block text-[10px] font-bold text-[#8C7E6A] [writing-mode:vertical-rl] tracking-wider">
+          Cây chủ đề
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full md:w-72 lg:w-80 flex flex-col min-h-0 max-h-[45%] md:max-h-none bg-[#FFFDF8] border-r border-[#E6DCC8] rounded-2xl md:rounded-r-none overflow-hidden shrink-0 shadow-xs">
@@ -329,8 +376,8 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                   draggingTopicId === topic.id ? 'opacity-50' : ''
                 } ${dragOverTopicId === topic.id ? 'ring-2 ring-[#E2704A]' : ''}`}
                 style={{
-                  backgroundColor: `${topicColor}14`,
-                  borderColor: `${topicColor}59`,
+                  backgroundColor: `${topicColor}26`,
+                  borderColor: `${topicColor}80`,
                 }}
                 title="Giữ và kéo để đổi thứ tự chủ đề"
               >
@@ -342,7 +389,7 @@ export const TopicTreeSidebar: React.FC<TopicTreeSidebarProps> = ({
                   }`}
                   style={
                     isTopicSelected
-                      ? { backgroundColor: `${topicColor}26`, borderLeftColor: topicColor }
+                      ? { backgroundColor: `${topicColor}40`, borderLeftColor: topicColor }
                       : undefined
                   }
                 >

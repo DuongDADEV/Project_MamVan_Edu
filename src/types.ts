@@ -68,6 +68,11 @@ export interface Question {
 
 export type QuizKind = 'practice' | 'quick' | 'mastery' | 'reading' | 'final' | 'homework';
 
+// Các loại quiz nội dung được tính là "Kiểm tra" — làm 1 lần, lần sau chỉ xem
+// lại (không tính điểm mới, không cộng XP). BTVN (homework) và các loại còn
+// lại không giới hạn số lần làm. Dùng chung cho màn Bài tập và điểm chặn ở App.
+export const TEST_QUIZ_KINDS: QuizKind[] = ['quick', 'mastery', 'final'];
+
 export interface Quiz {
   id: string;
   title: string;

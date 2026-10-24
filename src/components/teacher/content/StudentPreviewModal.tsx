@@ -97,7 +97,6 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                         src={videoData.sampleUrl}
                         controls
                         className="w-full h-full object-contain"
-                        poster={videoData.thumbnailUrl}
                       />
                     ) : (
                       <div className="text-center text-white/70 p-6 space-y-2">

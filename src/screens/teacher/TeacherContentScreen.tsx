@@ -103,6 +103,20 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   // 2. Mục đang được chọn để chỉnh sửa bên phải
   const [selectedItem, setSelectedItem] = useState<SelectedContentItem | null>(null);
 
+  // Đợt sửa 24/10: khi mở trình soạn (video/lý thuyết/quiz/bài tập) thì cây trái
+  // thu gọn thành rail để vùng soạn chiếm toàn bộ khung phải; thoát soạn thì
+  // cây trở lại. Cô vẫn mở lại cây bằng nút trên rail bất cứ lúc nào.
+  const editorOpen =
+    selectedItem?.type === 'video' ||
+    selectedItem?.type === 'theory' ||
+    selectedItem?.type === 'quiz' ||
+    selectedItem?.type === 'assignment';
+  const [treeUserExpanded, setTreeUserExpanded] = useState(false);
+  useEffect(() => {
+    setTreeUserExpanded(false);
+  }, [selectedItem?.id, selectedItem?.type]);
+  const treeCollapsed = editorOpen && !treeUserExpanded;
+
   // Mặc định chọn video đầu tiên nếu chưa chọn mục nào
   useEffect(() => {
     if (!selectedItem && videos.length > 0) {
@@ -784,6 +798,9 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       <div className="flex flex-col md:flex-row gap-0 items-stretch flex-1 min-h-0 w-full max-w-full min-w-0 overflow-hidden">
         {/* Left Pane: Topic Tree Sidebar */}
         <TopicTreeSidebar
+          teacherId={teacherId}
+          collapsed={treeCollapsed}
+          onExpandTree={() => setTreeUserExpanded(true)}
           topics={topics}
           videos={videos}
           theories={theories}
@@ -893,8 +910,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           <div
             className="flex-1 min-h-0 overflow-y-auto p-8 rounded-2xl md:rounded-l-none border shadow-xs flex flex-col items-center justify-center text-center space-y-4"
             style={{
-              backgroundColor: `${currentTopic.colorScheme || '#2F3E6B'}0F`,
-              borderColor: `${currentTopic.colorScheme || '#2F3E6B'}59`,
+              backgroundColor: `${currentTopic.colorScheme || '#2F3E6B'}26`,
+              borderColor: `${currentTopic.colorScheme || '#2F3E6B'}80`,
             }}
           >
             <div

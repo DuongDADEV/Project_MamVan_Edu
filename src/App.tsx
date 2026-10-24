@@ -6,6 +6,7 @@ import {
   EssaySubmission,
   ThemeId,
   Topic,
+  TEST_QUIZ_KINDS,
 } from './types.ts';
 import { createFreshStudentState } from './services/mock/seedData.ts';
 import { REWARDS_CATALOG } from './data/rewards.ts';
@@ -23,6 +24,7 @@ import { DevPanel } from './components/DevPanel.tsx';
 import { BreakReminderModal } from './components/BreakReminderModal.tsx';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal.tsx';
 import { QuizRunner } from './components/QuizRunner.tsx';
+import { QuizReviewScreen } from './components/QuizReviewScreen.tsx';
 import { QuizResult } from './components/QuizResult.tsx';
 import { Palette } from 'lucide-react';
 
@@ -55,6 +57,9 @@ const LearnScreen = React.lazy(() =>
 );
 const TreeScreen = React.lazy(() =>
   import('./screens/TreeScreen.tsx').then((m) => ({ default: m.TreeScreen }))
+);
+const AssignmentsScreen = React.lazy(() =>
+  import('./screens/AssignmentsScreen.tsx').then((m) => ({ default: m.AssignmentsScreen }))
 );
 const LearningResultsScreen = React.lazy(() =>
   import('./screens/LearningResultsScreen.tsx').then((m) => ({ default: m.LearningResultsScreen }))
@@ -898,6 +903,27 @@ export default function App() {
 
             const xpEarned = Math.max(0, Math.floor(targetQuiz.xp || 0));
 
+            // Quy tắc kiểm tra 1 lần (đợt sửa 24/10): bài kiểm tra (quick/mastery/
+            // final) đã hoàn thành thì chỉ cho xem lại — không mở QuizRunner mới,
+            // không ghi thêm questionResults, không cộng XP. BTVN không giới hạn.
+            // Điểm chặn đặt ở đây nên mọi lối vào (Học bài, Bài tập, Trang chủ)
+            // đều đi qua cùng một cửa.
+            const isTestKind = TEST_QUIZ_KINDS.includes(targetQuiz.kind);
+            const alreadyDone = (studentState.completedSteps || []).includes(
+              `quiz_completed:${targetQuiz.id}`
+            );
+            if (isTestKind && alreadyDone) {
+              return (
+                <QuizReviewScreen
+                  quiz={targetQuiz}
+                  questions={qList}
+                  results={studentState.questionResults || []}
+                  essaySubmissions={studentState.essaySubmissions || []}
+                  onBack={() => setActiveFlow(null)}
+                />
+              );
+            }
+
             return (
               <div className="w-full max-w-2xl mx-auto py-6 px-4">
                 <QuizRunner
@@ -1019,6 +1045,19 @@ export default function App() {
               />
             )}
 
+            {currentTab === 'assignments' && (
+              <AssignmentsScreen
+                quizzes={rawQuizzes || []}
+                topics={publishedTopics}
+                studentId={currentStudentId}
+                completedQuizIds={(studentState.completedSteps || [])
+                  .filter((s) => s.startsWith('quiz_completed:'))
+                  .map((s) => s.replace('quiz_completed:', ''))}
+                onSelectQuiz={(qId) => setActiveFlow({ type: 'homework', homeworkQuizId: qId })}
+                onOpenAssignment={(aId) => setActiveFlow({ type: 'assignment', assignmentId: aId })}
+              />
+            )}
+
             {currentTab === 'tree' && (
               <TreeScreen
                 state={studentState}
@@ -1039,6 +1078,8 @@ export default function App() {
                   setLearnFocusTopicId(tId);
                   setCurrentTab('learn');
                 }}
+                questions={rawQuestions || {}}
+                studentId={currentStudentId}
               />
             )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, BookOpen, Sprout, Gift, User, Flame, Clock, Palette, TrendingUp, Bell, PlayCircle, FileQuestion } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, Sprout, Gift, User, Flame, Clock, Palette, TrendingUp, Bell, PlayCircle, FileQuestion } from 'lucide-react';
 import { APP_NAME, MASCOT_NAME } from '../config.ts';
 import { StudentState } from '../types.ts';
 import { THEMES_LIST } from '../data/themes.ts';
@@ -9,7 +9,7 @@ import {
   formatRelativeTime,
 } from '../logic/studentNotifications.ts';
 
-export type NavTab = 'home' | 'learn' | 'tree' | 'results' | 'rewards' | 'profile';
+export type NavTab = 'home' | 'learn' | 'assignments' | 'tree' | 'results' | 'rewards' | 'profile';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -156,6 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       icon: BookOpen,
       badge: topicsCount !== undefined ? (topicsCount > 0 ? `${topicsCount} chủ đề` : null) : null,
     },
+    { key: 'assignments' as NavTab, label: 'Bài tập', icon: ClipboardList, badge: null },
     { key: 'tree' as NavTab, label: 'Cây tri thức', icon: Sprout, badge: null },
     { key: 'results' as NavTab, label: 'Kết quả học tập', icon: TrendingUp, badge: null },
     { key: 'rewards' as NavTab, label: 'Đổi quà', icon: Gift, badge: 'Mới' },

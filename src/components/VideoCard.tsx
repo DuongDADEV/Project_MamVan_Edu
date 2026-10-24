@@ -169,7 +169,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   quizzes,
   onClick,
 }) => {
-  const [imgError, setImgError] = useState(false);
+
 
   // Lắng nghe realtime quizzes nếu component chưa được truyền quizzes
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
@@ -249,17 +249,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         status === 'Chưa học' ? 'opacity-95' : 'opacity-100'
       }`}
     >
-      {/* ================= PHẦN THUMBNAIL (16:9, BO GÓC TRÊN 16-18PX) ================= */}
+      {/* ================= PHẦN ẢNH BÌA (16:9, BO GÓC TRÊN 16-18PX) =================
+          Đợt sửa 24/10: bỏ hẳn ảnh thumbnail tải lên — thẻ chỉ còn nền SVG
+          phong cách Giấy & Mực (không còn đọc video.thumbnailUrl). */}
       <div className="relative aspect-video w-full rounded-t-[17px] overflow-hidden select-none bg-slate-900">
-        {video.thumbnailUrl && !imgError ? (
-          <img
-            src={video.thumbnailUrl}
-            alt={video.title}
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[1.03] motion-reduce:transform-none"
-          />
-        ) : (
-          /* Thumbnail SVG phong cách Giấy & Mực độc quyền */
           <div
             className={`w-full h-full relative p-4 flex flex-col justify-between bg-gradient-to-br ${palette.bgGradient} overflow-hidden transition-transform duration-200 group-hover:scale-[1.03] motion-reduce:transform-none`}
           >
@@ -312,7 +305,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               <span className="truncate max-w-[120px]">{topic.tag}</span>
             </div>
           </div>
-        )}
 
         {/* NHÃN TRẠNG THÁI (GÓC TRÊN BÊN TRÁI) */}
         <div className="absolute top-2.5 left-2.5 z-10">

@@ -9,11 +9,13 @@ interface TopicModalProps {
   initialData?: TopicWithMeta | null;
 }
 
+// Đợt sửa 24/10: 2 màu nhạt nhất được tăng đậm lên (Xanh tre, Hổ phách) để
+// thẻ chủ đề + viền nhìn rõ hơn; các màu còn lại vốn đã đậm nên giữ nguyên.
 const COLOR_PRESETS = [
   { name: 'Xanh mực', value: '#2F3E6B' },
-  { name: 'Xanh tre', value: '#7FA88A' },
+  { name: 'Xanh tre', value: '#4F7D5F' },
   { name: 'Cam đất', value: '#E2704A' },
-  { name: 'Hổ phách', value: '#F2B84B' },
+  { name: 'Hổ phách', value: '#D99A26' },
   { name: 'Tím mận', value: '#7C3AED' },
   { name: 'Xanh ngọc', value: '#0D9488' },
 ];

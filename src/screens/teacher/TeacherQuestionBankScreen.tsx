@@ -67,6 +67,10 @@ interface QuestionDraftSet {
   questions: Question[];
   selectedIds: string[];
   savedAt: string;
+  // Đợt sửa 24/10: người tạo bản nháp. Nháp cũ chưa có dấu thì coi là nháp
+  // của người đang dùng trình duyệt này (tương thích ngược); nháp mới có dấu
+  // thì chỉ chính người tạo mới thấy và mới được chuyển vào ngân hàng.
+  teacherId?: string;
 }
 
 interface TheoryDraftItem {
@@ -75,6 +79,7 @@ interface TheoryDraftItem {
   title: string;
   blocksCount: number;
   savedAt: string;
+  teacherId?: string;
 }
 
 function readQuestionDraftSets(): QuestionDraftSet[] {
@@ -92,6 +97,7 @@ function readQuestionDraftSets(): QuestionDraftSet[] {
           questions: parsed.questions,
           selectedIds: Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [],
           savedAt: parsed.savedAt || '',
+          teacherId: parsed.teacherId || undefined,
         });
       }
     }
@@ -115,6 +121,7 @@ function readTheoryDrafts(): TheoryDraftItem[] {
           title: parsed.data.title || 'Lý thuyết chưa đặt tên',
           blocksCount: parsed.data.blocks.length,
           savedAt: parsed.savedAt || '',
+          teacherId: parsed.teacherId || undefined,
         });
       }
     }
@@ -161,15 +168,19 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   // MỤC BẢN NHÁP: đọc lại mỗi khi đổi tab / sau mỗi thao tác xử lý nháp
   const [draftsVersion, setDraftsVersion] = useState(0);
+  // Ngân hàng riêng từng giáo viên: mục nháp chỉ hiện nháp của chính giáo viên
+  // đang đăng nhập + nháp cũ chưa đóng dấu (tương thích ngược). Nháp có dấu
+  // của giáo viên khác không hiện, không chuyển được.
+  const isOwnDraft = (d?: string) => !d || d === teacherId;
   const questionDraftSets = useMemo(
-    () => readQuestionDraftSets(),
+    () => readQuestionDraftSets().filter((s) => isOwnDraft(s.teacherId)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draftsVersion, activeMainTab]
+    [draftsVersion, activeMainTab, teacherId]
   );
   const theoryDraftItems = useMemo(
-    () => readTheoryDrafts(),
+    () => readTheoryDrafts().filter((s) => isOwnDraft(s.teacherId)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draftsVersion, activeMainTab]
+    [draftsVersion, activeMainTab, teacherId]
   );
   const pendingDraftCount =
     questionDraftSets.reduce((acc, set) => acc + set.questions.length, 0) + theoryDraftItems.length;
@@ -192,8 +203,15 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     setActiveMainTab('ai_studio');
   };
 
-  // Đẩy các câu ĐÃ DUYỆT (đã tích chọn) từ bản nháp vào Ngân hàng
+  // Đẩy các câu ĐÃ DUYỆT (đã tích chọn) từ bản nháp vào Ngân hàng.
+  // CHUYỂN HẲN: câu đã đẩy bị xóa khỏi bản nháp (phần còn lại giữ nguyên,
+  // vẫn giữ dấu người tạo); hết nháp thì xóa luôn khóa nháp. Chỉ chính giáo
+  // viên tạo ra nháp mới được chuyển.
   const handlePushDraftQuestions = async (set: QuestionDraftSet) => {
+    if (set.teacherId && set.teacherId !== teacherId) {
+      alert('Bản nháp này thuộc về giáo viên khác — thầy/cô không thể chuyển nó vào ngân hàng của mình.');
+      return;
+    }
     const ids = getDraftSelection(set);
     const toPush = set.questions.filter((q) => ids.includes(q.id));
     if (toPush.length === 0) {
@@ -218,6 +236,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
             selectedIds: remaining.map((q) => q.id),
             savedAt: new Date().toISOString(),
             topicTitle: set.topicTitle,
+            teacherId: set.teacherId || teacherId,
           })
         );
       } else {
@@ -759,6 +778,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           <AiContentStudioModal
             isOpen={true}
             isEmbedded={true}
+            teacherId={teacherId}
             onClose={() => setActiveMainTab('bank')}
             autoOpenDraftKind={draftOpenRequest?.kind ?? null}
             autoOpenDraftNonce={draftOpenRequest?.nonce ?? 0}

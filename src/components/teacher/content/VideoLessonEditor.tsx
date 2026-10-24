@@ -22,7 +22,6 @@ import {
   Sparkles,
   ArrowRight,
   FileQuestion,
-  Image as ImageIcon,
   Layers,
   ArrowUp,
   ArrowDown,
@@ -55,7 +54,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   const [topicId, setTopicId] = useState(video.topicId || topics[0]?.id || '');
   const [durationSec, setDurationSec] = useState<number>(video.durationSec || 600);
   const [sampleUrl, setSampleUrl] = useState(video.sampleUrl || '');
-  const [thumbnailUrl, setThumbnailUrl] = useState(video.thumbnailUrl || '');
+
   const [subtopicsText, setSubtopicsText] = useState(video.subtopics?.join(', ') || '');
   const [summaryPoints, setSummaryPoints] = useState<VideoFocusPoint[]>(
     video.summaryPoints && video.summaryPoints.length > 0
@@ -76,7 +75,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
   // Hidden file inputs
   const videoFileInputRef = useRef<HTMLInputElement>(null);
-  const thumbFileInputRef = useRef<HTMLInputElement>(null);
+
   const videoProbeRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -85,7 +84,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     setTopicId(video.topicId || topics[0]?.id || '');
     setDurationSec(video.durationSec || 600);
     setSampleUrl(video.sampleUrl || '');
-    setThumbnailUrl(video.thumbnailUrl || '');
+
     setSubtopicsText(video.subtopics?.join(', ') || '');
     setSummaryPoints(
       video.summaryPoints && video.summaryPoints.length > 0
@@ -147,20 +146,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     }
   };
 
-  // Chọn ảnh bìa (tải lên Supabase Storage)
-  const handleThumbSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const publicUrl = await uploadLessonMedia(file, 'thumbnails');
-      setThumbnailUrl(publicUrl);
-    } catch (err: any) {
-      console.error('Lỗi tải ảnh bìa lên Supabase:', err);
-      setUploadError(err?.message || 'Không tải được ảnh bìa lên.');
-    }
-  };
-
   // Thêm / sửa / xóa / đổi thứ tự ý trọng tâm
   const handleAddPoint = () => {
     setSummaryPoints((prev) => [
@@ -209,7 +194,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
         topicId,
         durationSec,
         sampleUrl: sampleUrl.trim(),
-        thumbnailUrl: thumbnailUrl.trim(),
+
         subtopics,
         summaryPoints,
         practiceQuizId,
@@ -482,44 +467,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
             />
           </div>
 
-          {/* Ảnh bìa thumbnail */}
-          <div className="md:col-span-2 flex items-center gap-4 p-3.5 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-            <div className="w-20 h-14 rounded-xl bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center border border-[#E6DCC8]">
-              {thumbnailUrl ? (
-                <img src={thumbnailUrl} alt="Thumbnail" className="w-full h-full object-cover" />
-              ) : (
-                <ImageIcon className="w-6 h-6 text-slate-400" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                Ảnh bìa Thumbnail (Tải lên hoặc để trống để tự tạo)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                  placeholder="Dán link ảnh hoặc để trống"
-                  className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-                />
-                <button
-                  type="button"
-                  onClick={() => thumbFileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] hover:bg-black/5 shrink-0"
-                >
-                  Chọn ảnh
-                </button>
-                <input
-                  ref={thumbFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleThumbSelect}
-                  className="hidden"
-                />
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* 3. KIẾN THỨC TRỌNG TÂM DƯỚI VIDEO (TÓM TẮT SAU VIDEO) */}

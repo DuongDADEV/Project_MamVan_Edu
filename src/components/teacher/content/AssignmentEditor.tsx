@@ -5,6 +5,7 @@ import {
   ArrowUp,
   CheckCircle2,
   ClipboardList,
+  Plus,
   Search,
   Send,
   Timer,
@@ -75,6 +76,82 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Đợt sửa 24/10: tạo câu hỏi THỦ CÔNG ngay trong màn soạn bài tập & đánh giá
+  // (trước đây chỉ chọn được từ ngân hàng). Câu mới lưu vào ngân hàng của
+  // chính giáo viên đang đăng nhập (quizService tự đóng dấu teacher_id) và
+  // được đưa thẳng vào đề này; bấm "Lưu/Giao bài" mới ghi nhận vào bài.
+  const [manualType, setManualType] = useState<'single' | 'multi' | 'fill' | 'essay'>('single');
+  const [manualPrompt, setManualPrompt] = useState('');
+  const [manualOptions, setManualOptions] = useState<string[]>(['', '', '', '']);
+  const [manualSingleAnswer, setManualSingleAnswer] = useState('A');
+  const [manualMultiAnswers, setManualMultiAnswers] = useState<Set<string>>(new Set(['A']));
+  const [manualFillAnswer, setManualFillAnswer] = useState('');
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+
+  const handleAddManualQuestion = async () => {
+    const prompt = manualPrompt.trim();
+    if (!prompt) {
+      setManualError('Nhập nội dung câu hỏi trước.');
+      return;
+    }
+    let options: string[] | undefined;
+    let answer: string | string[] | undefined;
+    if (manualType === 'single' || manualType === 'multi') {
+      options = manualOptions.map((o) => o.trim());
+      if (options.some((o) => !o)) {
+        setManualError('Nhập đủ 4 phương án A–D.');
+        return;
+      }
+      if (manualType === 'single') {
+        answer = manualSingleAnswer;
+      } else {
+        if (manualMultiAnswers.size === 0) {
+          setManualError('Chọn ít nhất 1 đáp án đúng.');
+          return;
+        }
+        answer = [...manualMultiAnswers].sort();
+      }
+    } else if (manualType === 'fill') {
+      if (!manualFillAnswer.trim()) {
+        setManualError('Nhập đáp án điền khuyết.');
+        return;
+      }
+      answer = [manualFillAnswer.trim()];
+    }
+    setManualSaving(true);
+    setManualError(null);
+    try {
+      const saved = await quizService.saveQuestion({
+        id: 'q_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        type: manualType,
+        level: 'THONG_HIEU',
+        difficulty: 'TB',
+        prompt,
+        // Bài tập & đánh giá không gắn chủ đề cụ thể; câu vẫn vào ngân hàng
+        // riêng của giáo viên và hiện ở bộ lọc "Tất cả chủ đề".
+        topicId: '',
+        options,
+        answer,
+        explanation: '',
+        points: 10,
+        minWords: manualType === 'essay' ? 120 : undefined,
+      } as any);
+      setBank((prev) => [...prev, saved as unknown as Question]);
+      setPickedQuestions((prev) => [...prev, saved.id]);
+      setManualPrompt('');
+      setManualOptions(['', '', '', '']);
+      setManualSingleAnswer('A');
+      setManualMultiAnswers(new Set(['A']));
+      setManualFillAnswer('');
+      setSavedNote('Đã thêm câu hỏi mới vào đề (và vào ngân hàng của thầy/cô).');
+    } catch (e: any) {
+      setManualError('Tạo câu hỏi thất bại: ' + (e?.message || 'lỗi không rõ'));
+    } finally {
+      setManualSaving(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -433,10 +510,108 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
               })}
               {pickedQuestions.length === 0 && (
                 <p className="text-xs text-[#8C7E6A] italic">
-                  Chưa có câu nào — chọn từ ngân hàng câu hỏi bên dưới.
+                  Chưa có câu nào — tạo câu mới thủ công hoặc chọn từ ngân hàng câu hỏi bên dưới.
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Tạo câu hỏi mới thủ công (không cần qua ngân hàng trước) */}
+          <div className="bg-white border border-[#E6DCC8] rounded-2xl p-4 space-y-3">
+            <h4 className="text-xs font-black uppercase tracking-wider text-[#2F3E6B] flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-[#E2704A]" /> Tạo câu hỏi mới (thủ công)
+            </h4>
+            <div className="flex flex-wrap gap-1.5">
+              {(['single', 'multi', 'fill', 'essay'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setManualType(t)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
+                    manualType === t
+                      ? 'bg-[#2F3E6B] text-white border-[#2F3E6B]'
+                      : 'bg-white text-[#2F3E6B] border-[#E6DCC8] hover:border-[#2F3E6B]'
+                  }`}
+                >
+                  {TYPE_LABEL[t]}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={manualPrompt}
+              onChange={(e) => setManualPrompt(e.target.value)}
+              placeholder="Nhập nội dung câu hỏi…"
+              rows={3}
+              className="w-full bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl px-3 py-2 text-sm text-[#2F3E6B] outline-none focus:border-[#B45309]"
+            />
+            {(manualType === 'single' || manualType === 'multi') && (
+              <div className="space-y-1.5">
+                {manualOptions.map((opt, oi) => {
+                  const letter = String.fromCharCode(65 + oi);
+                  const checked =
+                    manualType === 'single'
+                      ? manualSingleAnswer === letter
+                      : manualMultiAnswers.has(letter);
+                  return (
+                    <label key={oi} className="flex items-center gap-2">
+                      <input
+                        type={manualType === 'single' ? 'radio' : 'checkbox'}
+                        name="manual-answer"
+                        checked={checked}
+                        onChange={() => {
+                          if (manualType === 'single') setManualSingleAnswer(letter);
+                          else {
+                            setManualMultiAnswers((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(letter)) next.delete(letter);
+                              else next.add(letter);
+                              return next;
+                            });
+                          }
+                        }}
+                        className="shrink-0 accent-[#2F3E6B]"
+                      />
+                      <span className="text-xs font-bold text-[#2F3E6B] w-4 shrink-0">{letter}.</span>
+                      <input
+                        value={opt}
+                        onChange={(e) =>
+                          setManualOptions((prev) => {
+                            const next = [...prev];
+                            next[oi] = e.target.value;
+                            return next;
+                          })
+                        }
+                        placeholder={`Phương án ${letter}`}
+                        className="flex-1 bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl px-3 py-1.5 text-sm text-[#2F3E6B] outline-none focus:border-[#B45309]"
+                      />
+                    </label>
+                  );
+                })}
+                <p className="text-[11px] text-[#8C7E6A]">Tích chọn đáp án đúng.</p>
+              </div>
+            )}
+            {manualType === 'fill' && (
+              <input
+                value={manualFillAnswer}
+                onChange={(e) => setManualFillAnswer(e.target.value)}
+                placeholder="Đáp án điền khuyết (chấm khớp chính xác)"
+                className="w-full bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl px-3 py-2 text-sm text-[#2F3E6B] outline-none focus:border-[#B45309]"
+              />
+            )}
+            {manualType === 'essay' && (
+              <p className="text-[11px] text-[#8C7E6A]">
+                Tự luận: học sinh viết bài, cô chấm theo thang 10 (tối thiểu 120 từ).
+              </p>
+            )}
+            {manualError && <p className="text-xs font-bold text-red-600">{manualError}</p>}
+            <button
+              type="button"
+              onClick={handleAddManualQuestion}
+              disabled={manualSaving}
+              className="px-4 py-2 rounded-full bg-[#E2704A] text-white text-xs font-bold hover:opacity-90 active:scale-95 transition disabled:opacity-50"
+            >
+              {manualSaving ? 'Đang thêm…' : 'Thêm câu hỏi này vào đề'}
+            </button>
           </div>
 
           <div className="bg-white border border-[#E6DCC8] rounded-2xl p-4">

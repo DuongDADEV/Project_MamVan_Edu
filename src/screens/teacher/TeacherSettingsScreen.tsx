@@ -1122,7 +1122,7 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                     {isAiConfigSaved ? (
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
-                        AI Thật Đang Hoạt Động
+                        AI Đang Hoạt Động
                       </span>
                     ) : (
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF5EB] text-[#8C7E6A] border border-[#E6DCC8]">

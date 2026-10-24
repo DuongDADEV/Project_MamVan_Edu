@@ -52,6 +52,9 @@ interface AiContentStudioModalProps {
   isEmbedded?: boolean;
   autoOpenDraftKind?: 'questions' | 'theory' | null;
   autoOpenDraftNonce?: number;
+  // Đợt sửa 24/10: đóng dấu người tạo lên bản nháp để chỉ chính giáo viên
+  // tạo ra nó mới được chuyển vào ngân hàng (ngân hàng riêng từng giáo viên).
+  teacherId?: string;
   onApplyDraft: (payload: {
     type: 'video' | 'theory' | 'quiz';
     data: any;
@@ -190,6 +193,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   onApplyDraft,
   autoOpenDraftKind,
   autoOpenDraftNonce,
+  teacherId,
 }) => {
   // 1. TRẠNG THÁI API KEY & AI THẬT
   const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!getGeminiApiKey());
@@ -401,6 +405,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
             selectedIds: selectedDraftIds,
             savedAt: nowIso,
             topicTitle: topicTitle || '',
+            teacherId: teacherId || undefined,
           })
         );
         setDraftSavedAt(nowIso);
@@ -454,7 +459,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
         const nowIso = new Date().toISOString();
         localStorage.setItem(
           theoryDraftStorageKey,
-          JSON.stringify({ data: reviewTheoryDraft, savedAt: nowIso })
+          JSON.stringify({ data: reviewTheoryDraft, savedAt: nowIso, teacherId: teacherId || undefined })
         );
         setTheoryDraftSavedAt(nowIso);
       } else {
