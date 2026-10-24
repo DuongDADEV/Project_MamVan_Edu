@@ -1,3 +1,9 @@
+## 2026-10-25 (TỔNG QUAN: HÀNG "TỔNG CỘNG" BẢNG HỌC SINH XUỐNG ĐÁY THẺ)
+
+Vòng sửa nhỏ theo ảnh chủ dự án 01:45 25/10 (phía dưới hàng Tổng cộng còn khoảng trống thừa trong thẻ).
+
+- **Bảng "Học sinh cần quan tâm": hàng "Tổng cộng" thành footer ở đáy thẻ**: trước đây hàng Tổng cộng nằm trong `tfoot` sticky ở đáy khung cuộn `max-h-[300px]` nên khi thẻ bị kéo cao theo hàng lưới (grid stretch) thì phía dưới nó còn cả khoảng trống thừa. Nay thẻ bảng chuyển thành flex column: vùng cuộn `flex-1 min-h-0` giãn ra lấp đầy phần thẻ phía trên (bỏ cap `max-h-[300px]`), header cột vẫn sticky ở đầu vùng cuộn khi cuộn; hàng Tổng cộng tách ra khỏi bảng cuộn thành footer riêng ngay dưới vùng cuộn (`shrink-0`, viền trên phân cách) nên luôn nằm hẳn ở đáy thẻ, hết khoảng trống thừa. Hai bảng (bảng cuộn + bảng footer) dùng chung `table-fixed` với cùng một `colgroup` (22% / 22% / 12% / 14% / 30%) để các cột thẳng hàng tuyệt đối. GIỮ NGUYÊN mọi thứ khác: các cột, giá trị, sắp xếp, chip cross-filter "Đang xem: <tên> ✕" và hành vi bấm chọn/bỏ chọn học sinh, KPI, các panel khác. Vùng cuộn chỉ cuộn khi nội dung bảng cao hơn chiều cao thẻ (do hàng lưới quyết định); khi thẻ đủ cao thì hiện đủ các dòng, không còn cuộn 5–6 dòng như trước.
+
 ## 2026-10-25 (TỔNG QUAN: BẢNG CHỦ ĐỀ THAY BIỂU ĐỒ LUỒNG + BẢNG PROGRESS THẬT + XÓA MỤC BÀI GIAO Ở HOME + KHUNG CUỘN BẢNG HỌC SINH + CROSS-FILTER THEO HỌC SINH)
 
 Năm việc trong một đợt, theo lệnh chủ dự án ngày 25/10. Ghi chú chất lượng trong hộp thoại xuất bản (chưa quyết xóa hay giữ), biểu đồ 4 mức lớp (đã park), RLS thật và mật khẩu tài khoản KHÔNG đụng trong đợt này.

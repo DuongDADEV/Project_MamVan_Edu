@@ -376,7 +376,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
 
       {/* Hàng 2: bảng học sinh + bảng bài giao + bảng chủ đề */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 lg:col-span-5 flex flex-col">
           <CardTitle
             right={
               <span className="text-xs text-stone-500">
@@ -389,8 +389,16 @@ export const PbixOverviewSection: React.FC<Props> = ({
           {dashboard.studentsTable.length === 0 ? (
             <EmptyNote>Chưa có học sinh trong phạm vi đang lọc.</EmptyNote>
           ) : (
-            <div className="overflow-x-auto overflow-y-auto max-h-[300px]">
-              <table className="w-full text-sm">
+            <>
+            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '30%' }} />
+                </colgroup>
                 <thead>
                   <tr className="text-left text-stone-500 border-b">
                     <th className="py-2 pr-3 font-semibold sticky top-0 z-10 bg-white">Họ tên</th>
@@ -426,25 +434,37 @@ export const PbixOverviewSection: React.FC<Props> = ({
                     </tr>
                   ))}
                 </tbody>
-                {dashboard.studentsTotal && (
-                  <tfoot>
-                    <tr className="font-bold">
-                      <td className="py-2 pr-3 sticky bottom-0 z-10 bg-stone-50">Tổng cộng</td>
-                      <td className="py-2 pr-3 whitespace-nowrap sticky bottom-0 z-10 bg-stone-50">
-                        {formatVNDateTime(dashboard.studentsTotal.lastLoginAt)}
-                      </td>
-                      <td className="py-2 pr-3 text-right sticky bottom-0 z-10 bg-stone-50">
-                        {dashboard.studentsTotal.unsubmitted}
-                      </td>
-                      <td className="py-2 pr-3 text-right sticky bottom-0 z-10 bg-stone-50">
-                        {formatOneDecimalPercent(dashboard.studentsTotal.overallRate)}
-                      </td>
-                      <td className="py-2 sticky bottom-0 z-10 bg-stone-50">{dashboard.studentsTotal.suggestion}</td>
-                    </tr>
-                  </tfoot>
-                )}
               </table>
             </div>
+            {dashboard.studentsTotal && (
+              <div className="shrink-0 overflow-x-auto border-t border-stone-200">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '30%' }} />
+                  </colgroup>
+                  <tbody>
+                    <tr className="font-bold">
+                      <td className="py-2 pr-3">Tổng cộng</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {formatVNDateTime(dashboard.studentsTotal.lastLoginAt)}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {dashboard.studentsTotal.unsubmitted}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatOneDecimalPercent(dashboard.studentsTotal.overallRate)}
+                      </td>
+                      <td className="py-2">{dashboard.studentsTotal.suggestion}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+            </>
           )}
         </div>
 
