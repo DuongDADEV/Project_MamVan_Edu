@@ -51,6 +51,26 @@ function geminiRoleToOpenAI(role: string): 'user' | 'assistant' | 'system' {
   return 'user';
 }
 
+/** Chuyển schema kiểu Gemini (type VIẾT HOA: OBJECT/STRING/...) sang JSON
+ * Schema chuẩn (type thường: object/string/...) mà các leg OpenAI-dialect
+ * (Groq, OpenRouter) bắt buộc — Groq validate parameters theo metaschema
+ * nên type viết hoa bị 400 "not valid against metaschema", khiến cả
+ * chuỗi fallback sập khi Gemini không gánh được. Đệ quy mọi nhánh
+ * (properties/items/...) và mọi dạng type (string hoặc mảng string). */
+export function convertGeminiSchema(s: any): any {
+  if (Array.isArray(s)) return s.map(convertGeminiSchema);
+  if (s && typeof s === 'object') {
+    const out: any = {};
+    for (const [k, v] of Object.entries(s)) {
+      if (k === 'type' && typeof v === 'string') out[k] = v.toLowerCase();
+      else if (k === 'type' && Array.isArray(v)) out[k] = v.map((t: any) => (typeof t === 'string' ? t.toLowerCase() : t));
+      else out[k] = convertGeminiSchema(v);
+    }
+    return out;
+  }
+  return s;
+}
+
 /**
  * Convert Gemini contents + function declarations to OpenAI messages +
  * tools. Function-response turns (role 'function') become user messages
@@ -110,14 +130,14 @@ export function geminiToOpenAI(
       messages.push({ role: 'user', content: text });
     }
   }
-  const tools =
+const tools =
     functionDeclarations && functionDeclarations.length
       ? functionDeclarations.map((d: any) => ({
           type: 'function',
           function: {
             name: d.name,
             description: d.description || '',
-            parameters: d.parameters || { type: 'object', properties: {} },
+            parameters: d.parameters ? convertGeminiSchema(d.parameters) : { type: 'object', properties: {} },
           },
         }))
       : undefined;

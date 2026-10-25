@@ -1,3 +1,7 @@
+## 2026-10-25 (SỬA FALLBACK GROQ BỊ 400 DO SCHEMA VIẾT HOA)
+
+- **Nguyên nhân giáo viên gọi AI không được khi Gemini sập:** bộ dịch Gemini→OpenAI ở proxy truyền nguyên schema công cụ kiểu Gemini (type VIẾT HOA OBJECT/STRING/...) sang Groq/OpenRouter — Groq validate theo JSON Schema metaschema nên 400 ngay tool đầu tiên; cộng Gemini quá tải/timeout + OpenRouter 429 là cả chuỗi sập → chat 502. Lần gọi không kèm công cụ vẫn qua Groq bình thường nên test trần không lộ lỗi. **Sửa:** `convertGeminiSchema` trong `api/_lib/ai.ts` đệ quy hạ type về thường (object/string/...) trước khi gửi leg OpenAI-dialect; đã kiểm chứng local: 33/33 tool qua metaschema JSON Schema 2020-12, 0 lỗi.
+
 ## 2026-10-25 (CHẶN SPAM 401 KHI GHI BỊ RLS CHẶN)
 
 - **Ghi state/topics/payload bị RLS chặn thì chỉ thử 1 lần rồi chuyển hẳn sang lưu local trong phiên đó** (danh sách deny theo id, reload trang sẽ thử lại): trước đây mỗi lần lưu thất bại lại thử lại vô hạn nên console spam 401 liên tục (student_states, topics). Lần chặn đầu tiên log 1 dòng duy nhất kèm JWT role + id để chẩn đúng tài khoản đang cầm (vd tab giáo viên đang cầm JWT tài khoản khác do đăng nhập ở tab khác đè session) + hướng đăng xuất/đăng nhập lại. Các lần ghi đúng quyền không đổi.
