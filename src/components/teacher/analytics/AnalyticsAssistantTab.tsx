@@ -289,6 +289,12 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
                           code: ({ children }) => (
                             <code className="bg-[#FAF5EB] border border-[#E6DCC8] rounded px-1 text-[13px]">{children}</code>
                           ),
+                          // ĐỢT 7 (26/10): câu trả lời trợ lý KHÔNG bao giờ hiện ảnh
+                          // markdown — biểu đồ duy nhất là chart Recharts từ
+                          // render_chart; ảnh markdown do model chèn (vd ảnh
+                          // hỏng 'Biểu đồ đăng nhập') chỉ hiện icon vỡ + nhấp
+                          // nháy khi khung chat re-render nên bỏ hẳn nút này.
+                          img: () => null,
                         }}
                       >
                         {m.text}

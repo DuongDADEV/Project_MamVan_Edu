@@ -1,3 +1,8 @@
+## 2026-10-26 (XÓA ẢNH MARKDOWN HỎNG TRONG CÂU TRẢ LỜI TRỢ LÝ)
+
+- **Vấn đề thật 26/10 ~02:35:** câu trả lời về "số lần đăng nhập của tất cả học sinh" hiện thêm 1 ảnh hỏng có chữ "Biểu đồ đăng nhập", nhấp nháy trong khung chat. Nguyên nhân: model chèn ảnh markdown ![...](...) với URL hỏng, mà nút render markdown duy nhất của trợ lý (tab + bong bóng dùng chung) không chặn thẻ img nên trình duyệt hiện icon vỡ + chữ alt, nhấp nháy mỗi lần khung chat re-render. Biểu đồ thật (Recharts từ render_chart) vẫn hiện bình thường bên dưới.
+- **Sửa:** nút render markdown nay bỏ hẳn thẻ img (`img: () => null`) — câu trả lời trợ lý không bao giờ hiện ảnh markdown nữa, biểu đồ chỉ hiện qua render_chart; thêm luật prompt 5j cấm model chèn ảnh markdown. Test chốt chặn `scripts/test_no_markdown_images.ts` 4/4 (override còn đó, chỉ 1 nút render, luật 5j còn đó). Không sinh lại sơ đồ đợt này (sửa render nhỏ, không đổi luồng).
+
 ## 2026-10-26 (FUNCTION CHO DỮ LIỆU TRƯỚC ĐÂY KHÔNG TOOL NÀO TỚI ĐƯỢC)
 
 - **Vấn đề thật 26/10 ~02:20:** giáo viên hỏi "thời gian nộp và số lần làm lại của Lê Khánh Chi", trợ lý chỉ trả "nộp bài 6 lần trong 6 tuần" — không có thời gian từng lần nộp, không có số lần làm lại theo từng bài. Nguyên nhân đúng như giáo viên nói: function không tới được dữ liệu đó — tool hồ sơ chỉ trả tổng số lượt (lichSuLamBai rút gọn bỏ mất timestamp dù attemptHistory có sẵn), và bảng attempts (submitted_at + attempt_no thật) không tool nào đọc.
