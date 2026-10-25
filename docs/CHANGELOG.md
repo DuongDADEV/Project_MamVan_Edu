@@ -1,3 +1,7 @@
+## 2026-10-25 (ROUTE ADMIN LIỆT KÊ MODEL GEMINI)
+
+- Route `POST /api/admin/gemini-models` (chỉ JWT admin, dùng key Gemini hiệu dụng DB-trước/env-fallback, không trả key): gọi ListModels của Google, trả tổng số + số model generateContent được + tên từng model. Kiểm chứng 25/10: key hiện tại nhìn thấy 60 model, 46 generateContent được (gồm gemini-3.8-flash đang dùng, dòng 2.5, 3.x, 4-argon, Gemma 4, Nano Banana, Lyria, live/audio, embedding). Lưu ý: ListModels từng liệt kê cả tên đã khai tử (gọi thật 404) nên đây là số "nhìn thấy", không phải số "gọi được chắc chắn".
+
 ## 2026-10-25 (TRỢ LÝ CHỈ GỬI TOOL KHỚP CÂU HỎI — TIẾT KIỆM TOKEN)
 
 - **Vấn đề:** mỗi lượt hỏi gửi cả 33 tool (~3500 tokens/call) + prompt hệ thống, 1 lượt 2 vòng tốn ~11000 tokens — vượt trần 8000 tokens/phút của Groq free nên lượt sau 429. **Sửa:** `selectToolsForQuery` ở frontend chọn tool theo từ khóa câu hỏi mới nhất (bỏ dấu, khớp theo từ: 'diem' không khớp 'diem danh', 'kha' không khớp 'khac'): câu thường chỉ còn 1–6 tool (~300–800 tokens/call), tức ~5000 tokens/lượt — vừa trần Groq. Câu chào hỏi thuần ("xin chào") gửi 0 tool; câu lạ/câu nối tiếp không khớp từ khóa nào thì gửi đủ 33 tool như cũ (an toàn, không trả lời sai vì thiếu tool); câu vẽ biểu đồ luôn kèm các tool dữ liệu vẽ được. Đã kiểm chứng router bằng 11 câu mẫu (danh sách, điểm, so sánh chủ đề, vẽ biểu đồ, chấm tự luận, tạo chủ đề, điểm danh, duyệt quà, xuất bản, chào hỏi, câu nối tiếp) — chọn đúng tool, riêng 'điểm danh' từng bị 'điểm' nuốt mất đã sửa bằng cách gộp cụm trước khi khớp.
