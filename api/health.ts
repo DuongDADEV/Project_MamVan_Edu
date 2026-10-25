@@ -25,6 +25,10 @@ export default async function handler(req: any, res: any) {
       configured: !!process.env.OPENROUTER_API_KEY,
       model: DEFAULT_MODELS.openrouter,
     },
+    workersai: {
+      configured: !!process.env.WORKERS_AI_API_KEY,
+      model: DEFAULT_MODELS.workersai,
+    },
   };
   try {
     const admin = getAdminClient();
