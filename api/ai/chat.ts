@@ -1,5 +1,6 @@
 import { getAdminClient, verifyUserToken, readBearer } from '../_lib/supabase.ts';
 import { tryChain, allLegsBadRequest, DEFAULT_MODELS, LegConfig } from '../_lib/ai.ts';
+import { resolveKeys } from '../_lib/aiKeys.ts';
 
 /**
  * POST /api/ai/chat — proxy AI cho giáo viên/học sinh.
@@ -11,6 +12,9 @@ import { tryChain, allLegsBadRequest, DEFAULT_MODELS, LegConfig } from '../_lib/
  * - Chuỗi failover do admin cấu hình trong ai_settings (models + thứ
  *   tự + bật/tắt từng nấc); mặc định Gemini → Groq → OpenRouter.
  * - Key chỉ nằm trong Vercel env, không bao giờ trả về client.
+ * - Key: ưu tiên key admin nhập ở màn "Cấu hình Mầm AI" (ai_settings
+ *   'ai_keys', chỉ service role đọc), fallback biến môi trường Vercel.
+ *   Không bao giờ trả giá trị key về client.
  * - Lỗi: mọi nấc 400 → BAD_REQUEST (trình duyệt hiển thị gợi ý sửa
  *   câu hỏi); ngược lại PROVIDER_ERROR kèm kết quả từng nấc (đã lược
  *   bỏ mọi chuỗi trông giống key).
@@ -85,11 +89,7 @@ export default async function handler(req: any, res: any) {
       leg: l as 'gemini' | 'groq' | 'openrouter',
       model: models[l] || DEFAULT_MODELS[l],
     }));
-  const keys: Record<string, string> = {
-    gemini: process.env.GEMINI_API_KEY || '',
-    groq: process.env.GROQ_API_KEY || '',
-    openrouter: process.env.OPENROUTER_API_KEY || '',
-  };
+  const keys = await resolveKeys();
 
   const result = await tryChain(
     { contents, systemInstruction, tools: body.tools },
@@ -99,6 +99,21 @@ export default async function handler(req: any, res: any) {
   );
 
   if (result.parts) {
+    // Ghi log token (không để lỗi ghi log làm hỏng câu trả lời).
+    try {
+      const u = result.usage || { prompt: 0, completion: 0, total: 0 };
+      const admin = getAdminClient();
+      await admin.from('ai_usage').insert({
+        leg: result.servedBy,
+        model: result.legModel,
+        prompt_tokens: u.prompt,
+        completion_tokens: u.completion,
+        total_tokens: u.total,
+        user_id: user.id || null,
+      });
+    } catch {
+      // Bỏ qua — thống kê thiếu 1 dòng còn hơn chat lỗi.
+    }
     res.status(200).json({
       candidates: [
         {

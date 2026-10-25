@@ -5,17 +5,80 @@ import {
   isAdminUser,
 } from '../_lib/supabase.ts';
 import { DEFAULT_MODELS } from '../_lib/ai.ts';
+import { keysStatus, loadStoredKeys, resolveKeys } from '../_lib/aiKeys.ts';
 
 /**
  * GET / POST /api/admin/ai-settings — cấu hình AI của admin.
  * Chỉ JWT có app_metadata.role = 'admin' mới được gọi. Đọc/ghi qua
  * service role vào bảng ai_settings (RLS chặn đọc trực tiếp từ
  * trình duyệt — xem migration 014/015).
- * GET trả về { models, order, enabled } (merge với mặc định).
- * POST nhận { models?, order?, enabled? } — chỉ ghi những gì gửi lên.
- * Model trống = quay về mặc định của nấc đó.
+ * GET trả về { models, order, enabled, keysConfigured, keySource,
+ * usage, openrouter } (merge với mặc định; KHÔNG trả giá trị key).
+ * POST nhận { models?, order?, enabled?, keys? } — chỉ ghi những gì
+ * gửi lên. Model trống = giữ nguyên; key trống = giữ nguyên key đã lưu.
+ * Usage: tổng hợp từ bảng ai_usage (migration 017). OpenRouter limit:
+ * gọi https://openrouter.ai/api/v1/auth/key bằng key hiệu lực (DB
+ * trước, env sau); Gemini/Groq không có API xem giới hạn còn lại nên
+ * chỉ thống kê đã dùng.
  */
 const LEGS = ['gemini', 'groq', 'openrouter'];
+
+async function loadUsage(admin: any): Promise<any[]> {
+  try {
+    const { data, error } = await admin
+      .from('ai_usage')
+      .select('leg,model,total_tokens,created_at')
+      .order('created_at', { ascending: false })
+      .limit(5000);
+    if (error || !data) return [];
+    const agg = new Map<string, any>();
+    for (const row of data) {
+      const k = `${row.leg}|||${row.model}`;
+      const cur = agg.get(k) || {
+        leg: row.leg,
+        model: row.model,
+        calls: 0,
+        totalTokens: 0,
+        lastAt: null as string | null,
+      };
+      cur.calls++;
+      cur.totalTokens += Number(row.total_tokens || 0);
+      if (!cur.lastAt || (row.created_at && row.created_at > cur.lastAt)) {
+        cur.lastAt = row.created_at;
+      }
+      agg.set(k, cur);
+    }
+    return [...agg.values()].sort((a, b) => b.totalTokens - a.totalTokens);
+  } catch {
+    return [];
+  }
+}
+
+async function loadOpenRouterLimit(): Promise<{ used: number; limit: number | null } | null> {
+  try {
+    const keys = await resolveKeys();
+    if (!keys.openrouter) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        headers: { Authorization: `Bearer ${keys.openrouter}` },
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return null;
+      const json: any = await res.json();
+      const d = json?.data || {};
+      return {
+        used: Number(d.usage || 0),
+        limit: typeof d.limit === 'number' ? d.limit : null,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return null;
+  }
+}
 
 export default async function handler(req: any, res: any) {
   const user = await verifyUserToken(readBearer(req));
@@ -26,10 +89,14 @@ export default async function handler(req: any, res: any) {
   const admin = getAdminClient();
 
   if (req.method === 'GET') {
-    const out = {
+    const out: any = {
       models: { ...DEFAULT_MODELS },
       order: [...LEGS],
       enabled: { gemini: true, groq: true, openrouter: true } as Record<string, boolean>,
+      keysConfigured: { gemini: false, groq: false, openrouter: false },
+      keySource: { gemini: null, groq: null, openrouter: null },
+      usage: [] as any[],
+      openrouter: null as any,
     };
     try {
       const { data } = await admin.from('ai_settings').select('key,value');
@@ -56,6 +123,15 @@ export default async function handler(req: any, res: any) {
     } catch {
       // Bảng chưa có — trả mặc định.
     }
+    try {
+      const ks = await keysStatus();
+      out.keysConfigured = ks.configured;
+      out.keySource = ks.source;
+    } catch {
+      // Không xác định được key — để mặc định false.
+    }
+    out.usage = await loadUsage(admin);
+    out.openrouter = await loadOpenRouterLimit();
     res.status(200).json(out);
     return;
   }
@@ -88,6 +164,19 @@ export default async function handler(req: any, res: any) {
       if (Object.keys(enabled).length) {
         upserts.push({ key: 'ai_enabled', value: enabled });
       }
+    }
+    if (body.keys && typeof body.keys === 'object') {
+      // Key trống = giữ nguyên key đã lưu (không xóa, không lộ lại).
+      const stored = await loadStoredKeys();
+      let changed = false;
+      for (const leg of LEGS) {
+        const k = body.keys[leg];
+        if (typeof k === 'string' && k.trim()) {
+          (stored as any)[leg] = k.trim();
+          changed = true;
+        }
+      }
+      if (changed) upserts.push({ key: 'ai_keys', value: stored });
     }
     for (const row of upserts) {
       const { error } = await admin

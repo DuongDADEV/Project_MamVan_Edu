@@ -5,6 +5,7 @@ import {
   isAdminUser,
 } from '../_lib/supabase.ts';
 import { testLeg, DEFAULT_MODELS } from '../_lib/ai.ts';
+import { resolveKeys } from '../_lib/aiKeys.ts';
 
 /**
  * POST /api/admin/ai-test — admin test từng nấc AI.
@@ -56,14 +57,10 @@ export default async function handler(req: any, res: any) {
   } catch {
     // Bảng chưa có — dùng mặc định.
   }
-  const keys: Record<string, string> = {
-    gemini: process.env.GEMINI_API_KEY || '',
-    groq: process.env.GROQ_API_KEY || '',
-    openrouter: process.env.OPENROUTER_API_KEY || '',
-  };
+  const keys = await resolveKeys();
   const legs = [];
   for (const leg of order) {
-    const key = keys[leg];
+    const key = (keys as Record<string, string>)[leg];
     if (!key) {
       legs.push({ leg, model: models[leg], configured: false, ok: false });
       continue;

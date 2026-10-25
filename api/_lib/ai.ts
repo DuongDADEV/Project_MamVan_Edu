@@ -17,6 +17,12 @@
 export type GeminiPart = { text?: string; functionCall?: { name: string; args: any } };
 export type GeminiContent = { role: string; parts: GeminiPart[] };
 
+export type TokenUsage = {
+  prompt: number;
+  completion: number;
+  total: number;
+};
+
 export type LegOutcome = {
   leg: string;
   model: string;
@@ -24,6 +30,7 @@ export type LegOutcome = {
   status?: number;
   message?: string;
   latencyMs: number;
+  usage?: TokenUsage;
 };
 
 export type LegConfig = { leg: 'gemini' | 'groq' | 'openrouter'; model: string };
@@ -189,7 +196,13 @@ async function callGeminiLeg(
     };
   }
   const parts = (json?.candidates?.[0]?.content?.parts || []) as GeminiPart[];
-  return { parts, outcome: { leg: 'gemini', model, ok: true, status, latencyMs } };
+  const um = json?.usageMetadata || {};
+  const usage: TokenUsage = {
+    prompt: Number(um.promptTokenCount || 0),
+    completion: Number(um.candidatesTokenCount || 0),
+    total: Number(um.totalTokenCount || 0),
+  };
+  return { parts, outcome: { leg: 'gemini', model, ok: true, status, latencyMs, usage } };
 }
 
 async function callOpenAiLeg(
@@ -244,7 +257,13 @@ async function callOpenAiLeg(
       outcome: { leg, model, ok: false, status, message: 'EMPTY_RESPONSE', latencyMs },
     };
   }
-  return { parts, outcome: { leg, model, ok: true, status, latencyMs } };
+  const u = json?.usage || {};
+  const usage: TokenUsage = {
+    prompt: Number(u.prompt_tokens || 0),
+    completion: Number(u.completion_tokens || 0),
+    total: Number(u.total_tokens || 0),
+  };
+  return { parts, outcome: { leg, model, ok: true, status, latencyMs, usage } };
 }
 
 export type ChainRequest = {
@@ -258,6 +277,7 @@ export type ChainResult = {
   servedBy: string | null;
   legModel: string | null;
   outcomes: LegOutcome[];
+  usage?: TokenUsage;
 };
 
 /**
@@ -285,7 +305,7 @@ export async function tryChain(
       const r = await callGeminiLeg(leg.model, key, body, timeoutPerLegMs);
       outcomes.push(r.outcome);
       if (r.parts) {
-        return { parts: r.parts, servedBy: 'gemini', legModel: leg.model, outcomes };
+        return { parts: r.parts, servedBy: 'gemini', legModel: leg.model, outcomes, usage: r.outcome.usage };
       }
     } else {
       const r = await callOpenAiLeg(
@@ -299,7 +319,7 @@ export async function tryChain(
       );
       outcomes.push(r.outcome);
       if (r.parts) {
-        return { parts: r.parts, servedBy: leg.leg, legModel: leg.model, outcomes };
+        return { parts: r.parts, servedBy: leg.leg, legModel: leg.model, outcomes, usage: r.outcome.usage };
       }
     }
   }
