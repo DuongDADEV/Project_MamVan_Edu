@@ -46,6 +46,7 @@ interface AnalyticsAssistantTabProps {
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { extractTable, toCards, shouldStack } from './tableCards.ts';
 import {
   useAssistantChat,
   appendAssistantMsg,
@@ -289,15 +290,37 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
                           code: ({ children }) => (
                             <code className="bg-[#FAF5EB] border border-[#E6DCC8] rounded px-1 text-[13px]">{children}</code>
                           ),
-                          // ĐỢT 7 (26/10): bảng markdown không có style nên 6 cột
-                          // bị bóp dúm trong bong bóng hẹp (chữ dính nhau kiểu
-                          // 'Assignment1', tiêu đề vỡ giữa từ) — bọc bảng trong
-                          // khung cuộn ngang, cột đủ rộng, ô có padding + viền.
-                          table: ({ children }) => (
-                            <div className="overflow-x-auto my-1.5 -mx-1 px-1">
-                              <table className="w-full min-w-[500px] text-xs border-collapse">{children}</table>
-                            </div>
-                          ),
+                          // ĐỢT 7 (26/10): bảng rộng tự đổi thành thẻ dọc —
+                          // bảng quá 3 cột trong bong bóng hẹp kiểu gì cũng
+                          // tràn nên cột đầu thành tiêu đề thẻ, các cột còn
+                          // lại thành dòng 'Nhãn: giá trị'; bảng hẹp giữ
+                          // dạng bảng thường có cuộn ngang dự phòng.
+                          table: ({ children }) => {
+                            const extracted = extractTable(children);
+                            if (extracted && shouldStack(extracted.headers)) {
+                              const cards = toCards(extracted.headers, extracted.rows);
+                              return (
+                                <div className="space-y-2 my-1.5">
+                                  {cards.map((c, i) => (
+                                    <div key={i} className="bg-white border border-[#E6DCC8] rounded-xl p-2">
+                                      <div className="font-bold text-[#2F3E6B] text-xs mb-1">{c.title}</div>
+                                      {c.lines.map((l, j) => (
+                                        <div key={j} className="text-xs text-stone-700 leading-relaxed">
+                                          <span className="text-stone-500">{l.label}: </span>
+                                          {l.value}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="overflow-x-auto my-1.5 -mx-1 px-1">
+                                <table className="w-full text-xs border-collapse">{children}</table>
+                              </div>
+                            );
+                          },
                           th: ({ children }) => (
                             <th className="border border-[#E6DCC8] bg-[#FAF5EB] px-2 py-1 text-left font-bold text-[#2F3E6B] whitespace-nowrap">{children}</th>
                           ),

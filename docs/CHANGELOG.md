@@ -1,3 +1,8 @@
+## 2026-10-26 (BẢNG RỘNG TỰ ĐỔI THÀNH THẺ DỌC, KHÔNG TRÀN)
+
+- **Vấn đề thật 26/10 ~02:44:** bảng lịch sử nộp bài 6 cột vẫn tràn trong bong bóng hẹp — bản sửa cuộn ngang trước đó chưa đủ vì giáo viên muốn nội dung vừa khung, không cần kéo ngang.
+- **Sửa (`tableCards.ts` + `AnalyticsAssistantTab.tsx`, tab + bong bóng dùng chung):** khung chat tự xếp lại mọi bảng quá 3 cột thành thẻ dọc — cột đầu thành tiêu đề thẻ, các cột còn lại thành dòng "Nhãn: giá trị" — nên bảng nào cũng vừa khung, không tràn, không cần kéo ngang, không phụ thuộc model chịu đổi cách trình bày. Bảng 3 cột trở xuống giữ dạng bảng thường (có cuộn ngang dự phòng); trích xuất thất bại thì quay về bảng thường. Test `scripts/test_table_render.ts` 14/14 (đọc bảng theo vị trí, đổi thẻ, ngưỡng 3/4 cột, nút render). Không sinh lại sơ đồ đợt này (sửa render nhỏ, không đổi luồng).
+
 ## 2026-10-26 (BẢNG MARKDOWN TRONG CÂU TRẢ LỜI TRỢ LÝ BỊ BÓP DÚM)
 
 - **Vấn đề thật 26/10 ~02:40:** câu trả lời lịch sử nộp bài của Lê Khánh Chi hiện bảng 6 cột nhưng chữ dính nhau ("Assignment1"), tiêu đề vỡ giữa từ, giờ nộp tách dòng — vì nút render markdown không có style cho bảng nên bảng 6 cột bị bóp dúm trong bong bóng hẹp. Dữ liệu trong bảng là đúng (tool Lịch sử nộp bài đã chạy, giờ + điểm thật).
