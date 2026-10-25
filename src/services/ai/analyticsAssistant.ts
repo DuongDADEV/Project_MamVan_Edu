@@ -1672,7 +1672,7 @@ Phạm vi dữ liệu: toàn bộ dữ liệu của giáo viên đang đăng nh�
 
 async function callProxyWithTools(
   contents: any[],
-  withTools: boolean
+  declarations: any[] | undefined
 ): Promise<any> {
   // Đợt 25/10: trợ lý gọi qua proxy admin — failover và key nằm ở server,
   // trình duyệt chỉ gửi contents + system prompt + tool declarations.
@@ -1682,7 +1682,7 @@ async function callProxyWithTools(
   const body: any = {
     contents,
     systemInstruction: SYSTEM_PROMPT,
-    tools: withTools ? [{ functionDeclarations: FUNCTION_DECLARATIONS }] : undefined,
+    tools: declarations && declarations.length ? [{ functionDeclarations: declarations }] : undefined,
   };
   const json = await callAiProxy(body);
   if (!json?.candidates?.[0]) {
@@ -1706,6 +1706,111 @@ function parseFollowups(text: string): { text: string; followups: string[] } {
 }
 
 /**
+ * Chọn tool theo câu hỏi (tiết kiệm token + tránh chạm trần TPM của gói
+ * free): gửi cả 33 tool mỗi lần tốn ~3500 tokens/call, trong khi 1 câu
+ * hỏi thường chỉ cần 1–4 tool. Khớp từ khóa trên câu hỏi mới nhất (bỏ
+ * dấu, khớp theo từ để khỏi nhận nhầm: 'kha' không khớp 'khac',
+ * 'diem' không khớp 'diem danh').
+ * - Trả về null = không khớp gì → gửi đủ 33 tool (an toàn cho câu lạ,
+ * câu nối tiếp, câu mơ hồ).
+ * - Trả về [] = chỉ chào hỏi → không gửi tool nào (trả lời text 1 vòng).
+ * - render_chart không bao giờ đứng một mình: luôn kèm các tool dữ liệu
+ * vẽ được (điểm, tổng quan, hồ sơ, so sánh, hoạt động).
+ */
+function normalizeQuery(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd');
+}
+
+const TOOL_KEYWORDS: [string, string[]][] = [
+  ['danh sach hoc sinh', ['list_class_students']],
+  ['hoc sinh', ['list_class_students']],
+  ['lop', ['list_class_students', 'get_class_summary']],
+  ['si so', ['list_class_students', 'get_class_summary']],
+  ['tong quan', ['get_class_summary']],
+  ['tinh hinh lop', ['get_class_summary']],
+  ['pho diem', ['get_score_distribution']],
+  ['chua co diem', ['get_score_distribution']],
+  ['chua dat', ['get_score_distribution']],
+  ['diem', ['get_score_distribution']],
+  ['so sanh', ['compare_topics']],
+  ['chu de', ['compare_topics', 'list_topics']],
+  ['cau hoi', ['get_question_analysis', 'list_questions']],
+  ['ngan hang', ['list_questions']],
+  ['ho so', ['get_student_profile']],
+  ['tien do', ['get_student_profile']],
+  ['diemdanh', ['get_learning_activity']],
+  ['hoat dong', ['get_learning_activity']],
+  ['phut hoc', ['get_learning_activity']],
+  ['tu luan', ['list_pending_essays', 'get_essay_detail', 'grade_essay']],
+  ['bai viet', ['list_pending_essays', 'get_essay_detail']],
+  ['cham bai', ['list_pending_essays', 'grade_essay', 'list_pending_reviews', 'grade_pending_review']],
+  ['cho cham', ['list_pending_essays', 'list_pending_reviews']],
+  ['phieu', ['list_pending_reviews', 'grade_pending_review']],
+  ['cho duyet', ['list_pending_reviews', 'list_reward_requests']],
+  ['doi qua', ['list_reward_requests', 'approve_reward_request', 'reject_reward_request']],
+  ['duyet qua', ['list_reward_requests', 'approve_reward_request']],
+  ['tu choi qua', ['list_reward_requests', 'reject_reward_request']],
+  ['yeu cau qua', ['list_reward_requests']],
+  ['ruong', ['list_reward_requests', 'approve_reward_request', 'reject_reward_request']],
+  ['phan thuong', ['list_reward_requests', 'approve_reward_request', 'reject_reward_request']],
+  ['tao chu de', ['create_topic', 'list_topics']],
+  ['tao video', ['create_video_draft', 'list_topics']],
+  ['video', ['create_video_draft', 'list_topics']],
+  ['ly thuyet', ['create_theory_draft', 'list_topics']],
+  ['tao bai kiem tra', ['create_quiz', 'list_quizzes']],
+  ['bai kiem tra', ['list_quizzes', 'create_quiz', 'publish_quiz']],
+  ['kiem tra', ['list_quizzes', 'create_quiz', 'publish_quiz']],
+  ['tao cau hoi', ['create_question', 'list_questions']],
+  ['xuat ban', ['publish_content', 'publish_quiz']],
+  ['go xuat ban', ['unpublish_content']],
+  ['an bai', ['unpublish_content']],
+  ['bai tap', ['list_assignments', 'create_assignment', 'update_assignment']],
+  ['giao bai', ['create_assignment', 'list_assignments']],
+  ['tao bai tap', ['create_assignment', 'list_questions']],
+  ['xoa', ['delete_content', 'delete_quiz', 'delete_question']],
+  ['tao', ['create_topic', 'create_video_draft', 'create_theory_draft', 'create_quiz', 'create_question']],
+  ['bieu do', ['render_chart']],
+  ['ve bieu do', ['render_chart']],
+  ['so do', ['render_chart']],
+];
+
+const CHARTABLE_TOOLS = [
+  'get_score_distribution',
+  'get_class_summary',
+  'get_student_profile',
+  'compare_topics',
+  'get_learning_activity',
+];
+
+export function selectToolsForQuery(latestUserText: string): any[] | null {
+  const raw = normalizeQuery(latestUserText).replace(/\s+/g, ' ').trim();
+  if (/^(xin chao|hi|hello|chao|chao thay|chao co)[\s!.?]*$/.test(raw)) return [];
+  // 'diem danh' là 1 cụm riêng — gộp lại để 'diem' không khớp nhầm vào nó.
+  // (Từ khóa cũng viết dạng gộp 'diemdanh' cho khớp với text đã gộp.)
+  const text = ` ${raw.replace(/diem danh/g, 'diemdanh')} `;
+  const picked = new Set<string>();
+  for (const [kw, tools] of TOOL_KEYWORDS) {
+    if (text.includes(` ${kw} `) || text.includes(` ${kw},`) || text.includes(` ${kw}.`) || text.includes(` ${kw}?`)) {
+      for (const t of tools) picked.add(t);
+    }
+  }
+  if (picked.size === 0) return null;
+  if (picked.has('render_chart')) {
+    // Vẽ luôn cần dữ liệu: kèm các tool dữ liệu vẽ được để model tự lấy.
+    for (const t of CHARTABLE_TOOLS) picked.add(t);
+  }
+  const out: any[] = [];
+  for (const d of FUNCTION_DECLARATIONS) {
+    if (picked.has(d.name)) out.push(d);
+  }
+  return out;
+}
+
+/**
  * Chạy một lượt hỏi–đáp của trợ lý: mô hình chọn công cụ, hệ thống chạy
  * hàm tính thật, mô hình diễn đạt lại kèm bằng chứng.
  */
@@ -1721,6 +1826,11 @@ export async function askAnalyticsAssistant(
     parts: [{ text: h.text }],
   }));
 
+  // Tiết kiệm token: lượt này chỉ gửi tool khớp câu hỏi mới nhất (null =
+  // không khớp → gửi đủ, [] = chỉ chào hỏi → không gửi tool nào).
+  const lastUser = [...history].reverse().find((h) => h.role === 'user');
+  const turnDecls = selectToolsForQuery(lastUser?.text || '') ?? FUNCTION_DECLARATIONS;
+
   const toolRuns: AssistantToolRun[] = [];
   const seriesByTool = new Map<string, NonNullable<ToolOutcome['series']>>();
   let chart: AssistantChart | undefined;
@@ -1729,7 +1839,7 @@ export async function askAnalyticsAssistant(
   try {
       // Tối đa 5 vòng gọi hàm cho mỗi câu hỏi
       for (let round = 0; round < 5; round++) {
-        const res = await callProxyWithTools(contents, true);
+        const res = await callProxyWithTools(contents, turnDecls);
         const parts = res?.candidates?.[0]?.content?.parts || [];
         const calls = parts.filter((p: any) => p.functionCall);
         const textPart = parts.find((p: any) => typeof p.text === 'string')?.text as
@@ -1792,7 +1902,7 @@ export async function askAnalyticsAssistant(
 
       // Hết vòng gọi hàm mà chưa có câu trả lời: ép mô hình trả lời bằng
       // dữ liệu đã có (không kèm công cụ nữa).
-      const finalRes = await callProxyWithTools(contents, false);
+      const finalRes = await callProxyWithTools(contents, undefined);
       const finalText =
         finalRes?.candidates?.[0]?.content?.parts?.find(
           (p: any) => typeof p.text === 'string'
