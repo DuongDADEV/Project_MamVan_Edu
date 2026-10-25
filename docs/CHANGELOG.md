@@ -1,3 +1,11 @@
+## 2026-10-25 (BIỂU ĐỒ TỔNG QUAN: NHÃN % VÀ 0/1 VẼ CUSTOM — HIỂN THỊ SUỐT ANIMATION, HẾT NHẤP NHÁY CON SỐ)
+
+Theo lệnh chủ dự án: hiệu ứng chuyển động giữ nguyên, còn con số phải hiển thị suốt, không được nhấp nháy. Đợt animation 800ms trước đó dùng LabelList mặc định của Recharts — loại nhãn này tự ẩn trong lúc animation (Line: showLabels = !isAnimating) nên con số tắt rồi hiện (nhấp nháy), và kiểm chứng 25/10 còn bắt gặp trường hợp nhãn kẹt mất hẳn sau khi lọc theo học sinh (chỉ hiện lại khi bỏ lọc). Đợt này bỏ hẳn LabelList, vẽ nhãn bằng code riêng gắn chặt vào hình học biểu đồ.
+
+- **Bar: nhãn % bằng hàm label custom** gắn vào đầu thanh (x + width + 8) — khi thanh co/giãn trong 800ms chuyển động, nhãn chạy theo đầu thanh; đứng yên thì nằm phải thanh như cũ. Hết cảnh nhãn tắt trong lúc chạy.
+- **Line: nhãn 0/1 bằng dot custom** — mỗi điểm tự vẽ cả chấm (r=3, màu đường) lẫn con số phía trên (y - 8); khi đường chuyển động, con số chạy theo điểm; đứng yên thì nằm trên mọi điểm như cũ. Tooltip hover giữ nguyên.
+- KHÔNG ĐỔI: animation 800ms ease-out chỉ khi đổi dữ liệu (memo khóa label:rate:gradedCount cho cột, date:students cho đường), margins chống cắt, đường 0-fill, 7 dòng + sticky header + footer các bảng, cross-filter, KPI. Sơ đồ cập nhật cùng đợt: nút biểu đồ sửa từ "nhãn tạm ẩn trong 0.8s" sang "nhãn custom hiển thị suốt" (308 nút, 29/29 quan hệ, code-map 307/307, 0 vấn đề).
+
 ## 2026-10-25 (BIỂU ĐỒ TỔNG QUAN: CHUYỂN ĐỘNG MƯỢT TRỞ LẠI KHI ĐỔI DỮ LIỆU — HẾT ĐƠ, KHÔNG NHẤP NHÁY LẶP)
 
 Theo lệnh chủ dự án (ảnh chụp 13:27 25/10: trước đây còn thấy hiệu ứng chuyển động lên xuống, nay biểu đồ đơ): đợt 25/10 sửa nhấp nháy đã tắt hẳn animation của cả 2 biểu đồ (Bar + Line isAnimationActive=false) nên khi đổi lọc/cross-filter giá trị nhảy thẳng, mất chuyển động. Đợt này bật lại animation NHƯNG chỉ chạy khi dữ liệu thật sự đổi, nên vừa mượt vừa không nhấp nháy lặp.

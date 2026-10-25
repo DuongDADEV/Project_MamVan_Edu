@@ -32,7 +32,6 @@ import {
   Tooltip,
   LineChart,
   Line,
-  LabelList,
 } from 'recharts';
 import type { ClassItem, TopicWithMeta, QuizWithMeta } from '../../../services/types.ts';
 import type { Question, StudentState } from '../../../types.ts';
@@ -672,19 +671,35 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       'Tỷ lệ điểm đạt',
                     ]}
                   />
-                  {/* Animation chỉ khi đổi dữ liệu: tham chiếu data giữ nguyên
-                      qua các lần render không đổi giá trị (memo theo khóa
-                      label:rate:gradedCount ở trên) nên Recharts không chạy
-                      lại animation khi tab render lại — chỉ khi đổi lọc/
-                      cross-filter thì thanh mới chuyển động mượt 800ms từ
-                      giá trị cũ sang giá trị mới, không nhấp nháy. */}
-                  <Bar dataKey="rate" fill={BAR_PEACH} animationDuration={800} animationEasing="ease-out">
-                    <LabelList
-                      dataKey="rate"
-                      position="right"
-                      formatter={(v: any) => `${Math.round(Number(v) * 100)}%`}
-                    />
-                  </Bar>
+                  {/* Nhãn % vẽ bằng hàm custom gắn vào đầu thanh (không dùng
+                      LabelList): nhãn mặc định của Recharts tự ẩn trong lúc
+                      animation nên con số nhấp nháy (tắt rồi hiện). Nhãn
+                      custom chạy theo đầu thanh trong suốt 800ms chuyển động
+                      và đứng yên sau đó — con số hiển thị suốt, không tắt.
+                      Animation vẫn chỉ chạy khi đổi dữ liệu (memo khóa
+                      label:rate:gradedCount giữ tham chiếu khi không đổi). */}
+                  <Bar
+                    dataKey="rate"
+                    fill={BAR_PEACH}
+                    animationDuration={800}
+                    animationEasing="ease-out"
+                    label={(props: any) => {
+                      const { x, y, width, height, value } = props;
+                      if (x == null || y == null || width == null || height == null || value == null) return <g />;
+                      return (
+                        <text
+                          x={x + width + 8}
+                          y={y + height / 2}
+                          fill="#57534e"
+                          fontSize={12}
+                          textAnchor="start"
+                          dominantBaseline="middle"
+                        >
+                          {`${Math.round(Number(value) * 100)}%`}
+                        </text>
+                      );
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -721,25 +736,35 @@ export const PbixOverviewSection: React.FC<Props> = ({
                     formatter={(value: any) => [`${value} học sinh`, 'Số học sinh']}
                     labelFormatter={(d: any) => `Ngày ${formatVNDate(String(d))}`}
                   />
-                  {/* Animation chỉ khi đổi dữ liệu (như Bar): tham chiếu
-                      dailyChart giữ nguyên qua các lần render không đổi giá
-                      trị (memo theo khóa date:students) nên đường không chạy
-                      lại animation khi tab render lại — chỉ khi đổi lọc/
-                      cross-filter thì đường mới chuyển động mượt 800ms.
-                      Đánh đổi của Recharts 3: nhãn 0/1 chỉ vẽ khi không còn
-                      animation (showLabels = !isAnimating) nên trong 0.8s
-                      chuyển động nhãn tạm ẩn rồi hiện lại ở giá trị mới. */}
+                  {/* Nhãn 0/1 vẽ bằng dot custom (không dùng LabelList):
+                      nhãn mặc định của Recharts 3 chỉ vẽ khi không còn
+                      animation (showLabels = !isAnimating) nên con số nhấp
+                      nháy (tắt trong 0.8s chuyển động rồi hiện lại — và đợt
+                      vừa rồi còn kẹt mất hẳn sau khi lọc). Dot custom vẽ
+                      cả chấm lẫn con số, chạy theo điểm trong suốt chuyển
+                      động và đứng yên sau đó — con số hiển thị suốt.
+                      Animation vẫn chỉ chạy khi đổi dữ liệu (memo khóa
+                      date:students). */}
                   <Line
                     type="linear"
                     dataKey="students"
                     stroke={LINE_BLUE}
                     strokeWidth={2}
-                    dot={{ r: 3 }}
+                    dot={(props: any) => {
+                      const { cx, cy, value, index } = props;
+                      if (cx == null || cy == null || value == null) return <g key={index} />;
+                      return (
+                        <g key={index}>
+                          <circle cx={cx} cy={cy} r={3} fill={LINE_BLUE} />
+                          <text x={cx} y={cy - 8} fill="#57534e" fontSize={12} textAnchor="middle">
+                            {value}
+                          </text>
+                        </g>
+                      );
+                    }}
                     animationDuration={800}
                     animationEasing="ease-out"
-                  >
-                    <LabelList dataKey="students" position="top" />
-                  </Line>
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
