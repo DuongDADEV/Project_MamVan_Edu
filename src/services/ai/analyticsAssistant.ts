@@ -41,11 +41,13 @@ import {
 import {
   getSessionsSummary,
   getAssignmentsProgress,
+  getAttemptsWithAnswers,
   getTeacherAssignments,
   createAssignment,
   updateAssignment,
   getAssignmentDetail,
   getPendingReviews,
+  getGradedReviews,
   gradePendingAnswer,
 } from '../supabase/biRepository.ts';
 import {
@@ -107,6 +109,10 @@ const TOOL_LABELS: Record<string, string> = {
   get_essay_detail: 'Chi tiết bài tự luận',
   list_pending_essays: 'Bài tự luận chờ chấm',
   list_pending_reviews: 'Bài chờ chấm (BI)',
+  get_submission_history: 'Lịch sử nộp bài',
+  list_graded_reviews: 'Bài đã chấm',
+  get_assignment_detail: 'Chi tiết bài tập',
+  list_reward_tiers: 'Mốc quà',
   list_reward_requests: 'Yêu cầu quà chờ duyệt',
   create_topic: 'Tạo chủ đề',
   create_video_draft: 'Tạo nháp video',
@@ -134,6 +140,59 @@ const norm = (x?: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .trim();
+
+// ĐỢT 7 (26/10): thời gian hiển thị theo giờ Việt Nam, tính sẵn trong
+// code để model chỉ việc đọc lại, không tự đổi múi giờ hay tự tính.
+export function fmtTime(v: any): string | null {
+  if (!v) return null;
+  const d = new Date(typeof v === 'number' ? v : String(v));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+// ĐỢT 7 (26/10): khớp tên học sinh kiểu chứa chuỗi sau khi bỏ dấu (dùng
+// chung cho các tool hỏi theo tên, tránh mỗi tool tự viết 1 kiểu khớp).
+export function matchStudentsByName(students: StudentAccount[], query: string): StudentAccount[] {
+  const q = norm(query);
+  if (!q) return [];
+  return students.filter((s) => norm(s.name).includes(q));
+}
+
+// ĐỢT 7 (26/10): gộp lượt làm BI theo từng bài — số lần nộp + số lần làm
+// lại (= số lần nộp − 1) tính trong code, model chỉ việc đọc lại.
+export function groupAttemptsBySource(attempts: any[]): Array<{
+  bai: string;
+  loai: string;
+  soLanNop: number;
+  soLanLamLai: number;
+  cacLan: Array<{ lanThu: number | null; thoiGianNop: string | null; diem: string | null; trangThai: string | null }>;
+}> {
+  const groups = new Map<string, any>();
+  for (const a of attempts) {
+    const key = `${a.sourceType || ''}|${a.sourceTitle || ''}`;
+    if (!groups.has(key)) groups.set(key, { bai: a.sourceTitle || '', loai: a.sourceType || '', cacLan: [] });
+    groups.get(key).cacLan.push({
+      lanThu: a.attemptNo ?? null,
+      thoiGianNop: fmtTime(a.submittedAt),
+      diem: a.score != null && a.maxScore != null ? `${a.score}/${a.maxScore}` : null,
+      trangThai: a.status ?? null,
+    });
+  }
+  return [...groups.values()].map((g) => ({
+    bai: g.bai,
+    loai: g.loai,
+    soLanNop: g.cacLan.length,
+    soLanLamLai: Math.max(0, g.cacLan.length - 1),
+    cacLan: g.cacLan,
+  }));
+}
 
 function periodLabel(f: AnalyticsFilter): string {
   switch (f.timeRange) {
@@ -539,6 +598,7 @@ export async function executeTool(
             ganNhat: profile.attemptHistory.slice(0, 5).map((h) => ({
               bai: h.quizTitle,
               chuDe: h.topicTitle,
+              thoiGian: fmtTime(h.timestamp),
               diem: `${h.score}/${h.maxScore}`,
               dat: h.isPass,
             })),
@@ -556,6 +616,55 @@ export async function executeTool(
           defaultType: 'bar',
         },
       };
+    }
+
+    case 'get_submission_history': {
+      try {
+        if (!norm(args?.studentName)) {
+          return { evidence, data: { found: false, lyDo: 'Chưa rõ tên học sinh cần xem.' } };
+        }
+        const matches = matchStudentsByName(ctx.students, args.studentName);
+        if (matches.length === 0) {
+          return { evidence, data: { found: false, lyDo: 'Không tìm thấy học sinh có tên này trong các lớp của giáo viên.' } };
+        }
+        if (matches.length > 1) {
+          return { evidence, data: { found: false, lyDo: 'Có nhiều học sinh trùng tên, cần nói rõ hơn.', ungVien: matches.map((m) => m.name) } };
+        }
+        const student = matches[0];
+        // Lượt làm bài tập BI: submitted_at + attempt_no có thật trong bảng
+        // attempts — trước đây không tool nào đọc bảng này nên câu hỏi về
+        // thời gian nộp / số lần làm lại chỉ trả được tổng số lượt.
+        const bi = await getAttemptsWithAnswers([student.id]);
+        const profile = computeStudentProfileData(
+          student.id,
+          ctx.studentStates,
+          ctx.students,
+          ctx.topics as any,
+          f,
+          ctx.classes as any,
+          ctx.questions
+        );
+        const quiz = (profile?.attemptHistory || []).slice(0, 15).map((h: any) => ({
+          bai: h.quizTitle,
+          chuDe: h.topicTitle,
+          thoiGian: fmtTime(h.timestamp),
+          diem: `${h.score}/${h.maxScore}`,
+          dat: h.isPass,
+        }));
+        return {
+          evidence,
+          data: {
+            found: true,
+            hoTen: student.name,
+            baiTapBI: groupAttemptsBySource(bi),
+            kiemTra: quiz,
+            tongLuotBI: bi.length,
+            tongLuotKiemTra: (profile?.attemptHistory || []).length,
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Lấy lịch sử nộp bài thất bại.' } };
+      }
     }
 
     case 'get_learning_activity': {
@@ -699,6 +808,38 @@ export async function executeTool(
       }
     }
 
+    case 'get_assignment_detail': {
+      try {
+        if (!ctx.teacherId) throw new Error('Không xác định được giáo viên đang đăng nhập nên không xem được chi tiết bài tập.');
+        const query = norm(args?.tieuDe);
+        if (!query) throw new Error('Chưa rõ tên bài tập cần xem.');
+        const list = await getTeacherAssignments(ctx.teacherId);
+        const matches = list.filter((a: any) => norm(a.title).includes(query));
+        if (matches.length === 0) throw scopeErr(`bài tập "${args.tieuDe}"`);
+        if (matches.length > 1) {
+          return { evidence, data: { error: 'Có nhiều bài tập trùng tên, cần nói rõ hơn.', ungVien: matches.map((a: any) => a.title) } };
+        }
+        const detail = await getAssignmentDetail(matches[0].id);
+        if (!detail) throw scopeErr(`bài tập "${args.tieuDe}"`);
+        return {
+          evidence,
+          data: {
+            tieuDe: detail.title,
+            hanNop: detail.dueAt,
+            gioiHanPhut: detail.timeLimitMinutes,
+            xpThuong: detail.xpReward,
+            cauHoi: (detail.questions || []).slice(0, 50).map((q: any) => ({
+              deBai: trunc(q.prompt, 160),
+              loai: q.type,
+              diem: q.points,
+            })),
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Xem chi tiết bài tập thất bại.' } };
+      }
+    }
+
     case 'list_questions': {
       try {
         let topicId: string | undefined;
@@ -780,6 +921,29 @@ export async function executeTool(
       }
     }
 
+    case 'list_graded_reviews': {
+      try {
+        const list = await getGradedReviews(ctx.students.map((s) => s.id));
+        return {
+          evidence,
+          data: {
+            baiDaCham: list.slice(0, 20).map((r) => ({
+              reviewId: r.reviewId,
+              hocSinh: r.studentName,
+              bai: r.sourceTitle,
+              deBai: trunc(r.questionPrompt, 160),
+              baiLam: r.responseText,
+              diemToiDa: r.maxScore,
+              diem: r.scoreAwarded ?? null,
+              thoiGian: fmtTime(r.createdAt),
+            })),
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Liệt kê bài đã chấm thất bại.' } };
+      }
+    }
+
     case 'list_reward_requests': {
       const wanted = args.status || 'PENDING_APPROVAL';
       const list = ctx.rewards.filter((r) => (wanted === 'ALL' ? true : r.status === wanted));
@@ -798,6 +962,27 @@ export async function executeTool(
     }
 
     // ============ CÔNG CỤ GHI (24/10 — toàn quyền trong phạm vi giáo viên) ============
+    case 'list_reward_tiers': {
+      try {
+        const tiers = await rewardRepo.getRewards();
+        return {
+          evidence,
+          data: {
+            mocQua: tiers.map((t: any) => ({
+              ruong: t.tierKey,
+              moTa: t.teaserDescription,
+              xpCan: t.requiredXp,
+              soNgayDiemDanhCan: t.requiredAttendanceDays,
+              soLuongCon: t.stock ?? null,
+              dangBat: t.isActive ?? true,
+            })),
+          },
+        };
+      } catch (e: any) {
+        return { evidence, data: { error: e?.message || 'Liệt kê mốc quà thất bại.' } };
+      }
+    }
+
     case 'create_topic': {
       try {
         if (!args.title?.trim()) throw new Error('Cần tiêu đề chủ đề.');
@@ -1443,6 +1628,26 @@ const FUNCTION_DECLARATIONS: any[] = [
     parameters: { type: 'OBJECT', properties: { status: { type: 'STRING', description: 'PENDING_APPROVAL (mặc định), APPROVED, REJECTED hoặc ALL.' } } },
   },
   {
+    name: 'get_submission_history',
+    description: 'Lịch sử nộp bài của 1 học sinh: từng lần nộp bài tập BI (thời gian nộp, lần thứ mấy, điểm) gộp theo bài kèm số lần làm lại, và kiểm tra theo chủ đề (thời gian, điểm, đạt/không). Dùng khi hỏi thời gian nộp, số lần làm lại, lịch sử nộp bài của 1 học sinh — trả danh sách này, không trả mỗi tổng số lượt.',
+    parameters: { type: 'OBJECT', properties: { studentName: { type: 'STRING', description: 'Tên học sinh cần xem.' } }, required: ['studentName'] },
+  },
+  {
+    name: 'list_graded_reviews',
+    description: 'Liệt kê bài đã chấm (phiếu BI đã có điểm) của các lớp giáo viên: học sinh, bài, đề bài, bài làm, điểm tối đa, điểm đã chấm, thời gian.',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
+    name: 'get_assignment_detail',
+    description: 'Chi tiết 1 bài tập đã giao theo tên bài: hạn nộp, giới hạn phút, XP thưởng, danh sách câu hỏi (đề bài, loại, điểm).',
+    parameters: { type: 'OBJECT', properties: { tieuDe: { type: 'STRING', description: 'Tên bài tập cần xem.' } }, required: ['tieuDe'] },
+  },
+  {
+    name: 'list_reward_tiers',
+    description: 'Liệt kê các mốc quà của giáo viên: rương, mô tả gợi ý, XP cần, số ngày điểm danh cần, số lượng còn, đang bật/tắt. Không lộ nội dung quà bí mật.',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
     name: 'create_topic',
     description: 'Tạo chủ đề mới ở trạng thái nháp (chưa xuất bản, học sinh chưa thấy).',
     parameters: {
@@ -1688,6 +1893,7 @@ QUY TẮC BẮT BUỘC:
 5f. KHÔNG dùng câu "Em xin lỗi, em không thể..." với bất kỳ yêu cầu nào NẰM TRONG phạm vi công cụ: dữ liệu lớp mình, trả lời đếm/liệt kê/tên, vẽ biểu đồ từ dữ liệu có được, và mọi việc ghi đã có công cụ — phải làm luôn (trả lời + vẽ nếu được yêu cầu). Chỉ từ chối khi yêu cầu THỰC SỰ ngoài phạm vi (dữ liệu giáo viên khác, quản trị hệ thống, việc chưa có công cụ) — và khi đó từ chối ngắn gọn trong 1 câu + nói rõ việc thay thế làm được ngay (kèm nội dung chuẩn bị sẵn nếu là việc ghi chưa có công cụ).
 5g. "Vẽ sơ đồ tổng quan học sinh" LUÔN vẽ được: gọi render_chart MỘT lần với loai = tien_do_hoc_sinh + tenHocSinh (hàm tự lấy hồ sơ rồi vẽ cột % hoàn thành theo chủ đề: chuDe × phanTramHoanThanh). TUYỆT ĐỐI không nói công cụ thiếu trường — tienDoChuDe sinh ra chính cho việc này. Nếu hồ sơ không có dữ liệu chủ đề nào thì nói ngắn "chưa đủ dữ liệu" + hiện phần văn bản, không xin lỗi kiểu từ chối.
 5h. Tham chiếu mơ hồ không có tên: "học sinh này", "em đó", "bạn đó" mà hội thoại hiện tại chưa gọi tên học sinh nào thì HỎI LẠI học sinh nào — tuyệt đối không gọi công cụ với tên đoán mò hoặc tên rỗng (tên rỗng làm API lỗi).
+5i. Khi hỏi về 1 học sinh cụ thể — thời gian nộp, số lần làm lại, lịch sử nộp bài — gọi get_submission_history với studentName (hàm trả danh sách từng lần nộp kèm thời gian + số lần làm lại theo từng bài, cả bài tập BI lẫn kiểm tra): trả lời bằng danh sách đó, KHÔNG trả mỗi tổng số lượt. Bài đã chấm rồi thì gọi list_graded_reviews; chi tiết 1 bài tập đã giao thì gọi get_assignment_detail theo tên bài; mốc quà thì gọi list_reward_tiers.
 6. Trả lời tiếng Việt, ngắn gọn, rõ cấu trúc (đoạn ngắn hoặc gạch đầu dòng). Xưng "em", gọi người dùng là "thầy/cô".
 7. Cuối MỖI câu trả lời, thêm một khối đúng định dạng sau (tối đa 3 câu hỏi gợi ý liên quan trực tiếp tới điều vừa phân tích):
 GOI_Y:
@@ -1795,6 +2001,14 @@ const TOOL_KEYWORDS: [string, string[]][] = [
   ['go xuat ban', ['unpublish_content']],
   ['an bai', ['unpublish_content']],
   ['bai tap', ['list_assignments', 'create_assignment', 'update_assignment']],
+  ['thoi gian nop', ['get_submission_history']],
+  ['lam lai', ['get_submission_history']],
+  ['lich su nop', ['get_submission_history']],
+  ['so lan nop', ['get_submission_history']],
+  ['nop bai', ['get_submission_history']],
+  ['da cham', ['list_graded_reviews']],
+  ['chi tiet bai tap', ['get_assignment_detail']],
+  ['moc qua', ['list_reward_tiers']],
   ['giao bai', ['create_assignment', 'list_assignments']],
   ['tao bai tap', ['create_assignment', 'list_questions']],
   ['xoa', ['delete_content', 'delete_quiz', 'delete_question']],
