@@ -671,32 +671,39 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       'Tỷ lệ điểm đạt',
                     ]}
                   />
-                  {/* Nhãn % vẽ bằng hàm custom gắn vào đầu thanh (không dùng
-                      LabelList): nhãn mặc định của Recharts tự ẩn trong lúc
-                      animation nên con số nhấp nháy (tắt rồi hiện). Nhãn
-                      custom chạy theo đầu thanh trong suốt 800ms chuyển động
-                      và đứng yên sau đó — con số hiển thị suốt, không tắt.
-                      Animation vẫn chỉ chạy khi đổi dữ liệu (memo khóa
-                      label:rate:gradedCount giữ tham chiếu khi không đổi). */}
+                  {/* Thanh + nhãn % vẽ bằng shape custom (không dùng
+                      LabelList lẫn prop label — cả hai đều qua hệ nhãn của
+                      Recharts nên đợt vừa rồi nhãn % không hiện): shape tự
+                      vẽ hình chữ nhật của thanh kèm con số ở đầu thanh, nên
+                      con số chạy theo đầu thanh trong suốt 800ms chuyển động
+                      và đứng yên sau đó — cùng cách làm đã chứng minh hiệu
+                      quả với dot custom của đường. Animation vẫn chỉ chạy
+                      khi đổi dữ liệu (memo khóa label:rate:gradedCount). */}
                   <Bar
                     dataKey="rate"
                     fill={BAR_PEACH}
                     animationDuration={800}
                     animationEasing="ease-out"
-                    label={(props: any) => {
-                      const { x, y, width, height, value } = props;
-                      if (x == null || y == null || width == null || height == null || value == null) return <g />;
+                    shape={(props: any) => {
+                      const { x, y, width, height, index } = props;
+                      const value = props.value ?? props.payload?.rate;
+                      if (x == null || y == null || width == null || height == null) return <g key={index} />;
                       return (
-                        <text
-                          x={x + width + 8}
-                          y={y + height / 2}
-                          fill="#57534e"
-                          fontSize={12}
-                          textAnchor="start"
-                          dominantBaseline="middle"
-                        >
-                          {`${Math.round(Number(value) * 100)}%`}
-                        </text>
+                        <g key={index}>
+                          <rect x={x} y={y} width={width} height={height} fill={BAR_PEACH} />
+                          {value == null ? null : (
+                            <text
+                              x={x + width + 8}
+                              y={y + height / 2}
+                              fill="#57534e"
+                              fontSize={12}
+                              textAnchor="start"
+                              dominantBaseline="middle"
+                            >
+                              {`${Math.round(Number(value) * 100)}%`}
+                            </text>
+                          )}
+                        </g>
                       );
                     }}
                   />

@@ -1,3 +1,7 @@
+## 2026-10-25 (BIỂU ĐỒ CỘT: NHÃN % CHUYỂN SANG SHAPE CUSTOM — PROP LABEL KHÔNG HIỆN)
+
+Kiểm chứng 25/10 trên bản 4abd812: nhãn 0/1 của đường đạt ở mọi trạng thái (dot custom hiệu quả), nhưng nhãn % của cột không hiện trong bất kỳ ảnh nào — hàm label custom gắn vào prop label của Bar không vẽ ra (hàm này vẫn đi qua hệ nhãn của Recharts). Đợt này chuyển nhãn % sang shape custom: shape tự vẽ hình chữ nhật của thanh kèm con số ở đầu thanh (x + width + 8), cùng triết lý với dot custom của đường — nhãn là một phần của hình vẽ nên không thể bị hệ nhãn ẩn đi, chạy theo đầu thanh trong suốt 800ms chuyển động và đứng yên sau đó. Thanh vẫn vẽ đúng hình chữ nhật màu cũ, chỉ khác là con số đi kèm trong cùng một shape. Sơ đồ cập nhật cùng đợt (308 nút, quan hệ không đổi, code-map nguyên vẹn).
+
 ## 2026-10-25 (BIỂU ĐỒ TỔNG QUAN: NHÃN % VÀ 0/1 VẼ CUSTOM — HIỂN THỊ SUỐT ANIMATION, HẾT NHẤP NHÁY CON SỐ)
 
 Theo lệnh chủ dự án: hiệu ứng chuyển động giữ nguyên, còn con số phải hiển thị suốt, không được nhấp nháy. Đợt animation 800ms trước đó dùng LabelList mặc định của Recharts — loại nhãn này tự ẩn trong lúc animation (Line: showLabels = !isAnimating) nên con số tắt rồi hiện (nhấp nháy), và kiểm chứng 25/10 còn bắt gặp trường hợp nhãn kẹt mất hẳn sau khi lọc theo học sinh (chỉ hiện lại khi bỏ lọc). Đợt này bỏ hẳn LabelList, vẽ nhãn bằng code riêng gắn chặt vào hình học biểu đồ.
