@@ -1,3 +1,9 @@
+## 2026-10-26 (CHẶN SỐ BỊA Ở TRỢ LÝ PHÂN TÍCH)
+
+- **Vấn đề thật 26/10 ~01:41:** giáo viên hỏi "xem biểu đồ tổng quan", nấc cuối Workers AI phục vụ (3 nấc kia rớt) đã trả toàn chữ kể chuyện gọi tool + bảng số tự bịa (Toán 85%, Văn 80%...) thay vì gọi tool thật — trong khi biểu đồ thật phải hiện dạng cột theo CHỦ ĐỀ của 1 học sinh cụ thể, và câu hỏi không nêu tên ai nên tool thật còn báo "chưa rõ tên học sinh". Vòng tool ở trình duyệt vốn trả nguyên văn câu chữ khi model không gọi tool nào, nên số bịa lọt thẳng lên khung chat.
+- **Sửa (frontend, `askAnalyticsAssistant`):** câu hỏi đã chọn tool (router khớp từ khóa) mà model trả toàn chữ không gọi tool nào, lại chứa số liệu (%, phân số, số kèm XP/điểm/bài/học sinh/em) thì khung chat hiện "Chưa đủ dữ liệu" thay cho câu đó, bỏ luôn gợi ý nối tiếp sinh ra từ câu bịa. Không chặn: câu chào (không chọn tool), câu nối tiếp không khớp từ khóa (gửi đủ 33 tool, có thể trả từ lịch sử), câu không có số, và mọi câu đã gọi tool rồi. Giới hạn còn lại: câu hỏi không khớp từ khóa nào (gửi đủ 33 tool) vẫn dựa vào việc model chịu gọi tool + quy tắc prompt "chưa đủ dữ liệu".
+- **Kiểm chứng:** test mới `scripts/test_data_guard.ts` 13/13 (bảng % kiểu ảnh chụp bị chặn; mã lớp 7A4, số thứ tự, câu chào, câu nối tiếp, câu đã gọi tool đều không bị chặn); tsc + 34/34 + 20/20 vẫn đậu. Sơ đồ cập nhật cùng đợt (315 nút, code-map 314/314).
+
 ## 2026-10-26 (WORKERS AI LÀM NẤC CUỐI CHUỖI AI)
 
 - Thêm nấc Workers AI (Cloudflare) vào cuối chuỗi failover: Gemini → Groq → OpenRouter → Workers AI. Model mặc định `@cf/meta/llama-3.1-8b-instruct-fp8-fast` (OpenAI-compatible, base theo Account ID). Key nấc này nhập ở màn admin như các nấc khác (ai_settings 'ai_keys', DB-trước/env-fallback với biến WORKERS_AI_API_KEY); riêng nấc này cần thêm Account ID Cloudflare (ai_settings 'workersai_account_id' hoặc env CLOUDFLARE_ACCOUNT_ID, nhập ở ô riêng dưới nấc Workers AI trong màn admin).

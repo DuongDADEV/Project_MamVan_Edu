@@ -1786,6 +1786,25 @@ const CHARTABLE_TOOLS = [
   'get_learning_activity',
 ];
 
+// ĐỢT 5 (26/10): số liệu không có bằng chứng tool — phần trăm, phân số,
+// số kèm đơn vị đo (XP/điểm/bài/học sinh/em). Câu hỏi đã chọn tool mà model
+// trả toàn chữ không gọi tool nào, lại chứa mẫu này thì số đó là bịa:
+// khung chat hiện 'chưa đủ dữ liệu' thay cho câu đó. Câu chào (không chọn
+// tool), câu nối tiếp không khớp từ khóa (gửi đủ 33 tool, có thể trả từ
+// lịch sử) và câu không có số thì không bị chặn.
+const UNGROUNDED_NUMBER_RE =
+  /(\d+\s*%|\d+\s*\/\s*\d+|\d[\d.,]*\s*(XP|điểm|bài|học sinh|em\b))/i;
+
+export function isUngroundedDataAnswer(
+  text: string,
+  toolRunCount: number,
+  routed: any[] | null
+): boolean {
+  if (toolRunCount > 0) return false;
+  if (!routed || routed.length === 0) return false;
+  return UNGROUNDED_NUMBER_RE.test(text);
+}
+
 export function selectToolsForQuery(latestUserText: string): any[] | null {
   const raw = normalizeQuery(latestUserText).replace(/\s+/g, ' ').trim();
   if (/^(xin chao|hi|hello|chao|chao thay|chao co)[\s!.?]*$/.test(raw)) return [];
@@ -1829,12 +1848,31 @@ export async function askAnalyticsAssistant(
   // Tiết kiệm token: lượt này chỉ gửi tool khớp câu hỏi mới nhất (null =
   // không khớp → gửi đủ, [] = chỉ chào hỏi → không gửi tool nào).
   const lastUser = [...history].reverse().find((h) => h.role === 'user');
-  const turnDecls = selectToolsForQuery(lastUser?.text || '') ?? FUNCTION_DECLARATIONS;
+  const routed = selectToolsForQuery(lastUser?.text || '');
+  const turnDecls = routed ?? FUNCTION_DECLARATIONS;
 
   const toolRuns: AssistantToolRun[] = [];
   const seriesByTool = new Map<string, NonNullable<ToolOutcome['series']>>();
   let chart: AssistantChart | undefined;
   let lastError: any = null;
+
+  // ĐỢT 5 (26/10): chặn số bịa — câu trả lời không kèm kết quả tool thật
+  // mà chứa số liệu thì bỏ câu đó, hiện 'chưa đủ dữ liệu' (kèm gợi ý hỏi
+  // lại/nêu tên), và bỏ luôn gợi ý nối tiếp sinh ra từ câu bịa đó.
+  const guardReply = (parsed: {
+    text: string;
+    followups: string[];
+  }): AssistantReply => {
+    if (isUngroundedDataAnswer(parsed.text, toolRuns.length, routed)) {
+      return {
+        text: 'Chưa đủ dữ liệu để trả lời câu này. Thầy/cô thử hỏi lại hoặc nêu rõ tên học sinh/chủ đề giúp em.',
+        toolRuns,
+        chart,
+        followups: [],
+      };
+    }
+    return { text: parsed.text, toolRuns, chart, followups: parsed.followups };
+  };
 
   try {
       // Tối đa 5 vòng gọi hàm cho mỗi câu hỏi
@@ -1849,7 +1887,7 @@ export async function askAnalyticsAssistant(
         if (calls.length === 0) {
           if (textPart) {
             const parsed = parseFollowups(textPart);
-            return { text: parsed.text, toolRuns, chart, followups: parsed.followups };
+            return guardReply(parsed);
           }
           throw new Error('EMPTY_RESPONSE');
         }
@@ -1908,7 +1946,7 @@ export async function askAnalyticsAssistant(
           (p: any) => typeof p.text === 'string'
         )?.text || 'Em đã truy vấn dữ liệu nhưng chưa diễn đạt được kết quả. Thầy/cô thử hỏi lại giúp em.';
       const parsed = parseFollowups(finalText);
-      return { text: parsed.text, toolRuns, chart, followups: parsed.followups };
+      return guardReply(parsed);
     } catch (err: any) {
       lastError = err;
       // 400/INVALID_ARGUMENT (25/10): thử lại CÙNG contents qua model khác
