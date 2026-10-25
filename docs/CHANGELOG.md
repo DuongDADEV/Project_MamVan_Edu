@@ -1,3 +1,8 @@
+## 2026-10-26 (BẢNG MARKDOWN TRONG CÂU TRẢ LỜI TRỢ LÝ BỊ BÓP DÚM)
+
+- **Vấn đề thật 26/10 ~02:40:** câu trả lời lịch sử nộp bài của Lê Khánh Chi hiện bảng 6 cột nhưng chữ dính nhau ("Assignment1"), tiêu đề vỡ giữa từ, giờ nộp tách dòng — vì nút render markdown không có style cho bảng nên bảng 6 cột bị bóp dúm trong bong bóng hẹp. Dữ liệu trong bảng là đúng (tool Lịch sử nộp bài đã chạy, giờ + điểm thật).
+- **Sửa (`AnalyticsAssistantTab.tsx`, tab + bong bóng dùng chung):** bảng nay bọc trong khung cuộn ngang, chiều rộng tối thiểu 500px để cột không bóp, ô có padding + viền, tiêu đề không vỡ từ. Test chốt chặn `scripts/test_table_render.ts` 4/4. Không sinh lại sơ đồ đợt này (sửa render nhỏ, không đổi luồng).
+
 ## 2026-10-26 (XÓA ẢNH MARKDOWN HỎNG TRONG CÂU TRẢ LỜI TRỢ LÝ)
 
 - **Vấn đề thật 26/10 ~02:35:** câu trả lời về "số lần đăng nhập của tất cả học sinh" hiện thêm 1 ảnh hỏng có chữ "Biểu đồ đăng nhập", nhấp nháy trong khung chat. Nguyên nhân: model chèn ảnh markdown ![...](...) với URL hỏng, mà nút render markdown duy nhất của trợ lý (tab + bong bóng dùng chung) không chặn thẻ img nên trình duyệt hiện icon vỡ + chữ alt, nhấp nháy mỗi lần khung chat re-render. Biểu đồ thật (Recharts từ render_chart) vẫn hiện bình thường bên dưới.

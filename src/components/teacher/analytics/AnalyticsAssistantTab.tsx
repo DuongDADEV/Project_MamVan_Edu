@@ -289,6 +289,21 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
                           code: ({ children }) => (
                             <code className="bg-[#FAF5EB] border border-[#E6DCC8] rounded px-1 text-[13px]">{children}</code>
                           ),
+                          // ĐỢT 7 (26/10): bảng markdown không có style nên 6 cột
+                          // bị bóp dúm trong bong bóng hẹp (chữ dính nhau kiểu
+                          // 'Assignment1', tiêu đề vỡ giữa từ) — bọc bảng trong
+                          // khung cuộn ngang, cột đủ rộng, ô có padding + viền.
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto my-1.5 -mx-1 px-1">
+                              <table className="w-full min-w-[500px] text-xs border-collapse">{children}</table>
+                            </div>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-[#E6DCC8] bg-[#FAF5EB] px-2 py-1 text-left font-bold text-[#2F3E6B] whitespace-nowrap">{children}</th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-[#E6DCC8] px-2 py-1 align-top break-words">{children}</td>
+                          ),
                           // ĐỢT 7 (26/10): câu trả lời trợ lý KHÔNG bao giờ hiện ảnh
                           // markdown — biểu đồ duy nhất là chart Recharts từ
                           // render_chart; ảnh markdown do model chèn (vd ảnh
