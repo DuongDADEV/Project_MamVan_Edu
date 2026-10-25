@@ -32,9 +32,11 @@ import { Palette } from 'lucide-react';
 import {
   authService,
   attemptService,
+  classService,
   contentService,
   quizService,
   rewardService,
+  studentService,
   essayRepository,
   QuizWithMeta,
   QuestionWithMeta,
@@ -573,10 +575,37 @@ export default function App() {
       } catch {}
       setPreviewReturnSession(currentSession);
     }
-    // Chuyển sang trải nghiệm học sinh với tài khoản hs001
-    const res = await authService.signIn('student', 'hs001', '123456');
-    if (res.session) {
-      setCurrentSession(res.session);
+    // Xem trước KHÔNG đổi phiên Supabase Auth (đợt 25/10): giữ JWT giáo viên
+    // để lúc thoát không kẹt JWT học sinh (RLS sẽ chặn truy vấn giáo viên).
+    // Hồ sơ hs001 đọc bằng quyền giáo viên (hs001 thuộc lớp của gv001);
+    // xem trước chỉ xem, không ghi bài (ghi cần JWT học sinh nên RLS chặn).
+    // Giáo viên khác lớp hs001: getStudentById rơi về mock (id không phải
+    // UUID) → báo rõ chứ không hiển thị dữ liệu mẫu đội lốt thật.
+    try {
+      const stu = await studentService.getStudentById('hs001');
+      if (!stu || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stu.id)) {
+        showToast('Góc xem trước chỉ dùng được cho học sinh lớp mình (hs001 không thuộc lớp của thầy/cô)');
+        return;
+      }
+      let grade = 'Lớp 7';
+      try {
+        const cls = await classService.getClassById(stu.class_id);
+        if (cls?.grade) grade = cls.grade;
+      } catch {}
+      const previewSession: AuthSession = {
+        user: {
+          id: stu.id,
+          name: stu.name,
+          username: stu.username,
+          role: 'student',
+          grade,
+          school: 'THCS Giấy & Mực',
+          avatarSeed: stu.username,
+        },
+        role: 'student',
+        signedInAt: Date.now(),
+      };
+      setCurrentSession(previewSession);
       try {
         sessionStorage.removeItem('mam_van_watered_session_hs001');
       } catch {}
@@ -586,9 +615,9 @@ export default function App() {
       setCurrentTab('home');
       setActiveFlow(null);
       navigateTo('/');
-      showToast('Đang ở góc xem trước Học sinh (hs001)');
-    } else {
-      showToast(res.error || 'Không vào được góc xem trước Học sinh (tài khoản hs001 chưa sẵn sàng)');
+      showToast('Đang ở góc xem trước Học sinh (hs001) — chỉ xem, không ghi bài');
+    } catch {
+      showToast('Không vào được góc xem trước Học sinh (tài khoản hs001 chưa sẵn sàng)');
     }
   };
 

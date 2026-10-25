@@ -23,20 +23,12 @@ import {
   RefreshCw,
   Quote,
   Eye,
-  KeyRound,
-  Zap,
-  ExternalLink,
   Lightbulb,
   RotateCcw,
   Link2,
 } from 'lucide-react';
 import { AISource, aiService } from '../../../services/index.ts';
 import {
-  getGeminiApiKey,
-  setGeminiApiKey,
-  getGeminiModel,
-  setGeminiModel,
-  testGeminiApiKey,
   getLastAiFallback,
   clearLastAiFallback,
 } from '../../../services/ai/index.ts';
@@ -195,18 +187,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   autoOpenDraftNonce,
   teacherId,
 }) => {
-  // 1. TRẠNG THÁI API KEY & AI THẬT
-  const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!getGeminiApiKey());
-  const [activeModel, setActiveModel] = useState<string>(() => getGeminiModel());
-  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
-  const [modalKeyInput, setModalKeyInput] = useState<string>(() => getGeminiApiKey());
-  const [modalModelInput, setModalModelInput] = useState<string>(() => getGeminiModel());
-  const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
-  const [keyTestResult, setKeyTestResult] = useState<{
-    success: boolean;
-    message: string;
-    latencyMs: number;
-  } | null>(null);
+  // Đợt 25/10: AI chạy qua proxy admin — không còn trạng thái key/model ở đây.
 
   // Nguồn ngữ liệu mặc định: Bài thơ "Cây dừa" (Trần Đăng Khoa)
   const DEFAULT_CAY_DUA_SOURCE: AISource = {
@@ -682,7 +663,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     onApplyDraft({
       type: 'quiz',
       data: {
-        title: `Bộ câu hỏi: ${topicTitle} (Sinh bởi Gemini AI)`,
+        title: `Bộ câu hỏi: ${topicTitle} (Sinh bởi Mầm AI)`,
         kind: 'quick',
         topicId,
         timeLimitMinutes: Math.max(7, questionsToSave.length),
@@ -758,43 +739,6 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     }
   };
 
-  // Lưu API Key từ Modal Quick
-  const handleSaveModalKey = () => {
-    setGeminiApiKey(modalKeyInput);
-    setGeminiModel(modalModelInput);
-    const keyValid = !!modalKeyInput.trim();
-    setHasApiKey(keyValid);
-    setActiveModel(modalModelInput);
-    setShowApiKeyModal(false);
-    alert(
-      keyValid
-        ? 'Đã kích hoạt Google AI Studio (Gemini) thật! Bây giờ AI sẽ đọc ngữ liệu và sinh nội dung trực tiếp.'
-        : 'Đã xóa API Key.'
-    );
-  };
-
-  // Kiểm tra kết nối trong Modal Quick
-  const handleTestModalKey = async () => {
-    if (!modalKeyInput.trim()) {
-      alert('Vui lòng dán API Key trước khi kiểm tra.');
-      return;
-    }
-    setIsTestingKey(true);
-    setKeyTestResult(null);
-    try {
-      const res = await testGeminiApiKey(modalKeyInput.trim(), modalModelInput);
-      setKeyTestResult(res);
-    } catch (err: any) {
-      setKeyTestResult({
-        success: false,
-        message: err.message || 'Lỗi mạng khi kiểm tra.',
-        latencyMs: 0,
-      });
-    } finally {
-      setIsTestingKey(false);
-    }
-  };
-
   // Sinh bản nháp từ AI
   const handleGenerateDraft = async () => {
     const activeSources = sources.filter((s) => s.isEnabled);
@@ -803,16 +747,9 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
       return;
     }
 
-    // Kiểm tra xem đã có API Key chưa
-    if (!getGeminiApiKey()) {
-      alert('⚠️ Chưa cấu hình Google AI Studio API Key! Vui lòng dán API Key để kích hoạt AI thật sinh câu hỏi theo đúng ngữ liệu của thầy/cô.');
-      setShowApiKeyModal(true);
-      return;
-    }
-
     clearLastAiFallback();
     setIsGenerating(true);
-    setGenerationStep('Gemini AI đang đọc và phân tích cấu trúc văn bản nguồn...');
+    setGenerationStep('Mầm AI đang đọc và phân tích cấu trúc văn bản nguồn...');
 
     try {
       if (outputType === 'video') {
@@ -824,7 +761,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
 
         const fbVideo = getLastAiFallback();
         if (fbVideo) {
-          alert(`⚠️ Gemini AI lỗi (${fbVideo.reason}). Nội dung vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô kiểm tra kỹ hoặc thử lại sau.`);
+          alert(`⚠️ Mầm AI lỗi (${fbVideo.reason}). Nội dung vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô kiểm tra kỹ hoặc thử lại sau.`);
         }
         setGenerationStep('Hoàn tất! Đang đưa vào trình chỉnh sửa video...');
         setTimeout(() => {
@@ -832,7 +769,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           onApplyDraft({
             type: 'video',
             data: {
-              title: `Bài giảng: Tìm hiểu ${topicTitle} ${fbVideo ? '(Bản dự phòng — Gemini lỗi)' : '(Sinh bởi Gemini AI)'}`,
+              title: `Bài giảng: Tìm hiểu ${topicTitle} ${fbVideo ? '(Bản dự phòng — Mầm AI lỗi)' : '(Sinh bởi Mầm AI)'}`,
               description: `Video bài giảng bám sát ngữ liệu: ${activeSources[0].title}.`,
               durationSec: 12 * 60,
               subtopics: [topicTitle, 'Đặc trưng thể loại'],
@@ -853,20 +790,20 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
 
         const fbTheory = getLastAiFallback();
         if (fbTheory) {
-          alert(`⚠️ Gemini AI lỗi (${fbTheory.reason}). Nội dung vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô kiểm tra kỹ hoặc thử lại sau.`);
+          alert(`⚠️ Mầm AI lỗi (${fbTheory.reason}). Nội dung vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô kiểm tra kỹ hoặc thử lại sau.`);
         }
         setGenerationStep('Hoàn tất! Đang mở bản duyệt lý thuyết...');
         setTimeout(() => {
           setIsGenerating(false);
           setReviewTheoryDraft({
-            title: `Lý thuyết chuyên sâu: ${topicTitle} ${fbTheory ? '(Bản dự phòng — Gemini lỗi)' : '(Sinh bởi Gemini AI)'}`,
+            title: `Lý thuyết chuyên sâu: ${topicTitle} ${fbTheory ? '(Bản dự phòng — Mầm AI lỗi)' : '(Sinh bởi Mầm AI)'}`,
             blocks,
             isFallback: !!fbTheory,
           });
           setIsTheoryReviewOpen(true);
         }, 600);
       } else {
-        setGenerationStep(`Gemini AI đang soạn bộ câu hỏi 4 mức năng lực (${totalQuestions} câu)...`);
+        setGenerationStep(`Mầm AI đang soạn bộ câu hỏi 4 mức năng lực (${totalQuestions} câu)...`);
         const questions = await aiService.generateQuestions(activeSources, {
           topicTitle,
           totalQuestions,
@@ -876,7 +813,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
 
         const fbQuestions = getLastAiFallback();
         if (fbQuestions) {
-          alert(`⚠️ Gemini AI lỗi (${fbQuestions.reason}). Bộ câu hỏi vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô duyệt kỹ từng câu trước khi lưu.`);
+          alert(`⚠️ Mầm AI lỗi (${fbQuestions.reason}). Bộ câu hỏi vừa tạo là BẢN DỰ PHÒNG mẫu, chưa bám ngữ liệu nguồn — thầy/cô duyệt kỹ từng câu trước khi lưu.`);
         }
 
         const processedQuestions = questions.map((q) => ({
@@ -896,7 +833,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
       }
     } catch (e: any) {
       console.error('Lỗi sinh bản nháp AI:', e);
-      alert(`⚠️ Lỗi sinh nội dung AI: ${e.message || 'Lỗi mạng hoặc API Key chưa hợp lệ'}. Vui lòng bấm vào nút cấu hình API Key để kiểm tra lại.`);
+      alert(`⚠️ Lỗi sinh nội dung AI: ${e.message || 'Lỗi mạng'}. Vui lòng thử lại sau ít phút.`);
       setIsGenerating(false);
     }
   };
@@ -928,39 +865,12 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           </div>
         </div>
 
-        {/* NÚT TRẠNG THÁI AI & ĐÓNG MODAL */}
+        {/* Trạng thái AI: chạy qua proxy admin, giáo viên không nhập key */}
         <div className="flex items-center gap-2">
-          {hasApiKey ? (
-            <button
-              type="button"
-              onClick={() => {
-                setModalKeyInput(getGeminiApiKey());
-                setModalModelInput(getGeminiModel());
-                setKeyTestResult(null);
-                setShowApiKeyModal(true);
-              }}
-              className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Cấu hình Google AI Studio API Key"
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-              <span>🟢 Mầm AI ({activeModel.replace(/^gemini/i, 'AI')})</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setModalKeyInput(getGeminiApiKey());
-                setModalModelInput(getGeminiModel());
-                setKeyTestResult(null);
-                setShowApiKeyModal(true);
-              }}
-              className="px-3 py-1.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer animate-pulse"
-              title="Bấm để kích hoạt AI thật bằng API Key của bạn"
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>🔑 Kích hoạt Mầm AI (Nhập Key)</span>
-            </button>
-          )}
+          <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-600" />
+            <span>Mầm AI</span>
+          </span>
 
           {!isEmbedded && (
             <button
@@ -1657,7 +1567,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
             {isChatLoading && (
               <div className="flex gap-2 items-center text-xs text-[#8C7E6A] italic p-2 bg-[#FAF5EB] rounded-xl w-fit">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0D9488]" />
-                <span>Gemini AI đang đọc tài liệu nguồn và trích xuất câu trả lời...</span>
+                <span>Mầm AI đang đọc tài liệu nguồn và trích xuất câu trả lời...</span>
               </div>
             )}
           </div>
@@ -1884,7 +1794,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                 {isGenerating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>{generationStep || 'Gemini AI đang làm việc...'}</span>
+                    <span>{generationStep || 'Mầm AI đang làm việc...'}</span>
                   </>
                 ) : (
                   <>
@@ -1925,123 +1835,6 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
         onConfirm={handleDiscardDraft}
         onCancel={() => setIsDiscardDraftOpen(false)}
       />
-      {showApiKeyModal && (
-        <div className="fixed inset-0 z-60 bg-[#1E1B4B]/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl shadow-2xl p-6 space-y-4 text-[#2F3E6B] animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E6DCC8]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#E2704A]/10 text-[#E2704A] flex items-center justify-center">
-                  <KeyRound className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-lora font-bold text-base">Cấu hình Google AI Studio API Key</h3>
-                  <p className="text-[11px] text-[#8C7E6A]">Kích hoạt Gemini AI thật cho toàn hệ thống Mầm Văn</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowApiKeyModal(false)}
-                className="p-1 rounded-lg text-[#8C7E6A] hover:bg-black/5"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold block mb-1">
-                  Google Gemini API Key <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Dán API Key (bắt đầu bằng AIzaSy...)"
-                  value={modalKeyInput}
-                  onChange={(e) => setModalKeyInput(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-mono outline-none focus:border-[#E2704A]"
-                />
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] text-[#E2704A] hover:underline inline-flex items-center gap-1 mt-1 font-medium"
-                >
-                  <span>Lấy API Key miễn phí tại Google AI Studio</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold block mb-1">Mô hình AI (Model)</label>
-                <select
-                  value={modalModelInput}
-                  onChange={(e) => setModalModelInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
-                >
-                  <option value="gemini-3.8-flash">Mầm AI-3.8-flash (Thế hệ mới 3.8 - Siêu tốc)</option>
-                  <option value="gemini-3.5-flash-lite">Mầm AI-3.5-flash-lite (Nhẹ - Siêu tốc)</option>
-                  <option value="gemini-3.1-pro-preview">Mầm AI-3.1-pro-preview (Suy luận chuyên sâu, bản xem trước)</option>
-                  <option value="gemini-flash-latest">Mầm AI-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
-                </select>
-              </div>
-
-              {keyTestResult && (
-                <div
-                  className={`p-3 rounded-xl border text-xs space-y-1 ${
-                    keyTestResult.success
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                      : 'bg-rose-50 border-rose-300 text-rose-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold">
-                    <span>{keyTestResult.success ? '✓ Kết nối thành công!' : '✗ Lỗi kết nối!'}</span>
-                    {keyTestResult.latencyMs > 0 && <span>{keyTestResult.latencyMs}ms</span>}
-                  </div>
-                  <p className="text-[11px] italic">"{keyTestResult.message}"</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-[#E6DCC8]">
-              <button
-                type="button"
-                onClick={handleTestModalKey}
-                disabled={isTestingKey || !modalKeyInput.trim()}
-                className="px-3.5 py-2 rounded-xl border border-[#2F3E6B] text-[#2F3E6B] hover:bg-[#2F3E6B]/5 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-              >
-                {isTestingKey ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Đang kiểm tra...</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Kiểm tra kết nối</span>
-                  </>
-                )}
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowApiKeyModal(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#8C7E6A] hover:bg-black/5"
-                >
-                  Đóng
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveModalKey}
-                  className="px-4 py-2 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shadow-xs cursor-pointer"
-                >
-                  Lưu & Kích hoạt AI
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ========================================================= */}
       {/* MODAL XEM TOÀN VĂN TÀI LIỆU NGUỒN (SOURCE VIEWER)         */}
       {/* ========================================================= */}

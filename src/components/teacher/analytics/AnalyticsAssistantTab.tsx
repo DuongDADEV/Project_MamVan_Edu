@@ -4,7 +4,6 @@ import {
   Trash2,
   Sparkles,
   Loader2,
-  KeyRound,
   Database,
   Lightbulb,
   AlertTriangle,
@@ -23,7 +22,6 @@ import {
 import { StudentState, EssaySubmission, RewardRequest, Question } from '../../../types.ts';
 import { StudentAccount, ClassItem } from '../../../services/types.ts';
 import { AnalyticsFilter } from '../../../analytics/types.ts';
-import { getGeminiApiKey } from '../../../services/ai/index.ts';
 import {
   askAnalyticsAssistant,
   AssistantContext,
@@ -79,9 +77,6 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   teacherId,
   compact = false,
 }) => {
-  const [hasKey, setHasKey] = useState<boolean>(() => !!getGeminiApiKey());
-  // Lịch sử + trạng thái bận lấy từ kho DÙNG CHUNG: tab Phân tích và bong
-  // bóng chat là cùng một cuộc trò chuyện, lưu bền trong trình duyệt.
   const { messages, busy } = useAssistantChat();
   const [input, setInput] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
@@ -120,10 +115,6 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
   const send = async (rawText: string) => {
     const text = rawText.trim();
     if (!text || busy) return;
-    if (!getGeminiApiKey()) {
-      setHasKey(false);
-      return;
-    }
     const history = messages
       .filter((m) => !m.isError)
       .map((m) => ({ role: m.role, text: m.text }));
@@ -161,15 +152,9 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
       }
     } catch (err: any) {
       if (!timedOut) {
-        if (err?.message === 'NO_API_KEY') {
-          setHasKey(false);
-        }
         appendAssistantMsg({
           role: 'assistant',
-          text:
-            err?.message === 'NO_API_KEY'
-              ? 'Chưa có khóa Gemini nên em chưa trả lời được. Thầy/cô nhập khóa ở mục Cài đặt → Mô hình Mầm AI rồi quay lại đây nhé.'
-              : `Em chưa truy vấn được lúc này (${err?.message || 'lỗi kết nối'}). Thầy/cô thử gửi lại câu hỏi giúp em.`,
+          text: `Em chưa truy vấn được lúc này (${err?.message || 'lỗi kết nối'}). Thầy/cô thử gửi lại câu hỏi giúp em.`,
           isError: true,
         });
       }
@@ -178,36 +163,6 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
       if (sendSeq.current === mySeq && !timedOut) setAssistantBusy(false);
     }
   };
-
-  if (!hasKey) {
-    return (
-      <div
-        className={`bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-8 text-center space-y-4 ${
-          compact ? 'h-full overflow-y-auto flex flex-col justify-center' : ''
-        }`}
-      >
-        <div className="w-14 h-14 mx-auto rounded-2xl bg-[#2F3E6B] text-white flex items-center justify-center">
-          <KeyRound className="w-7 h-7" />
-        </div>
-        <h3 className="font-lora font-bold text-lg text-[#2F3E6B]">
-          Trợ lý phân tích cần khóa Gemini
-        </h3>
-        <p className="text-sm text-[#78716C] max-w-xl mx-auto leading-relaxed">
-          Trợ lý dùng Gemini để hiểu câu hỏi, nhưng <b>mọi con số đều do hệ thống tính từ
-          dữ liệu thật</b> trong các lớp của thầy/cô. Hãy nhập Google AI Studio API Key ở mục{' '}
-          <b>Cài đặt → Mô hình Mầm AI</b> (cùng khóa đang dùng cho AI Studio và gợi ý chấm bài),
-          rồi quay lại tab này.
-        </p>
-        <button
-          type="button"
-          onClick={() => setHasKey(!!getGeminiApiKey())}
-          className="px-5 py-2.5 rounded-2xl bg-[#2F3E6B] text-white text-xs font-bold hover:opacity-90 transition"
-        >
-          Tôi đã nhập khóa — kiểm tra lại
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className={compact ? 'h-full flex flex-col' : 'space-y-4'}>

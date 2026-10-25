@@ -23,6 +23,7 @@ import {
   AIExtractedSource,
 } from './AIService.ts';
 import { Question, KeyPoint, TheoryBlock } from '../../types.ts';
+import { callAiProxyText } from './proxyClient.ts';
 
 /**
  * Các tên model Google đã khai tử với key/project mới (luôn 404 — đã xác
@@ -42,116 +43,17 @@ export const DEAD_GEMINI_MODELS: ReadonlySet<string> = new Set([
 ]);
 
 export class GeminiAIService implements AIService {
-  private apiKey: string;
-  private model: string;
-
-  constructor(apiKey: string, model: string = 'gemini-3.8-flash') {
-    this.apiKey = apiKey.trim();
-    this.model = model.trim();
-  }
+  // Đợt 25/10: service chạy qua proxy admin — không còn key/model riêng.
+  // Constructor giữ tham số cũ (không dùng) để không vỡ code khởi tạo cũ.
+  constructor(_apiKey?: string, _model?: string) {}
 
   /**
-   * Gọi API Google Gemini với fallback model thông minh
+   * Gọi AI qua proxy của admin (/api/ai/chat): trình duyệt không giữ key,
+   * không gọi thẳng Google nữa — failover Gemini → Groq → OpenRouter nằm
+   * ở proxy, key nằm trong Vercel env của admin.
    */
   private async callGemini(prompt: string, systemInstruction?: string): Promise<string> {
-    const candidateModels = [
-      this.model,
-      'gemini-3.8-flash',
-      'gemini-3.5-flash-lite',
-      'gemini-flash-latest',
-      'gemini-3.1-pro-preview',
-    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx && !DEAD_GEMINI_MODELS.has(m));
-
-    let lastError: Error | null = null;
-
-    for (const modelToTry of candidateModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`;
-
-        const generationConfig: any = {
-          temperature: 0.3,
-          maxOutputTokens: 8192,
-        };
-
-        // Tắt thinking budget trên các model thế hệ mới để sinh câu hỏi siêu tốc (5s thay vì hơn 60s)
-        if (modelToTry.includes('flash-latest') || modelToTry.includes('gemini-3') || modelToTry.includes('flash')) {
-          generationConfig.thinkingConfig = { thinkingBudget: 0 };
-        }
-
-        const body: any = {
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig,
-        };
-
-        if (systemInstruction) {
-          body.systemInstruction = {
-            parts: [{ text: systemInstruction }],
-          };
-        }
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': this.apiKey,
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!response.ok) {
-          let errDetails = '';
-          try {
-            const errJson = await response.json();
-            errDetails = errJson?.error?.message || response.statusText;
-          } catch {
-            errDetails = `HTTP ${response.status}: ${response.statusText}`;
-          }
-
-          // Nếu lỗi 404 (model không tìm thấy), 429 (hết token / rate limit), 503 (quá tải), tiếp tục thử model tiếp theo
-          if (
-            response.status === 404 ||
-            response.status === 429 ||
-            response.status === 503 ||
-            errDetails.includes('not found') ||
-            errDetails.includes('RESOURCE_EXHAUSTED') ||
-            errDetails.includes('quota') ||
-            errDetails.includes('overloaded')
-          ) {
-            console.warn(`Model ${modelToTry} (${response.status}): ${errDetails}. Thử model tiếp theo...`);
-            lastError = new Error(`Model ${modelToTry} (${response.status}): ${errDetails}`);
-            continue;
-          }
-
-          throw new Error(`Google AI Studio (${modelToTry}): ${errDetails}`);
-        }
-
-        const data = await response.json();
-        const candidate = data?.candidates?.[0];
-        const text = candidate?.content?.parts?.[0]?.text;
-
-        if (text) {
-          return text;
-        }
-      } catch (err: any) {
-        lastError = err;
-        if (
-          err.message &&
-          (err.message.includes('API_KEY_INVALID') ||
-            err.message.includes('API key not valid') ||
-            err.message.includes('400') ||
-            err.message.includes('403'))
-        ) {
-          throw err;
-        }
-      }
-    }
-
-    throw lastError || new Error('Google AI Studio không trả về nội dung.');
+    return callAiProxyText(prompt, systemInstruction);
   }
 
   /**

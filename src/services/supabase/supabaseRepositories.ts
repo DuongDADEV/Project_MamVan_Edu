@@ -140,6 +140,38 @@ function isUUID(str?: string | null): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
+// Đợt 25/10: mọi thao tác gắn với Supabase Auth (tạo tài khoản, reset mật
+// khẩu, đổi tên đăng nhập) đi qua route server /api/admin/users — trình
+// duyệt không bao giờ tự ghi password_hash hay tự đổi email auth nữa.
+// Lỗi route được đánh dấu isUsersRouteError để tầng gọi KHÔNG fallback
+// sang mock (mock sẽ tạo tài khoản local lệch với prod, tệ hơn lỗi hiện rõ).
+async function callUsersRoute(body: any): Promise<any> {
+  const { data: sb } = await supabase.auth.getSession();
+  const token = sb?.session?.access_token;
+  if (!token) {
+    const err: any = new Error('Chưa đăng nhập nên không thực hiện được thao tác tài khoản.');
+    err.isUsersRouteError = true;
+    throw err;
+  }
+  const res = await fetch('/api/admin/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err: any = new Error(
+      json?.error
+        ? `Thao tác tài khoản thất bại (${json.error}).`
+        : `Thao tác tài khoản thất bại (HTTP ${res.status}).`
+    );
+    err.isUsersRouteError = true;
+    err.routeError = json?.error;
+    throw err;
+  }
+  return json;
+}
+
 // ==============================================================================
 // 1. SUPABASE AUTH REPOSITORY
 // ==============================================================================
@@ -162,64 +194,58 @@ export class SupabaseAuthRepository implements AuthRepository {
     }
 
     try {
-      // 0. Phân hệ Quản trị viên (Admin) — tài khoản THẬT trong bảng teachers
-      // (role = 'admin', tạo bằng database/migration_006_admin_account.sql).
-      // Đã gỡ hoàn toàn thông tin đăng nhập ghi cứng khỏi mã nguồn (đợt 21/10).
-      if (role === 'admin') {
-        const { data: admin, error } = await supabase
+      // ĐĂNG NHẬP SUPABASE AUTH (đợt 25/10): mật khẩu không còn so sánh
+      // trong trình duyệt nữa. Email tổng hợp từ role + username — format
+      // này PHẢI khớp phía server (api/_lib/supabase.ts synthAuthEmail,
+      // dùng trong route migrate-auth và route users). Đổi 1 phía là tài
+      // khoản đã migrate không đăng nhập được nữa.
+      const email = `${role}_${uClean}@mamvan.internal`;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pClean,
+      });
+      if (error || !data?.user) {
+        return { success: false, error: mapAuthError(role, error) };
+      }
+      const authUserId = data.user.id;
+
+      if (role === 'admin' || role === 'teacher') {
+        const { data: prof, error: profErr } = await supabase
           .from('teachers')
           .select('*')
-          .ilike('username', uClean)
-          .eq('role', 'admin')
+          .eq('auth_user_id', authUserId)
           .maybeSingle();
-
-        if (error) {
-          // KHÔNG fallback về tài khoản mẫu khi máy chủ lỗi: tài khoản mẫu có
-          // cùng tên đăng nhập/mật khẩu sẽ tạo "phiên ma" hiển thị sai người.
-          console.warn('[SupabaseAuth] Lỗi truy vấn tài khoản admin:', error.message);
+        if (profErr || !prof) {
+          // JWT có nhưng không nối được hồ sơ (tài khoản chưa migrate) —
+          // hủy JWT để không để lại phiên mồ côi.
+          await supabase.auth.signOut();
           return {
             success: false,
-            error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
+            error: 'Tài khoản chưa được liên kết hồ sơ. Vui lòng liên hệ quản trị viên!',
           };
         }
-
-        if (!admin) {
-          // Tài khoản có thể chỉ tồn tại ở kho local — thử local trước khi kết luận
-          const localAttempt = await mockAuthRepo.signIn(role, uClean, pClean);
-          if (localAttempt.success) return localAttempt;
+        if ((prof as any).role !== role) {
+          await supabase.auth.signOut();
           return {
             success: false,
-            error: 'Tài khoản Quản trị viên không tồn tại trên hệ thống',
+            error: 'Tài khoản này không thuộc phân hệ đã chọn.',
           };
         }
-
-        if (admin.status === 'locked') {
+        if ((prof as any).status === 'locked') {
+          await supabase.auth.signOut();
           return {
             success: false,
             isLocked: true,
-            error: 'Tài khoản Quản trị viên đã bị khóa. Vui lòng liên hệ hỗ trợ kỹ thuật!',
+            error:
+              role === 'admin'
+                ? 'Tài khoản Quản trị viên đã bị khóa. Vui lòng liên hệ hỗ trợ kỹ thuật!'
+                : 'Tài khoản giáo viên đã bị khóa. Vui lòng liên hệ quản trị viên!',
           };
         }
-
-        const validPassword = admin.password_hash === pClean;
-        if (!validPassword) {
-          return {
-            success: false,
-            error: 'Mật khẩu Quản trị viên chưa chính xác',
-          };
-        }
-
-        const session: AuthSession = {
-          user: {
-            id: admin.id,
-            name: admin.name,
-            username: admin.username,
-            role: 'admin',
-            email: admin.email || undefined,
-          },
-          role: 'admin',
-          signedInAt: Date.now(),
-        };
+        const session =
+          role === 'admin'
+            ? buildAdminSession(prof)
+            : await buildTeacherSession(prof);
         if (typeof window !== 'undefined') {
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
         }
@@ -227,121 +253,25 @@ export class SupabaseAuthRepository implements AuthRepository {
         return { success: true, session };
       }
 
-      // 1. Phân hệ Giáo viên
-      if (role === 'teacher') {
-        const { data: teacher, error } = await supabase
-          .from('teachers')
-          .select('*')
-          .ilike('username', uClean)
-          .eq('role', 'teacher')
-          .maybeSingle();
-
-        if (error) {
-          // KHÔNG fallback về tài khoản mẫu khi máy chủ lỗi (xem ghi chú ở nhánh admin).
-          console.warn('[SupabaseAuth] Lỗi truy vấn bảng teachers:', error.message);
-          return {
-            success: false,
-            error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
-          };
-        }
-
-        if (!teacher) {
-          // Tài khoản có thể chỉ tồn tại ở kho local (tạo lúc mất kết nối) —
-          // thử đăng nhập local trước khi kết luận không tồn tại
-          const localAttempt = await mockAuthRepo.signIn(role, uClean, pClean);
-          if (localAttempt.success) return localAttempt;
-          return {
-            success: false,
-            error: 'Tài khoản giáo viên không tồn tại trên hệ thống',
-          };
-        }
-
-        if (teacher.status === 'locked') {
-          return {
-            success: false,
-            isLocked: true,
-            error: 'Tài khoản giáo viên đã bị khóa. Vui lòng liên hệ quản trị viên!',
-          };
-        }
-
-        const validPassword = teacher.password_hash === pClean;
-        if (!validPassword) {
-          return {
-            success: false,
-            error: 'Mật khẩu giáo viên chưa chính xác',
-          };
-        }
-
-        const { data: classRows } = await supabase
-          .from('classes')
-          .select('id')
-          .eq('teacher_id', teacher.id);
-
-        const classIds = classRows?.map((c) => c.id) || [];
-
-        const session: AuthSession = {
-          user: {
-            id: teacher.id,
-            name: teacher.name,
-            username: teacher.username,
-            role: 'teacher',
-            email: teacher.email || undefined,
-            subject: teacher.subject || 'Ngữ văn 7',
-            school: teacher.school || 'THCS Giấy & Mực',
-            classIds: classIds.length > 0 ? classIds : [DEFAULT_CLASS_UUID],
-            phone: teacher.phone || undefined,
-          },
-          role: 'teacher',
-          signedInAt: Date.now(),
-        };
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-        }
-        syncEventBus.emit('auth', session, 'supabase-auth');
-        return { success: true, session };
-      }
-
-      // 2. Phân hệ Học sinh
       if (role === 'student') {
-        const { data: student, error } = await supabase
+        const { data: stu, error: stuErr } = await supabase
           .from('students')
           .select('*, classes(name, grade, school_year)')
-          .ilike('username', uClean)
+          .eq('auth_user_id', authUserId)
           .maybeSingle();
-
-        if (error) {
-          // KHÔNG fallback về tài khoản mẫu khi máy chủ lỗi (xem ghi chú ở nhánh admin).
-          console.warn('[SupabaseAuth] Lỗi truy vấn bảng students:', error.message);
+        if (stuErr || !stu) {
+          await supabase.auth.signOut();
           return {
             success: false,
-            error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
+            error: 'Tài khoản chưa được liên kết hồ sơ. Vui lòng liên hệ Thầy/Cô phụ trách nhé!',
           };
         }
-
-        if (!student) {
-          // Tài khoản có thể chỉ tồn tại ở kho local (tạo lúc mất kết nối)
-          const localAttempt = await mockAuthRepo.signIn(role, uClean, pClean);
-          if (localAttempt.success) return localAttempt;
-          return {
-            success: false,
-            error: 'Hệ thống chưa nhận diện được tài khoản này, bạn vui lòng kiểm tra lại với thầy/cô phụ trách nhé!',
-          };
-        }
-
-        if (student.status === 'locked') {
+        if ((stu as any).status === 'locked') {
+          await supabase.auth.signOut();
           return {
             success: false,
             isLocked: true,
             error: 'Tài khoản của em đang tạm khóa. Vui lòng liên hệ Thầy/Cô phụ trách để mở khóa nhé!',
-          };
-        }
-
-        const validPassword = student.password_hash === pClean;
-        if (!validPassword) {
-          return {
-            success: false,
-            error: 'Mật khẩu chưa chính xác. Nếu quên mật khẩu, em hãy nhờ Thầy/Cô cấp lại nhé!',
           };
         }
 
@@ -351,46 +281,34 @@ export class SupabaseAuthRepository implements AuthRepository {
             has_logged_in: true,
             last_active_at: new Date().toISOString(),
           })
-          .eq('id', student.id);
+          .eq('id', (stu as any).id);
 
-        const session: AuthSession = {
-          user: {
-            id: student.id,
-            name: student.name,
-            username: student.username,
-            role: 'student',
-            grade: (student.classes as any)?.grade || 'Lớp 7',
-            school: 'THCS Giấy & Mực',
-            avatarSeed: student.avatar_seed || student.username,
-          },
-          role: 'student',
-          signedInAt: Date.now(),
-        };
-
+        const session = buildStudentSession(stu);
         if (typeof window !== 'undefined') {
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
         }
         syncEventBus.emit('auth', session, 'supabase-auth');
-        syncEventBus.emit('student', { studentId: student.id }, 'supabase-auth');
+        syncEventBus.emit('student', { studentId: (stu as any).id }, 'supabase-auth');
         return { success: true, session };
       }
 
+      await supabase.auth.signOut();
       return { success: false, error: 'Phân hệ đang được hoàn thiện!' };
     } catch (err: any) {
       console.error('[SupabaseAuth] Ngoại lệ khi đăng nhập:', err);
-      if (isSupabaseReady()) {
-        // Đã cấu hình máy chủ mà gặp ngoại lệ: báo lỗi kết nối, KHÔNG đăng
-        // nhập vào tài khoản mẫu (tránh "phiên ma" sai danh tính).
-        return {
-          success: false,
-          error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
-        };
-      }
-      return mockAuthRepo.signIn(role, uClean, pClean);
+      return {
+        success: false,
+        error: 'Không kết nối được máy chủ. Vui lòng kiểm tra mạng và thử lại!',
+      };
     }
   }
 
   async signOut(): Promise<void> {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* JWT đã hết hạn hoặc mất mạng — vẫn dọn phiên local bên dưới */
+    }
     if (typeof window !== 'undefined') {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       // TÁCH DỮ LIỆU THEO TÀI KHOẢN: dọn toàn bộ bộ nhớ đệm nội dung/dữ liệu
@@ -423,39 +341,120 @@ export class SupabaseAuthRepository implements AuthRepository {
       const raw = localStorage.getItem(SESSION_STORAGE_KEY);
       if (!raw) return null;
       const session = JSON.parse(raw) as AuthSession;
-      // CHẶN "PHIÊN MA": phiên lưu từ tài khoản MẪU có id không phải UUID
-      // (vd 'hs001') trong khi tên đăng nhập đó TỒN TẠI trên máy chủ với id
-      // UUID thật — phiên mẫu hiển thị sai người (đã gặp: hs001 hiện thành
-      // học sinh mẫu khác tên/khác lớp). Gặp trường hợp này: hủy phiên, bắt
-      // đăng nhập lại để lấy đúng tài khoản thật. Không xác minh được (mất
-      // mạng) thì giữ nguyên phiên, tránh đăng xuất oan.
-      if (
-        isSupabaseReady() &&
-        session?.user?.id &&
-        session?.user?.username &&
-        !isUUID(session.user.id) &&
-        (session.role === 'student' || session.role === 'teacher')
-      ) {
-        try {
-          const table = session.role === 'student' ? 'students' : 'teachers';
-          const { data, error } = await supabase
-            .from(table)
-            .select('id')
-            .ilike('username', session.user.username)
-            .maybeSingle();
-          if (!error && data && isUUID((data as any).id)) {
-            localStorage.removeItem(SESSION_STORAGE_KEY);
-            return null;
-          }
-        } catch {
-          /* không xác minh được — giữ nguyên phiên */
+      if (!isSupabaseReady()) return session; // chế độ mock offline
+      // Phiên local chỉ có giá trị khi còn phiên Supabase Auth tương ứng:
+      // JWT mất (hết hạn, đăng xuất tab khác) thì phiên local là xác chết.
+      const { data: sb } = await supabase.auth.getSession();
+      if (!sb?.session) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        return null;
+      }
+      // Tự chữa lệch phiên: hồ sơ nối với JWT hiện tại khác hồ sơ trong
+      // phiên local (vd đổi tài khoản mà phiên local chưa kịp đổi) thì
+      // dựng lại phiên từ hồ sơ thật thay vì hiển thị sai người. Không
+      // xác minh được (mất mạng / lỗi RLS) thì giữ nguyên phiên, tránh
+      // đăng xuất oan.
+      try {
+        const table = session.role === 'student' ? 'students' : 'teachers';
+        const sel =
+          session.role === 'student'
+            ? '*, classes(name, grade, school_year)'
+            : '*';
+        const { data: prof, error } = await supabase
+          .from(table)
+          .select(sel)
+          .eq('auth_user_id', sb.session.user.id)
+          .maybeSingle();
+        if (!error && prof && (prof as any).id !== session.user.id) {
+          const rebuilt =
+            session.role === 'student'
+              ? buildStudentSession(prof)
+              : session.role === 'admin'
+                ? buildAdminSession(prof)
+                : await buildTeacherSession(prof);
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(rebuilt));
+          return rebuilt;
         }
+        if (!error && !prof) {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+          return null;
+        }
+      } catch {
+        /* không xác minh được — giữ nguyên phiên */
       }
       return session;
     } catch {
       return null;
     }
   }
+}
+
+function mapAuthError(role: Role, error: any): string {
+  const msg = String(error?.message || '');
+  if (/too many requests/i.test(msg)) {
+    return 'Đăng nhập quá nhiều lần, vui lòng thử lại sau ít phút.';
+  }
+  if (/email not confirmed/i.test(msg)) {
+    return 'Tài khoản chưa được kích hoạt. Vui lòng liên hệ quản trị viên!';
+  }
+  // Supabase cố tình không phân biệt "sai tên" với "sai mật khẩu" (chống
+  // dò tài khoản) — mọi lỗi đăng nhập đều chung 1 thông báo.
+  if (role === 'admin') return 'Tên đăng nhập hoặc mật khẩu Quản trị viên chưa chính xác';
+  if (role === 'teacher') return 'Tên đăng nhập hoặc mật khẩu giáo viên chưa chính xác';
+  return 'Mật khẩu chưa chính xác. Nếu quên mật khẩu, em hãy nhờ Thầy/Cô cấp lại nhé!';
+}
+
+function buildAdminSession(prof: any): AuthSession {
+  return {
+    user: {
+      id: prof.id,
+      name: prof.name,
+      username: prof.username,
+      role: 'admin',
+      email: prof.email || undefined,
+    },
+    role: 'admin',
+    signedInAt: Date.now(),
+  };
+}
+
+async function buildTeacherSession(prof: any): Promise<AuthSession> {
+  const { data: classRows } = await supabase
+    .from('classes')
+    .select('id')
+    .eq('teacher_id', prof.id);
+  const classIds = classRows?.map((c) => c.id) || [];
+  return {
+    user: {
+      id: prof.id,
+      name: prof.name,
+      username: prof.username,
+      role: 'teacher',
+      email: prof.email || undefined,
+      subject: prof.subject || 'Ngữ văn 7',
+      school: prof.school || 'THCS Giấy & Mực',
+      classIds: classIds.length > 0 ? classIds : [DEFAULT_CLASS_UUID],
+      phone: prof.phone || undefined,
+    },
+    role: 'teacher',
+    signedInAt: Date.now(),
+  };
+}
+
+function buildStudentSession(prof: any): AuthSession {
+  return {
+    user: {
+      id: prof.id,
+      name: prof.name,
+      username: prof.username,
+      role: 'student',
+      grade: (prof.classes as any)?.grade || 'Lớp 7',
+      school: 'THCS Giấy & Mực',
+      avatarSeed: prof.avatar_seed || prof.username,
+    },
+    role: 'student',
+    signedInAt: Date.now(),
+  };
 }
 
 export const supabaseAuthRepo = new SupabaseAuthRepository();
@@ -815,51 +814,56 @@ export class SupabaseStudentRepository implements StudentRepository {
         return mockStudentRepo.createStudent(data, teacherActorId);
       }
 
-      const payload = {
-        name: cleanName,
-        username: generatedUsername,
-        password_hash: initialPassword,
-        class_id: cleanClassId,
-        student_code:
-          data.student_code?.trim() ||
-          generateStudentCode((await this.getStudents()).map((s) => s.student_code)),
-        dob: data.dob || null,
-        status: 'active',
-        has_logged_in: false,
-      };
-
-      let { data: created, error } = await supabase
-        .from('students')
-        .insert(payload)
-        .select()
-        .single();
-
-      if ((error || !created) && error) {
-        // Trùng tên đăng nhập ở DB (unique): sinh lại tên khác và thử lại 1 lần
-        // thay vì đổ sang mock khiến học sinh "tạo mà không thấy".
-        const isDuplicateUsername =
-          (error as any).code === '23505' || /username|duplicate/i.test(error.message || '');
-        if (isDuplicateUsername) {
+      const studentCode =
+        data.student_code?.trim() ||
+        generateStudentCode((await this.getStudents()).map((s) => s.student_code));
+      // Đợt 25/10: tạo học sinh phải tạo luôn Supabase Auth user — qua route
+      // server (admin, hoặc giáo viên với lớp của mình). Route trả profile row.
+      let created: any = null;
+      try {
+        const routeRes = await callUsersRoute({
+          action: 'create',
+          role: 'student',
+          username: generatedUsername,
+          password: initialPassword,
+          name: cleanName,
+          class_id: cleanClassId,
+          student_code: studentCode,
+          dob: data.dob || null,
+        });
+        created = routeRes.profile;
+      } catch (routeErr: any) {
+        // Trùng tên đăng nhập: sinh lại tên khác và thử lại 1 lần (giữ hành
+        // vi cũ: tránh rơi sang mock khiến học sinh "tạo mà không thấy").
+        if (
+          /TAKEN|duplicate|already|23505/i.test(routeErr?.message || '') ||
+          routeErr?.routeError === 'CREATE_USER_FAILED' ||
+          routeErr?.routeError === 'CREATE_PROFILE_FAILED'
+        ) {
           const existing = await this.getStudents();
           const retryUsername = generateUsername(
             cleanName,
             existing.map((s) => s.username.toLowerCase()).concat(generatedUsername)
           );
-          const retry = await supabase
-            .from('students')
-            .insert({ ...payload, username: retryUsername })
-            .select()
-            .single();
-          if (!retry.error && retry.data) {
-            created = retry.data;
-            error = null;
-          }
+          const retryRes = await callUsersRoute({
+            action: 'create',
+            role: 'student',
+            username: retryUsername,
+            password: initialPassword,
+            name: cleanName,
+            class_id: cleanClassId,
+            student_code: studentCode,
+            dob: data.dob || null,
+          });
+          created = retryRes.profile;
+          generatedUsername = retryUsername;
+        } else {
+          throw routeErr;
         }
       }
 
-      if (error || !created) {
-        console.warn('[SupabaseStudent] Không tạo được học sinh trên DB, dùng mock:', error?.message);
-        return mockStudentRepo.createStudent(data, teacherActorId);
+      if (!created) {
+        throw new Error('Không tạo được học sinh trên máy chủ.');
       }
 
       await supabase.from('student_states').upsert({
@@ -910,7 +914,8 @@ export class SupabaseStudentRepository implements StudentRepository {
       syncEventBus.emit('student');
       syncEventBus.emit('class');
       return { student, credential };
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.isUsersRouteError) throw err;
       console.error('[SupabaseStudent] Ngoại lệ createStudent:', err);
       return mockStudentRepo.createStudent(data, teacherActorId);
     }
@@ -945,11 +950,31 @@ export class SupabaseStudentRepository implements StudentRepository {
         updated_at: new Date().toISOString(),
       };
       if (data.name !== undefined) payload.name = data.name;
-      if (data.username !== undefined) payload.username = data.username;
-      if ((data as any).password_hash !== undefined) {
-        payload.password_hash = (data as any).password_hash;
+      // Đợt 25/10: đổi mật khẩu và đổi tên đăng nhập gắn với Supabase Auth
+      // nên phải qua route server (đổi tên còn đổi cả email auth). Route
+      // chạy TRƯỚC khi ghi các trường khác để lỗi thì không lệch 2 phía.
+      const newPassword = (data as any).password || (data as any).password_hash;
+      if (newPassword !== undefined && String(newPassword).trim()) {
+        await callUsersRoute({
+          action: 'reset-password',
+          table: 'students',
+          profileId: id,
+          newPassword: String(newPassword).trim(),
+        });
       }
-      if ((data as any).password !== undefined) payload.password_hash = (data as any).password;
+      if (data.username !== undefined) {
+        const wanted = String(data.username).trim().toLowerCase();
+        const current = await this.getStudentById(id);
+        if (
+          current &&
+          isUUID(current.id) &&
+          wanted &&
+          wanted !== current.username.toLowerCase()
+        ) {
+          await callUsersRoute({ action: 'rename-student', profileId: id, newUsername: wanted });
+        }
+        // username đã do route đổi (hoặc giữ nguyên) — không ghi trực tiếp.
+      }
       if (data.student_code !== undefined) payload.student_code = data.student_code;
       if (data.dob !== undefined) payload.dob = data.dob;
       if (data.class_id !== undefined && isUUID(data.class_id)) payload.class_id = data.class_id;
@@ -983,7 +1008,8 @@ export class SupabaseStudentRepository implements StudentRepository {
         updated_at: updated.updated_at,
         deleted_at: null,
       };
-    } catch {
+    } catch (err: any) {
+      if (err?.isUsersRouteError) throw err;
       return mockStudentRepo.updateStudent(id, data, teacherActorId);
     }
   }
@@ -1015,32 +1041,30 @@ export class SupabaseStudentRepository implements StudentRepository {
       return mockStudentRepo.resetPassword(id, teacherActorId, newPass);
     }
 
-    try {
-      const { data: updated, error } = await supabase
-        .from('students')
-        .update({ password_hash: newPass, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error || !updated) {
-        return mockStudentRepo.resetPassword(id, teacherActorId, newPass);
-      }
-
-      syncEventBus.emit('student');
-      return {
-        credential: {
-          id: updated.id,
-          name: updated.name,
-          username: updated.username,
-          initialPassword: newPass,
-          class_id: updated.class_id,
-          student_code: updated.student_code || undefined,
-        },
-      };
-    } catch {
-      return mockStudentRepo.resetPassword(id, teacherActorId, newPass);
+    // Đợt 25/10: reset mật khẩu học sinh qua route server (Supabase Auth).
+    // Không fallback sang mock: mật khẩu local không đăng nhập được prod.
+    const routeRes = await callUsersRoute({
+      action: 'reset-password',
+      table: 'students',
+      profileId: id,
+      newPassword: newPass,
+    });
+    const updated = routeRes.profile;
+    if (!updated) {
+      throw new Error('Không reset được mật khẩu trên máy chủ.');
     }
+
+    syncEventBus.emit('student');
+    return {
+      credential: {
+        id: updated.id,
+        name: updated.name,
+        username: updated.username,
+        initialPassword: newPass,
+        class_id: updated.class_id,
+        student_code: updated.student_code || undefined,
+      },
+    };
   }
 
   async toggleLock(id: string, isLocked: boolean, teacherActorId: string): Promise<StudentAccount> {
@@ -2655,26 +2679,24 @@ export class SupabaseTeacherRepository implements TeacherRepository {
           ? new Date(Date.now() + trialDays * 86400000).toISOString()
           : null;
 
-      const { data: created, error } = await supabase
-        .from('teachers')
-        .insert({
-          name: data.name,
-          username: data.username,
-          password_hash: data.password || '123456',
-          email: data.email || null,
-          phone: data.phone || null,
-          school: data.school || 'THCS Giấy & Mực',
-          subject: data.subject || 'Ngữ văn 7',
-          status: data.status || 'active',
-          trial_expires_at: trialExpiresAt,
-          role: 'teacher',
-        })
-        .select()
-        .single();
-
-      if (error || !created) {
-        console.warn('[SupabaseTeacher] Lỗi tạo giáo viên, fallback sang mock:', error?.message);
-        return mockTeacherRepo.createTeacher(data);
+      // Đợt 25/10: tạo giáo viên qua route server (admin) — tạo luôn
+      // Supabase Auth user, không ghi password_hash.
+      const routeRes = await callUsersRoute({
+        action: 'create',
+        role: 'teacher',
+        username: data.username,
+        password: data.password || '123456',
+        name: data.name,
+        email: data.email || null,
+        phone: data.phone || null,
+        school: data.school || 'THCS Giấy & Mực',
+        subject: data.subject || 'Ngữ văn 7',
+        status: data.status || 'active',
+        trial_expires_at: trialExpiresAt,
+      });
+      const created = routeRes.profile;
+      if (!created) {
+        throw new Error('Không tạo được giáo viên trên máy chủ.');
       }
 
       syncEventBus.emit('teacher');
@@ -2693,7 +2715,8 @@ export class SupabaseTeacherRepository implements TeacherRepository {
         created_at: created.created_at,
         updated_at: created.updated_at,
       };
-    } catch {
+    } catch (err: any) {
+      if (err?.isUsersRouteError) throw err;
       return mockTeacherRepo.createTeacher(data);
     }
   }
@@ -2708,7 +2731,16 @@ export class SupabaseTeacherRepository implements TeacherRepository {
       if (data.school) updatePayload.school = data.school;
       if (data.subject) updatePayload.subject = data.subject;
       if (data.status) updatePayload.status = data.status;
-      if (data.password) updatePayload.password_hash = data.password;
+      // Đợt 25/10: đổi mật khẩu giáo viên qua route server (Supabase Auth).
+      // Người gọi là admin hoặc chính giáo viên đó (tự đổi) — route kiểm tra.
+      if (data.password) {
+        await callUsersRoute({
+          action: 'reset-password',
+          table: 'teachers',
+          profileId: id,
+          newPassword: data.password,
+        });
+      }
       if (data.trialExpiresAt) updatePayload.trial_expires_at = data.trialExpiresAt;
 
       const { data: updated, error } = await supabase
@@ -2736,7 +2768,8 @@ export class SupabaseTeacherRepository implements TeacherRepository {
         created_at: updated.created_at,
         updated_at: updated.updated_at,
       };
-    } catch {
+    } catch (err: any) {
+      if (err?.isUsersRouteError) throw err;
       return mockTeacherRepo.updateTeacher(id, data);
     }
   }

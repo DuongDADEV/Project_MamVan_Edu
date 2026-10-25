@@ -15,8 +15,7 @@
  *   vào dữ liệu điểm.
  */
 
-import { getGeminiApiKey, getGeminiModel } from './index.ts';
-import { DEAD_GEMINI_MODELS } from './GeminiAIService.ts';
+import { callAiProxy } from './proxyClient.ts';
 import { StudentState, EssaySubmission, RewardRequest, Question } from '../../types.ts';
 import { StudentAccount, ClassItem } from '../types.ts';
 import { AnalyticsFilter } from '../../analytics/types.ts';
@@ -1671,43 +1670,26 @@ GOI_Y:
 
 Phạm vi dữ liệu: toàn bộ dữ liệu của giáo viên đang đăng nhập (các lớp/học sinh thuộc quyền quản lý của giáo viên đó) — đây là phạm vi toàn quyền của cô, không giới hạn thêm. Các công cụ chỉ trả về dữ liệu trong phạm vi này nên không bao giờ lộ dữ liệu của giáo viên khác. Mặc định áp dụng bộ lọc chung của trang Phân tích (6 tuần gần nhất) trừ khi giáo viên hỏi khoảng khác.`;
 
-async function callGeminiWithTools(
-  model: string,
-  apiKey: string,
+async function callProxyWithTools(
   contents: any[],
   withTools: boolean
 ): Promise<any> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  const generationConfig: any = { temperature: 0.2, maxOutputTokens: 4096 };
-  // Tắt thinking trên các model flash như GeminiAIService đang làm — trả
-  // lời phân tích nhanh hơn rõ rệt mà không đổi chất lượng số liệu.
-  if (model.includes('flash')) {
-    generationConfig.thinkingConfig = { thinkingBudget: 0 };
-  }
+  // Đợt 25/10: trợ lý gọi qua proxy admin — failover và key nằm ở server,
+  // trình duyệt chỉ gửi contents + system prompt + tool declarations.
+  // Proxy trả đúng shape Gemini generateContent nên vòng lặp tool bên dưới
+  // không đổi (parts.functionCall → executeTool → parts.functionResponse
+  // role 'function').
   const body: any = {
     contents,
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    generationConfig,
+    systemInstruction: SYSTEM_PROMPT,
+    tools: withTools ? [{ functionDeclarations: FUNCTION_DECLARATIONS }] : undefined,
   };
-  if (withTools) {
-    body.tools = [{ functionDeclarations: FUNCTION_DECLARATIONS }];
-  }
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    let msg = `HTTP ${response.status}`;
-    try {
-      const err = await response.json();
-      msg = err?.error?.message || msg;
-    } catch {}
-    const err: any = new Error(msg);
-    err.status = response.status;
+  const json = await callAiProxy(body);
+  if (!json?.candidates?.[0]) {
+    const err: any = new Error('EMPTY_RESPONSE');
     throw err;
   }
-  return response.json();
+  return json;
 }
 
 function parseFollowups(text: string): { text: string; followups: string[] } {
@@ -1731,27 +1713,8 @@ export async function askAnalyticsAssistant(
   history: { role: 'user' | 'assistant'; text: string }[],
   ctx: AssistantContext
 ): Promise<AssistantReply> {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) throw new Error('NO_API_KEY');
-
-  // Chuỗi model (25/10, dọn sau gốc rễ 429): Google đã khai tử dòng 2.x/1.x
-  // đối với key/project mới — key mới gọi 2.5-flash/2.5-pro/2.5-flash-lite/
-  // 2.0/1.5 đều 404, nên các tên chết đã CẮT KHỎI mọi chuỗi (giữ lại chỉ tốn
-  // call lãng phí); tên thế hệ mới đứng ĐẦU chuỗi, sau model đã lưu của giáo
-  // viên (model đã lưu nếu là tên chết thì bị bỏ qua, KHÔNG đổi giá trị đã
-  // lưu); gemini-flash-latest ở nhóm alias/dự phòng; gemma-4-31b-it làm tầng
-  // dự phòng sâu; gemini-3.1-pro-preview để CUỐI chuỗi (không có free tier,
-  // chỉ là fallback cho project có thanh toán). Tên 3.x đã kiểm chứng sống
-  // bằng Network thật 25/10 (3.8-flash 429 = hết quota, không phải chết;
-  // 3.5-flash-lite 400 = lỗi riêng model; pro-preview 429 = không free tier).
-  const candidateModels = [
-    getGeminiModel(),
-    'gemini-3.8-flash',
-    'gemini-3.5-flash-lite',
-    'gemini-flash-latest',
-    'gemma-4-31b-it',
-    'gemini-3.1-pro-preview',
-  ].filter((m, i, arr) => !!m && arr.indexOf(m) === i && !DEAD_GEMINI_MODELS.has(m));
+  // Đợt 25/10: không còn key giáo viên, không còn chuỗi model ở client —
+  // failover Gemini → Groq → OpenRouter nằm ở proxy /api/ai/chat.
 
   const contents: any[] = history.map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
@@ -1763,11 +1726,10 @@ export async function askAnalyticsAssistant(
   let chart: AssistantChart | undefined;
   let lastError: any = null;
 
-  for (const model of candidateModels) {
-    try {
+  try {
       // Tối đa 5 vòng gọi hàm cho mỗi câu hỏi
       for (let round = 0; round < 5; round++) {
-        const res = await callGeminiWithTools(model, apiKey, contents, true);
+        const res = await callProxyWithTools(contents, true);
         const parts = res?.candidates?.[0]?.content?.parts || [];
         const calls = parts.filter((p: any) => p.functionCall);
         const textPart = parts.find((p: any) => typeof p.text === 'string')?.text as
@@ -1830,7 +1792,7 @@ export async function askAnalyticsAssistant(
 
       // Hết vòng gọi hàm mà chưa có câu trả lời: ép mô hình trả lời bằng
       // dữ liệu đã có (không kèm công cụ nữa).
-      const finalRes = await callGeminiWithTools(model, apiKey, contents, false);
+      const finalRes = await callProxyWithTools(contents, false);
       const finalText =
         finalRes?.candidates?.[0]?.content?.parts?.find(
           (p: any) => typeof p.text === 'string'
@@ -1852,10 +1814,8 @@ export async function askAnalyticsAssistant(
           followups: [],
         };
       }
-      // Chỉ thử model kế tiếp khi lỗi thuộc về model/kết nối; lỗi dữ liệu
-      // (vd câu hỏi sai) thì dừng ngay.
-      if (err?.status && ![400, 404, 429, 500, 503].includes(err.status)) throw err;
+      // Không còn chuỗi model để thử tiếp (failover nằm ở proxy) — mọi
+      // lỗi không phải 400 đều rơi xuống throw lastError bên dưới.
     }
-  }
-  throw lastError || new Error('Không kết nối được Gemini.');
+  throw lastError || new Error('Không kết nối được AI.');
 }
