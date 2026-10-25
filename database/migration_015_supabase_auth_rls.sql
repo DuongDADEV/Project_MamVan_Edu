@@ -249,11 +249,13 @@ CREATE POLICY "student_own_requests" ON public.reward_requests FOR ALL
 
 -- reward_tiers: teacher toàn quyền của mình; student xem quà của giáo
 -- viên lớp mình.
+-- (reward_tiers.teacher_id là TEXT từ migration 012, chứa chuỗi UUID —
+-- so sánh phải cast helper UUID sang text; bảng đang 0 dòng.)
 CREATE POLICY "teacher_own_tiers" ON public.reward_tiers FOR ALL
-  USING (teacher_id = public.my_teacher_id())
-  WITH CHECK (teacher_id = public.my_teacher_id());
+  USING (teacher_id = public.my_teacher_id()::text)
+  WITH CHECK (teacher_id = public.my_teacher_id()::text);
 CREATE POLICY "student_class_tiers" ON public.reward_tiers FOR SELECT
-  USING (teacher_id = public.teacher_of_class(public.my_class_id()));
+  USING (teacher_id = public.teacher_of_class(public.my_class_id())::text);
 
 -- student_states / student_sessions / student_activity_progress:
 -- student xem/sửa của mình; teacher xem/sửa học sinh lớp mình.
@@ -270,12 +272,16 @@ CREATE POLICY "student_own_sessions" ON public.student_sessions FOR ALL
   USING (student_id = public.my_student_id())
   WITH CHECK (student_id = public.my_student_id());
 
+-- (student_activity_progress.student_id là TEXT từ migration 013 nhưng
+-- 73 dòng hiện tại đều là chuỗi UUID hợp lệ — cast sang uuid để so
+-- sánh; nếu sau này có dòng không phải UUID thì policy sẽ lỗi lúc đọc,
+-- cần chuẩn hóa dữ liệu trước.)
 CREATE POLICY "teacher_student_progress" ON public.student_activity_progress FOR ALL
-  USING (student_id IN (SELECT id FROM public.students WHERE class_id IN (SELECT id FROM public.classes WHERE teacher_id = public.my_teacher_id())))
-  WITH CHECK (student_id IN (SELECT id FROM public.students WHERE class_id IN (SELECT id FROM public.classes WHERE teacher_id = public.my_teacher_id())));
+  USING (student_id::uuid IN (SELECT id FROM public.students WHERE class_id IN (SELECT id FROM public.classes WHERE teacher_id = public.my_teacher_id())))
+  WITH CHECK (student_id::uuid IN (SELECT id FROM public.students WHERE class_id IN (SELECT id FROM public.classes WHERE teacher_id = public.my_teacher_id())));
 CREATE POLICY "student_own_progress" ON public.student_activity_progress FOR ALL
-  USING (student_id = public.my_student_id())
-  WITH CHECK (student_id = public.my_student_id());
+  USING (student_id::uuid = public.my_student_id())
+  WITH CHECK (student_id::uuid = public.my_student_id());
 
 -- system_settings: teacher toàn quyền của mình; student xem setting của
 -- giáo viên lớp mình (quy tắc XP hiển thị cho học sinh).
