@@ -111,13 +111,39 @@ function ts(v?: string | null): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** UUID giả thời legacy (map 'gv001' -> sentinel) — không khớp dòng nào trên server. */
+const LEGACY_SENTINEL_UUID = '00000000-0000-0000-0000-000000000001';
+
+/**
+ * teacher_id hợp lệ để đẩy lên Supabase dưới RLS mới (25/10: RLS chặn
+ * mọi dòng có teacher_id khác giáo viên của JWT, kể cả bản nháp local cũ).
+ * - Trả về UUID để đẩy: bản của chính phiên hiện tại; bản nháp vô chủ,
+ *   chuỗi legacy ('gv001') hay sentinel legacy đều được NHẬN VỀ đúng chủ
+ *   (đẩy thành công, dứt vòng đẩy lỗi, không mất dữ liệu).
+ * - Trả về null = BỎ QUA, không đẩy: bản mang UUID thật của giáo viên
+ *   khác (RLS sẽ chặn, đẩy chỉ spam lỗi) hoặc không có phiên.
+ */
+export function resolvePushTeacherId(rawTid: unknown): string | null {
+  const own = sessionTeacherId();
+  if (!own || !UUID_RE.test(own)) return null;
+  const raw = String(rawTid || '');
+  if (!raw) return own;
+  if (!UUID_RE.test(raw)) return own;
+  if (raw === LEGACY_SENTINEL_UUID) return own;
+  if (raw !== own) return null;
+  return own;
+}
+
 /** Ghi (upsert) 1 đối tượng lên Supabase. Trả về true nếu thành công. */
 export async function pushPayloadItem(table: string, item: PayloadItem): Promise<boolean> {
   if (!isSupabaseReady() || !item || !item.id) return false;
   const now = new Date().toISOString();
-  // Đóng dấu chủ sở hữu: item chưa có chủ thì lấy giáo viên của phiên hiện tại.
-  const ownerId = item.teacher_id || sessionTeacherId() || null;
-  const stamped: PayloadItem = ownerId ? { ...item, teacher_id: ownerId } : item;
+  // Đóng dấu chủ sở hữu: bản của người khác thì bỏ qua (RLS chặn),
+  // bản vô chủ/legacy thì nhận về đúng giáo viên của phiên hiện tại.
+  const pushTid = resolvePushTeacherId(item.teacher_id);
+  if (!pushTid) return false;
+  const stamped: PayloadItem = { ...item, teacher_id: pushTid };
   try {
     const { error } = await supabase.from(table).upsert(
       {
@@ -125,7 +151,7 @@ export async function pushPayloadItem(table: string, item: PayloadItem): Promise
         topic_id: stamped.topicId || null,
         status: stamped.status || 'draft',
         payload: stamped,
-        teacher_id: ownerId,
+        teacher_id: pushTid,
         deleted_at: stamped.deleted_at || null,
         created_at: stamped.created_at || now,
         updated_at: stamped.updated_at || now,

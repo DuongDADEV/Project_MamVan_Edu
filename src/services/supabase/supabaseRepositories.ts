@@ -72,6 +72,7 @@ import {
   getSessionUser,
   sessionTeacherId,
   resolveContentOwnerId,
+  resolvePushTeacherId,
 } from './payloadStore.ts';
 import { generateUsername, generateFriendlyPassword, generateStudentCode, generateUUID } from '../mock/credentialUtils.ts';
 import {
@@ -3425,13 +3426,17 @@ export class SupabaseContentRepository implements ContentRepository {
     if (!topicId || !isSupabaseReady()) return;
     const t = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY).find((x) => x.id === topicId);
     if (!t) return;
+    // RLS mới: bản của giáo viên khác thì bỏ qua (đẩy sẽ bị chặn);
+    // bản vô chủ/legacy thì nhận về đúng giáo viên của phiên hiện tại.
+    const pushTid = resolvePushTeacherId((t as any).teacher_id);
+    if (!pushTid) return;
     try {
       const { error } = await supabase.from('topics').upsert(
         {
           id: t.id,
           title: t.title || 'Chủ đề mới',
           category: t.tag || 'Chung',
-          teacher_id: (t as any).teacher_id || sessionTeacherId() || null,
+          teacher_id: pushTid,
           video_payload: {
             shortDesc: t.shortDesc || '',
             videoIds: Array.isArray(t.videoIds) ? t.videoIds : [],
