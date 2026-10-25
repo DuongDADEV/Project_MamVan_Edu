@@ -150,6 +150,26 @@ export default function App() {
     }
   });
 
+  // Tự chữa phiên đăng nhập khi mở app (26/10): phiên local cũ (id legacy
+  // 'gv001', JWT mất) khiến mọi lần lưu video/lý thuyết bị RLS chặn (403)
+  // mà màn hình chỉ báo "lỗi" chung chung. getSession() đã có sẵn: JWT còn
+  // thì dựng lại phiên từ hồ sơ thật (id UUID), JWT mất thì xóa phiên cũ
+  // để về màn đăng nhập; không xác minh được thì giữ nguyên phiên, tránh
+  // đăng xuất oan. Chỉ chạy 1 lần khi mở app — xem trước học sinh không
+  // ghi phiên vào localStorage nên không bị ảnh hưởng.
+  useEffect(() => {
+    let cancelled = false;
+    const initial = currentSession;
+    authService.getSession().then((healed) => {
+      if (cancelled) return;
+      if (JSON.stringify(healed) !== JSON.stringify(initial)) {
+        setCurrentSession(healed);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 1b. Quản lý Route URL (/admin, /teacher hoặc /)
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {

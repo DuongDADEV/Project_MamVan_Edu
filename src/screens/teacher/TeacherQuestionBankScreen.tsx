@@ -225,9 +225,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     draftSelections[set.key] ?? set.selectedIds.filter((id) => set.questions.some((q) => q.id === id));
 
   const handleReviewDraftInStudio = (topicId: string, kind: 'questions' | 'theory') => {
-    if (topicId && topicId !== 'global' && topics.some((t) => t.id === topicId)) {
-      setFormTopicId(topicId);
-    }
+    // Đặt đúng chủ đề của bản nháp (kể cả nháp 'global' -> topic rỗng) để
+    // Studio nạp đúng khóa nháp; trước đây chỉ đặt khi chủ đề còn tồn tại
+    // nên bấm Duyệt với nháp global/chủ đề đã xóa thì Studio mở ra mà
+    // không mở màn duyệt (nạp sai khóa).
+    setFormTopicId(topicId === 'global' ? '' : topicId);
     setDraftOpenRequest({ kind, nonce: Date.now() });
     setActiveMainTab('ai_studio');
   };

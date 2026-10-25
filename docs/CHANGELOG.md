@@ -1,3 +1,10 @@
+## 2026-10-26 (BẢN NHÁP LƯU/DUYỆT LỖI Ở CẢ 3 PHẦN STUDIO)
+
+- **Chẩn đoán bằng tái hiện thật (không đoán):** dùng JWT giáo viên gv001 thật gọi đúng câu upsert app dùng — teacher_id UUID thật -> 201, teacher_id sentinel legacy `00000000-...-0001` -> 403 RLS cả 2 bảng video_lessons/theory_lessons; chuỗi AI proxy vẫn sống (groq 200). Vậy lỗi nằm ở phiên + khóa nháp, không phải AI.
+- **Nguyên nhân 1 — phiên cũ không được tự chữa:** App không bao giờ gọi `authService.getSession()` lúc mở app nên phiên local cũ (id legacy 'gv001') tồn tại mãi, đóng dấu sentinel cho mọi lần lưu -> RLS chặn -> toast "Có lỗi xảy ra khi lưu bản nháp AI vào Ngân hàng". Sửa (`App.tsx`): mở app gọi getSession() 1 lần — JWT còn thì dựng lại phiên từ hồ sơ thật (id UUID), JWT mất thì xóa phiên cũ về màn đăng nhập, không xác minh được thì giữ nguyên (tránh đăng xuất oan). Xem trước học sinh không ghi phiên vào localStorage nên không bị ảnh hưởng.
+- **Nguyên nhân 2 — Duyệt nạp sai khóa:** "Duyệt trong Studio" chỉ đặt chủ đề khi chủ đề còn tồn tại, nên với nháp 'global' (đúng dạng bản nháp 02:54: tiêu đề mặc định "Ngữ văn 7") hoặc chủ đề đã xóa, Studio nạp khóa khác -> không mở màn duyệt. Sửa (`TeacherQuestionBankScreen.tsx`): đặt formTopicId đúng khóa nháp, không điều kiện ('global' -> topic rỗng).
+- Test `scripts/test_draft_session_fix.ts` 6/6; tsc 0; các suite cũ vẫn đạt. Không sinh lại sơ đồ đợt này (sửa nối phiên + handler, không đổi luồng).
+
 ## 2026-10-26 (BẢNG RỘNG TỰ ĐỔI THÀNH THẺ DỌC, KHÔNG TRÀN)
 
 - **Vấn đề thật 26/10 ~02:44:** bảng lịch sử nộp bài 6 cột vẫn tràn trong bong bóng hẹp — bản sửa cuộn ngang trước đó chưa đủ vì giáo viên muốn nội dung vừa khung, không cần kéo ngang.
