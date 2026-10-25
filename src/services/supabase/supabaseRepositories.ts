@@ -73,6 +73,9 @@ import {
   sessionTeacherId,
   resolveContentOwnerId,
   resolvePushTeacherId,
+  isPushDenied,
+  markPushDenied,
+  jwtRoleForLog,
 } from './payloadStore.ts';
 import { generateUsername, generateFriendlyPassword, generateStudentCode, generateUUID } from '../mock/credentialUtils.ts';
 import {
@@ -1224,6 +1227,11 @@ export class SupabaseAttemptRepository implements AttemptRepository {
     if (!isSupabaseReady() || !isUUID(studentId)) {
       return mockAttemptRepo.saveStudentState(studentId, state, sourceId);
     }
+    // Đã bị RLS chặn trong phiên này thì chỉ lưu local (chặn spam 401).
+    if (isPushDenied(`student_states:${studentId}`)) {
+      await mockAttemptRepo.saveStudentState(studentId, state, sourceId);
+      return;
+    }
 
     try {
       const payload = {
@@ -1247,7 +1255,15 @@ export class SupabaseAttemptRepository implements AttemptRepository {
 
       const { error: upsertError } = await supabase.from('student_states').upsert(payload, { onConflict: 'student_id' });
       if (upsertError) {
-        console.error('[SupabaseAttempt] ❌ Lưu student_states thất bại:', upsertError.message);
+        if (/row-level security/i.test(upsertError.message)) {
+          if (markPushDenied(`student_states:${studentId}`)) {
+            console.warn(
+              `[SupabaseAttempt] Lưu student_states bị RLS chặn (JWT role=${await jwtRoleForLog()}, studentId=${studentId}) — đã chuyển sang lưu local cho học sinh này trong phiên này; đăng xuất rồi đăng nhập lại tài khoản đúng để đồng bộ.`
+            );
+          }
+        } else {
+          console.error('[SupabaseAttempt] ❌ Lưu student_states thất bại:', upsertError.message);
+        }
       }
       await mockAttemptRepo.saveStudentState(studentId, state, sourceId);
       syncEventBus.emit('state', { studentId }, sourceId);
@@ -3430,6 +3446,8 @@ export class SupabaseContentRepository implements ContentRepository {
     // bản vô chủ/legacy thì nhận về đúng giáo viên của phiên hiện tại.
     const pushTid = resolvePushTeacherId((t as any).teacher_id);
     if (!pushTid) return;
+    // Đã bị RLS chặn trong phiên này thì không thử lại (chặn spam 401).
+    if (isPushDenied(`topics:${topicId}`)) return;
     try {
       const { error } = await supabase.from('topics').upsert(
         {
@@ -3454,7 +3472,17 @@ export class SupabaseContentRepository implements ContentRepository {
         },
         { onConflict: 'id' }
       );
-      if (error) console.warn('[SupabaseContent] Lỗi đẩy chủ đề lên Supabase:', error.message);
+      if (error) {
+        if (/row-level security/i.test(error.message)) {
+          if (markPushDenied(`topics:${topicId}`)) {
+            console.warn(
+              `[SupabaseContent] Đẩy chủ đề bị RLS chặn (JWT role=${await jwtRoleForLog()}, id=${topicId}) — đã bỏ qua chủ đề này trong phiên này; đăng xuất rồi đăng nhập lại tài khoản đúng để đồng bộ.`
+            );
+          }
+        } else {
+          console.warn('[SupabaseContent] Lỗi đẩy chủ đề lên Supabase:', error.message);
+        }
+      }
     } catch (err) {
       console.error('[SupabaseContent] Ngoại lệ pushTopicRecord:', err);
     }

@@ -135,9 +135,38 @@ export function resolvePushTeacherId(rawTid: unknown): string | null {
   return own;
 }
 
+/** Khóa đã bị RLS chặn đẩy trong phiên này — lần sau bỏ qua luôn, không
+ * thử Supabase nữa (chặn spam 401 liên tục). Reload trang sẽ thử lại
+ * (vd sau khi đăng nhập lại đúng tài khoản). */
+const deniedPushKeys = new Set<string>();
+const warnedPushKeys = new Set<string>();
+
+export function isPushDenied(key: string): boolean {
+  return deniedPushKeys.has(key);
+}
+
+/** Ghi nhận 1 khóa bị RLS chặn; trả về true nếu đây là lần đầu (để log 1 lần). */
+export function markPushDenied(key: string): boolean {
+  const first = !warnedPushKeys.has(key);
+  deniedPushKeys.add(key);
+  warnedPushKeys.add(key);
+  return first;
+}
+
+export async function jwtRoleForLog(): Promise<string> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return (data.session?.user?.app_metadata as any)?.role || '?';
+  } catch {
+    return '?';
+  }
+}
+
 /** Ghi (upsert) 1 đối tượng lên Supabase. Trả về true nếu thành công. */
 export async function pushPayloadItem(table: string, item: PayloadItem): Promise<boolean> {
   if (!isSupabaseReady() || !item || !item.id) return false;
+  const denyKey = `${table}:${item.id}`;
+  if (isPushDenied(denyKey)) return false;
   const now = new Date().toISOString();
   // Đóng dấu chủ sở hữu: bản của người khác thì bỏ qua (RLS chặn),
   // bản vô chủ/legacy thì nhận về đúng giáo viên của phiên hiện tại.
@@ -159,7 +188,15 @@ export async function pushPayloadItem(table: string, item: PayloadItem): Promise
       { onConflict: 'id' }
     );
     if (error) {
-      console.warn(`[PayloadStore] Lỗi lưu lên bảng ${table}:`, error.message);
+      if (/row-level security/i.test(error.message)) {
+        if (markPushDenied(denyKey)) {
+          console.warn(
+            `[PayloadStore] Lưu ${table} bị RLS chặn (JWT role=${await jwtRoleForLog()}, id=${item.id}) — đã chuyển sang lưu local cho bản này trong phiên này; đăng xuất rồi đăng nhập lại tài khoản đúng để đồng bộ.`
+          );
+        }
+      } else {
+        console.warn(`[PayloadStore] Lỗi lưu lên bảng ${table}:`, error.message);
+      }
       return false;
     }
     return true;

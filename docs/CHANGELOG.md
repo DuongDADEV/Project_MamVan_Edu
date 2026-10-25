@@ -1,3 +1,7 @@
+## 2026-10-25 (CHẶN SPAM 401 KHI GHI BỊ RLS CHẶN)
+
+- **Ghi state/topics/payload bị RLS chặn thì chỉ thử 1 lần rồi chuyển hẳn sang lưu local trong phiên đó** (danh sách deny theo id, reload trang sẽ thử lại): trước đây mỗi lần lưu thất bại lại thử lại vô hạn nên console spam 401 liên tục (student_states, topics). Lần chặn đầu tiên log 1 dòng duy nhất kèm JWT role + id để chẩn đúng tài khoản đang cầm (vd tab giáo viên đang cầm JWT tài khoản khác do đăng nhập ở tab khác đè session) + hướng đăng xuất/đăng nhập lại. Các lần ghi đúng quyền không đổi.
+
 ## 2026-10-25 (ADMIN NHẬP KEY TẠI CHỖ + BIỂU ĐỒ TOKEN + SỬA ĐẨY TOPICS 401)
 
 - **Ô nhập key từng nấc ở màn "Cấu hình Mầm AI"** (theo yêu cầu chủ dự án 25/10): key lưu vào ai_settings ('ai_keys', chỉ service role đọc được), proxy /api/ai/chat và /api/admin/ai-test ưu tiên key trong DB rồi mới fallback biến môi trường Vercel; giao diện chỉ hiện "đã cấu hình" + nguồn (DB/Vercel), không bao giờ hiện lại giá trị key; để trống = giữ nguyên key đã lưu.
