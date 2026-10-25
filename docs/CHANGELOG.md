@@ -1,3 +1,9 @@
+## 2026-10-26 (VẼ BIỂU ĐỒ THÀNH 1 FUNCTION DUY NHẤT)
+
+- **Vấn đề thật 26/10 ~01:56:** giáo viên hỏi "xem biểu đồ tổng quan", model gọi get_class_summary rồi viết bảng chữ thay vì gọi render_chart — vì cơ chế cũ bắt model gọi 2 lần (tool dữ liệu rồi render_chart với dataSource/xKey/yKey) và get_class_summary lại là tool duy nhất trong nhóm vẽ được KHÔNG có series nên kể cả gọi render_chart sau nó cũng không vẽ được gì.
+- **Sửa (`analyticsAssistant.ts`):** render_chart nay chỉ cần loai (tong_quan_lop / tien_do_hoc_sinh / pho_diem / hoat_dong / so_sanh_chu_de) + tenHocSinh khi vẽ tiến độ học sinh — hàm tự chạy công cụ dữ liệu trong code rồi vẽ luôn, 1 lần gọi là xong, không cần dataSource/xKey/yKey, không viết bảng chữ thay biểu đồ; luật prompt 2/5e/5g đổi sang 1 lần gọi; cơ chế seriesByTool cũ bỏ. get_class_summary nay có series số học sinh từng lớp (lop × soHocSinh, theo đúng bộ lọc) nên vẽ được tổng quan lớp.
+- **Kiểm chứng:** test mới `scripts/test_chart_function.ts` 13/13 (đủ 5 loai + loai lạ, series đếm đúng theo lớp/lọc/rỗng); tsc + 34/34 + 20/20 + 13/13 (guard) vẫn đậu. Sơ đồ cập nhật cùng đợt (315 nút, code-map 314/314).
+
 ## 2026-10-26 (CHẶN SỐ BỊA Ở TRỢ LÝ PHÂN TÍCH)
 
 - **Vấn đề thật 26/10 ~01:41:** giáo viên hỏi "xem biểu đồ tổng quan", nấc cuối Workers AI phục vụ (3 nấc kia rớt) đã trả toàn chữ kể chuyện gọi tool + bảng số tự bịa (Toán 85%, Văn 80%...) thay vì gọi tool thật — trong khi biểu đồ thật phải hiện dạng cột theo CHỦ ĐỀ của 1 học sinh cụ thể, và câu hỏi không nêu tên ai nên tool thật còn báo "chưa rõ tên học sinh". Vòng tool ở trình duyệt vốn trả nguyên văn câu chữ khi model không gọi tool nào, nên số bịa lọt thẳng lên khung chat.

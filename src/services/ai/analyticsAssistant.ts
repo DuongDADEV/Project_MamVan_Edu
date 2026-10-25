@@ -10,9 +10,8 @@
  * - Từ 24/10: trợ lý có thêm công cụ GHI (tạo/xuất bản/sửa/xóa/chấm/duyệt)
  *   đi qua đúng service/repository mà UI dùng, vẫn trong phạm vi giáo viên
  *   đó — không vượt sang giáo viên khác, không đụng cài đặt cấp hệ thống.
- * - Biểu đồ: AI chỉ được KHAI BÁO (loại/tựa/trục) qua công cụ render_chart;
- *   số liệu vẽ lấy nguyên văn từ kết quả công cụ đã chạy — AI không chạm
- *   vào dữ liệu điểm.
+ * - Biểu đồ: AI gọi render_chart 1 lần với loai, hàm tự lấy dữ liệu thật
+ *   rồi vẽ trong code — AI không khai trục, không chạm vào dữ liệu điểm.
  */
 
 import { callAiProxy } from './proxyClient.ts';
@@ -99,6 +98,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_question_analysis: 'Phân tích câu hỏi',
   get_student_profile: 'Hồ sơ học sinh',
   get_learning_activity: 'Hoạt động học tập',
+  render_chart: 'Biểu đồ',
   list_class_students: 'Danh sách học sinh',
   list_topics: 'Danh sách chủ đề',
   list_quizzes: 'Danh sách bài kiểm tra',
@@ -251,6 +251,40 @@ const trunc = (s: any, n: number): string => {
   return t.length > n ? t.slice(0, n) + '…' : t;
 };
 
+// ĐỢT 6 (26/10): series số học sinh từng lớp cho get_class_summary — trước
+// đây công cụ này không có series nên render_chart không vẽ được tổng quan
+// lớp dù dữ liệu đã có sẵn.
+export function buildClassCountSeries(
+  classes: ClassItem[],
+  students: StudentAccount[],
+  filter: AnalyticsFilter
+): NonNullable<ToolOutcome['series']> {
+  const scoped = filterStudents(students, filter);
+  return {
+    rows: classes
+      .map((c) => ({
+        lop: c.name,
+        soHocSinh: scoped.filter((s) => s.class_id === c.id).length,
+      }))
+      .filter((r) => r.soHocSinh > 0),
+    xKey: 'lop',
+    yKey: 'soHocSinh',
+    yLabel: 'Số học sinh',
+    defaultType: 'bar',
+  };
+}
+
+// ĐỢT 6 (26/10): vẽ biểu đồ = 1 function duy nhất — loại biểu đồ -> công
+// cụ dữ liệu chạy trong code. Model chỉ gọi render_chart 1 lần với loai,
+// không gọi công cụ dữ liệu trước, không khai dataSource/xKey/yKey.
+export const CHART_LOAI_TO_TOOL: Record<string, { tool: string; argName?: string }> = {
+  tong_quan_lop: { tool: 'get_class_summary' },
+  tien_do_hoc_sinh: { tool: 'get_student_profile', argName: 'studentName' },
+  pho_diem: { tool: 'get_score_distribution' },
+  hoat_dong: { tool: 'get_learning_activity' },
+  so_sanh_chu_de: { tool: 'compare_topics' },
+};
+
 export async function executeTool(
   name: string,
   args: any,
@@ -321,6 +355,7 @@ export async function executeTool(
             .map(pick),
           hocSinhCanChuY: attention,
         },
+        series: buildClassCountSeries(ctx.classes, ctx.students, f),
       };
     }
 
@@ -1622,27 +1657,18 @@ const FUNCTION_DECLARATIONS: any[] = [
   {
     name: 'render_chart',
     description:
-      'Vẽ biểu đồ từ dữ liệu của một công cụ vừa chạy. Dùng khi câu trả lời có phân breakdown theo nhóm: so sánh/phân bố/xu hướng, hoặc đếm theo trạng thái (vd đã có điểm vs chưa có điểm từ get_score_distribution — series đã kèm hàng "Chưa có điểm"). Số liệu lấy từ kết quả công cụ — không tự cung cấp số.',
+      'Vẽ biểu đồ trong MỘT lần gọi duy nhất: tự lấy dữ liệu thật rồi vẽ luôn, không cần gọi công cụ dữ liệu trước, không cần dataSource/xKey/yKey, không viết bảng chữ thay biểu đồ. loai = loại biểu đồ: tong_quan_lop (số học sinh từng lớp), tien_do_hoc_sinh (tiến độ theo chủ đề của 1 học sinh — cần tenHocSinh), pho_diem (phân bố điểm, kèm hàng Chưa có điểm), hoat_dong (điểm danh theo tuần), so_sanh_chu_de (điểm TB từng chủ đề). Số liệu lấy từ kết quả công cụ — không tự cung cấp số.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        chartType: { type: 'STRING', enum: ['bar', 'line'] },
-        title: { type: 'STRING' },
-        dataSource: {
+        loai: {
           type: 'STRING',
-          enum: [
-            'get_class_summary',
-            'compare_topics',
-            'get_score_distribution',
-            'get_question_analysis',
-            'get_student_profile',
-            'get_learning_activity',
-          ],
+          enum: ['tong_quan_lop', 'tien_do_hoc_sinh', 'pho_diem', 'hoat_dong', 'so_sanh_chu_de'],
         },
-        xKey: { type: 'STRING', description: 'Khóa trục hoành đúng như trong dữ liệu công cụ (vd chuDe, khoangDiem, tuan).' },
-        yKey: { type: 'STRING', description: 'Khóa trục tung đúng như trong dữ liệu công cụ (vd diemTB, soHocSinh, tyLeDiemDanh).' },
+        tenHocSinh: { type: 'STRING', description: 'Tên học sinh, chỉ cần cho loai tien_do_hoc_sinh.' },
+        chartType: { type: 'STRING', enum: ['bar', 'line'] },
       },
-      required: ['chartType', 'title', 'dataSource', 'xKey', 'yKey'],
+      required: ['loai'],
     },
   },
 ];
@@ -1651,16 +1677,16 @@ const SYSTEM_PROMPT = `Bạn là Trợ lý phân tích học tập của Mầm V
 
 QUY TẮC BẮT BUỘC:
 1. Mọi con số trong câu trả lời PHẢI lấy từ kết quả công cụ — tuyệt đối không tự bịa số, không suy đoán số khi chưa gọi công cụ phù hợp.
-2. Cần số liệu nào thì gọi công cụ tương ứng trước khi trả lời. Khi câu trả lời có phân breakdown theo nhóm — so sánh/phân bố/xu hướng, hoặc đếm theo trạng thái như đã có điểm vs chưa có điểm — và đã có dữ liệu, hãy gọi thêm render_chart để vẽ biểu đồ (dataSource = tên công cụ vừa cho dữ liệu; xKey/yKey phải là các khóa có thật trong dữ liệu đó; với get_score_distribution, series đã kèm hàng "Chưa có điểm" để vẽ cả breakdown đó).
+2. Cần số liệu nào thì gọi công cụ tương ứng trước khi trả lời. Khi câu trả lời có phân breakdown theo nhóm — so sánh/phân bố/xu hướng, hoặc đếm theo trạng thái như đã có điểm vs chưa có điểm — hoặc giáo viên yêu cầu vẽ biểu đồ, hãy gọi render_chart MỘT lần với loai phù hợp (tong_quan_lop / tien_do_hoc_sinh / pho_diem / hoat_dong / so_sanh_chu_de): hàm tự lấy dữ liệu thật rồi vẽ luôn, không cần gọi công cụ dữ liệu trước, không cần dataSource/xKey/yKey, không viết bảng chữ thay biểu đồ. Với pho_diem, series đã kèm hàng "Chưa có điểm" để vẽ cả breakdown đó.
 3. Nếu dữ liệu cho thấy mẫu quá ít (0 lượt làm, 0 học sinh có điểm...), phải nói rõ "chưa đủ dữ liệu" và KHÔNG kết luận học sinh yếu/giỏi.
 4. Nhận xét học sinh phải kèm bằng chứng cụ thể (lượt làm, điểm TB, khoảng thời gian). Không dán nhãn tiêu cực khi bằng chứng yếu.
 5. HÀNH ĐỘNG TRỰC TIẾP (toàn quyền trong phạm vi của giáo viên): khi giáo viên yêu cầu LÀM việc — tạo/xuất bản/gỡ xuất bản/sửa/xóa chủ đề, video, lý thuyết, bài kiểm tra, câu hỏi, bài tập; chấm bài tự luận; duyệt/từ chối yêu cầu quà — thì gọi NGAY công cụ ghi tương ứng, không xin xác nhận thêm, không xin lỗi vì quyền, không từ chối vì quyền trong phạm vi dữ liệu của giáo viên. Sau mỗi hành động, báo kết quả cụ thể: đã tạo/cập nhật/xóa cái gì, tiêu đề, id. Mọi công cụ ghi đều đối chiếu tên/id với dữ liệu của giáo viên trước khi làm; nếu công cụ trả lỗi "không tìm thấy trong phạm vi" thì báo đúng lỗi đó và gợi ý tên đúng trong phạm vi, không đoán id. Việc nào chưa có công cụ ghi thì nói rõ giới hạn đó + chuẩn bị sẵn nội dung để giáo viên bấm một lần là xong, tuyệt đối không bắt giáo viên tự làm lại từ đầu.
 5b. KHÔNG hỏi ngược lại kiểu "thầy/cô muốn xem lớp nào/chủ đề nào" khi câu hỏi không nêu cụ thể: bộ lọc chung hiện tại CHÍNH LÀ phạm vi trả lời (để "Tất cả các lớp" nghĩa là mọi lớp của giáo viên; giáo viên có thể chỉ quản lý đúng 1 lớp). Cứ gọi công cụ theo đúng bộ lọc hiện tại, trả lời luôn và ghi rõ phạm vi đã áp dụng. Chỉ hỏi lại khi câu hỏi thật sự không xác định được cần số liệu gì.
 5c. Khi giáo viên hỏi TÊN học sinh ở một mức điểm (vd "điểm khá là những ai", "em biết tên học sinh điểm khá đó không"), gọi get_score_distribution rồi trả lời bằng tên thật + điểm TB lấy từ danh sách hocSinh của khoảng đó — tuyệt đối không xin lỗi vì "công cụ không cung cấp tên" hay "không có quyền xem tên", vì công cụ đã trả tên.
 5d. Tên lớp/chủ đề/học sinh/bài tập mơ hồ hoặc không tìm thấy: dùng công cụ liệt kê (list_class_students, list_topics, list_quizzes, list_assignments, list_questions) để đối chiếu rồi báo lại danh sách đúng trong phạm vi cho giáo viên chọn — không tự đoán đối tượng.
-5e. Khi giáo viên hỏi ĐẾM theo trạng thái (vd "lớp 7A4 có bao nhiêu học sinh chưa có điểm", "mấy em chưa nộp bài"), gọi công cụ tương ứng — với chưa có điểm thì gọi get_score_distribution rồi TRẢ LỜI TRỰC TIẾP con số soHocSinhChuaCoDiem kèm tên trong hocSinhChuaCoDiem (gọi thêm list_class_students nếu cần tổng số lớp) — tuyệt đối không né sang đề nghị khác, không xin lỗi vì "không vẽ được" hay "không có quyền". Nếu giáo viên yêu cầu vẽ (vd "vẽ sơ đồ", "vẽ biểu đồ") hoặc câu trả lời có breakdown, gọi thêm render_chart với dataSource là công cụ vừa cho dữ liệu.
+5e. Khi giáo viên hỏi ĐẾM theo trạng thái (vd "lớp 7A4 có bao nhiêu học sinh chưa có điểm", "mấy em chưa nộp bài"), gọi công cụ tương ứng — với chưa có điểm thì gọi get_score_distribution rồi TRẢ LỜI TRỰC TIẾP con số soHocSinhChuaCoDiem kèm tên trong hocSinhChuaCoDiem (gọi thêm list_class_students nếu cần tổng số lớp) — tuyệt đối không né sang đề nghị khác, không xin lỗi vì "không vẽ được" hay "không có quyền". Nếu giáo viên yêu cầu vẽ (vd "vẽ sơ đồ", "vẽ biểu đồ") hoặc câu trả lời có breakdown, gọi render_chart MỘT lần với loai phù hợp (không gọi công cụ dữ liệu trước).
 5f. KHÔNG dùng câu "Em xin lỗi, em không thể..." với bất kỳ yêu cầu nào NẰM TRONG phạm vi công cụ: dữ liệu lớp mình, trả lời đếm/liệt kê/tên, vẽ biểu đồ từ dữ liệu có được, và mọi việc ghi đã có công cụ — phải làm luôn (trả lời + vẽ nếu được yêu cầu). Chỉ từ chối khi yêu cầu THỰC SỰ ngoài phạm vi (dữ liệu giáo viên khác, quản trị hệ thống, việc chưa có công cụ) — và khi đó từ chối ngắn gọn trong 1 câu + nói rõ việc thay thế làm được ngay (kèm nội dung chuẩn bị sẵn nếu là việc ghi chưa có công cụ).
-5g. "Vẽ sơ đồ tổng quan học sinh" LUÔN vẽ được: gọi get_student_profile lấy hồ sơ rồi gọi render_chart với dataSource = get_student_profile (series của công cụ này là tiến độ theo chủ đề: chuDe × phanTramHoanThanh, vẽ cột % hoàn thành). TUYỆT ĐỐI không nói công cụ thiếu trường — tienDoChuDe sinh ra chính cho việc này. Nếu hồ sơ không có dữ liệu chủ đề nào thì nói ngắn "chưa đủ dữ liệu" + hiện phần văn bản, không xin lỗi kiểu từ chối.
+5g. "Vẽ sơ đồ tổng quan học sinh" LUÔN vẽ được: gọi render_chart MỘT lần với loai = tien_do_hoc_sinh + tenHocSinh (hàm tự lấy hồ sơ rồi vẽ cột % hoàn thành theo chủ đề: chuDe × phanTramHoanThanh). TUYỆT ĐỐI không nói công cụ thiếu trường — tienDoChuDe sinh ra chính cho việc này. Nếu hồ sơ không có dữ liệu chủ đề nào thì nói ngắn "chưa đủ dữ liệu" + hiện phần văn bản, không xin lỗi kiểu từ chối.
 5h. Tham chiếu mơ hồ không có tên: "học sinh này", "em đó", "bạn đó" mà hội thoại hiện tại chưa gọi tên học sinh nào thì HỎI LẠI học sinh nào — tuyệt đối không gọi công cụ với tên đoán mò hoặc tên rỗng (tên rỗng làm API lỗi).
 6. Trả lời tiếng Việt, ngắn gọn, rõ cấu trúc (đoạn ngắn hoặc gạch đầu dòng). Xưng "em", gọi người dùng là "thầy/cô".
 7. Cuối MỖI câu trả lời, thêm một khối đúng định dạng sau (tối đa 3 câu hỏi gợi ý liên quan trực tiếp tới điều vừa phân tích):
@@ -1852,7 +1878,6 @@ export async function askAnalyticsAssistant(
   const turnDecls = routed ?? FUNCTION_DECLARATIONS;
 
   const toolRuns: AssistantToolRun[] = [];
-  const seriesByTool = new Map<string, NonNullable<ToolOutcome['series']>>();
   let chart: AssistantChart | undefined;
   let lastError: any = null;
 
@@ -1897,24 +1922,46 @@ export async function askAnalyticsAssistant(
         for (const callPart of calls) {
           const { name, args } = callPart.functionCall || {};
           if (name === 'render_chart') {
-            const series = seriesByTool.get(args?.dataSource);
+            // ĐỢT 6 (26/10): 1 lần gọi là xong — hàm tự chạy công cụ dữ
+            // liệu trong code rồi vẽ luôn, model không cần gọi 2 lần hay
+            // khai dataSource/xKey/yKey.
+            const mapping = CHART_LOAI_TO_TOOL[args?.loai as string];
+            if (!mapping) {
+              responseParts.push({
+                functionResponse: {
+                  name,
+                  response: {
+                    result: {
+                      daVe: false,
+                      coBieuDo: false,
+                      lyDo: 'Loại biểu đồ chưa hỗ trợ, chọn trong: tong_quan_lop, tien_do_hoc_sinh, pho_diem, hoat_dong, so_sanh_chu_de.',
+                    },
+                  },
+                },
+              });
+              continue;
+            }
+            const dataArgs: any = {};
+            if (mapping.argName && args?.tenHocSinh) dataArgs[mapping.argName] = args.tenHocSinh;
+            const chartOutcome = await executeTool(mapping.tool, dataArgs, ctx);
+            const series = chartOutcome.series;
+            let drew = false;
             if (series && series.rows.length > 0) {
-              const row0 = series.rows[0];
-              const xKey = args.xKey && args.xKey in row0 ? args.xKey : series.xKey;
-              const yKey = args.yKey && args.yKey in row0 ? args.yKey : series.yKey;
+              drew = true;
               chart = {
                 type: args.chartType === 'line' ? 'line' : series.defaultType,
-                title: args.title || TOOL_LABELS[args.dataSource] || 'Biểu đồ',
+                title: TOOL_LABELS[mapping.tool] || 'Biểu đồ',
                 rows: series.rows,
-                xKey,
-                yKey,
+                xKey: series.xKey,
+                yKey: series.yKey,
                 yLabel: series.yLabel,
               };
             }
+            toolRuns.push({ name, label: TOOL_LABELS[name] || name, evidence: chartOutcome.evidence });
             responseParts.push({
               functionResponse: {
                 name,
-                response: { result: { daXuLy: true, coBieuDo: !!chart } },
+                response: { result: { ...chartOutcome.data, daVe: drew, coBieuDo: drew } },
               },
             });
             continue;
@@ -1925,7 +1972,6 @@ export async function askAnalyticsAssistant(
             label: TOOL_LABELS[name] || name,
             evidence: outcome.evidence,
           });
-          if (outcome.series) seriesByTool.set(name, outcome.series);
           responseParts.push({
             functionResponse: { name, response: { result: outcome.data } },
           });
