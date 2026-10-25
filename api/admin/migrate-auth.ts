@@ -90,9 +90,15 @@ export default async function handler(req: any, res: any) {
     roleOf: (row: any) => string
   ): Promise<{ linked: number; skipped: number; failed: string[] }> {
     const out = { linked: 0, skipped: 0, failed: [] as string[] };
+    // students KHÔNG có cột role (chỉ teachers có) — select chung cả 2
+    // bảng từng gây TABLE_ERROR:students ở lần migrate đầu (25/10).
+    const selectCols =
+      table === 'teachers'
+        ? 'id,username,password_hash,auth_user_id,role'
+        : 'id,username,password_hash,auth_user_id';
     const { data: rows, error } = await admin
       .from(table)
-      .select('id,username,password_hash,auth_user_id,role')
+      .select(selectCols)
       .order('username');
     if (error) {
       out.failed.push(`TABLE_ERROR:${table}`);
@@ -133,7 +139,11 @@ export default async function handler(req: any, res: any) {
         userId = await findUserIdByEmail(email);
       }
       if (!userId) {
-        out.failed.push(username);
+        // Ghi kèm thông báo lỗi để lần sau khỏi đoán mò (thông báo của
+        // Auth/PostgREST không chứa secret; cắt 200 ký tự cho gọn).
+        out.failed.push(
+          `${username} (create: ${String(createErr?.message || 'unknown').slice(0, 200)})`
+        );
         continue;
       }
       const patch: any = { auth_user_id: userId, password_hash: null };
@@ -143,7 +153,9 @@ export default async function handler(req: any, res: any) {
         .update(patch)
         .eq('id', (row as any).id);
       if (updErr) {
-        out.failed.push(username);
+        out.failed.push(
+          `${username} (update: ${String(updErr.message || 'unknown').slice(0, 200)})`
+        );
         continue;
       }
       out.linked++;
