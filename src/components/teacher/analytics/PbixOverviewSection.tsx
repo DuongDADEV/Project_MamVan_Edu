@@ -258,6 +258,18 @@ export const PbixOverviewSection: React.FC<Props> = ({
     [thinkingChartKey],
   );
 
+  // Dữ liệu đường đăng nhập: cùng cơ chế giữ tham chiếu — chỉ đổi tham
+  // chiếu khi giá trị thật sự đổi, để animation đường chỉ chạy khi đổi
+  // lọc/cross-filter, không chạy lại khi tab render lại.
+  const dailyChartKey = dashboardSel.dailyChart
+    .map((d) => `${d.date}:${d.students}`)
+    .join('|');
+  const dailyChartData = useMemo(
+    () => dashboardSel.dailyChart,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dailyChartKey],
+  );
+
   // Mặc định khoảng ngày = khoảng dữ liệu thật (áp một lần khi nạp xong; sau
   // đó người dùng tự chỉnh, không tự ghi đè lại).
   const dateDefaultsApplied = useRef(false);
@@ -660,11 +672,13 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       'Tỷ lệ điểm đạt',
                     ]}
                   />
-                  {/* Không animation lặp: thanh vẽ thẳng ở giá trị cuối và
-                      đứng yên — trước đây animation mặc định của Recharts chạy
-                      lại mỗi khi cây biểu đồ nhận dữ liệu/kích thước mới nên
-                      thanh nhấp nháy liên tục khi tab render lại. */}
-                  <Bar dataKey="rate" fill={BAR_PEACH} isAnimationActive={false}>
+                  {/* Animation chỉ khi đổi dữ liệu: tham chiếu data giữ nguyên
+                      qua các lần render không đổi giá trị (memo theo khóa
+                      label:rate:gradedCount ở trên) nên Recharts không chạy
+                      lại animation khi tab render lại — chỉ khi đổi lọc/
+                      cross-filter thì thanh mới chuyển động mượt 800ms từ
+                      giá trị cũ sang giá trị mới, không nhấp nháy. */}
+                  <Bar dataKey="rate" fill={BAR_PEACH} animationDuration={800} animationEasing="ease-out">
                     <LabelList
                       dataKey="rate"
                       position="right"
@@ -692,7 +706,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
                 {/* 25/10: bottom 28 + nhãn trục X 12px — tiêu đề 'Ngày' không còn
                     bị cắt nửa dưới ở mép dưới thẻ (cùng nguyên nhân như biểu
                     đồ cột: margin cũ không có bottom, nhãn kế thừa cỡ chữ app). */}
-                <LineChart data={dashboardSel.dailyChart} margin={{ left: 8, right: 24, top: 28, bottom: 28 }}>
+                <LineChart data={dailyChartData} margin={{ left: 8, right: 24, top: 28, bottom: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
@@ -707,20 +721,22 @@ export const PbixOverviewSection: React.FC<Props> = ({
                     formatter={(value: any) => [`${value} học sinh`, 'Số học sinh']}
                     labelFormatter={(d: any) => `Ngày ${formatVNDate(String(d))}`}
                   />
-                  {/* Nhãn 0/1 vẽ thẳng, không animation: Recharts 3 chỉ vẽ
-                      nhãn của Line khi không còn animation (showLabels =
-                      !isAnimating) — để animation mặc định thì nhãn đã cấu
-                      hình sẵn không bao giờ hiện trên tab này (cùng cơ chế
-                      từng làm thanh Bar nhấp nháy; Bar đã tắt animation
-                      nên nhãn % của nó hiện bình thường). Tắt animation
-                      của Line thì nhãn 0/1 vẽ ngay và đứng yên. */}
+                  {/* Animation chỉ khi đổi dữ liệu (như Bar): tham chiếu
+                      dailyChart giữ nguyên qua các lần render không đổi giá
+                      trị (memo theo khóa date:students) nên đường không chạy
+                      lại animation khi tab render lại — chỉ khi đổi lọc/
+                      cross-filter thì đường mới chuyển động mượt 800ms.
+                      Đánh đổi của Recharts 3: nhãn 0/1 chỉ vẽ khi không còn
+                      animation (showLabels = !isAnimating) nên trong 0.8s
+                      chuyển động nhãn tạm ẩn rồi hiện lại ở giá trị mới. */}
                   <Line
                     type="linear"
                     dataKey="students"
                     stroke={LINE_BLUE}
                     strokeWidth={2}
                     dot={{ r: 3 }}
-                    isAnimationActive={false}
+                    animationDuration={800}
+                    animationEasing="ease-out"
                   >
                     <LabelList dataKey="students" position="top" />
                   </Line>

@@ -1,3 +1,12 @@
+## 2026-10-25 (BIỂU ĐỒ TỔNG QUAN: CHUYỂN ĐỘNG MƯỢT TRỞ LẠI KHI ĐỔI DỮ LIỆU — HẾT ĐƠ, KHÔNG NHẤP NHÁY LẶP)
+
+Theo lệnh chủ dự án (ảnh chụp 13:27 25/10: trước đây còn thấy hiệu ứng chuyển động lên xuống, nay biểu đồ đơ): đợt 25/10 sửa nhấp nháy đã tắt hẳn animation của cả 2 biểu đồ (Bar + Line isAnimationActive=false) nên khi đổi lọc/cross-filter giá trị nhảy thẳng, mất chuyển động. Đợt này bật lại animation NHƯNG chỉ chạy khi dữ liệu thật sự đổi, nên vừa mượt vừa không nhấp nháy lặp.
+
+- **Bar (Tỷ lệ điểm đạt theo mức tư duy) + Line (đăng nhập theo ngày): animationDuration 800ms, easing ease-out** — khi bấm dòng học sinh (cross-filter), đổi lớp hay đổi khoảng ngày, thanh/đường chuyển động mượt từ giá trị cũ sang mới trong 0.8s thay vì nhảy thẳng.
+- **Chống nhấp nháy lặp bằng memo theo khóa giá trị (giữ từ đợt trước + bổ sung cho đường)**: thinkingChartData đã memo theo khóa label:rate:gradedCount; dailyChart nay cũng memo theo khóa date:students (mới: dailyChartData trong PbixOverviewSection.tsx, LineChart dùng dailyChartData thay vì dashboardSel.dailyChart trực tiếp) — tham chiếu data chỉ đổi khi giá trị đổi, nên tab render lại khi đứng yên KHÔNG chạy lại animation.
+- **Đánh đổi của Recharts 3, báo rõ trước**: nhãn 0/1 trên đường chỉ vẽ khi không còn animation (showLabels = !isAnimating) nên trong 0.8s chuyển động nhãn tạm ẩn rồi hiện lại ở giá trị mới; nhãn % cuối thanh chạy theo đầu thanh. Đây là hành vi chuẩn của Recharts, không phải lỗi mất nhãn.
+- KHÔNG ĐỔI: margins chống cắt (right 72 bar, Y 150, top 28 line, bottom 28 cả hai, nhãn trục X 12px), đường 0-fill, tooltip, 7 dòng + sticky header + footer các bảng, cross-filter, KPI. Sơ đồ cập nhật cùng đợt: nút biểu đồ trong TREE sửa từ "không animation" sang "animation 800ms ease-out chỉ khi đổi dữ liệu" (308 nút, 29/29 quan hệ, code-map 307/307, 0 vấn đề; "isAnimationActive" còn 0 lần trong sơ đồ).
+
 ## 2026-10-25 (SƠ ĐỒ: SỬA NHÃN MODEL CONTENT-GEN — 2.5-FLASH ĐÃ CHẾT → FLASH-LATEST + CHUỖI FALLBACK HIỆN TẠI)
 
 Đợt dc65980 cắt model chết khỏi code nhưng sót nhãn sơ đồ: nút content-gen trong TREE vẫn ghi "(model AI-2.5-flash)" trong khi tên đó đã bị lọc khỏi mọi chuỗi gọi và dropdown qua tập DEAD_GEMINI_MODELS. Đợt này CHỈ sửa nhãn đó, KHÔNG đụng code app, KHÔNG deploy lại app.
