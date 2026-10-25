@@ -198,12 +198,22 @@ async function callGeminiLeg(
   if (model.includes('flash')) {
     generationConfig.thinkingConfig = { thinkingBudget: 0 };
   }
+  // gemini-3.x từ chối role 'function' (400 "Role 'function' is not supported"):
+  // functionResponse phải nằm trong content role 'user' (chuẩn mới). Vòng
+  // lặp tool của frontend vẫn giữ role 'function' vì leg OpenAI-dialect cần
+  // nó để dựng tool message — chỉ đổi ở đây, ngay trước khi gửi Google.
+  const geminiBody: any = { ...body };
+  if (Array.isArray(body?.contents)) {
+    geminiBody.contents = body.contents.map((c: any) =>
+      c?.role === 'function' ? { ...c, role: 'user' } : c
+    );
+  }
   const { ok, status, json } = await fetchJson(
     url,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
-      body: JSON.stringify({ ...body, generationConfig }),
+      body: JSON.stringify({ ...geminiBody, generationConfig }),
     },
     timeoutMs
   );
