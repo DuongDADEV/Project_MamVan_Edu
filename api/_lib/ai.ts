@@ -33,12 +33,13 @@ export type LegOutcome = {
   usage?: TokenUsage;
 };
 
-export type LegConfig = { leg: 'gemini' | 'groq' | 'openrouter'; model: string };
+export type LegConfig = { leg: 'gemini' | 'groq' | 'openrouter' | 'workersai'; model: string; baseUrl?: string };
 
 export const DEFAULT_MODELS: Record<string, string> = {
   gemini: 'gemini-3.8-flash',
   groq: 'openai/gpt-oss-120b',
   openrouter: 'google/gemma-4-31b-it:free',
+  workersai: '@cf/meta/llama-3.1-8b-instruct-fp8-fast',
 };
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -236,17 +237,35 @@ async function callGeminiLeg(
 }
 
 async function callOpenAiLeg(
-  leg: 'groq' | 'openrouter',
+  leg: 'groq' | 'openrouter' | 'workersai',
   model: string,
   apiKey: string,
   contents: GeminiContent[],
   systemPrompt: string,
   functionDeclarations: any[] | undefined,
-  timeoutMs: number
+  timeoutMs: number,
+  baseUrl?: string
 ): Promise<{ parts: GeminiPart[] | null; outcome: LegOutcome }> {
   const started = Date.now();
-  const base = leg === 'groq' ? GROQ_BASE : OPENROUTER_BASE;
+  const base =
+    leg === 'groq' ? GROQ_BASE : leg === 'openrouter' ? OPENROUTER_BASE : baseUrl || '';
+  if (!base) {
+    return {
+      parts: null,
+      outcome: { leg, model, ok: false, status: 0, message: 'WORKERSAI_NO_ACCOUNT_ID', latencyMs: Date.now() - started },
+    };
+  }
   const { messages, tools } = geminiToOpenAI(contents, systemPrompt, functionDeclarations);
+  // Cloudflare Workers AI 400 khi assistant content null kèm tool_calls
+  // (test thật 26/10, vòng tool thứ 2): chỉ nấc này chuẩn hóa null -> ''.
+  const outMessages =
+    leg === 'workersai'
+      ? messages.map((m: any) =>
+          m.role === 'assistant' && (m.content === null || m.content === undefined)
+            ? { ...m, content: '' }
+            : m
+        )
+      : messages;
   const headers: any = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${apiKey}`,
@@ -262,7 +281,7 @@ async function callOpenAiLeg(
       headers,
       body: JSON.stringify({
         model,
-        messages,
+        messages: outMessages,
         tools,
         temperature: 0.2,
         max_tokens: 4096,
@@ -345,7 +364,8 @@ export async function tryChain(
         req.contents,
         systemPrompt,
         functionDeclarations,
-        timeoutPerLegMs
+        timeoutPerLegMs,
+        leg.baseUrl
       );
       outcomes.push(r.outcome);
       if (r.parts) {
@@ -362,10 +382,11 @@ export async function tryChain(
  * tryChain vốn dừng ở nấc đầu tiên thành công).
  */
 export async function testLeg(
-  leg: 'gemini' | 'groq' | 'openrouter',
+  leg: 'gemini' | 'groq' | 'openrouter' | 'workersai',
   model: string,
   key: string,
-  timeoutMs = 15000
+  timeoutMs = 15000,
+  baseUrl?: string
 ): Promise<LegOutcome> {
   const contents: GeminiContent[] = [
     { role: 'user', parts: [{ text: 'Trả lời đúng một từ: ok' }] },
@@ -374,7 +395,7 @@ export async function testLeg(
     const r = await callGeminiLeg(model, key, { contents }, timeoutMs);
     return r.outcome;
   }
-  const r = await callOpenAiLeg(leg, model, key, contents, '', undefined, timeoutMs);
+  const r = await callOpenAiLeg(leg, model, key, contents, '', undefined, timeoutMs, baseUrl);
   return r.outcome;
 }
 

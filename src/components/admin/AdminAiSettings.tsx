@@ -19,6 +19,7 @@ const LEGS = [
   { id: 'gemini', label: 'Gemini (Google)' },
   { id: 'groq', label: 'Groq' },
   { id: 'openrouter', label: 'OpenRouter' },
+  { id: 'workersai', label: 'Workers AI (Cloudflare)' },
 ] as const;
 
 type LegId = (typeof LEGS)[number]['id'];
@@ -79,6 +80,8 @@ export const AdminAiSettings: React.FC = () => {
   const [keySource, setKeySource] = useState<Record<string, string | null>>({});
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [openrouter, setOpenrouter] = useState<{ used: number; limit: number | null } | null>(null);
+  const [accountId, setAccountId] = useState('');
+  const [accountIdSource, setAccountIdSource] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,6 +104,8 @@ export const AdminAiSettings: React.FC = () => {
       setKeySource(data.keySource || {});
       setUsage(Array.isArray(data.usage) ? data.usage : []);
       setOpenrouter(data.openrouter || null);
+      setAccountId(data.workersaiAccountId || '');
+      setAccountIdSource(data.workersaiAccountIdSource || null);
     } catch (e: any) {
       setError(e.message || 'Không tải được cấu hình AI.');
     } finally {
@@ -134,6 +139,9 @@ export const AdminAiSettings: React.FC = () => {
               ([, v]) => v
             )
           ),
+          // Account ID Workers AI: trống = giữ nguyên đã lưu (không phải
+          // key nên hiện lại được trong ô nhập).
+          ...(accountId.trim() ? { workersaiAccountId: accountId.trim() } : {}),
         }),
       });
       if (!res.ok) throw new Error(`Lưu thất bại (HTTP ${res.status}).`);
@@ -223,7 +231,7 @@ export const AdminAiSettings: React.FC = () => {
           (lưu vào database, chỉ máy chủ đọc được; nếu chưa nhập ở đây thì
           dùng key trong biến môi trường Vercel). Để trống ô model hoặc ô
           key = giữ nguyên giá trị đã lưu (không reset, không xóa). Nút
-          kiểm tra sẽ lưu trước rồi mới test theo cấu hình đã lưu.
+          kiểm tra sẽ lưu trước rồi mới test theo cấu hình đã lưu. Nấc Workers AI cần thêm Account ID Cloudflare (ô riêng dưới nấc đó).
         </p>
       </div>
 
@@ -308,6 +316,26 @@ export const AdminAiSettings: React.FC = () => {
                   : 'chưa có'}
               </span>
             </div>
+            {leg === 'workersai' && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  placeholder="Account ID Cloudflare cho nấc Workers AI"
+                  className="flex-1 px-3 py-2 rounded-xl border border-[#D1C7B7] bg-white text-xs text-[#2F3E6B] font-mono focus:outline-none focus:border-[#E2704A]"
+                />
+                <span className="text-[11px] text-[#6B7280] shrink-0">
+                  Account ID:{' '}
+                  {accountId
+                    ? accountIdSource === 'db'
+                      ? 'đã lưu tại đây'
+                      : 'đang dùng biến môi trường'
+                    : 'chưa có'}
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -337,9 +365,10 @@ export const AdminAiSettings: React.FC = () => {
       <div className="border-t border-[#E6DCC8] pt-4 space-y-3">
         <h4 className="font-lora font-bold text-sm text-[#2F3E6B]">Token đã dùng theo model</h4>
         <p className="text-[11px] text-[#6B7280] leading-relaxed">
-          Thống kê từ khi bật ghi log (mỗi lần AI trả lời thành công). Gemini và
-          Groq không có API xem giới hạn còn lại nên chỉ hiện đã dùng; riêng
-          OpenRouter có API giới hạn key nên hiện được cả phần còn lại.
+          Thống kê từ khi bật ghi log (mỗi lần AI trả lời thành công). Gemini,
+          Groq và Workers AI không có API xem giới hạn còn lại nên chỉ hiện
+          đã dùng; riêng OpenRouter có API giới hạn key nên hiện được cả
+          phần còn lại.
         </p>
         {usage.length === 0 ? (
           <p className="text-xs text-[#6B7280]">

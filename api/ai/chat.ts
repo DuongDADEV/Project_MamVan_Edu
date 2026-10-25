@@ -1,6 +1,6 @@
 import { getAdminClient, verifyUserToken, readBearer } from '../_lib/supabase.ts';
 import { tryChain, allLegsBadRequest, DEFAULT_MODELS, LegConfig } from '../_lib/ai.ts';
-import { resolveKeys } from '../_lib/aiKeys.ts';
+import { resolveKeys, loadWorkersAiAccountId } from '../_lib/aiKeys.ts';
 
 /**
  * POST /api/ai/chat — proxy AI cho giáo viên/học sinh.
@@ -10,7 +10,8 @@ import { resolveKeys } from '../_lib/aiKeys.ts';
  *   systemInstruction?, tools? }. Trả về đúng shape đó để vòng lặp
  *   tool của trình duyệt không phải sửa.
  * - Chuỗi failover do admin cấu hình trong ai_settings (models + thứ
- *   tự + bật/tắt từng nấc); mặc định Gemini → Groq → OpenRouter.
+ *   tự + bật/tắt từng nấc); mặc định Gemini → Groq → OpenRouter →
+ *   Workers AI (nấc cuối).
  * - Key chỉ nằm trong Vercel env, không bao giờ trả về client.
  * - Key: ưu tiên key admin nhập ở màn "Cấu hình Mầm AI" (ai_settings
  *   'ai_keys', chỉ service role đọc), fallback biến môi trường Vercel.
@@ -26,6 +27,7 @@ function scrub(text: string): string {
     .replace(/gsk_[A-Za-z0-9]+/g, '[key]')
     .replace(/AIza[A-Za-z0-9_-]+/g, '[key]')
     .replace(/AQ\.[A-Za-z0-9_-]+/g, '[key]')
+    .replace(/cfut_[A-Za-z0-9_-]+/g, '[key]')
     .slice(0, 200);
 }
 
@@ -78,16 +80,22 @@ export default async function handler(req: any, res: any) {
       : body.systemInstruction?.parts?.map((p: any) => p.text || '').join('') || '';
 
   const settings = await loadSettings();
-  const order = (settings.order || ['gemini', 'groq', 'openrouter']).filter((l) =>
-    ['gemini', 'groq', 'openrouter'].includes(l)
+  const order = (settings.order || ['gemini', 'groq', 'openrouter', 'workersai']).filter((l) =>
+    ['gemini', 'groq', 'openrouter', 'workersai'].includes(l)
   );
   const enabled = settings.enabled || {};
   const models = settings.models || {};
+  const workersAiAccountId = await loadWorkersAiAccountId();
   const legs: LegConfig[] = order
     .filter((l) => enabled[l] !== false)
+    .filter((l) => l !== 'workersai' || !!workersAiAccountId)
     .map((l) => ({
-      leg: l as 'gemini' | 'groq' | 'openrouter',
+      leg: l as 'gemini' | 'groq' | 'openrouter' | 'workersai',
       model: models[l] || DEFAULT_MODELS[l],
+      baseUrl:
+        l === 'workersai' && workersAiAccountId
+          ? `https://api.cloudflare.com/client/v4/accounts/${workersAiAccountId}/ai/v1`
+          : undefined,
     }));
   const keys = await resolveKeys();
 

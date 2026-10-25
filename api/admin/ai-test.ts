@@ -5,7 +5,7 @@ import {
   isAdminUser,
 } from '../_lib/supabase.ts';
 import { testLeg, DEFAULT_MODELS } from '../_lib/ai.ts';
-import { resolveKeys } from '../_lib/aiKeys.ts';
+import { resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys.ts';
 
 /**
  * POST /api/admin/ai-test — admin test từng nấc AI.
@@ -13,7 +13,7 @@ import { resolveKeys } from '../_lib/aiKeys.ts';
  * từng nấc (kể cả nấc sau khi 1 nấc đã ok) + latency. Không trả key,
  * thông báo lỗi đã lược bỏ chuỗi giống key.
  */
-const LEGS = ['gemini', 'groq', 'openrouter'] as const;
+const LEGS = ['gemini', 'groq', 'openrouter', 'workersai'] as const;
 
 function scrub(text: string): string {
   return String(text || '')
@@ -21,6 +21,7 @@ function scrub(text: string): string {
     .replace(/gsk_[A-Za-z0-9]+/g, '[key]')
     .replace(/AIza[A-Za-z0-9_-]+/g, '[key]')
     .replace(/AQ\.[A-Za-z0-9_-]+/g, '[key]')
+    .replace(/cfut_[A-Za-z0-9_-]+/g, '[key]')
     .slice(0, 200);
 }
 
@@ -58,6 +59,7 @@ export default async function handler(req: any, res: any) {
     // Bảng chưa có — dùng mặc định.
   }
   const keys = await resolveKeys();
+  const workersAcct = await workersAiAccountIdStatus();
   const legs = [];
   for (const leg of order) {
     const key = (keys as Record<string, string>)[leg];
@@ -65,10 +67,18 @@ export default async function handler(req: any, res: any) {
       legs.push({ leg, model: models[leg], configured: false, ok: false });
       continue;
     }
+    if (leg === 'workersai' && !workersAcct.value) {
+      legs.push({ leg, model: models[leg], configured: false, ok: false, message: 'Chưa có Account ID Cloudflare' });
+      continue;
+    }
     const outcome = await testLeg(
-      leg as 'gemini' | 'groq' | 'openrouter',
+      leg as 'gemini' | 'groq' | 'openrouter' | 'workersai',
       models[leg],
-      key
+      key,
+      15000,
+      leg === 'workersai' && workersAcct.value
+        ? `https://api.cloudflare.com/client/v4/accounts/${workersAcct.value}/ai/v1`
+        : undefined
     );
     legs.push({
       leg,

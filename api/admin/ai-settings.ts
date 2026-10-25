@@ -5,7 +5,7 @@ import {
   isAdminUser,
 } from '../_lib/supabase.ts';
 import { DEFAULT_MODELS } from '../_lib/ai.ts';
-import { keysStatus, loadStoredKeys, resolveKeys } from '../_lib/aiKeys.ts';
+import { keysStatus, loadStoredKeys, resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys.ts';
 
 /**
  * GET / POST /api/admin/ai-settings — cấu hình AI của admin.
@@ -13,7 +13,8 @@ import { keysStatus, loadStoredKeys, resolveKeys } from '../_lib/aiKeys.ts';
  * service role vào bảng ai_settings (RLS chặn đọc trực tiếp từ
  * trình duyệt — xem migration 014/015).
  * GET trả về { models, order, enabled, keysConfigured, keySource,
- * usage, openrouter } (merge với mặc định; KHÔNG trả giá trị key).
+ * workersaiAccountId, workersaiAccountIdSource, usage, openrouter }
+ * (merge với mặc định; KHÔNG trả giá trị key).
  * POST nhận { models?, order?, enabled?, keys? } — chỉ ghi những gì
  * gửi lên. Model trống = giữ nguyên; key trống = giữ nguyên key đã lưu.
  * Usage: tổng hợp từ bảng ai_usage (migration 017). OpenRouter limit:
@@ -21,7 +22,7 @@ import { keysStatus, loadStoredKeys, resolveKeys } from '../_lib/aiKeys.ts';
  * trước, env sau); Gemini/Groq không có API xem giới hạn còn lại nên
  * chỉ thống kê đã dùng.
  */
-const LEGS = ['gemini', 'groq', 'openrouter'];
+const LEGS = ['gemini', 'groq', 'openrouter', 'workersai'];
 
 async function loadUsage(admin: any): Promise<any[]> {
   try {
@@ -92,9 +93,9 @@ export default async function handler(req: any, res: any) {
     const out: any = {
       models: { ...DEFAULT_MODELS },
       order: [...LEGS],
-      enabled: { gemini: true, groq: true, openrouter: true } as Record<string, boolean>,
-      keysConfigured: { gemini: false, groq: false, openrouter: false },
-      keySource: { gemini: null, groq: null, openrouter: null },
+      enabled: { gemini: true, groq: true, openrouter: true, workersai: true } as Record<string, boolean>,
+      keysConfigured: { gemini: false, groq: false, openrouter: false, workersai: false },
+      keySource: { gemini: null, groq: null, openrouter: null, workersai: null },
       usage: [] as any[],
       openrouter: null as any,
     };
@@ -122,6 +123,14 @@ export default async function handler(req: any, res: any) {
       }
     } catch {
       // Bảng chưa có — trả mặc định.
+    }
+    try {
+      const acct = await workersAiAccountIdStatus();
+      out.workersaiAccountId = acct.value || null;
+      out.workersaiAccountIdSource = acct.source;
+    } catch {
+      out.workersaiAccountId = null;
+      out.workersaiAccountIdSource = null;
     }
     try {
       const ks = await keysStatus();
@@ -177,6 +186,9 @@ export default async function handler(req: any, res: any) {
         }
       }
       if (changed) upserts.push({ key: 'ai_keys', value: stored });
+    }
+    if (typeof body.workersaiAccountId === 'string' && body.workersaiAccountId.trim()) {
+      upserts.push({ key: 'workersai_account_id', value: body.workersaiAccountId.trim() });
     }
     for (const row of upserts) {
       const { error } = await admin
