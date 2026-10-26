@@ -567,6 +567,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     });
 
     try {
+      // Chỉ ghi đúng trường liên kết — KHÔNG spread nguyên bài gốc từ state
+      // cha (26/10: state cha có thể còn bản cũ, spread sẽ ghi đè nội dung
+      // mới soạn trong editor chưa kịp lưu; merge trong repo giữ lại mọi
+      // trường còn lại từ bản đã lưu).
       if (sourceVideo) {
         const field =
           kind === 'practice'
@@ -574,10 +578,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             : kind === 'quick'
               ? 'quickTestId'
               : 'masteryCheckId';
-        await contentService.saveVideoLesson({ ...sourceVideo, [field]: newQuiz.id } as any);
+        await contentService.saveVideoLesson({ id: sourceVideo.id, [field]: newQuiz.id } as any);
       } else if (sourceTheory) {
         const field = kind === 'practice' ? 'practiceQuizId' : 'testQuizId';
-        await contentService.saveTheoryLesson({ ...sourceTheory, [field]: newQuiz.id } as any);
+        await contentService.saveTheoryLesson({ id: sourceTheory.id, [field]: newQuiz.id } as any);
       }
     } catch (err) {
       console.error('Lỗi ghi liên kết quiz vào bài gốc:', err);
@@ -945,6 +949,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           />
         ) : currentVideo ? (
           <VideoLessonEditor
+            key={currentVideo.id}
             video={currentVideo}
             topics={topics}
             quizzes={quizzes}
@@ -958,6 +963,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           />
         ) : currentTheory ? (
           <TheoryLessonEditor
+            key={currentTheory.id}
             theory={currentTheory}
             topics={topics}
             quizzes={quizzes}

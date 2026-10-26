@@ -72,6 +72,28 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   // Trạng thái lưu
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Bản nháp hiện tại + bản đã lưu gần nhất (autosave chỉ ghi khi đổi).
+  // videoRef giữ prop mới nhất cho các closure chạy sau unmount.
+  const videoRef = useRef(video);
+  videoRef.current = video;
+  const draftRef = useRef({
+    title: video.title || '',
+    description: video.description || '',
+    topicId: video.topicId || topics[0]?.id || '',
+    durationSec: video.durationSec || 600,
+    sampleUrl: video.sampleUrl || '',
+    subtopicsText: video.subtopics?.join(', ') || '',
+    summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
+      ? video.summaryPoints
+      : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
+    practiceQuizId: video.practiceQuizId || '',
+    quickTestId: video.quickTestId || '',
+    masteryCheckId: video.masteryCheckId || '',
+  });
+  const savedJsonRef = useRef<string>(JSON.stringify(draftRef.current));
+  const savingRef = useRef(false);
 
   // Hidden file inputs
   const videoFileInputRef = useRef<HTMLInputElement>(null);
@@ -96,6 +118,22 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     setMasteryCheckId(video.masteryCheckId || '');
     setIsUploading(false);
     setUploadProgress(0);
+    draftRef.current = {
+      title: video.title || '',
+      description: video.description || '',
+      topicId: video.topicId || topics[0]?.id || '',
+      durationSec: video.durationSec || 600,
+      sampleUrl: video.sampleUrl || '',
+      subtopicsText: video.subtopics?.join(', ') || '',
+      summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
+        ? video.summaryPoints
+        : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
+      practiceQuizId: video.practiceQuizId || '',
+      quickTestId: video.quickTestId || '',
+      masteryCheckId: video.masteryCheckId || '',
+    };
+    savedJsonRef.current = JSON.stringify(draftRef.current);
+    setSaveError(null);
   }, [video.id]);
 
   // Tải file video lên Supabase Storage (lưu vĩnh viễn, không mất khi tải lại trang)
@@ -178,43 +216,77 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     });
   };
 
-  // Lưu nháp
-  const handleSaveDraft = async () => {
+  // ---- TỰ LƯU NHÁP (26/10, cùng ca mất nội dung như trình soạn Lý thuyết) ----
+  // Nội dung soạn chỉ sống trong state, rời bước là unmount -> mất phần chưa
+  // lưu. Nay: gõ xong 2s tự lưu 1 lần (chỉ khi đổi so với lần lưu trước),
+  // và khi rời trình soạn thì đẩy nốt phần còn dở dang.
+  const buildPayloadFromDraft = (d: typeof draftRef.current) => ({
+    id: videoRef.current.id,
+    title: d.title.trim(),
+    description: d.description.trim(),
+    topicId: d.topicId,
+    durationSec: d.durationSec,
+    sampleUrl: d.sampleUrl.trim(),
+    subtopics: d.subtopicsText
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    summaryPoints: d.summaryPoints,
+    practiceQuizId: d.practiceQuizId,
+    quickTestId: d.quickTestId,
+    masteryCheckId: d.masteryCheckId,
+  });
+
+  const saveDraft = async (d: typeof draftRef.current, silent: boolean) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    if (!silent) setIsSaving(true);
     try {
-      setIsSaving(true);
-      const subtopics = subtopicsText
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      await onSave({
-        id: video.id,
-        title: title.trim(),
-        description: description.trim(),
-        topicId,
-        durationSec,
-        sampleUrl: sampleUrl.trim(),
-
-        subtopics,
-        summaryPoints,
-        practiceQuizId,
-        quickTestId,
-        masteryCheckId,
-      });
-
-      const now = new Date();
-      setLastSavedTime(
-        `${now.getHours().toString().padStart(2, '0')}:${now
-          .getMinutes()
-          .toString()
-          .padStart(2, '0')}`
-      );
+      await onSave(buildPayloadFromDraft(d));
+      savedJsonRef.current = JSON.stringify(d);
+      if (!silent) {
+        setSaveError(null);
+        const now = new Date();
+        setLastSavedTime(
+          `${now.getHours().toString().padStart(2, '0')}:${now
+            .getMinutes()
+            .toString()
+            .padStart(2, '0')}`
+        );
+      }
     } catch (err) {
       console.error('Lỗi khi lưu video:', err);
+      if (!silent) setSaveError('Lưu chưa được — kiểm tra mạng rồi bấm Lưu nháp lại.');
     } finally {
-      setIsSaving(false);
+      savingRef.current = false;
+      if (!silent) setIsSaving(false);
     }
   };
+
+  // Lưu nháp (nút bấm)
+  const handleSaveDraft = async () => {
+    await saveDraft(draftRef.current, false);
+  };
+
+  // Đồng bộ ref theo state + hẹn tự lưu sau 2s không gõ nữa
+  useEffect(() => {
+    draftRef.current = { title, description, topicId, durationSec, sampleUrl, subtopicsText, summaryPoints, practiceQuizId, quickTestId, masteryCheckId };
+    const t = setTimeout(() => {
+      if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
+        void saveDraft(draftRef.current, true);
+      }
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [title, description, topicId, durationSec, sampleUrl, subtopicsText, summaryPoints, practiceQuizId, quickTestId, masteryCheckId]);
+
+  // Rời trình soạn: đẩy nốt phần chưa lưu (im lặng, không setState sau unmount)
+  useEffect(() => {
+    return () => {
+      if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
+        void saveDraft(draftRef.current, true);
+      }
+    };
+  }, []);
 
   // Cảnh báo nếu video >= 20 phút (1200 giây)
   const isDurationOver20Mins = durationSec >= 1200;
@@ -259,6 +331,9 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                 <CheckCircle2 className="w-3 h-3" />
                 <span>Đã lưu nháp lúc {lastSavedTime}</span>
               </p>
+            )}
+            {saveError && (
+              <p className="text-[10px] text-red-600 font-medium mt-0.5">{saveError}</p>
             )}
           </div>
         </div>
@@ -586,7 +661,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                 <span className="text-xs font-bold text-[#2F3E6B]">Bài luyện tập</span>
                 <button
                   type="button"
-                  onClick={() => onCreateLinkedQuiz('practice')}
+                  onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('practice'); }}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
                   + Tạo mới
@@ -612,7 +687,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                 <span className="text-xs font-bold text-[#2F3E6B]">Kiểm tra 1 (Nhanh)</span>
                 <button
                   type="button"
-                  onClick={() => onCreateLinkedQuiz('quick')}
+                  onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('quick'); }}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
                   + Tạo mới
@@ -638,7 +713,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                 <span className="text-xs font-bold text-[#2F3E6B]">Kiểm tra 2 (Mastery)</span>
                 <button
                   type="button"
-                  onClick={() => onCreateLinkedQuiz('mastery')}
+                  onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('mastery'); }}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
                   + Tạo mới

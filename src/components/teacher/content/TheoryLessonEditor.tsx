@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   TheoryLessonWithMeta,
   TopicWithMeta,
@@ -33,6 +33,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { uploadLessonMedia } from '../../../services/supabase/storage.ts';
+import { initialBlocksFor, theorySectionsFromBlocks } from '../../../logic/theoryDraft.ts';
 
 interface TheoryLessonEditorProps {
   theory: TheoryLessonWithMeta;
@@ -65,64 +66,33 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   const [testQuizId, setTestQuizId] = useState(theory.testQuizId || '');
   const [test2QuizId, setTest2QuizId] = useState(theory.test2QuizId || '');
 
-  // Khối nội dung trong block-editor
-  const [blocks, setBlocks] = useState<TheoryBlock[]>(() => {
-    if (theory.blocks && theory.blocks.length > 0) {
-      return theory.blocks;
-    }
-    // Nếu chưa có blocks mà có sections cũ, convert sang blocks
-    if (theory.sections && theory.sections.length > 0) {
-      const generated: TheoryBlock[] = [];
-      theory.sections.forEach((sec, i) => {
-        generated.push({
-          id: `b_${Date.now()}_${i}_h`,
-          type: 'heading',
-          level: 2,
-          content: sec.title,
-        });
-        sec.body.forEach((p, j) => {
-          generated.push({
-            id: `b_${Date.now()}_${i}_p_${j}`,
-            type: 'paragraph',
-            content: p,
-          });
-        });
-        if (sec.example) {
-          generated.push({
-            id: `b_${Date.now()}_${i}_ex`,
-            type: 'example',
-            exampleText: sec.example.text,
-            exampleAnalysis: sec.example.analysis,
-          });
-        }
-        if (sec.takeaway) {
-          generated.push({
-            id: `b_${Date.now()}_${i}_tk`,
-            type: 'takeaway',
-            takeawayText: sec.takeaway,
-          });
-        }
-      });
-      return generated;
-    }
-
-    return [
-      { id: 'b_1', type: 'heading', level: 2, content: '1. Khái niệm và đặc điểm chung' },
-      { id: 'b_2', type: 'paragraph', content: 'Gõ nội dung giải thích lý thuyết chi tiết tại đây...' },
-      {
-        id: 'b_3',
-        type: 'example',
-        exampleText: 'Trích dẫn câu thơ hoặc đoạn văn mẫu...',
-        exampleAnalysis: 'Phân tích nét đặc sắc về nghệ thuật hoặc nội dung...',
-      },
-      { id: 'b_4', type: 'takeaway', takeawayText: 'Ghi nhớ cốt lõi cần nhớ để làm bài tập.' },
-    ];
-  });
+  // Khối nội dung trong block-editor — khởi tạo từ bài đang mở (blocks đã
+  // lưu > convert từ sections cũ > mẫu mặc định, xem logic/theoryDraft.ts).
+  const [blocks, setBlocks] = useState<TheoryBlock[]>(() => initialBlocksFor(theory));
 
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Bản nháp hiện tại + bản đã lưu gần nhất (để autosave chỉ ghi khi đổi).
+  // theoryRef giữ prop mới nhất cho các closure chạy sau unmount.
+  const theoryRef = useRef(theory);
+  theoryRef.current = theory;
+  const draftRef = useRef({
+    title: theory.title || '',
+    topicId: theory.topicId || topics[0]?.id || '',
+    kind: theory.kind || 'general_topic',
+    minReadSeconds: theory.minReadSeconds || 25,
+    blocks,
+    practiceQuizId: theory.practiceQuizId || '',
+    testQuizId: theory.testQuizId || '',
+    test2QuizId: theory.test2QuizId || '',
+  });
+  const savedJsonRef = useRef<string>(JSON.stringify(draftRef.current));
+  const savingRef = useRef(false);
 
   useEffect(() => {
+    const b = initialBlocksFor(theory);
     setTitle(theory.title || '');
     setTopicId(theory.topicId || topics[0]?.id || '');
     setKind(theory.kind || 'general_topic');
@@ -130,6 +100,19 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
     setPracticeQuizId(theory.practiceQuizId || '');
     setTestQuizId(theory.testQuizId || '');
     setTest2QuizId(theory.test2QuizId || '');
+    setBlocks(b);
+    draftRef.current = {
+      title: theory.title || '',
+      topicId: theory.topicId || topics[0]?.id || '',
+      kind: theory.kind || 'general_topic',
+      minReadSeconds: theory.minReadSeconds || 25,
+      blocks: b,
+      practiceQuizId: theory.practiceQuizId || '',
+      testQuizId: theory.testQuizId || '',
+      test2QuizId: theory.test2QuizId || '',
+    };
+    savedJsonRef.current = JSON.stringify(draftRef.current);
+    setSaveError(null);
   }, [theory.id]);
 
   // Tự động ước tính thời gian đọc từ số từ trong các khối (~200 từ/phút = ~3.3 từ/giây)
@@ -231,48 +214,78 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
     .filter((b) => b.type === 'heading' && b.content?.trim())
     .map((b) => ({ id: b.id, title: b.content!.trim(), level: b.level || 2 }));
 
-  // Lưu nháp
-  const handleSaveDraft = async () => {
+  // ---- TỰ LƯU NHÁP (26/10, sửa ca mất nội dung khi chuyển bước) ----
+  // Trước đây nội dung soạn chỉ sống trong state của editor, chỉ lưu khi
+  // bấm nút "Lưu nháp": rời bước (sang tạo bài tập) là unmount -> mất hết
+  // phần chưa lưu, quay lại chỉ thấy bản đã lưu cũ (mẫu tạo mới). Nay: gõ
+  // xong 2s tự lưu 1 lần (chỉ khi nội dung đổi so với lần lưu trước), và
+  // khi rời trình soạn thì đẩy nốt phần còn dở dang.
+  const buildPayloadFromDraft = (d: typeof draftRef.current) => {
+    const sections = theorySectionsFromBlocks(d.blocks);
+    return {
+      id: theoryRef.current.id,
+      title: d.title.trim(),
+      topicId: d.topicId,
+      kind: d.kind,
+      minReadSeconds: d.minReadSeconds,
+      blocks: d.blocks,
+      sections: sections.length > 0 ? sections : theoryRef.current.sections,
+      practiceQuizId: d.practiceQuizId,
+      testQuizId: d.testQuizId,
+      test2QuizId: d.test2QuizId,
+    };
+  };
+
+  const saveDraft = async (d: typeof draftRef.current, silent: boolean) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    if (!silent) setIsSaving(true);
     try {
-      setIsSaving(true);
-      // Chuyển đổi khối thành sections nếu cần tương thích ngược
-      const sections = blocks
-        .filter((b) => b.type === 'heading')
-        .map((h, idx) => ({
-          id: h.id,
-          title: h.content || `Phần ${idx + 1}`,
-          body: blocks
-            .filter((b) => b.type === 'paragraph')
-            .map((p) => p.content || ''),
-          takeaway: blocks.find((b) => b.type === 'takeaway')?.takeawayText || '',
-        }));
-
-      await onSave({
-        id: theory.id,
-        title: title.trim(),
-        topicId,
-        kind,
-        minReadSeconds,
-        blocks,
-        sections: sections.length > 0 ? sections : theory.sections,
-        practiceQuizId,
-        testQuizId,
-        test2QuizId,
-      });
-
-      const now = new Date();
-      setLastSavedTime(
-        `${now.getHours().toString().padStart(2, '0')}:${now
-          .getMinutes()
-          .toString()
-          .padStart(2, '0')}`
-      );
+      await onSave(buildPayloadFromDraft(d));
+      savedJsonRef.current = JSON.stringify(d);
+      if (!silent) {
+        setSaveError(null);
+        const now = new Date();
+        setLastSavedTime(
+          `${now.getHours().toString().padStart(2, '0')}:${now
+            .getMinutes()
+            .toString()
+            .padStart(2, '0')}`
+        );
+      }
     } catch (err) {
       console.error('Lỗi khi lưu lý thuyết:', err);
+      if (!silent) setSaveError('Lưu chưa được — kiểm tra mạng rồi bấm Lưu nháp lại.');
     } finally {
-      setIsSaving(false);
+      savingRef.current = false;
+      if (!silent) setIsSaving(false);
     }
   };
+
+  // Lưu nháp (nút bấm)
+  const handleSaveDraft = async () => {
+    await saveDraft(draftRef.current, false);
+  };
+
+  // Đồng bộ ref theo state + hẹn tự lưu sau 2s không gõ nữa
+  useEffect(() => {
+    draftRef.current = { title, topicId, kind, minReadSeconds, blocks, practiceQuizId, testQuizId, test2QuizId };
+    const t = setTimeout(() => {
+      if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
+        void saveDraft(draftRef.current, true);
+      }
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [title, topicId, kind, minReadSeconds, blocks, practiceQuizId, testQuizId, test2QuizId]);
+
+  // Rời trình soạn: đẩy nốt phần chưa lưu (im lặng, không setState sau unmount)
+  useEffect(() => {
+    return () => {
+      if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
+        void saveDraft(draftRef.current, true);
+      }
+    };
+  }, []);
 
   const topicQuizzes = quizzes.filter((q) => !topicId || q.topicId === topicId);
 
@@ -311,6 +324,9 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                 <CheckCircle2 className="w-3 h-3" />
                 <span>Đã lưu nháp lúc {lastSavedTime}</span>
               </p>
+            )}
+            {saveError && (
+              <p className="text-[10px] text-red-600 font-medium mt-0.5">{saveError}</p>
             )}
           </div>
         </div>
@@ -832,7 +848,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                   <span className="text-xs font-bold text-[#2F3E6B]">Bài luyện tập sau lý thuyết</span>
                   <button
                     type="button"
-                    onClick={() => onCreateLinkedQuiz('practice')}
+                    onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('practice'); }}
                     className="text-[10px] text-[#E2704A] hover:underline font-bold"
                   >
                     + Tạo mới
@@ -857,7 +873,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                   <span className="text-xs font-bold text-[#2F3E6B]">Bài kiểm tra lý thuyết</span>
                   <button
                     type="button"
-                    onClick={() => onCreateLinkedQuiz('quick')}
+                    onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('quick'); }}
                     className="text-[10px] text-[#E2704A] hover:underline font-bold"
                   >
                     + Tạo mới
