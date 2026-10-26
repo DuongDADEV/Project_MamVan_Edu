@@ -1895,8 +1895,9 @@ QUY TẮC BẮT BUỘC:
 5h. Tham chiếu mơ hồ không có tên: "học sinh này", "em đó", "bạn đó" mà hội thoại hiện tại chưa gọi tên học sinh nào thì HỎI LẠI học sinh nào — tuyệt đối không gọi công cụ với tên đoán mò hoặc tên rỗng (tên rỗng làm API lỗi).
 5i. Khi hỏi về 1 học sinh cụ thể — thời gian nộp, số lần làm lại, lịch sử nộp bài — gọi get_submission_history với studentName (hàm trả danh sách từng lần nộp kèm thời gian + số lần làm lại theo từng bài, cả bài tập BI lẫn kiểm tra): trả lời bằng danh sách đó, KHÔNG trả mỗi tổng số lượt. Bài đã chấm rồi thì gọi list_graded_reviews; chi tiết 1 bài tập đã giao thì gọi get_assignment_detail theo tên bài; mốc quà thì gọi list_reward_tiers.
 5j. KHÔNG chèn ảnh markdown ![...](...) vào câu trả lời — biểu đồ chỉ hiện qua render_chart; mọi ảnh markdown đều thành ảnh hỏng, gây nhấp nháy trong khung chat.
+5k. TRUNG THỰC DỮ LIỆU — MỌI con số, tên lớp, tên học sinh, tên chủ đề/bài tập trong câu trả lời VÀ trong khối gợi ý đều phải lấy từ kết quả công cụ của lượt này hoặc từ câu hỏi của giáo viên. Không có thì nói rõ "không có" hoặc "chưa đủ dữ liệu", tuyệt đối không bịa, không suy ra theo dãy số hay pattern (thấy lớp 7A4 thì KHÔNG được gợi ý 7A5/7A6; thấy học sinh A thì không được suy ra học sinh B). Gợi ý nào nhắc tới đối tượng không có thật sẽ bị hệ thống lọc bỏ trước khi hiện.
 6. Trả lời tiếng Việt, ngắn gọn, rõ cấu trúc (đoạn ngắn hoặc gạch đầu dòng). Xưng "em", gọi người dùng là "thầy/cô".
-7. Cuối MỖI câu trả lời, thêm một khối đúng định dạng sau (tối đa 3 câu hỏi gợi ý liên quan trực tiếp tới điều vừa phân tích):
+7. Cuối MỖI câu trả lời, thêm một khối đúng định dạng sau (tối đa 3 câu hỏi gợi ý liên quan trực tiếp tới điều vừa phân tích — và chỉ nhắc tới lớp/học sinh/chủ đề đã xuất hiện trong kết quả công cụ lượt này hoặc trong câu hỏi, theo rule 5k; không có gì thật để gợi ý thì bỏ trống khối này):
 GOI_Y:
 - <câu hỏi gợi ý 1>
 - <câu hỏi gợi ý 2>
@@ -1936,6 +1937,36 @@ function parseFollowups(text: string): { text: string; followups: string[] } {
     .filter((l) => l.length > 3)
     .slice(0, 3);
   return { text: main, followups };
+}
+
+// LUẬT TRUNG THỰC DỮ LIỆU (26/10, luật của user): gợi ý nối tiếp chỉ được
+// nhắc tới lớp có thật của giáo viên. Mã lớp dạng 7A4/10A1 — gợi ý nào nhắc
+// tới mã lớp không nằm trong danh sách lớp thật thì bỏ, không hiện. Gợi ý
+// không nhắc mã lớp nào thì giữ nguyên.
+const CLASS_CODE_RE = /\b\d{1,2}[A-Za-z]\d{1,2}\b/g;
+
+export function extractClassCodes(text: string): string[] {
+  const out: string[] = [];
+  for (const m of (text || '').toUpperCase().matchAll(CLASS_CODE_RE)) {
+    if (!out.includes(m[0])) out.push(m[0]);
+  }
+  return out;
+}
+
+export function filterFollowupsByRealClasses(
+  followups: string[],
+  classNames: string[]
+): string[] {
+  const real = new Set<string>();
+  for (const n of classNames || []) {
+    const codes = extractClassCodes(n);
+    if (codes.length) for (const c of codes) real.add(c);
+    else if (n) real.add(n.trim().toUpperCase());
+  }
+  return (followups || []).filter((q) => {
+    const codes = extractClassCodes(q);
+    return codes.every((c) => real.has(c));
+  });
 }
 
 /**
@@ -2111,7 +2142,7 @@ export async function askAnalyticsAssistant(
         followups: [],
       };
     }
-    return { text: parsed.text, toolRuns, chart, followups: parsed.followups };
+    return { text: parsed.text, toolRuns, chart, followups: filterFollowupsByRealClasses(parsed.followups, ctx.classes.map((c) => c.name)) };
   };
 
   try {

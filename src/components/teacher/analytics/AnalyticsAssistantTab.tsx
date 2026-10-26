@@ -24,6 +24,7 @@ import { StudentAccount, ClassItem } from '../../../services/types.ts';
 import { AnalyticsFilter } from '../../../analytics/types.ts';
 import {
   askAnalyticsAssistant,
+  filterFollowupsByRealClasses,
   AssistantContext,
   AssistantToolRun,
   AssistantChart,
@@ -382,9 +383,10 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
                       Bằng chứng: {m.toolRuns.map((t) => t.evidence).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}
                     </div>
                   )}
-                  {m.followups && m.followups.length > 0 && (
+                  {m.followups && filterFollowupsByRealClasses(m.followups, classes.map((c) => c.name)).length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      {m.followups.map((q) => (
+                      {/* Lọc lần nữa ở tầng hiện: tin cũ đã lưu (vd gợi ý 7A5/7A6 bịa) cũng biến mất khỏi màn hình mà không cần xóa lịch sử. */}
+                      {filterFollowupsByRealClasses(m.followups, classes.map((c) => c.name)).map((q) => (
                         <button
                           key={q}
                           type="button"
