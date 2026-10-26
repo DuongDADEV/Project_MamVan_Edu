@@ -73,27 +73,78 @@ export function capChatHistory(msgs: ChatMsg[]): ChatMsg[] {
  *   đồng bộ đầu tiên, và cũng là đường cứu tin gửi khi mất mạng
  *   (qua outbox) ở các lần sau.
  * - Trùng clientId chỉ giữ 1 (bản server thắng khi xung đột).
- * - Kết quả luôn cap 80.
+ * - Kết quả luôn cap 80 — NHƯNG đợt 4b: cap KHÔNG BAO GIỜ
+ *   cắt dòng server để chừa chỗ cho tin local. Lần first-sync
+ *   của đợt 4 cắt đúng dòng server có trước (server 2 dòng +
+ *   legacy 115 dòng → cap giữ 80 cuối, 2 dòng server rớt khỏi
+ *   danh sách, rồi prune xóa chúng khỏi DB vì legacy mang
+ *   created_at giờ sync nên xếp mới hơn). Luật mới: server
+ *   < 80 thì giữ toàn bộ server + tin local mới nhất vừa đủ
+ *   80 (phần cắt là legacy cũ nhất); server đã ≥ 80 thì giữ
+ *   tin local mới nhất + dòng server mới nhất vừa đủ 80
+ *   (chỉ cắt khỏi DANH SÁCH hiển thị, không xóa DB).
  */
 export function mergeChatHistories(
   server: ChatMsg[],
   local: ChatMsg[]
 ): ChatMsg[] {
   const seen = new Set<string>();
-  const merged: ChatMsg[] = [];
+  const serverRows: ChatMsg[] = [];
   for (const m of server) {
     const key = m.clientId ?? '';
     if (key && seen.has(key)) continue;
     if (key) seen.add(key);
-    merged.push(m);
+    serverRows.push(m);
   }
+  const localOnly: ChatMsg[] = [];
   for (const m of normalizeChatHistory(local)) {
     const key = m.clientId ?? '';
     if (key && seen.has(key)) continue;
     if (key) seen.add(key);
-    merged.push(m);
+    localOnly.push(m);
   }
-  return capChatHistory(merged);
+  if (serverRows.length + localOnly.length <= CHAT_HISTORY_MAX) {
+    return [...serverRows, ...localOnly];
+  }
+  if (serverRows.length < CHAT_HISTORY_MAX) {
+    return [
+      ...serverRows,
+      ...localOnly.slice(-(CHAT_HISTORY_MAX - serverRows.length)),
+    ];
+  }
+  // Server một mình đã ≥ cap (tạm thời, do prune chưa chạy):
+  // giữ tin local mới nhất + dòng server mới nhất vừa đủ 80.
+  const tail = localOnly.slice(-CHAT_HISTORY_MAX);
+  return [...serverRows.slice(-(CHAT_HISTORY_MAX - tail.length)), ...tail];
+}
+
+/**
+ * Gán createdAt cho tin legacy chưa có timestamp (đợt 4b):
+ * tin legacy ra đời TRƯỚC tính năng đồng bộ nên chắc chắn cũ
+ * hơn mọi dòng đã có trên server — xếp chúng ngay trước dòng
+ * server sớm nhất, giữ nguyên thứ tự mảng (mỗi tin lệch nhau
+ * 1ms). Không có dòng server nào thì lấy giờ hiện tại làm mốc
+ * (thứ tự mảng vẫn giữ). Tin đã có createdAt giữ nguyên.
+ * Nhờ vậy prune oldest-first (created_at rồi seq) sẽ cắt
+ * legacy cũ nhất trước, không bao giờ cắt dòng server có trước
+ * để chừa chỗ cho legacy — lỗi đợt 4 là legacy mang created_at
+ * giờ sync (mới nhất) nên prune cắt dòng server trước.
+ */
+export function stampLegacyBeforeServer(
+  msgs: ChatMsg[],
+  earliestServerAt?: number
+): ChatMsg[] {
+  const base =
+    earliestServerAt != null && Number.isFinite(earliestServerAt)
+      ? earliestServerAt
+      : Date.now();
+  const unstamped = msgs.filter((m) => m.createdAt == null).length;
+  let i = 0;
+  return msgs.map((m) =>
+    m.createdAt != null
+      ? m
+      : { ...m, createdAt: base - (unstamped - i++) }
+  );
 }
 
 /** Map tin local sang hàng insert DB (bỏ id số — DB tự sinh). */

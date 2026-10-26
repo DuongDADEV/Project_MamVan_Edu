@@ -15,6 +15,7 @@ import {
   capChatHistory,
   mergeChatHistories,
   normalizeChatHistory,
+  stampLegacyBeforeServer,
 } from './assistantChatSync.ts';
 
 export interface ChatMsg {
@@ -205,7 +206,20 @@ async function runSync(teacherId: string) {
         (m) => m.clientId && !serverIds.has(m.clientId)
       );
       if (missing.length > 0) {
-        await upsertAssistantChatMessages(teacherId, missing);
+        // Đợt 4b: tin legacy chưa có createdAt phải xếp TRƯỚC dòng
+        // server sớm nhất (chúng ra đời trước tính năng đồng bộ).
+        // Nếu để DB tự gán giờ sync thì prune oldest-first sẽ cắt
+        // dòng server có trước — hồi quy đợt 4 (cặp test seq 1–2
+        // bị xóa vì legacy mang created_at giờ sync, mới hơn).
+        const earliestServerAt = server.reduce(
+          (min, m) => (m.createdAt != null ? Math.min(min, m.createdAt) : min),
+          Infinity
+        );
+        const stamped = stampLegacyBeforeServer(
+          missing,
+          Number.isFinite(earliestServerAt) ? earliestServerAt : undefined
+        );
+        await upsertAssistantChatMessages(teacherId, stamped);
         try {
           await pruneAssistantChatHistory(teacherId, CHAT_HISTORY_MAX);
         } catch {

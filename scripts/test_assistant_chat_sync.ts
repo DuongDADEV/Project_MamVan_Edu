@@ -14,6 +14,7 @@ import {
   fromServerRow,
   mergeChatHistories,
   normalizeChatHistory,
+  stampLegacyBeforeServer,
   toServerInsert,
 } from '../src/components/teacher/analytics/assistantChatSync.ts';
 import type { ChatMsg } from '../src/components/teacher/analytics/assistantChatStore.ts';
@@ -131,6 +132,43 @@ console.log('=== 8. Tab móc init (tab + bong bóng cùng component) ===');
 check('Tab import initAssistantChatSync', tabSrc.includes('initAssistantChatSync'));
 check('Tab gọi init theo teacherId', tabSrc.includes('initAssistantChatSync(teacherId)'));
 check('Nút xóa 2 chạm còn nguyên (confirmClear)', tabSrc.includes('confirmClear'));
+
+console.log('=== 9. Đợt 4b: first-sync không bao giờ cắt dòng server ===');
+// Tái hiện đúng vụ 26/10: server 2 dòng + trình duyệt first-sync với
+// 115 dòng legacy (không createdAt) → tổng 117, vượt cap 80.
+const srv2 = [msg(1, 'srv-1', 'srv1'), msg(2, 'srv-2', 'srv2')];
+const legacy115 = Array.from({ length: 115 }, (_, i) => msg(i + 1, undefined, `legacy-${i + 1}`));
+const merged4b = mergeChatHistories(srv2, legacy115);
+check('First-sync 2 + 115 vẫn cap 80', merged4b.length === 80);
+check('2 dòng server còn nguyên ở đầu danh sách', merged4b[0].clientId === 'srv-1' && merged4b[1].clientId === 'srv-2');
+check('Phần bị cắt là legacy cũ nhất (1–37), giữ legacy mới nhất', !merged4b.some((m) => m.text === 'legacy-1' || m.text === 'legacy-37') && merged4b[2].text === 'legacy-38' && merged4b[79].text === 'legacy-115');
+// Siết thêm case cũ 70 + 20: trước đợt 4b cap cắt 10 dòng server đầu.
+const merged70 = mergeChatHistories(
+  Array.from({ length: 70 }, (_, i) => msg(i + 1, `s${i + 1}`, `s${i + 1}`)),
+  Array.from({ length: 20 }, (_, i) => msg(i + 1, `l${i + 1}`, `l${i + 1}`))
+);
+check('Merge 70 + 20 giữ đủ 70 dòng server + 10 local mới nhất', merged70.length === 80 && merged70.filter((m) => (m.clientId ?? '').startsWith('s')).length === 70 && merged70[79].text === 'l20');
+// Server một mình đã ≥ cap: tin local mới vẫn hiện, chỉ cắt dòng
+// server cũ nhất khỏi DANH SÁCH (DB không đụng — prune lo riêng).
+const mergedEdge = mergeChatHistories(
+  Array.from({ length: 90 }, (_, i) => msg(i + 1, `s${i + 1}`, `s${i + 1}`)),
+  [msg(1, 'n1', 'new1'), msg(2, 'n2', 'new2'), msg(3, 'n3', 'new3')]
+);
+check('Server 90 + local 3 vẫn cap 80, tin local không bị cắt', mergedEdge.length === 80 && ['n1', 'n2', 'n3'].every((c) => mergedEdge.some((m) => m.clientId === c)));
+check('Dòng server giữ lại là mới nhất (s14–s90)', mergedEdge[0].clientId === 's14' && mergedEdge[76].clientId === 's90');
+// stampLegacyBeforeServer: legacy xếp trước dòng server sớm nhất.
+const toStamp = [
+  { ...msg(1, 'a', 'co-ts'), createdAt: 1000 },
+  msg(2, undefined, 'legacy-A'),
+  msg(3, undefined, 'legacy-B'),
+  { ...msg(4, 'd', 'co-ts-2'), createdAt: 2000 },
+];
+const stamped = stampLegacyBeforeServer(toStamp, 5000);
+check('Tin đã có createdAt giữ nguyên', stamped[0].createdAt === 1000 && stamped[3].createdAt === 2000);
+check('Tin legacy xếp trước dòng server sớm nhất, giữ thứ tự, lệch 1ms', (stamped[1].createdAt ?? 0) < 5000 && (stamped[2].createdAt ?? 0) < 5000 && (stamped[1].createdAt ?? 0) < (stamped[2].createdAt ?? 0) && (stamped[2].createdAt ?? 0) - (stamped[1].createdAt ?? 0) === 1);
+const stampedNoServer = stampLegacyBeforeServer([msg(1, undefined, 'x'), msg(2, undefined, 'y')]);
+check('Không có dòng server thì mốc là giờ hiện tại, thứ tự giữ', (stampedNoServer[0].createdAt ?? 0) <= Date.now() && (stampedNoServer[0].createdAt ?? 0) < (stampedNoServer[1].createdAt ?? 0));
+check('Store first-sync stamp legacy trước upsert', storeSrc.includes('stampLegacyBeforeServer(') && storeSrc.includes('earliestServerAt'));
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
