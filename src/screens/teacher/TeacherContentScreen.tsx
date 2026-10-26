@@ -1146,6 +1146,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         targetTypeInitial={aiInitialType}
         topicId={aiTopic?.id || 'topic_tho_bon_nam'}
         topicTitle={aiTopic?.title || 'Thơ bốn chữ, năm chữ'}
+        teacherId={teacherId}
         onApplyDraft={handleApplyAiDraft}
       />
 

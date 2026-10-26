@@ -34,6 +34,7 @@ import {
 } from '../../../services/ai/index.ts';
 import { MamMuc } from '../../MamMuc.tsx';
 import { SkillLevel, Difficulty, QuestionType, Question, TheoryBlock } from '../../../types.ts';
+import { studioKey } from '../../../logic/teacherScope.ts';
 
 interface AiContentStudioModalProps {
   isOpen: boolean;
@@ -189,42 +190,17 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
 }) => {
   // Đợt 25/10: AI chạy qua proxy admin — không còn trạng thái key/model ở đây.
 
-  // Nguồn ngữ liệu mặc định: Bài thơ "Cây dừa" (Trần Đăng Khoa)
-  const DEFAULT_CAY_DUA_SOURCE: AISource = {
-    id: 'src_cay_dua_default',
-    title: 'Bài thơ: Cây dừa (Trần Đăng Khoa)',
-    type: 'text',
-    content: `Cây dừa xanh toả nhiều tàu,
-Dang tay đón gió, gật đầu gọi trăng.
-Thân dừa bạc phếch tháng năm,
-Quả dừa – đàn lợn con nằm trên cao.
 
-Đêm hè hoa nở cùng sao,
-Tàu dừa – chiếc lược chải vào mây xanh.
-Ai mang nước ngọt, nước lành,
-Ai đeo bao hũ rượu quanh cổ dừa.
-
-Tiếng dừa làm dịu nắng trưa,
-Gọi đàn gió đến cùng dừa múa reo.
-Trời trong đầy tiếng rì rào,
-Đàn cò đánh nhịp bay vào bay ra...
-
-Đứng canh trời đất bao la,
-Mà dừa đủng đỉnh như là đứng chơi.`,
-    wordCount: 104,
-    isEnabled: true,
-    createdAt: new Date().toISOString(),
-  };
-
-  // 2. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI) - LƯU LOCALSTORAGE THEO CHỦ ĐỀ
-  const sourcesStorageKey = `mamvan_ai_sources_${topicId}`;
+  // 2. STATE NGUỒN TÀI LIỆU (VÙNG TRÁI) - LƯU LOCALSTORAGE THEO GIÁO VIÊN + CHỦ ĐỀ (26/10)
+  const sourcesStorageKey = studioKey(teacherId, topicId, 'sources');
   const [sources, setSources] = useState<AISource[]>(() => {
     try {
-      const saved = localStorage.getItem(`mamvan_ai_sources_${topicId}`);
+      const saved = localStorage.getItem(sourcesStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         // Đã có dữ liệu lưu (kể cả danh sách RỖNG) = GV đã chủ động xóa hết
-        // nguồn — phải tôn trọng; chỉ nạp bài mẫu khi CHƯA TỪNG có dữ liệu.
+        // nguồn — phải tôn trọng; chưa có dữ liệu thì bắt đầu TRỐNG (26/10:
+        // bài mẫu Cây dừa đã bỏ, không nạp sẵn cho giáo viên mới nữa).
         if (Array.isArray(parsed)) {
           return parsed;
         }
@@ -232,7 +208,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
     } catch (e) {
       console.warn('Lỗi đọc nguồn tài liệu từ localStorage:', e);
     }
-    return [DEFAULT_CAY_DUA_SOURCE];
+    return [];
   });
 
   // Tự động lưu nguồn tài liệu vào localStorage khi thay đổi
@@ -247,7 +223,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
   // Cập nhật khi topicId thay đổi
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(`mamvan_ai_sources_${topicId}`);
+      const saved = localStorage.getItem(sourcesStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         // Như trên: danh sách rỗng đã lưu = GV đã xóa hết — không nạp lại bài mẫu
@@ -256,7 +232,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
           return;
         }
       }
-      setSources([DEFAULT_CAY_DUA_SOURCE]);
+      setSources([]);
     } catch (e) {
       console.warn(e);
     }
@@ -269,13 +245,13 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
   const [unsupportedFileNotice, setUnsupportedFileNotice] = useState<string | null>(null);
   const [previewingSource, setPreviewingSource] = useState<AISource | null>(null);
 
-  // 3. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA) - LƯU LOCALSTORAGE THEO CHỦ ĐỀ
-  const chatStorageKey = `mamvan_ai_chat_history_${topicId}`;
+  // 3. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA) - LƯU LOCALSTORAGE THEO GIÁO VIÊN + CHỦ ĐỀ (26/10)
+  const chatStorageKey = studioKey(teacherId, topicId, 'chat_history');
   const [chatMessages, setChatMessages] = useState<
     { role: 'user' | 'assistant'; text: string; citations?: { sourceTitle: string; snippet: string }[] }[]
   >(() => {
     try {
-      const saved = localStorage.getItem(`mamvan_ai_chat_history_${topicId}`);
+      const saved = localStorage.getItem(chatStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -323,9 +299,9 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
   }, [outputType]);
 
   // STATE XEM TRƯỚC VÀ PHÊ DUYỆT BỘ CÂU HỎI AI VỪA TẠO — đồng thời là BẢN NHÁP:
-  // bộ câu AI tạo xong được tự lưu nháp (localStorage theo chủ đề), đóng xưởng
+  // bộ câu AI tạo xong được tự lưu nháp (localStorage theo giáo viên + chủ đề), đóng xưởng
   // rồi quay lại vẫn còn nguyên để duyệt dần, chưa cần đưa vào Ngân hàng vội.
-  const draftStorageKey = `mamvan_ai_question_draft_${topicId || 'global'}`;
+  const draftStorageKey = studioKey(teacherId, topicId, 'question_draft');
   const [reviewDraftQuestions, setReviewDraftQuestions] = useState<Question[] | null>(() => {
     try {
       const saved = localStorage.getItem(draftStorageKey);
@@ -402,7 +378,7 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
 
   // BẢN NHÁP LÝ THUYẾT: lý thuyết AI tạo xong vào màn DUYỆT trước (đọc hết
   // nội dung rồi mới quyết định lưu), đồng thời tự lưu nháp để quay lại sau.
-  const theoryDraftStorageKey = `mamvan_ai_theory_draft_${topicId || 'global'}`;
+  const theoryDraftStorageKey = studioKey(teacherId, topicId, 'theory_draft');
   const [reviewTheoryDraft, setReviewTheoryDraft] = useState<{
     title: string;
     blocks: TheoryBlock[];
@@ -1406,13 +1382,6 @@ Mà dừa đủng đỉnh như là đứng chơi.`,
                     className="px-3 py-1.5 rounded-xl bg-[#E2704A] text-white text-xs font-bold hover:bg-[#D45E36] transition-colors shadow-2xs"
                   >
                     + Thêm nguồn tài liệu mới
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSources([DEFAULT_CAY_DUA_SOURCE])}
-                    className="px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-[#2F3E6B] text-xs font-bold hover:bg-black/5 transition-colors"
-                  >
-                    Khôi phục bài thơ "Cây dừa"
                   </button>
                 </div>
               </div>

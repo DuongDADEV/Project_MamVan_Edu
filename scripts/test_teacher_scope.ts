@@ -8,6 +8,7 @@ import {
   scopeItemsToTeacher,
   scopeQuestionsToTeacher,
   isOwnChatCache,
+  studioKey,
 } from '../src/logic/teacherScope.ts';
 
 let pass = 0;
@@ -71,6 +72,15 @@ console.log('=== teacherScope ===');
   check('cache khác GV không gộp', isOwnChatCache(OTHER, GV) === false);
   check('cache không rõ chủ KHÔNG gộp (lỗ 26/10)', isOwnChatCache(null, GV) === false);
   check('cache không rõ chủ KHÔNG gộp (undefined)', isOwnChatCache(undefined, GV) === false);
+}
+
+{
+  const k1 = studioKey(GV, 'topic_tho_bon_nam', 'sources');
+  check('khoa xuong cung GV+chu de+loai giong nhau', k1 === studioKey(GV, 'topic_tho_bon_nam', 'sources'));
+  check('khoa xuong khac GV thi khac', k1 !== studioKey(OTHER, 'topic_tho_bon_nam', 'sources'));
+  check('khoa xuong khac loai thi khac', k1 !== studioKey(GV, 'topic_tho_bon_nam', 'chat_history'));
+  check('khoa xuong khac chu de thi khac', k1 !== studioKey(GV, 'topic_khac', 'sources'));
+  check('khoa xuong khong co GV van tach biet', studioKey(undefined, 'topic_tho_bon_nam', 'sources') !== k1);
 }
 
 console.log(`\nKẾT QUẢ: ${pass} đạt, ${fail} lỗi`);

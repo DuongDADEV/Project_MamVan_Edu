@@ -103,3 +103,15 @@ export function isOwnChatCache(
 ): boolean {
   return !!recordedTeacher && recordedTeacher === teacherId;
 }
+
+/** Khóa localStorage của Xưởng AI, gắn theo GIÁO VIÊN + chủ đề (26/10:
+ *  khóa cũ chỉ theo chủ đề nên giáo viên mới mở xưởng trên cùng trình
+ *  duyệt thấy nguồn/chat/nháp của người trước; dữ liệu cũ không rõ chủ
+ *  bị bỏ hẳn, không di chuyển sang khóa mới). */
+export function studioKey(
+  teacherId: string | undefined,
+  topicId: string | undefined,
+  kind: 'sources' | 'chat_history' | 'question_draft' | 'theory_draft'
+): string {
+  return `mamvan_ai_${kind}_${teacherId || 'unknown'}_${topicId || 'global'}`;
+}

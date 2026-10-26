@@ -43,6 +43,7 @@ import { QuestionType, SkillLevel, Difficulty, Question } from '../../types.ts';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
 import { ConfirmDialog } from '../../components/teacher/ui/ConfirmDialog.tsx';
 import { AiContentStudioModal } from '../../components/teacher/ai/AiContentStudioModal.tsx';
+import { scopeItemsToTeacher, scopeQuestionsToTeacher } from '../../logic/teacherScope.ts';
 import { MamMuc } from '../../components/MamMuc.tsx';
 
 interface TeacherQuestionBankScreenProps {
@@ -195,11 +196,16 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     ['content']
   );
 
-  const topics = rawTopics ?? [];
+  // 26/10 (vu toangv thay do nguoi khac o xuong AI): ngan hang chi hien
+  // du lieu cua GV dang dang nhap — chu de/cau hoi loc theo teacher_id,
+  // video/ly thuyet loc theo chu de thuoc GV do (payload khong co truong
+  // teacher_id on dinh de loc truc tiep).
+  const topics = useMemo(() => scopeItemsToTeacher(rawTopics ?? [], teacherId), [rawTopics, teacherId]);
   const questionsMap = rawQuestions ?? {};
-  const questionsList = useMemo(() => Object.values(questionsMap), [questionsMap]);
-  const videos = rawVideos ?? [];
-  const theories = rawTheories ?? [];
+  const questionsList = useMemo(() => Object.values(scopeQuestionsToTeacher(questionsMap, teacherId)), [questionsMap, teacherId]);
+  const ownedTopicIds = useMemo(() => new Set(topics.map((t) => t.id)), [topics]);
+  const videos = useMemo(() => (rawVideos ?? []).filter((v) => v.topicId && ownedTopicIds.has(v.topicId)), [rawVideos, ownedTopicIds]);
+  const theories = useMemo(() => (rawTheories ?? []).filter((t) => t.topicId && ownedTopicIds.has(t.topicId)), [rawTheories, ownedTopicIds]);
 
   // 2. TABS ĐIỀU HƯỚNG CHÍNH: 'bank' (Kho câu hỏi) HOẶC 'ai_studio' (Mầm AI Studio)
   const [activeMainTab, setActiveMainTab] = useState<'bank' | 'ai_studio' | 'drafts'>('bank');
