@@ -63,7 +63,12 @@ export async function fetchPbixDashboardRows(opts: {
   appStudents: StudentAccount[];
   appClasses: ClassItem[];
 }): Promise<PbixRawData> {
-  if (!isSupabaseReady() || opts.appStudents.length === 0) return EMPTY;
+  // Chưa có học sinh trong phạm vi KHÔNG phải lỗi kết nối: vẫn là
+  // dashboard trống đã tải xong (26/10: tài khoản mới từng bị banner
+  // "Chưa kết nối được" dọa nhầm). Chỉ Supabase chưa sẵn sàng mới
+  // giữ loaded:false để banner lỗi thật hiện.
+  if (!isSupabaseReady()) return EMPTY;
+  if (opts.appStudents.length === 0) return { ...EMPTY, loaded: true };
   try {
     const appStudents = opts.appStudents;
     const usernames = appStudents.map((s) => s.username).filter(Boolean);

@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { ClassItem, CreateStudentInput, StudentAccount, StudentCredentialVoucher } from '../../services/types.ts';
+import { ownedClasses } from '../../logic/teacherScope.ts';
 import { studentService } from '../../services/index.ts';
 import { FileDropzone } from './ui/FileDropzone.tsx';
 import {
@@ -55,10 +56,20 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- STATE TAB NHẬP TAY ---
-  // Lớp đã lưu trữ không nhận thêm học sinh
-  const selectableClasses = classes.filter((c) => c.status !== 'archived');
+  // Lớp đã lưu trữ không nhận thêm học sinh.
+  // 26/10: chỉ cho lớp CỦA GIÁO VIÊN NÀY — trước đây danh sách có thể
+  // lẫn lớp của giáo viên khác (lỗi thời/lẫn), chọn nhầm là máy chủ
+  // từ chối CLASS_NOT_OWNED. Chế độ mock/legacy giữ nguyên.
+  const selectableClasses = ownedClasses(classes, teacherId).filter(
+    (c) => c.status !== 'archived'
+  );
   const activeClassId =
-    defaultClassId !== 'all' ? defaultClassId : selectableClasses[0]?.id || 'class_7a2';
+    selectableClasses.length === 0
+      ? ''
+      : defaultClassId !== 'all' &&
+          selectableClasses.some((c) => c.id === defaultClassId)
+        ? defaultClassId
+        : selectableClasses[0].id;
 
   const [manualRows, setManualRows] = useState<ManualRow[]>([
     {
@@ -235,6 +246,18 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
       };
     });
 
+    // 26/10: chặn từ giao diện thay vì để máy chủ trả CLASS_NOT_OWNED.
+    if (selectableClasses.length === 0 || !activeClassId) {
+      alert('Chưa có lớp nào thuộc tài khoản này — tạo lớp trước rồi thêm học sinh sau!');
+      return;
+    }
+    for (const r of validInputs) {
+      if (!selectableClasses.some((c) => c.id === r.class_id)) {
+        alert(`Lớp đã chọn cho học sinh "${r.name}" không thuộc tài khoản này. Tải lại trang rồi chọn lại lớp của mình!`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const res = await studentService.createStudentsBatch(validInputs, teacherId);
@@ -257,8 +280,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     setIsSubmitting(true);
     try {
       const inputs: CreateStudentInput[] = validRows.map((r) => {
-        // Tìm class_id từ className
-        const cls = classes.find(
+        // Tìm class_id từ className — chỉ trong lớp của giáo viên này.
+        const cls = selectableClasses.find(
           (c) => c.name.toLowerCase() === r.className.trim().toLowerCase()
         );
         return {
@@ -267,6 +290,17 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
           student_code: r.studentCode?.trim() || undefined,
         };
       });
+
+      if (selectableClasses.length === 0 || !activeClassId) {
+        alert('Chưa có lớp nào thuộc tài khoản này — tạo lớp trước rồi thêm học sinh sau!');
+        return;
+      }
+      for (const inp of inputs) {
+        if (!selectableClasses.some((c) => c.id === inp.class_id)) {
+          alert(`Lớp "${inp.class_id}" của học sinh "${inp.name}" không thuộc tài khoản này. Tải lại trang rồi chọn lại lớp của mình!`);
+          return;
+        }
+      }
 
       const res = await studentService.createStudentsBatch(inputs, teacherId);
       onStudentsCreated(res.credentials);

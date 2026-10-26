@@ -165,9 +165,11 @@ async function callUsersRoute(body: any): Promise<any> {
   const json = await res.json().catch(() => null);
   if (!res.ok) {
     const err: any = new Error(
-      json?.error
-        ? `Thao tác tài khoản thất bại (${json.error}).`
-        : `Thao tác tài khoản thất bại (HTTP ${res.status}).`
+      json?.error === 'CLASS_NOT_OWNED'
+        ? 'Lớp này không thuộc tài khoản đang đăng nhập — tải lại trang rồi chọn lại lớp của mình (CLASS_NOT_OWNED).'
+        : json?.error
+          ? `Thao tác tài khoản thất bại (${json.error}).`
+          : `Thao tác tài khoản thất bại (HTTP ${res.status}).`
     );
     err.isUsersRouteError = true;
     err.routeError = json?.error;

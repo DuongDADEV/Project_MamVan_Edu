@@ -17,6 +17,7 @@ import {
   normalizeChatHistory,
   stampLegacyBeforeServer,
 } from './assistantChatSync.ts';
+import { isOwnChatCache } from '../../../logic/teacherScope.ts';
 
 export interface ChatMsg {
   id: number;
@@ -47,11 +48,14 @@ interface ChatState {
  * Kho hội thoại DÙNG CHUNG của Trợ lý phân tích: tab trong mục Phân tích và
  * bong bóng chat nổi đọc/ghi cùng một lịch sử này nên hai nơi luôn đồng nhất.
  *
- * ĐỢT 4 (26/10) — đồng bộ lên database (bảng assistant_chat_messages):
- * server là nguồn thật duy nhất khi đọc thành công; localStorage chỉ còn
- * là cache hiển thị tức thời + fallback khi lỗi/mất mạng, đúng luật
- * server-thật đợt 3. Hành vi cũ giữ nguyên: tối đa 80 tin, nút xóa 2
- * chạm (không window.confirm), tab + bong bóng dùng chung một kho.
+ * ĐỢT 4 (26/10) — đồng bộ lên database (bảng assistant_chat_messages).
+ *
+ * LUẬT 26/10 (sau vụ toangv thấy lịch sử của gv001): server là nguồn thật
+ * duy nhất. Cache local KHÔNG được hiển thị trước khi đồng bộ, và chỉ
+ * được gộp lên server khi localStorage đã ghi nhận ĐÚNG giáo viên đó —
+ * cache không rõ chủ (null, từ bản cũ) hoặc của người khác thì bỏ hẳn,
+ * không hiển thị, không upload. Tin gửi trong phiên này thì vẫn giữ qua
+ * sessionAppended để đồng bộ không làm mất.
  */
 const STORAGE_KEY = 'mam_van_assistant_chat_v1';
 const MAX_STORED = 80;
@@ -119,7 +123,7 @@ function newClientId(): string {
   return `c-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-let state: ChatState = { messages: loadMessages(), busy: false };
+let state: ChatState = { messages: [], busy: false };
 let seq = state.messages.reduce((mx, m) => Math.max(mx, m.id || 0), 0) + 1;
 const listeners = new Set<() => void>();
 
@@ -161,10 +165,13 @@ async function runSync(teacherId: string) {
       }
     })();
     const cacheMsgs = loadMessages();
-    // Cache của giáo viên khác thì KHÔNG gộp sang người này —
-    // lịch sử người cũ vẫn nằm trên server, đăng nhập lại là về.
-    const localForMerge =
-      recordedTeacher && recordedTeacher !== teacherId ? [] : cacheMsgs;
+    // Cache của giáo viên khác — hoặc cache không rõ chủ (chưa từng ghi
+    // nhận giáo viên, từ bản cũ) — thì KHÔNG gộp sang người này, không
+    // hiển thị, không upload. 26/10: coi null như "của mình" đã khiến
+    // 80 tin của gv001 bị đẩy lên server dưới id toangv.
+    const localForMerge = isOwnChatCache(recordedTeacher, teacherId)
+      ? cacheMsgs
+      : [];
 
     // 1. Đẩy nốt tin gửi thất bại trước đây của đúng giáo viên này.
     const outbox = loadOutbox().filter((it) => it.teacherId === teacherId);
@@ -264,12 +271,17 @@ async function runSync(teacherId: string) {
  * AnalyticsAssistantTab (cả tab Phân tích lẫn bong bóng nổi đều
  * render component này nên một chỗ móc là đủ). Lặp gọi với cùng
  * teacherId là no-op; đổi teacherId thì đồng bộ lại cho người mới.
- * Không chặn render: tin local hiện ngay, server về thì thay bằng
- * lịch sử server (lần đầu có gộp local cũ lên).
+ * Không chặn render: lần đầu hiện trống, server về thì thay bằng
+ * lịch sử server (không hiện cache local trước — 26/10: cache lạ
+ * từng hiện lịch sử của giáo viên khác).
  */
 export function initAssistantChatSync(teacherId?: string) {
   if (!teacherId || !isSupabaseReady()) return;
   if (syncTeacherId === teacherId) return;
+  // Đổi giáo viên trong cùng phiên: XÓA NGAY lịch sử đang hiển thị
+  // trước khi đồng bộ mới về — nếu không tab sẽ thoáng thấy lịch sử
+  // của người cũ trong lúc chờ server (lỗ rò 26/10).
+  emit({ ...state, messages: [] });
   // Đổi giáo viên trong cùng phiên: tin gửi dở của người cũ
   // không thuộc về người mới.
   sessionAppended.clear();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TeacherSidebar,
   TeacherNavTab,
@@ -29,6 +29,13 @@ import {
   AuditLog,
 } from '../services/index.ts';
 import { StudentState, EssaySubmission, RewardRequest, Question } from '../types.ts';
+import {
+  scopeStudentsToClasses,
+  scopeStatesToStudents,
+  scopeEssaysToStudents,
+  scopeItemsToTeacher,
+  scopeQuestionsToTeacher,
+} from '../logic/teacherScope.ts';
 import { AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { MamMuc } from '../components/MamMuc.tsx';
 
@@ -121,6 +128,41 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   );
   const pendingRewards = allRewards.filter((r) => r.status === 'PENDING_APPROVAL');
 
+  // 26/10 — PHẠM VI GIÁO VIÊN: cổng từng nạp students/essays/topics/
+  // quizzes KHÔNG lọc theo giáo viên nên tài khoản mới thấy dữ liệu của
+  // giáo viên khác ở Tổng quan/Phân tích/bong bóng (ca toangv thấy lớp
+  // 7A4 + học sinh Lê Khánh Chi của gv001). Lớp đã lọc theo GV nên làm
+  // neo: học sinh/bài nộp/trạng thái suy ra từ lớp; chủ đề/bài/câu hỏi
+  // lọc trực tiếp theo teacher_id. Chỉ áp cho các màn hiện dữ liệu học
+  // sinh (tổng quan, phân tích, bong bóng, lớp & học sinh, số chờ chấm/
+  // chờ duyệt); màn nội dung/ngân hàng câu hỏi giữ nguyên vì có thể có
+  // nội dung dùng chung, màn cài đặt/audit giữ nguyên.
+  const teacherScope = useMemo(() => {
+    const myClassIds = new Set(classes.map((c) => c.id));
+    const scopedStudents = scopeStudentsToClasses(students, myClassIds);
+    const myStudentIds = new Set(scopedStudents.map((s) => s.id));
+    const scopedEssays = scopeEssaysToStudents(allEssays, myStudentIds);
+    // Yêu cầu đổi quà không có studentId trong type: chỉ lọc khi runtime
+    // có trường đó, không thì giữ nguyên để không làm mất dữ liệu.
+    const rewardsHaveStudent = allRewards.some((r) => (r as any).studentId);
+    const scopedRewards = rewardsHaveStudent
+      ? allRewards.filter((r) => myStudentIds.has((r as any).studentId))
+      : allRewards;
+    return {
+      students: scopedStudents,
+      studentStates: scopeStatesToStudents(studentStates, myStudentIds),
+      essays: scopedEssays,
+      topics: scopeItemsToTeacher(topics, teacher.id),
+      quizzes: scopeItemsToTeacher(quizzes, teacher.id),
+      questions: scopeQuestionsToTeacher(portalData?.questions ?? {}, teacher.id),
+      rewards: scopedRewards,
+      pendingEssays: scopedEssays.filter(
+        (e) => e.status === 'PENDING_TEACHER' || e.status === 'AI_SUGGESTED'
+      ),
+      pendingRewards: scopedRewards.filter((r) => r.status === 'PENDING_APPROVAL'),
+    };
+  }, [classes, students, studentStates, allEssays, allRewards, topics, quizzes, portalData, teacher.id]);
+
   // Tính số liệu cho lớp đang chọn
   const filteredStudents = (students || []).filter(
     (s) => selectedClassId === 'all' || s.class_id === selectedClassId
@@ -211,8 +253,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           onLogout={onLogout}
           onSwitchToStudentView={onSwitchToStudentView}
-          pendingGradingCount={pendingEssays.length}
-          pendingRewardCount={pendingRewards.length}
+          pendingGradingCount={teacherScope.pendingEssays.length}
+          pendingRewardCount={teacherScope.pendingRewards.length}
         />
 
         {/* NỘI DUNG CHÍNH + THANH TRÊN CÙNG */}
@@ -222,8 +264,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
             classes={classes || []}
             selectedClassId={selectedClassId}
             onSelectClassId={setSelectedClassId}
-            pendingGradingCount={pendingEssays.length}
-            pendingRewardCount={pendingRewards.length}
+            pendingGradingCount={teacherScope.pendingEssays.length}
+            pendingRewardCount={teacherScope.pendingRewards.length}
             onNavigateToGrading={() => setCurrentTab('grading')}
             onNavigateToRewards={() => setCurrentTab('rewards')}
             onLogout={onLogout}
@@ -248,13 +290,13 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   teacherId={teacher.id}
                   teacherName={teacher.name}
                   classes={classes || []}
-                  students={students || []}
-                  studentStates={studentStates || {}}
-                  topics={topics || []}
-                  quizzes={quizzes || []}
-                  questions={portalData?.questions ?? {}}
-                  essays={allEssays || []}
-                  rewards={allRewards || []}
+                  students={teacherScope.students}
+                  studentStates={teacherScope.studentStates}
+                  topics={teacherScope.topics}
+                  quizzes={teacherScope.quizzes}
+                  questions={teacherScope.questions}
+                  essays={teacherScope.essays}
+                  rewards={teacherScope.rewards}
                   auditLogs={auditLogs || []}
                   onNavigateTab={setCurrentTab}
                   onOpenAddStudentModal={() => {
@@ -273,8 +315,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 <ClassesAndStudentsScreen
                   teacherId={teacher.id}
                   classes={classes || []}
-                  students={students || []}
-                  studentStates={studentStates || {}}
+                  students={teacherScope.students}
+                  studentStates={teacherScope.studentStates}
                   selectedClassId={selectedClassId}
                   onSelectClassId={setSelectedClassId}
                   onRefreshData={refreshPortalData}
@@ -305,14 +347,14 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 <TeacherGradingScreen
                   classes={classes || []}
                   selectedClassId={selectedClassId}
-                  pendingCount={pendingEssays.length}
+                  pendingCount={teacherScope.pendingEssays.length}
                   onRefreshData={refreshPortalData}
                 />
               )}
 
               {currentTab === 'rewards' && (
                 <TeacherRewardsScreen
-                  pendingCount={pendingRewards.length}
+                  pendingCount={teacherScope.pendingRewards.length}
                   selectedClassId={selectedClassId}
                   teacherId={teacher.id}
                 />
@@ -321,13 +363,13 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
               {currentTab === 'analytics' && (
                 <TeacherAnalyticsScreen
                   classes={classes || []}
-                  students={students || []}
-                  studentStates={studentStates || {}}
-                  topics={topics || []}
-                  quizzes={quizzes || []}
-                  essays={allEssays || []}
-                  rewards={allRewards || []}
-                  questions={portalData?.questions ?? {}}
+                  students={teacherScope.students}
+                  studentStates={teacherScope.studentStates}
+                  topics={teacherScope.topics}
+                  quizzes={teacherScope.quizzes}
+                  essays={teacherScope.essays}
+                  rewards={teacherScope.rewards}
+                  questions={teacherScope.questions}
                   teacherId={teacher.id}
                   initialTab={analyticsInitialTab}
                   initialStudentId={analyticsInitialStudentId}
@@ -350,12 +392,12 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
       {/* Bong bóng chat Trợ lý phân tích — mở hỏi đáp số liệu từ mọi màn hình */}
       <AnalyticsAssistantBubble
         classes={classes || []}
-        students={students || []}
-        studentStates={studentStates || {}}
-        topics={topics || []}
-        essays={allEssays || []}
-        rewards={allRewards || []}
-        questions={portalData?.questions ?? {}}
+        students={teacherScope.students}
+        studentStates={teacherScope.studentStates}
+        topics={teacherScope.topics}
+        essays={teacherScope.essays}
+        rewards={teacherScope.rewards}
+        questions={teacherScope.questions}
         teacherId={teacher.id}
       />
     </div>
