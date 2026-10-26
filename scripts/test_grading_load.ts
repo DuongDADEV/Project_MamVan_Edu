@@ -34,7 +34,7 @@ check('lookupRealQuestion đơn lẻ vẫn còn cho đường đơn (chấm/lưu
 
 console.log('=== 2. Tải tiến triển ở màn chấm ===');
 check('loadData không còn Promise.all 8 thứ chặn chung', !gradingSrc.includes('await Promise.all(['));
-check('Hàng đợi được set ngay khi submissions về', gradingSrc.includes('const subs = await essayRepository.getSubmissions({ classId: selectedClassId });') && gradingSrc.includes('setSubmissions(subs);'));
+check('Giai đoạn 1 gọi getSubmissions với includeReviews:false rồi set ngay', gradingSrc.includes("getSubmissions({ classId: selectedClassId, includeReviews: false })") && gradingSrc.includes('setSubmissions(subs);'));
 check('Phần còn lại set tiến triển qua .then (rubric/mẫu/cấu hình/metrics/topics/quizzes/questions)', gradingSrc.includes('.then(setRubricTemplates)') && gradingSrc.includes('.then(setGradedSamples)') && gradingSrc.includes('.then(setAiConfig)') && gradingSrc.includes('.then(setAccuracyMetrics)') && gradingSrc.includes('.then((t) => setTopics(t || []))') && gradingSrc.includes('.then((q) => setQuizzes(q || []))') && gradingSrc.includes('.then((m) => setQuestionsMap(m || {}))'));
 check('Chỉ lần tải đầu mới đặt cờ loading (tải lại giữ danh sách cũ)', gradingSrc.includes('didFirstLoadRef') && gradingSrc.includes('if (!didFirstLoadRef.current) setIsLoadingSubmissions(true);'));
 check('Có dòng "Đang tải hàng đợi chấm…" khi submissions đầu tiên chưa về', gradingSrc.includes('Đang tải hàng đợi chấm…'));
@@ -45,6 +45,17 @@ check('handlePrev đi theo mảng submissions', gradingSrc.includes('setSelected
 check('gradeSubmission còn nguyên', gradingSrc.includes('essayRepository.gradeSubmission('));
 check('Lọc phạm vi giáo viên trong getSubmissions còn nguyên (scopeClassIds/scopeStudentIds)', supaSrc.includes('scopeClassIds') && supaSrc.includes('scopeStudentIds'));
 check('Gộp review:<id> còn nguyên', supaSrc.includes('`review:${r.reviewId}`'));
+
+console.log('=== 4. Tải 2 giai đoạn: bài nộp trước, phiếu review sau ===');
+check('Filter getSubmissions có cờ includeReviews (tùy chọn)', supaSrc.includes('includeReviews?: boolean'));
+check('Khối gộp review chỉ chạy khi includeReviews !== false', supaSrc.includes('if (filter?.includeReviews !== false) {'));
+check('Không truyền cờ thì vẫn gộp review như cũ (mặc định giữ hành vi)', supaSrc.includes('if (filter?.includeReviews !== false) {') && supaSrc.includes('`review:${r.reviewId}`'));
+check('Khối hợp nhất định danh + khử trùng vẫn nằm sau khối gộp (chạy cả 2 giai đoạn)', supaSrc.indexOf('HỢP NHẤT ĐỊNH DANH HỌC SINH') > supaSrc.indexOf('Bỏ qua gộp phiếu chấm vào hàng đợi'));
+check('Giai đoạn 2 gọi getSubmissions đầy đủ (không cờ) rồi thay toàn bộ danh sách', gradingSrc.includes('const full = await essayRepository.getSubmissions({ classId: selectedClassId });') && gradingSrc.includes('setSubmissions(full);'));
+check('Giai đoạn 2 lỗi thì giữ danh sách giai đoạn 1 (không xóa trắng)', gradingSrc.includes("console.error('Lỗi nạp phiếu chấm từ bài tập:'") && !gradingSrc.includes('setSubmissions([])'));
+check('Chống lần tải cũ ghi đè lần mới (loadSeqRef + kiểm tra seq trước khi set)', gradingSrc.includes('loadSeqRef') && gradingSrc.includes('if (seq !== loadSeqRef.current) return;'));
+check('Có chỉ báo riêng khi giai đoạn 2 đang tải', gradingSrc.includes('Đang tải thêm phiếu chấm từ bài tập…'));
+check('Bài đang chọn xác định theo id (không nhảy khi giai đoạn 2 thay mảng)', gradingSrc.includes('submissions.find((s) => s.id === selectedSubmissionId)'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

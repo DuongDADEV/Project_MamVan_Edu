@@ -1416,6 +1416,10 @@ export class SupabaseEssayRepository implements EssayRepository {
     status?: 'PENDING_TEACHER' | 'AI_SUGGESTED' | 'GRADED' | 'ALL';
     studentId?: string;
     quizId?: string;
+    // Tải 2 giai đoạn (26/10): false → BỎ QUA khối gộp phiếu review, chỉ
+    // trả bài nộp essay (kèm hợp nhất định danh + khử trùng vẫn chạy) để
+    // giai đoạn 1 hiện ngay; không truyền cờ (mặc định) = hành vi cũ.
+    includeReviews?: boolean;
   }): Promise<EssaySubmission[]> {
     // 1. Lấy danh sách local, tuyệt đối lọc bỏ toàn bộ bài nộp demo
     const localList = await mockEssayRepo.getSubmissions(filter);
@@ -1538,6 +1542,10 @@ export class SupabaseEssayRepository implements EssayRepository {
       // 'review:<mã phiếu>'). Chấm tại đây ghi ngược về đúng phiếu, xem
       // gradeSubmission nhánh 'review:'. Điểm hiển thị quy về thang 10; điểm
       // gốc của phiếu tính theo điểm tối đa riêng của câu (maxScore).
+      // Tải 2 giai đoạn (26/10): includeReviews:false thì BỎ QUA toàn bộ
+      // khối gộp này — khối hợp nhất định danh + khử trùng ở dưới vẫn chạy
+      // cho danh sách bài nộp. Mặc định (không truyền cờ) giữ đúng hành vi cũ.
+      if (filter?.includeReviews !== false) {
       try {
         let reviewStudentIds: string[] | null = null;
         if (scopeStudentIds) reviewStudentIds = Array.from(scopeStudentIds);
@@ -1627,6 +1635,7 @@ export class SupabaseEssayRepository implements EssayRepository {
       } catch (revErr) {
         console.warn('[SupabaseEssay] Bỏ qua gộp phiếu chấm vào hàng đợi:', revErr);
       }
+      } // đóng if (includeReviews !== false)
 
       // HỢP NHẤT ĐỊNH DANH HỌC SINH + KHỬ TRÙNG BÀI:
       // Cùng một học sinh có thể mang nhiều studentId khác nhau giữa các nguồn

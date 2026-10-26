@@ -307,6 +307,8 @@ export interface EssayRepository {
     status?: 'PENDING_TEACHER' | 'AI_SUGGESTED' | 'GRADED' | 'ALL';
     studentId?: string;
     quizId?: string;
+    // Tải 2 giai đoạn (26/10): false → chỉ bài nộp essay, không gộp phiếu review.
+    includeReviews?: boolean;
   }): Promise<EssaySubmission[]>;
   getSubmissionById(id: string): Promise<EssaySubmission | null>;
   createSubmission(submission: Omit<EssaySubmission, 'id' | 'submittedAt'>): Promise<EssaySubmission>;

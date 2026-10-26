@@ -78,23 +78,32 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
   // giữ danh sách cũ hiển thị tới khi dữ liệu mới về, tránh nhấp nháy.
   const didFirstLoadRef = useRef(false);
 
-  // Tải TIẾN TRIỂN: hàng đợi chấm về trước, hiện ngay — không chờ 7 phần
-  // còn lại (rubric, mẫu, cấu hình, metrics, topics, quizzes, questions).
-  // Trước đây cả 8 thứ nằm chung 1 Promise.all nên hàng đợi trống tới khi
-  // thứ chậm nhất xong, dù getSubmissions đã về từ lâu. (Lưu ý: cờ
-  // isLoadingSubmissions trước đây cũng không chặn render — màn hình vẫn
-  // vẽ bảng rỗng trong lúc chờ; nay cờ này chỉ còn nghĩa "đang tải đợt
-  // submissions đầu tiên" để hiện dòng "Đang tải…" thay vì bảng trống.)
+  // Tải 2 GIAI ĐOẠN (26/10, sửa chậm khi VÀO MÀN trên điện thoại + 4G):
+  // giai đoạn 1 hiện NGAY bài nộp từ essay_submissions (includeReviews:
+  // false) — không chờ gộp phiếu review (phần nặng nhất: 38 phiếu chờ +
+  // 10 phiếu chốt kèm full bài văn, nhiều vòng query); giai đoạn 2 gộp thêm
+  // phiếu review:<id> rồi thay toàn bộ danh sách — danh sách cuối bằng đúng
+  // hành vi cũ. Chọn bài theo id nên bài đang chọn không nhảy khi giai đoạn
+  // 2 đổ thêm vào; giai đoạn 2 lỗi thì giữ danh sách giai đoạn 1.
+  // loadSeqRef chống lần tải cũ (đổi lớp/event 'essay' mới) ghi đè danh
+  // sách của lần tải mới hơn — lần cũ resolve muộn thì bị bỏ qua.
+  const loadSeqRef = useRef(0);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+
   const loadData = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     if (!didFirstLoadRef.current) setIsLoadingSubmissions(true);
     try {
-      const subs = await essayRepository.getSubmissions({ classId: selectedClassId });
+      const subs = await essayRepository.getSubmissions({ classId: selectedClassId, includeReviews: false });
+      if (seq !== loadSeqRef.current) return;
       setSubmissions(subs);
     } catch (err) {
       console.error('Lỗi nạp hàng đợi chấm bài:', err);
     } finally {
-      setIsLoadingSubmissions(false);
-      didFirstLoadRef.current = true;
+      if (seq === loadSeqRef.current) {
+        setIsLoadingSubmissions(false);
+        didFirstLoadRef.current = true;
+      }
     }
     // Phần còn lại tải nền, về tới đâu hiện tới đó; lỗi phần nào giữ giá
     // trị cũ phần đó (không xóa sạch màn hình vì 1 phần lỗi).
@@ -105,6 +114,17 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
     contentService.getTopics().then((t) => setTopics(t || [])).catch(() => {});
     quizService.getQuizzes().then((q) => setQuizzes(q || [])).catch(() => {});
     quizService.getQuestions().then((m) => setQuestionsMap(m || {})).catch(() => {});
+    // Giai đoạn 2: gộp phiếu review — chạy SAU giai đoạn 1, không chặn nó.
+    if (seq === loadSeqRef.current) setIsLoadingReviews(true);
+    try {
+      const full = await essayRepository.getSubmissions({ classId: selectedClassId });
+      if (seq !== loadSeqRef.current) return;
+      setSubmissions(full);
+    } catch (err) {
+      console.error('Lỗi nạp phiếu chấm từ bài tập:', err);
+    } finally {
+      if (seq === loadSeqRef.current) setIsLoadingReviews(false);
+    }
   }, [selectedClassId]);
 
   // Lắng nghe realtime eventBus
@@ -295,6 +315,9 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
         <>
           {isLoadingSubmissions && submissions.length === 0 && (
             <p className="text-xs font-bold text-slate-500">Đang tải hàng đợi chấm…</p>
+          )}
+          {isLoadingReviews && submissions.length > 0 && (
+            <p className="text-xs font-bold text-slate-500">Đang tải thêm phiếu chấm từ bài tập…</p>
           )}
           <GradingQueueTable
           submissions={submissions}
