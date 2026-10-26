@@ -52,6 +52,7 @@ import {
   appendAssistantMsg,
   setAssistantBusy,
   clearAssistantChat,
+  initAssistantChatSync,
   type ChatMsg,
 } from './assistantChatStore.ts';
 
@@ -91,6 +92,11 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
     const t = setTimeout(() => setConfirmClear(false), 6000);
     return () => clearTimeout(t);
   }, [confirmClear]);
+  // Đồng bộ lịch sử chat với server (đợt 4): tab và bong bóng
+  // nổi đều render component này nên một chỗ móc là đủ cho cả hai.
+  useEffect(() => {
+    initAssistantChatSync(teacherId);
+  }, [teacherId]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ctx: AssistantContext = useMemo(
