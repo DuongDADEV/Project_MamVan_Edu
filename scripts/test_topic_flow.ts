@@ -73,5 +73,29 @@ const T = { id: 't1', title: 'Lý thuyết mới' };
   check('thiếu tiêu đề thì dùng tên mặc định', path[0].title === 'Bài giảng Video');
 }
 
+
+{
+  // Vi du cua chu du an 26/10: bai tap, ly thuyet, video, video, bai tap, ly thuyet, video.
+  const path = buildTopicFlowPath({
+    flowOrder: ['quiz:q1', 'theory:t1', 'video:v1', 'video:v2', 'quiz:q2', 'theory:t2', 'video:v3'],
+    videos: [{ id: 'v1', title: 'Video 1' }, { id: 'v2', title: 'Video 2' }, { id: 'v3', title: 'Video 3' }],
+    theories: [{ id: 't1', title: 'Ly thuyet 1' }, { id: 't2', title: 'Ly thuyet 2' }],
+    quizzes: [{ id: 'q1', title: 'Bai tap 1' }, { id: 'q2', title: 'Bai tap 2' }],
+  });
+  check('vi du 7 bai cua chu du an: dung thu tu, du so luong',
+    path.map((p) => `${p.type}:${p.id}`).join(',') === 'quiz:q1,theory:t1,video:v1,video:v2,quiz:q2,theory:t2,video:v3',
+    path.map((p) => `${p.type}:${p.id}`));
+  check('di het luong 7 bai bang next',
+    (() => {
+      let cur: any = path[0];
+      const seen = [cur.id];
+      for (let i = 0; i < 6; i++) {
+        cur = nextFlowItem(path, cur.type, cur.id);
+        if (!cur) break;
+        seen.push(cur.id);
+      }
+      return seen.join(',') === 'q1,t1,v1,v2,q2,t2,v3';
+    })());
+}
 console.log(`\nKẾT QUẢ: ${pass} đạt, ${fail} lỗi`);
 process.exit(fail ? 1 : 0);

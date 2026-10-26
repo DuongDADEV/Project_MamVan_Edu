@@ -1,3 +1,9 @@
+## 2026-10-26 (BỔ SUNG: BÀI TẬP CŨNG NỐI LUỒNG — VÍ DỤ 7 BÀI CỦA CHỦ DỰ ÁN)
+
+- Ví dụ chủ dự án duyệt: luồng cô là bài tập → lý thuyết → video → video → bài tập → lý thuyết → video thì học sinh phải học đúng luồng đó.
+- Dải luồng đã giữ đúng flowOrder từng bài một (kể cả loại lặp lại với bài khác nhau). Phần còn thiếu: bài tập mở từ danh sách chủ đề đi qua luồng homework, trước đây nộp xong là về danh sách nên mạch bị đứt ở mỗi bài tập.
+- Sửa: luồng homework cũng hiện dải Luồng chủ đề (đủ bài, đúng thứ tự, bài đang làm tô đậm, bấm để nhảy bài) và sau khi nộp thì đi tiếp bài sau trong luồng thay vì về danh sách (hết luồng mới về danh sách). Test topic_flow thêm đúng ví dụ 7 bài trên: 14/14.
+
 ## 2026-10-26 (HỌC SINH CHỈ THẤY 1 VIDEO DÙ CÔ ĐĂNG 2 + THỨ TỰ KHÔNG KHỚP)
 
 - Báo cáo: chủ đề "bài học 1" cô đăng 4 bài theo thứ tự video → bài tập → lý thuyết → video, nhưng màn học sinh chỉ hiện luồng Xem video → Trọng tâm → Luyện tập → Hoàn thành (1 video).

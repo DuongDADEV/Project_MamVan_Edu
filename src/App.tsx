@@ -24,6 +24,8 @@ import { DevPanel } from './components/DevPanel.tsx';
 import { BreakReminderModal } from './components/BreakReminderModal.tsx';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal.tsx';
 import { QuizRunner } from './components/QuizRunner.tsx';
+import { StudentTopicFlowStrip } from './components/StudentTopicFlowStrip.tsx';
+import { buildTopicFlowPath, nextFlowItem } from './logic/topicFlow.ts';
 import { QuizReviewScreen } from './components/QuizReviewScreen.tsx';
 import { QuizResult } from './components/QuizResult.tsx';
 import { Palette } from 'lucide-react';
@@ -951,6 +953,7 @@ export default function App() {
             // để thay thế khi không tìm thấy (đã gỡ mockData).
             const targetQuiz = (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId);
 
+
             if (!targetQuiz) {
               return (
                 <div className="w-full max-w-2xl mx-auto py-16 px-4 text-center space-y-4">
@@ -964,6 +967,27 @@ export default function App() {
                 </div>
               );
             }
+
+            // Dai luong chu de cho bai tap (26/10, mo rong tu man video/ly thuyet):
+            // bai tap mo tu danh sach chu de cung hien du luong theo dung thu tu
+            // co dang + di tiep bai sau khi nop, thay vi rot ve danh sach.
+            const homeworkFlowPath = buildTopicFlowPath({
+              flowOrder: (rawTopics || []).find((t) => t.id === targetQuiz.topicId)?.flowOrder,
+              videos: (rawVideos || []).filter((v) => v.topicId === targetQuiz.topicId),
+              theories: (rawTheories || []).filter((t) => t.topicId === targetQuiz.topicId),
+              quizzes: (rawQuizzes || []).filter((q) => q.topicId === targetQuiz.topicId),
+            });
+            const homeworkNext = nextFlowItem(homeworkFlowPath, 'quiz', targetQuiz.id);
+            const goHomeworkNext = () =>
+              setActiveFlow(
+                homeworkNext
+                  ? homeworkNext.type === 'video'
+                    ? { type: 'video', videoId: homeworkNext.id }
+                    : homeworkNext.type === 'theory'
+                      ? { type: 'theory', theoryId: homeworkNext.id }
+                      : { type: 'homework', homeworkQuizId: homeworkNext.id }
+                  : null
+              );
 
             const qList = (targetQuiz.questionIds || [])
               .map((id) => (rawQuestions ? rawQuestions[id] : null))
@@ -987,13 +1011,29 @@ export default function App() {
                   questions={qList}
                   results={studentState.questionResults || []}
                   essaySubmissions={studentState.essaySubmissions || []}
-                  onBack={() => setActiveFlow(null)}
+                  onBack={goHomeworkNext}
                 />
               );
             }
 
             return (
               <div className="w-full max-w-2xl mx-auto py-6 px-4">
+                {homeworkFlowPath.length > 1 && (
+                  <StudentTopicFlowStrip
+                    path={homeworkFlowPath}
+                    currentType="quiz"
+                    currentId={targetQuiz.id}
+                    onJump={(type, id) =>
+                      setActiveFlow(
+                        type === 'video'
+                          ? { type: 'video', videoId: id }
+                          : type === 'theory'
+                            ? { type: 'theory', theoryId: id }
+                            : { type: 'homework', homeworkQuizId: id }
+                      )
+                    }
+                  />
+                )}
                 <QuizRunner
                   quiz={targetQuiz}
                   studentId={currentStudentId}
@@ -1045,7 +1085,7 @@ export default function App() {
                     } else {
                       showToast('🎉 Em đã hoàn thành bài!');
                     }
-                    setActiveFlow(null);
+                    goHomeworkNext();
                   }}
                   onExit={() => setActiveFlow(null)}
                 />
