@@ -110,15 +110,10 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   }), [liveQuizzes]);
 
   const questionsMap: Record<string, Question> = useMemo(() => {
-    let localStored: Record<string, Question> = {};
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('mam_van_questions') : null;
-      if (raw) localStored = JSON.parse(raw);
-    } catch {}
-    return {
-      ...localStored,
-      ...(liveQuestions || {}),
-    };
+    // Luật DB-thắng (đợt 3 26/10): chỉ dùng câu hỏi từ máy chủ — không lót
+    // thêm bộ đệm local bên dưới, nếu không câu ma (đã xóa khỏi DB nhưng còn
+    // trong localStorage) sẽ hiện lại trong bài luyện/kiểm tra của bài học.
+    return liveQuestions || {};
   }, [liveQuestions]);
 
   // Tìm các bài tập đã xuất bản thuộc cùng chủ đề

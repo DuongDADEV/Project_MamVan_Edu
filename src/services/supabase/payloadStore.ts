@@ -105,12 +105,6 @@ export function writeLocalList<T>(storageKey: string, list: T[]): void {
   }
 }
 
-function ts(v?: string | null): number {
-  if (!v) return 0;
-  const n = Date.parse(v);
-  return Number.isNaN(n) ? 0 : n;
-}
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** UUID giả thời legacy (map 'gv001' -> sentinel) — không khớp dòng nào trên server. */
 const LEGACY_SENTINEL_UUID = '00000000-0000-0000-0000-000000000001';
@@ -214,11 +208,16 @@ export async function pushLocalById(table: string, storageKey: string, id: strin
 }
 
 /**
- * Đồng bộ 2 chiều 1 bộ sưu tập:
- *  - Lấy toàn bộ từ Supabase (nguồn thật).
- *  - Dữ liệu cũ chỉ có trong localStorage (hoặc mới hơn) sẽ được tự động đẩy lên Supabase.
- *  - Cập nhật lại bộ nhớ đệm localStorage.
- * Trả về null nếu không đọc được Supabase (để caller dùng bộ nhớ đệm).
+ * Đọc 1 bộ sưu tập từ Supabase (nguồn thật duy nhất) và ghi đè bộ nhớ đệm
+ * localStorage bằng server rows. Trả về null nếu không đọc được Supabase
+ * (để caller dùng bộ nhớ đệm làm fallback khi lỗi).
+ * Luật DB-thắng (đợt 3 26/10): KHÔNG gộp item chỉ có ở local, KHÔNG để bản
+ * local mới hơn đè lên server rows, và KHÔNG tự đẩy item local-only lên
+ * server trong đường đọc — item ma (hard-delete khỏi DB nhưng còn trong
+ * cache) trước đây hiện lại trong danh sách và bị đẩy hồi sinh (lỗi 22/10).
+ * Đẩy lên server chỉ xảy ra ở đường lưu/xóa/xuất bản tường minh
+ * (save/pushPayloadItem/pushLocalById). Hệ quả: nội dung tạo khi mất mạng
+ * sẽ không tự hiện lại khi có mạng — cần lưu lại 1 lần khi online.
  */
 export async function syncPayloadCollection<T extends PayloadItem>(
   table: string,
@@ -254,30 +253,6 @@ export async function syncPayloadCollection<T extends PayloadItem>(
         created_at: p.created_at || row.created_at,
         updated_at: p.updated_at || row.updated_at,
       } as T);
-    }
-
-    const toPush: T[] = [];
-    for (const localItem of readLocalList<T>(storageKey)) {
-      if (!localItem || !localItem.id) continue;
-      // Item mang dấu chủ của NGƯỜI KHÁC -> bỏ qua hoàn toàn (không hiển thị,
-      // không đẩy lên). Item không dấu chủ khi đang có phiên -> coi là dữ
-      // liệu vô chủ từ trước đợt tách, cũng không nhận để tránh rò chéo.
-      const stamp = (localItem as any).teacher_id as string | undefined;
-      if (ownerId && stamp && stamp !== ownerId) continue;
-      if (ownerId && !stamp && !merged.has(localItem.id)) continue;
-      const remoteItem = merged.get(localItem.id);
-      if (
-        !remoteItem ||
-        ts(localItem.updated_at) > ts(remoteItem.updated_at) ||
-        (localItem.deleted_at && !remoteItem.deleted_at)
-      ) {
-        merged.set(localItem.id, localItem);
-        toPush.push(localItem);
-      }
-    }
-
-    if (toPush.length > 0) {
-      await Promise.all(toPush.map((it) => pushPayloadItem(table, it)));
     }
 
     const list = Array.from(merged.values());

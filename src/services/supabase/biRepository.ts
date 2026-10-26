@@ -334,40 +334,51 @@ export async function getAttemptsWithAnswers(studentIds: string[]): Promise<BiAt
   }));
 }
 
-/** Đọc phiếu review theo trạng thái của học sinh thuộc giáo viên. */
+/** Đọc phiếu review theo trạng thái của học sinh thuộc giáo viên.
+ * Đợt sửa 3 (26/10, tải phiếu review nhanh hơn trên mạng chậm):
+ * - 6 vòng tuần tự cũ → 3 vòng: (1) tên HS + attempts + reviews song song
+ *   (3 query độc lập — reviews lọc theo học sinh ở bộ nhớ sau qua attMap
+ *   nên tập kết quả không đổi; ca attempts rỗng thì query reviews chạy
+ *   thừa rồi bị bỏ — chấp nhận để đổi lấy 1 vòng ít hơn ở ca thường);
+ *   (2) answers + assignments + activities song song; (3) questions.
+ * - opts.includeResponseText === false → đường list KHÔNG select response_json
+ *   (chỉ cột cần cho bảng), responseText trả '' — full bài văn chỉ tải khi mở
+ *   chi tiết qua getReviewAnswerContent. Mặc định true để các nơi gọi khác
+ *   (trợ lý AI list_pending/graded_reviews, LearningResults) giữ nguyên hành vi.
+ */
 async function getReviewsByStatus(
   studentIds: string[],
-  status: 'PENDING' | 'GRADED'
+  status: 'PENDING' | 'GRADED',
+  opts?: { includeResponseText?: boolean }
 ): Promise<BiPendingReview[]> {
   if (!isSupabaseReady() || !studentIds.length) return [];
-  const names = await studentNameMap(studentIds);
-  const { data: atts } = await supabase
-    .from('attempts')
-    .select('attempt_id, student_id, assignment_id, learning_activity_id')
-    .in('student_id', studentIds);
+  const includeResponseText = opts?.includeResponseText !== false;
+  const [names, { data: atts }, { data: reviews }] = await Promise.all([
+    studentNameMap(studentIds),
+    supabase
+      .from('attempts')
+      .select('attempt_id, student_id, assignment_id, learning_activity_id')
+      .in('student_id', studentIds),
+    supabase
+      .from('answer_reviews')
+      .select('*')
+      .eq('review_status', status)
+      .order('created_at', { ascending: true }),
+  ]);
   if (!atts?.length) return [];
   const attMap = new Map((atts || []).map((a: any) => [a.attempt_id, a]));
-  const { data: reviews } = await supabase
-    .from('answer_reviews')
-    .select('*')
-    .eq('review_status', status)
-    .order('created_at', { ascending: true });
   const myReviews = (reviews || []).filter((r: any) => r.answer_id);
   if (!myReviews.length) return [];
   const ansIds = myReviews.map((r: any) => r.answer_id);
-  const { data: answers } = await supabase
-    .from('attempt_answers')
-    .select('*')
-    .in('answer_id', ansIds);
-  const ansMap = new Map((answers || []).map((a: any) => [a.answer_id, a]));
-  const qIds = [...new Set((answers || []).map((a: any) => a.question_id))];
-  const { data: qs } = qIds.length
-    ? await supabase.from('questions').select('id, prompt, type').in('id', qIds)
-    : { data: [] as any[] };
-  const qMap = new Map((qs || []).map((q: any) => [q.id, q]));
   const asgIds = [...new Set(atts.map((a: any) => a.assignment_id).filter(Boolean))];
   const actIds = [...new Set(atts.map((a: any) => a.learning_activity_id).filter(Boolean))];
-  const [{ data: asgs }, { data: acts }] = await Promise.all([
+  const [{ data: answers }, { data: asgs }, { data: acts }] = await Promise.all([
+    includeResponseText
+      ? supabase.from('attempt_answers').select('*').in('answer_id', ansIds)
+      : supabase
+          .from('attempt_answers')
+          .select('answer_id, attempt_id, question_id, is_correct, score_awarded, max_score, grading_status, grading_method, response_time_seconds')
+          .in('answer_id', ansIds),
     asgIds.length
       ? supabase.from('assignments').select('id, title').in('id', asgIds)
       : Promise.resolve({ data: [] as any[] }),
@@ -375,6 +386,12 @@ async function getReviewsByStatus(
       ? supabase.from('learning_activities').select('id, title').in('id', actIds)
       : Promise.resolve({ data: [] as any[] }),
   ]);
+  const ansMap = new Map((answers || []).map((a: any) => [a.answer_id, a]));
+  const qIds = [...new Set((answers || []).map((a: any) => a.question_id))];
+  const { data: qs } = qIds.length
+    ? await supabase.from('questions').select('id, prompt, type').in('id', qIds)
+    : { data: [] as any[] };
+  const qMap = new Map((qs || []).map((q: any) => [q.id, q]));
   const asgMap = new Map((asgs || []).map((a: any) => [a.id, a.title]));
   const actMap = new Map((acts || []).map((a: any) => [a.id, a.title]));
 
@@ -403,7 +420,7 @@ async function getReviewsByStatus(
         : actMap.get(att.learning_activity_id) || att.learning_activity_id,
       questionPrompt: q?.prompt || ans.question_id,
       questionType: q?.type || '',
-      responseText: renderResponse(ans.response_json),
+      responseText: includeResponseText ? renderResponse(ans.response_json) : '',
       maxScore: ans.max_score,
       rubricText: rubric,
       createdAt: r.created_at,
@@ -416,13 +433,27 @@ async function getReviewsByStatus(
 }
 
 /** Hàng chờ chấm: các phiếu review PENDING của học sinh thuộc giáo viên. */
-export async function getPendingReviews(studentIds: string[]): Promise<BiPendingReview[]> {
-  return getReviewsByStatus(studentIds, 'PENDING');
+export async function getPendingReviews(studentIds: string[], opts?: { includeResponseText?: boolean }): Promise<BiPendingReview[]> {
+  return getReviewsByStatus(studentIds, 'PENDING', opts);
 }
 
 /** Phiếu đã chấm (để hàng đợi chấm hiển thị cả lịch sử chấm). */
-export async function getGradedReviews(studentIds: string[]): Promise<BiPendingReview[]> {
-  return getReviewsByStatus(studentIds, 'GRADED');
+export async function getGradedReviews(studentIds: string[], opts?: { includeResponseText?: boolean }): Promise<BiPendingReview[]> {
+  return getReviewsByStatus(studentIds, 'GRADED', opts);
+}
+
+/** Lấy full bài văn của 1 đáp án khi mở chi tiết chấm — đường list đã hoãn
+ * tải response_json khi includeResponseText=false (xem getReviewsByStatus),
+ * nên chi tiết phải fetch riêng 1 đáp án này, không dùng text từ list. */
+export async function getReviewAnswerContent(answerId: string): Promise<string> {
+  if (!isSupabaseReady() || !answerId) return '';
+  const { data } = await supabase
+    .from('attempt_answers')
+    .select('response_json')
+    .eq('answer_id', answerId)
+    .maybeSingle();
+  if (!data) return '';
+  return renderResponse((data as any).response_json);
 }
 
 /** Chấm 1 câu chờ: ghi review + điểm câu + tính lại tổng của lượt làm. */

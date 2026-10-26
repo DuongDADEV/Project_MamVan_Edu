@@ -94,7 +94,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
     const seq = ++loadSeqRef.current;
     if (!didFirstLoadRef.current) setIsLoadingSubmissions(true);
     try {
-      const subs = await essayRepository.getSubmissions({ classId: selectedClassId, includeReviews: false });
+      const subs = await essayRepository.getSubmissions({ classId: selectedClassId, includeReviews: false, includeReviewText: false });
       if (seq !== loadSeqRef.current) return;
       setSubmissions(subs);
     } catch (err) {
@@ -117,7 +117,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
     // Giai đoạn 2: gộp phiếu review — chạy SAU giai đoạn 1, không chặn nó.
     if (seq === loadSeqRef.current) setIsLoadingReviews(true);
     try {
-      const full = await essayRepository.getSubmissions({ classId: selectedClassId });
+      const full = await essayRepository.getSubmissions({ classId: selectedClassId, includeReviewText: false });
       if (seq !== loadSeqRef.current) return;
       setSubmissions(full);
     } catch (err) {
@@ -141,6 +141,44 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
     if (!selectedSubmissionId) return null;
     return submissions.find((s) => s.id === selectedSubmissionId) || null;
   }, [submissions, selectedSubmissionId]);
+
+  // Đợt sửa 3 (26/10): đường list hoãn tải full bài văn của phiếu review —
+  // khi mở chi tiết phiếu thì fetch text 1 lần rồi điền vào danh sách, để
+  // khung chấm + nút lưu mẫu (dùng submission.content) thấy đủ bài làm.
+  // Trong lúc chờ, workspace hiện "Đang tải bài làm…" thay cho hộp
+  // "nộp bài trắng" (tránh hiển thị sai). Không dùng ref chặn fetch lại:
+  // giai đoạn 2 có thể thay toàn bộ danh sách (content về '') sau khi fetch
+  // xong thì effect chạy lại và fetch lại — chặn vĩnh viễn sẽ kẹt hộp trắng.
+  const [detailContentLoadingId, setDetailContentLoadingId] = useState<string | null>(null);
+  useEffect(() => {
+    const sel = selectedSubmission;
+    if (!sel) {
+      setDetailContentLoadingId(null);
+      return;
+    }
+    if (!sel.id.startsWith('review:') || (sel.content && sel.content.trim().length > 0)) return;
+    const answerId = sel.answerId;
+    if (!answerId) return;
+    let cancelled = false;
+    setDetailContentLoadingId(sel.id);
+    essayRepository.getReviewAnswerContent(answerId).then((text) => {
+      if (cancelled) return;
+      setDetailContentLoadingId((cur) => (cur === sel.id ? null : cur));
+      if (!text) return;
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === sel.id
+            ? { ...s, content: text, wordCount: text.trim() ? text.trim().split(/\s+/).length : 0 }
+            : s
+        )
+      );
+    }).catch(() => {
+      if (!cancelled) setDetailContentLoadingId((cur) => (cur === sel.id ? null : cur));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSubmission]);
 
   // Vị trí bài hiện tại trong danh sách
   const currentIndex = useMemo(() => {
@@ -289,6 +327,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
         /* MÀN CHẤM CHIA ĐÔI (SPLIT SCREEN WORKSPACE) */
         <SplitGradingWorkspace
           submission={selectedSubmission}
+          contentLoading={detailContentLoadingId === selectedSubmission.id}
           rubricTemplates={rubricTemplates}
           onBack={() => setSelectedSubmissionId(null)}
           onFinalizeGrading={handleFinalizeGrading}

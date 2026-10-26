@@ -21,6 +21,10 @@ import {
 
 interface SplitGradingWorkspaceProps {
   submission: EssaySubmission;
+  // Đợt sửa 3 (26/10): true khi bài văn của phiếu review đang được fetch
+  // riêng (đường list đã hoãn tải text) — hiện "Đang tải bài làm…" thay cho
+  // hộp "nộp bài trắng" để không hiển thị sai trong lúc chờ.
+  contentLoading?: boolean;
   rubricTemplates: RubricTemplate[];
   onBack: () => void;
   onFinalizeGrading: (grading: {
@@ -43,6 +47,7 @@ interface SplitGradingWorkspaceProps {
 
 export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
   submission,
+  contentLoading,
   rubricTemplates,
   onBack,
   onFinalizeGrading,
@@ -376,7 +381,11 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                 <span>Bài làm học sinh</span>
                 <span>{submission.studentName}</span>
               </div>
-              {submission.content && submission.content.trim().length > 0 ? (
+              {contentLoading ? (
+                <div className="py-12 px-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                  <p className="font-sans font-bold text-slate-500 text-sm">Đang tải bài làm…</p>
+                </div>
+              ) : submission.content && submission.content.trim().length > 0 ? (
                 <p className="font-serif text-base text-[#1E1B4B] leading-relaxed whitespace-pre-wrap select-text">
                   {submission.content}
                 </p>

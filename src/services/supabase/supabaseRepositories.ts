@@ -80,6 +80,7 @@ import { generateUsername, generateFriendlyPassword, generateStudentCode, genera
 import {
   getPendingReviews,
   getGradedReviews,
+  getReviewAnswerContent as biGetReviewAnswerContent,
   gradePendingAnswer,
 } from './biRepository.ts';
 
@@ -1420,6 +1421,10 @@ export class SupabaseEssayRepository implements EssayRepository {
     // trả bài nộp essay (kèm hợp nhất định danh + khử trùng vẫn chạy) để
     // giai đoạn 1 hiện ngay; không truyền cờ (mặc định) = hành vi cũ.
     includeReviews?: boolean;
+    // Đợt sửa 3 (26/10): false → đường gộp phiếu review KHÔNG tải
+    // response_json (bảng chỉ cần đếm/tiêu đề); full bài văn tải riêng khi
+    // mở chi tiết qua getReviewAnswerContent. Mặc định true = hành vi cũ.
+    includeReviewText?: boolean;
   }): Promise<EssaySubmission[]> {
     // 1. Lấy danh sách local, tuyệt đối lọc bỏ toàn bộ bài nộp demo
     const localList = await mockEssayRepo.getSubmissions(filter);
@@ -1559,9 +1564,13 @@ export class SupabaseEssayRepository implements EssayRepository {
           const wantPending = filter?.status !== 'GRADED';
           const wantGraded =
             filter?.status !== 'PENDING_TEACHER' && filter?.status !== 'AI_SUGGESTED';
+          // Đợt sửa 3 (26/10): đường list của màn chấm không tải response_json
+          // khi includeReviewText=false (mặc định true để các nơi gọi khác giữ
+          // nguyên hành vi) — full bài văn tải riêng khi mở chi tiết.
+          const includeReviewText = filter?.includeReviewText !== false;
           const [pend, grad] = await Promise.all([
-            wantPending ? getPendingReviews(reviewStudentIds) : Promise.resolve([]),
-            wantGraded ? getGradedReviews(reviewStudentIds) : Promise.resolve([]),
+            wantPending ? getPendingReviews(reviewStudentIds, { includeResponseText: includeReviewText }) : Promise.resolve([]),
+            wantGraded ? getGradedReviews(reviewStudentIds, { includeResponseText: includeReviewText }) : Promise.resolve([]),
           ]);
           const reviews = [
             ...pend.map((r) => ({ r, graded: false })),
@@ -1604,6 +1613,7 @@ export class SupabaseEssayRepository implements EssayRepository {
               merged.push({
                 id: `review:${r.reviewId}`,
                 questionId: r.questionId,
+                answerId: r.answerId,
                 quizId: r.questionId,
                 studentId: r.studentId,
                 studentName: r.studentName,
@@ -1682,9 +1692,12 @@ export class SupabaseEssayRepository implements EssayRepository {
 
         const seen = new Set<string>();
         merged = merged.filter((sub) => {
-          const fingerprint = `${sub.studentId}|${sub.questionId}|${(sub.content || '')
-            .trim()
-            .slice(0, 120)}|${Math.round((sub.submittedAt || 0) / 60000)}`;
+          // Đợt sửa 3 (26/10): phiếu review ở đường list có content '' (hoãn
+          // tải full bài văn) — vân tay phải rơi về id duy nhất khi content
+          // rỗng, nếu không 2 phiếu cùng học sinh + câu hỏi + phút nộp sẽ bị
+          // khử trùng nhầm thành 1. Khi content có thì hành vi như cũ.
+          const contentKey = (sub.content || '').trim().slice(0, 120) || sub.id;
+          const fingerprint = `${sub.studentId}|${sub.questionId}|${contentKey}|${Math.round((sub.submittedAt || 0) / 60000)}`;
           if (seen.has(fingerprint)) return false;
           seen.add(fingerprint);
           return true;
@@ -1701,6 +1714,13 @@ export class SupabaseEssayRepository implements EssayRepository {
   async getSubmissionById(id: string): Promise<EssaySubmission | null> {
     const all = await this.getSubmissions();
     return all.find((e) => e.id === id) || null;
+  }
+
+  /** Lấy full bài văn của 1 phiếu review khi mở chi tiết chấm — đường list
+   * đã hoãn tải response_json khi includeReviewText=false (xem getSubmissions),
+   * nên khung chấm phải fetch riêng đáp án này, không dùng text từ list. */
+  async getReviewAnswerContent(answerId: string): Promise<string> {
+    return biGetReviewAnswerContent(answerId);
   }
 
   async createSubmission(
@@ -3079,19 +3099,19 @@ export class SupabaseQuizRepository implements QuizRepository {
             : qItem;
       }
 
-      const mergedQuestions: Record<string, QuestionWithMeta> = {
-        ...(await ownLocalQuestions()),
-        ...supabaseMap,
-      };
-
-      // Đồng bộ vào localStorage để chạy offline (chỉ còn câu của chủ sở hữu)
+      // Luật DB-thắng (mở rộng từ blocker 6, đợt 3 26/10): DB query thành công
+      // thì chỉ trả server rows — KHÔNG gộp câu chỉ có ở local (câu ma do
+      // hard-delete khỏi DB nhưng còn nằm trong localStorage sẽ hiện lại ở
+      // mọi trình duyệt nếu còn gộp). Ghi đè cache local bằng server rows để
+      // câu ma tự biến mất khi tải lại ngân hàng. Local chỉ còn là fallback
+      // khi query lỗi (return ownLocalQuestions() ở trên) hoặc ngoại lệ.
       try {
         if (typeof window !== 'undefined') {
-          localStorage.setItem('mam_van_questions', JSON.stringify(mergedQuestions));
+          localStorage.setItem('mam_van_questions', JSON.stringify(supabaseMap));
         }
       } catch {}
 
-      return mergedQuestions;
+      return supabaseMap;
     } catch (err) {
       console.error('[SupabaseQuiz] Ngoại lệ getQuestions:', err);
       return ownLocalQuestions();
@@ -3288,9 +3308,6 @@ export class SupabaseContentRepository implements ContentRepository {
 
       // XÓA MỀM (migration_011): dòng đã đóng dấu deleted_at không hiển thị
       // ở BẤT KỲ thiết bị nào và không bao giờ bị đẩy hồi sinh.
-      const deletedIds = new Set(
-        (rows || []).filter((r: any) => r.deleted_at).map((r: any) => r.id)
-      );
       const remoteTopics: TopicWithMeta[] = (rows || [])
         .filter((row: any) => !row.deleted_at)
         .map((row) => {
@@ -3317,26 +3334,13 @@ export class SupabaseContentRepository implements ContentRepository {
         };
       });
 
-      // Chủ đề chỉ có ở máy này (chưa lên được Supabase) -> giữ lại và tự đẩy lên để không bị mất.
-      // CHỈ nhận bản local mang dấu chủ của ĐÚNG giáo viên đang đăng nhập —
-      // bản của người khác hoặc vô chủ thì bỏ qua (chặn rò dữ liệu chéo tài khoản).
-      const remoteIds = new Set(remoteTopics.map((t) => t.id));
-      const localOnly = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY).filter(
-        (t) =>
-          t &&
-          t.id &&
-          !remoteIds.has(t.id) &&
-          !deletedIds.has(t.id) &&
-          !t.deleted_at &&
-          (!ownerId || (t as any).teacher_id === ownerId)
-      );
-      const topics: TopicWithMeta[] = [...remoteTopics, ...localOnly];
-
-      // Lưu đệm TOÀN BỘ chủ đề (cả bản nháp) vào localStorage để load mượt mà
+      // Luật DB-thắng (đợt 3 26/10): chỉ trả chủ đề trên server — KHÔNG gộp
+      // chủ đề chỉ có ở local (ma do hard-delete khỏi DB nhưng còn trong
+      // cache sẽ hiện lại và bị đẩy hồi sinh), không tự đẩy trong đường đọc
+      // (đẩy chỉ xảy ra ở đường lưu saveTopic tường minh). Ghi đè cache
+      // bằng server rows để ma tự biến mất khi tải lại.
+      const topics: TopicWithMeta[] = remoteTopics;
       writeLocalList(TOPIC_CACHE_KEY, topics);
-      if (localOnly.length > 0) {
-        await Promise.all(localOnly.map((t) => this.pushTopicRecord(t.id)));
-      }
 
       // Lọc theo trạng thái xuất bản & lớp
       let filtered = topics;

@@ -1920,6 +1920,11 @@ export class MockEssayRepository implements EssayRepository {
     return all.find((e) => e.id === id) || null;
   }
 
+  async getReviewAnswerContent(_answerId: string): Promise<string> {
+    // Mock không có đường review hoãn text — bài mock đã mang đủ content.
+    return '';
+  }
+
   async createSubmission(
     submission: Omit<EssaySubmission, 'id' | 'submittedAt'>
   ): Promise<EssaySubmission> {

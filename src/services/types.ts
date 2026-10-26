@@ -309,8 +309,14 @@ export interface EssayRepository {
     quizId?: string;
     // Tải 2 giai đoạn (26/10): false → chỉ bài nộp essay, không gộp phiếu review.
     includeReviews?: boolean;
+    // Đợt sửa 3 (26/10): false → đường gộp phiếu review KHÔNG tải response_json
+    // (bảng chỉ cần đếm/tiêu đề), full bài văn tải riêng khi mở chi tiết.
+    // Mặc định true để các nơi gọi khác giữ nguyên hành vi.
+    includeReviewText?: boolean;
   }): Promise<EssaySubmission[]>;
   getSubmissionById(id: string): Promise<EssaySubmission | null>;
+  // Lấy full bài văn của 1 phiếu review khi mở chi tiết chấm.
+  getReviewAnswerContent(answerId: string): Promise<string>;
   createSubmission(submission: Omit<EssaySubmission, 'id' | 'submittedAt'>): Promise<EssaySubmission>;
   saveSubmissionDraft(
     id: string,

@@ -188,6 +188,7 @@ export interface EssaySubmission {
   wordCount: number;
   status: 'PENDING_TEACHER' | 'AI_SUGGESTED' | 'GRADED';
   quizId?: string;
+  answerId?: string; // id đáp án của phiếu review (đường list hoãn tải text — mở chi tiết mới fetch qua getReviewAnswerContent)
   quizTitle?: string;
   classId?: string;
   studentName?: string;
