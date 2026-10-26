@@ -615,28 +615,14 @@ ${cleanedFallback}`;
       };
     }
 
-    // Fallback bài giảng chuẩn mực sư phạm (tuyệt đối không bao giờ trả về rác mạng)
-    const fallbackText = `[Tài liệu trích xuất từ ${isYouTube ? 'video' : 'liên kết'}: ${title}]
-${authorName ? `- Kênh/Tác giả: ${authorName}\n` : ''}- Đường dẫn nguồn: ${cleanUrl}
-
-1. Tổng quan bối cảnh & Chủ đề:
-Tư liệu cung cấp góc nhìn chuyên sâu và phân tích toàn diện về chủ đề: "${title}". Toàn bộ nội dung hướng tới việc làm rõ các cơ sở thực tiễn, quy luật phát triển và bài học nhận thức.
-
-2. Các luận điểm trọng tâm:
-- Phân tích cơ sở địa chính trị, hoàn cảnh lịch sử và tư duy chiến lược thực tiễn.
-- Phân tích cơ chế tổ chức lực lượng, tính liên kết hiệp đồng và vai trò điều hành tập trung thống nhất.
-- Đánh giá hiệu quả thực tế và các bài học kinh nghiệm trong xây dựng và bảo vệ đất nước.
-
-3. Định hướng ôn tập & Vận dụng:
-Vận dụng các luận điểm trên để phục vụ việc tự học, liên hệ thực tế đời sống và giải quyết các câu hỏi đọc hiểu 4 mức độ (Nhận biết, Thông hiểu, Phân tích, Vận dụng).`;
-
-    return {
-      title,
-      content: fallbackText,
-      wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
-      type: isYouTube ? 'video' : 'website',
-      url: cleanUrl,
-    };
+    // Đợt QA 26/10, blocker 5: KHÔNG còn đoạn văn mẫu bịa sẵn. Trước đây khi
+    // không lấy được nội dung thật, hàm vẫn trả một "bài giảng chuẩn mực"
+    // viết sẵn (kể cả luận điểm địa chính trị không liên quan) như thể đó là
+    // nội dung của liên kết — giáo viên không thể phân biệt thật/giả. Nay:
+    // không có nội dung thật thì ném lỗi rõ ràng để caller báo người dùng.
+    throw new Error(
+      'Không trích xuất được nội dung thật từ liên kết này (trang chặn bóc tách hoặc không có nội dung đọc được). Hãy thử liên kết khác hoặc dán nội dung trực tiếp.'
+    );
   }
 
   /**

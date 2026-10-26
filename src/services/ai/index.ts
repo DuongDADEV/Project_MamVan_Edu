@@ -145,16 +145,16 @@ class SmartAIService implements AIService {
     sampleEssays?: any[],
     options?: AIEssayGradingOptions
   ): Promise<AIEssayGradingResult> {
+    // Đợt QA 26/10, blocker 5: đường chấm bài KHÔNG được trả điểm mock im
+    // lặng. Trước đây Gemini lỗi → rơi xuống mock.suggestEssayGrade (điểm
+    // công thức, confidenceScore 0.92 bịa) mà giáo viên không biết. Nay: lỗi
+    // thì ném rõ — caller phải hiện lỗi cho người dùng (xem AiTrainingStudio;
+    // đường auto-gợi ý khi nộp bài đã bắt lỗi và giữ trạng thái chờ chấm).
     const gemini = this.getGeminiService();
     if (gemini) {
-      try {
-        return await gemini.suggestEssayGrade(essayText, rubric, sampleEssays, options);
-      } catch (err: any) {
-        console.error('GeminiAIService lỗi:', err);
-        noteAiFallback('suggestEssayGrade', err);
-      }
+      return await gemini.suggestEssayGrade(essayText, rubric, sampleEssays, options);
     }
-    return this.mock.suggestEssayGrade(essayText, rubric, sampleEssays, options);
+    throw new Error('Chưa cấu hình dịch vụ AI — không thể chấm tự luận. Vui lòng thử lại sau, đừng dùng điểm ước lượng.');
   }
 
   async chatWithSources(
@@ -175,16 +175,13 @@ class SmartAIService implements AIService {
   }
 
   async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
+    // Đợt QA 26/10, blocker 5: đường trích xuất KHÔNG được trả nội dung mock
+    // im lặng. Lỗi thì ném rõ để caller báo người dùng.
     const gemini = this.getGeminiService();
     if (gemini) {
-      try {
-        return await gemini.extractContentFromUrl(url);
-      } catch (err: any) {
-        console.error('Gemini extractContentFromUrl error:', err);
-        noteAiFallback('extractContentFromUrl', err);
-      }
+      return await gemini.extractContentFromUrl(url);
     }
-    return this.mock.extractContentFromUrl(url);
+    throw new Error('Chưa cấu hình dịch vụ AI — không trích xuất được nội dung từ liên kết.');
   }
 }
 

@@ -332,26 +332,38 @@ export type ChainResult = {
 /**
  * Try each configured leg once, in order. `keys` carries only the legs
  * the admin actually configured (missing key => leg skipped silently).
+ *
+ * Đợt QA 26/10, blocker 4: `totalBudgetMs` là ngân sách tổng cho cả chain —
+ * trước mỗi nấc, timeout của nấc đó = min(timeoutPerLegMs, thời gian còn lại);
+ * khi hết ngân sách thì dừng chain thay vì để Vercel cắt function ở 60s
+ * (plan Hobby) giữa chừng. Nấc cuối vẫn được thử nếu còn thời gian (> 0),
+ * kể cả khi thời gian còn lại nhỏ hơn timeout/nấc — nấc nhanh (Workers AI
+ * từng trả lời trong ~160ms) không "chết oan" vì bị bỏ qua.
  */
 export async function tryChain(
   req: ChainRequest,
   legs: LegConfig[],
   keys: Record<string, string>,
-  timeoutPerLegMs = 60000
+  timeoutPerLegMs = 60000,
+  totalBudgetMs = Infinity
 ): Promise<ChainResult> {
   const outcomes: LegOutcome[] = [];
   const systemPrompt = req.systemInstruction || '';
   const functionDeclarations = req.tools?.[0]?.functionDeclarations;
+  const deadline = Date.now() + totalBudgetMs;
   for (const leg of legs) {
     const key = keys[leg.leg];
     if (!key) continue;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const legTimeout = Math.min(timeoutPerLegMs, remaining);
     if (leg.leg === 'gemini') {
       const body: any = {
         contents: req.contents,
         systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
         tools: req.tools,
       };
-      const r = await callGeminiLeg(leg.model, key, body, timeoutPerLegMs);
+      const r = await callGeminiLeg(leg.model, key, body, legTimeout);
       outcomes.push(r.outcome);
       if (r.parts) {
         return { parts: r.parts, servedBy: 'gemini', legModel: leg.model, outcomes, usage: r.outcome.usage };
@@ -364,7 +376,7 @@ export async function tryChain(
         req.contents,
         systemPrompt,
         functionDeclarations,
-        timeoutPerLegMs,
+        legTimeout,
         leg.baseUrl
       );
       outcomes.push(r.outcome);

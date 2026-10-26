@@ -57,7 +57,6 @@ import {
   auditRepo,
 } from '../mock/mockRepositories.ts';
 import { createFreshStudentState } from '../mock/seedData.ts';
-import { getLocalTodayStr } from '../../logic/studentStateUtils.ts';
 import { syncEventBus } from '../mock/eventBus.ts';
 import { QuestionType } from '../../types.ts';
 import { REWARDS_CATALOG } from '../../data/rewards.ts';
@@ -724,22 +723,10 @@ export class SupabaseStudentRepository implements StudentRepository {
         );
       }
 
-      // Hợp nhất với kho mock (local): học sinh từng rơi vào đường fallback khi
-      // tạo vẫn phải hiển thị trong danh sách, tránh lỗi "thêm mà không thấy".
-      try {
-        const dbIds = new Set(result.map((s) => s.id));
-        const dbUsernames = new Set(result.map((s) => s.username.toLowerCase()));
-        const mockList = await mockStudentRepo.getStudents(filter);
-        const extras = mockList.filter(
-          (s) => !dbIds.has(s.id) && !dbUsernames.has(s.username.toLowerCase())
-        );
-        if (extras.length > 0) {
-          result = [...result, ...extras].sort((a, b) => a.name.localeCompare(b.name));
-        }
-      } catch {
-        // Bỏ qua lỗi hợp nhất, giữ nguyên kết quả từ DB
-      }
-
+      // Đợt QA 26/10, blocker 6: KHÔNG còn gộp học sinh chỉ có ở local vào
+      // danh sách DB. Trước đây học sinh tạo trong đường fallback/offline
+      // (kể cả mẫu) hiện lẫn trong danh sách prod. Nay DB thành công thì
+      // danh sách = DB đúng; đường offline vẫn là catch bên dưới.
       return result;
     } catch (err) {
       console.error('[SupabaseStudent] Ngoại lệ getStudents:', err);
@@ -1165,21 +1152,13 @@ export class SupabaseAttemptRepository implements AttemptRepository {
           directClassName
         );
 
-      const todayStr = getLocalTodayStr();
-      const effectiveAttendanceDate =
-        localFallback.lastAttendanceDate === todayStr
-          ? todayStr
-          : (data.last_attendance_date || localFallback.lastAttendanceDate || fresh.lastAttendanceDate);
-
-      const effectiveAttendanceDays =
-        localFallback.lastAttendanceDate === todayStr && (localFallback.attendanceDaysThisWeek || 0) > (data.attendance_days_this_week || 0)
-          ? localFallback.attendanceDaysThisWeek
-          : (data.attendance_days_this_week ?? localFallback.attendanceDaysThisWeek ?? fresh.attendanceDaysThisWeek);
-
+      // Đợt QA 26/10, blocker 6: khi đã có dòng DB thì mọi trường CÓ cột DB
+      // lấy đúng giá trị DB — không Math.max với local, không so độ dài
+      // mảng, không local thắng DB. Local chỉ còn giữ các trường KHÔNG có
+      // cột DB (essaySubmissions, rewardRequests, settings,
+      // seenNotificationIds) vì đó là nguồn duy nhất của chúng. ...fresh làm
+      // nền cho các trường đó khi local thiếu.
       return {
-        // fresh (trạng thái trắng) chỉ làm nền; dữ liệu local phải thắng nó —
-        // thứ tự cũ (...local, ...fresh) xóa sạch rewardRequests và các tùy chọn
-        // cá nhân (theme/âm thanh/cỡ chữ) sau mỗi lần đọc ở chế độ Supabase
         ...fresh,
         ...localFallback,
         profile: {
@@ -1191,31 +1170,19 @@ export class SupabaseAttemptRepository implements AttemptRepository {
         essaySubmissions: (localFallback.essaySubmissions || []).filter(
           (e) => !e.id?.startsWith('sub_demo') && e.studentName !== 'Trần Minh An'
         ),
-        xpToday: Math.max(data.xp_today ?? 0, localFallback.xpToday ?? 0),
-        xpWeek: Math.max(data.xp_week ?? 0, localFallback.xpWeek ?? 0),
-        totalXp: Math.max(data.total_xp ?? 0, localFallback.totalXp ?? 0),
-        activeSecondsToday: Math.max(data.active_seconds_today ?? 0, localFallback.activeSecondsToday ?? 0),
-        lastAttendanceDate: effectiveAttendanceDate,
-        attendanceDaysThisWeek: effectiveAttendanceDays,
-        attendanceHistory:
-          Array.isArray(data.attendance_history) && data.attendance_history.length >= (localFallback.attendanceHistory?.length || 0)
-            ? data.attendance_history
-            : localFallback.attendanceHistory || [],
-        completedSteps:
-          Array.isArray(data.completed_steps) && data.completed_steps.length >= (localFallback.completedSteps?.length || 0)
-            ? data.completed_steps
-            : localFallback.completedSteps || [],
-        questionResults:
-          Array.isArray(data.question_results) && data.question_results.length >= (localFallback.questionResults?.length || 0)
-            ? data.question_results
-            : localFallback.questionResults || [],
-        flaggedNeedReviewTopicIds: Array.isArray(data.flagged_topic_ids) ? data.flagged_topic_ids : localFallback.flaggedNeedReviewTopicIds,
-        unlockedBadgeIds: Array.isArray(data.unlocked_badge_ids) ? data.unlocked_badge_ids : localFallback.unlockedBadgeIds,
-        xpLogs:
-          Array.isArray(data.xp_logs) && data.xp_logs.length >= (localFallback.xpLogs?.length || 0)
-            ? data.xp_logs
-            : localFallback.xpLogs,
-        currentProgress: data.current_progress || localFallback.currentProgress,
+        xpToday: data.xp_today ?? 0,
+        xpWeek: data.xp_week ?? 0,
+        totalXp: data.total_xp ?? 0,
+        activeSecondsToday: data.active_seconds_today ?? 0,
+        lastAttendanceDate: data.last_attendance_date ?? fresh.lastAttendanceDate,
+        attendanceDaysThisWeek: data.attendance_days_this_week ?? fresh.attendanceDaysThisWeek,
+        attendanceHistory: Array.isArray(data.attendance_history) ? data.attendance_history : [],
+        completedSteps: Array.isArray(data.completed_steps) ? data.completed_steps : [],
+        questionResults: Array.isArray(data.question_results) ? data.question_results : [],
+        flaggedNeedReviewTopicIds: Array.isArray(data.flagged_topic_ids) ? data.flagged_topic_ids : [],
+        unlockedBadgeIds: Array.isArray(data.unlocked_badge_ids) ? data.unlocked_badge_ids : [],
+        xpLogs: Array.isArray(data.xp_logs) ? data.xp_logs : [],
+        currentProgress: data.current_progress ?? fresh.currentProgress,
       };
     } catch (err) {
       console.error('[SupabaseAttempt] Ngoại lệ getStudentState:', err);
@@ -1331,9 +1298,13 @@ export class SupabaseAttemptRepository implements AttemptRepository {
         return scopedFallback();
       }
 
-      // Bắt đầu từ các state chỉ có ở local (chưa đồng bộ) rồi phủ dữ liệu DB lên —
-      // trước đây state local bị bỏ hẳn khiến học sinh "biến mất" khỏi màn giáo viên
-      const map: Record<string, StudentState> = await scopedFallback();
+      // Đợt QA 26/10, blocker 6: danh sách = DB đúng. Trước đây map bắt đầu
+      // từ scopedFallback() nên học sinh chỉ có ở local hiện lẫn trong màn
+      // giáo viên. Nay: map bắt đầu rỗng; local chỉ còn bổ sung các trường
+      // KHÔNG có cột DB cho từng học sinh ĐÃ CÓ trong DB (không thêm học
+      // sinh chỉ có ở local).
+      const localMap = await scopedFallback();
+      const map: Record<string, StudentState> = {};
       const students = await supabaseStudentRepo.getStudents();
 
       for (const row of data) {
@@ -1353,7 +1324,7 @@ export class SupabaseAttemptRepository implements AttemptRepository {
 
         map[row.student_id] = {
           ...fresh,
-          ...(map[row.student_id] || {}),
+          ...(localMap[row.student_id] || {}),
           xpToday: row.xp_today ?? fresh.xpToday,
           xpWeek: row.xp_week ?? fresh.xpWeek,
           totalXp: row.total_xp ?? fresh.totalXp,
@@ -1405,6 +1376,39 @@ export class SupabaseEssayRepository implements EssayRepository {
     } catch {
       return undefined;
     }
+  }
+
+  // Tối ưu tải màn chấm (26/10): tra NHIỀU câu hỏi bằng 1 query bulk duy
+  // nhất (.in('id', ids distinct), chia nhỏ mỗi 200 id để tránh URL quá dài)
+  // thay vì 1 query /dòng. Shape trả về giống hệt lookupRealQuestion để
+  // caller dùng chung; id không có dòng thì map miss → undefined như cũ.
+  private async lookupRealQuestionsBulk(
+    ids: string[]
+  ): Promise<Map<string, { prompt?: string; level?: string; topicId?: string }>> {
+    const out = new Map<string, { prompt?: string; level?: string; topicId?: string }>();
+    const distinct = [...new Set((ids || []).filter(Boolean))];
+    if (distinct.length === 0 || !isSupabaseReady()) return out;
+    try {
+      for (let i = 0; i < distinct.length; i += 200) {
+        const chunk = distinct.slice(i, i + 200);
+        const { data } = await supabase
+          .from('questions')
+          .select('id, topic_id, level, payload')
+          .in('id', chunk);
+        for (const row of data || []) {
+          const p = (row as any).payload || {};
+          out.set((row as any).id, {
+            prompt: p.prompt || undefined,
+            level: p.level || (row as any).level || undefined,
+            topicId: p.topicId || (row as any).topic_id || undefined,
+          });
+        }
+      }
+    } catch {
+      // Bulk lỗi thì caller rơi về undefined từng dòng (như lookupRealQuestion
+      // lỗi trước đây) — không chặn cả hàng đợi chấm.
+    }
+    return out;
   }
 
   async getSubmissions(filter?: {
@@ -1464,7 +1468,9 @@ export class SupabaseEssayRepository implements EssayRepository {
         }
       }
       if (scopeClassIds) {
-        if (scopeClassIds.size === 0) return cleanLocalList;
+        // Đợt QA 26/10, blocker 6: giáo viên không có lớp nào trong phạm vi
+        // thì hàng đợi chấm = rỗng — không được rơi về danh sách local.
+        if (scopeClassIds.size === 0) return [];
         query = query.in('class_id', Array.from(scopeClassIds));
       }
 
@@ -1474,9 +1480,11 @@ export class SupabaseEssayRepository implements EssayRepository {
         return cleanLocalList;
       }
 
-      const remoteList: EssaySubmission[] = await Promise.all(
-        (data || []).map(async (e: any) => {
-          const qInfo = await this.lookupRealQuestion(e.question_id);
+      // Tối ưu tải màn chấm (26/10): tra câu hỏi 1 lần bulk thay vì 1 query
+      // /dòng (N+1) — trước đây mỗi submission await lookupRealQuestion riêng.
+      const qInfoById = await this.lookupRealQuestionsBulk((data || []).map((e: any) => e.question_id));
+      const remoteList: EssaySubmission[] = (data || []).map((e: any) => {
+        const qInfo = qInfoById.get(e.question_id);
         const submittedTime = new Date(e.created_at || Date.now()).getTime();
         return {
           id: e.id,
@@ -1507,16 +1515,15 @@ export class SupabaseEssayRepository implements EssayRepository {
           } : undefined,
           skillLevel: (qInfo?.level as any) || 'VAN_DUNG',
             hoursWaiting: Math.max(0, Math.floor((Date.now() - submittedTime) / 3600000)),
-          };
-        })
-      );
+        };
+      });
 
-      // HỢP NHẤT hai nguồn (remote ưu tiên, local chỉ là phần đệm chưa kịp đồng bộ)
-      const map = new Map<string, EssaySubmission>();
-      cleanLocalList.forEach((item) => map.set(item.id, item));
-      remoteList.forEach((item) => map.set(item.id, item));
-
-      let merged = Array.from(map.values()).sort((a, b) => b.submittedAt - a.submittedAt);
+      // Đợt QA 26/10, blocker 6: DB thành công thì chỉ dùng DB. Trước đây
+      // gộp cleanLocalList vào dưới remoteList — bài chỉ có ở local (kể cả
+      // mẫu) hiện lẫn trong hàng đợi chấm prod. Local chỉ còn là fallback
+      // khi query lỗi (return cleanLocalList ở trên) hoặc ngoại lệ (catch
+      // cuối). Phiếu answer_reviews gộp sau đây là DB-với-DB nên giữ nguyên.
+      let merged = [...remoteList].sort((a, b) => b.submittedAt - a.submittedAt);
       // quizId không có cột riêng trên DB (được suy từ question_id) nên lọc sau hợp nhất —
       // trước đây bộ lọc này bị bỏ qua hoàn toàn sau khi gộp dữ liệu
       if (filter?.quizId) {
@@ -1564,7 +1571,9 @@ export class SupabaseEssayRepository implements EssayRepository {
             const reviewClassName = new Map<string, string>(
               (clRows || []).map((c: any) => [c.id, c.name])
             );
-            const qCache = new Map<string, { level?: string } | undefined>();
+            // Tối ưu tải màn chấm (26/10): tra câu hỏi của phiếu review 1 lần
+            // bulk thay vì 1 query /câu hỏi distinct (qCache nạp lười trước đây).
+            const qCache = await this.lookupRealQuestionsBulk(reviews.map(({ r }) => r.questionId));
             let reviewDrafts: Record<string, any> = {};
             try {
               reviewDrafts = JSON.parse(
@@ -1576,9 +1585,8 @@ export class SupabaseEssayRepository implements EssayRepository {
               if (filter?.classId && filter.classId !== 'all' && stClassId !== filter.classId) {
                 continue;
               }
-              if (!qCache.has(r.questionId)) {
-                qCache.set(r.questionId, await this.lookupRealQuestion(r.questionId));
-              }
+              // Câu hỏi không có trong bảng questions → qCache miss →
+              // qInfo undefined, giữ nhãn mặc định như trước đây.
               const qInfo = qCache.get(r.questionId);
               const submittedTime = r.createdAt ? new Date(r.createdAt).getTime() : Date.now();
               const maxScore = r.maxScore && r.maxScore > 0 ? r.maxScore : 10;
@@ -1700,6 +1708,9 @@ export class SupabaseEssayRepository implements EssayRepository {
       return localCreated;
     }
 
+    // Đợt QA 26/10, blocker 8: cờ để lỗi insert vượt qua catch ngoài (catch
+    // ngoài vẫn giữ đường local cho các ngoại lệ tra cứu học sinh/lớp).
+    let insertFailed = false;
     try {
       // 2. Tìm ID học sinh thực tế trong Supabase (tránh vi phạm khóa ngoại)
       let targetStudentUUID: string | null = null;
@@ -1783,7 +1794,13 @@ export class SupabaseEssayRepository implements EssayRepository {
           .single();
 
         if (error) {
-          console.error('[SupabaseEssay] Lỗi insert essay_submissions:', error.message);
+          // Đợt QA 26/10, blocker 8: insert đã thử và lỗi thì ném — trước
+          // đây chỉ console.error rồi trả localCreated, màn học sinh tưởng
+          // đã nộp trong khi hàng đợi chấm của giáo viên (nay chỉ đọc DB)
+          // không thấy bài. Các nhánh khác giữ nguyên: chưa xác định được
+          // học sinh → local (không suy đoán chủ bài), offline → local.
+          insertFailed = true;
+          throw new Error(`Không gửi được bài tự luận lên máy chủ: ${error.message}`);
         } else if (created) {
           syncEventBus.emit('essay');
           return {
@@ -1802,6 +1819,7 @@ export class SupabaseEssayRepository implements EssayRepository {
       syncEventBus.emit('essay');
       return localCreated;
     } catch (err: any) {
+      if (insertFailed) throw err;
       console.error('[SupabaseEssay] Ngoại lệ createSubmission:', err?.message || err);
       syncEventBus.emit('essay');
       return localCreated;
@@ -2912,7 +2930,25 @@ export class SupabaseQuizRepository implements QuizRepository {
   ): Promise<QuizWithMeta> {
     await this.ensureQuizLocal(id);
     const result = await mockQuizRepo.publishQuiz(id, options, teacherActorId);
-    await pushPayloadItem('quizzes', result);
+    // Đợt QA 26/10, blocker 8: push quiz lỗi trước đây bị nuốt im (giá trị
+    // trả về của pushPayloadItem không được kiểm tra) — nay ném để màn Nội
+    // dung báo lỗi thay vì hiện "đã xuất bản" giả.
+    const pushed = await pushPayloadItem('quizzes', result);
+    if (!pushed) {
+      throw new Error('Không đẩy được bài kiểm tra lên máy chủ (RLS hoặc mất mạng). Bài kiểm tra chưa được xuất bản thật.');
+    }
+    // Điều tra publish topic (QA E2E TEST-QA-26-10): trước đây publishQuiz
+    // KHÔNG tự xuất bản chủ đề cha — khác với publishContent video/lý
+    // thuyết — nên quiz published mà topic mẹ vẫn draft, học sinh không thấy
+    // gì. Nay mirror hành vi đó: xuất bản luôn chủ đề cha nếu chưa published.
+    const parentId = (result as any).topicId;
+    if (parentId) {
+      const parent = readLocalList<TopicWithMeta>(TOPIC_CACHE_KEY).find((t) => t.id === parentId);
+      if (parent && parent.status !== 'published') {
+        await mockContentRepo.publishContent('topic', parentId, { classIds: options.classIds }, teacherActorId);
+        await supabaseContentRepo.pushContentById('topic', parentId);
+      }
+    }
     return result;
   }
 
@@ -3364,8 +3400,9 @@ export class SupabaseContentRepository implements ContentRepository {
         .upsert(dbPayload, { onConflict: 'id' });
 
       if (error) {
-        console.warn('[SupabaseContent] Lỗi lưu chủ đề lên Supabase:', error.message);
-        return savedMock;
+        // Đợt QA 26/10, blocker 8: lỗi lưu lên DB trước đây chỉ warn rồi trả
+        // savedMock — màn Nội dung tưởng đã lưu. Nay ném để UI báo lỗi.
+        throw new Error(`Không lưu được chủ đề lên máy chủ: ${error.message}`);
       }
 
       console.log(`[SupabaseContent] ✅ Đã lưu chủ đề [${topicId}] vào Supabase database thành công!`);
@@ -3373,7 +3410,7 @@ export class SupabaseContentRepository implements ContentRepository {
       return savedMock;
     } catch (err) {
       console.error('[SupabaseContent] Ngoại lệ saveTopic:', err);
-      return savedMock;
+      throw err;
     }
   }
 
@@ -3400,13 +3437,17 @@ export class SupabaseContentRepository implements ContentRepository {
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
       if (error) {
-        console.warn('[SupabaseContent] Lỗi xóa chủ đề trên Supabase:', error.message);
+        // Đợt QA 26/10, blocker 8: xóa mềm trên DB lỗi thì ném để UI giữ hộp
+        // thoại mở và báo lỗi (chủ đề sẽ hiện lại khi tải lại vì máy chủ
+        // vẫn còn dòng đó — đúng sự thật, không phải "đã xóa" giả).
+        throw new Error(`Không xóa được chủ đề trên máy chủ: ${error.message}`);
       } else {
         console.log(`[SupabaseContent] 🗑️ Đã xóa (mềm) chủ đề [${id}] trên Supabase database.`);
       }
       syncEventBus.emit('content', { deletedTopicId: id });
     } catch (err) {
       console.error('[SupabaseContent] Ngoại lệ deleteTopic:', err);
+      throw err;
     }
   }
 
@@ -3416,14 +3457,22 @@ export class SupabaseContentRepository implements ContentRepository {
     if (!isSupabaseReady()) return;
 
     try {
-      await Promise.all(
+      // Đợt QA 26/10, blocker 8: Promise.all trước đây nuốt {error} của từng
+      // update (chỉ catch ngoại lệ) — thứ tự lưu lỗi mà UI tưởng đã lưu.
+      // Nay kiểm tra error của từng update và ném nếu có update nào lỗi.
+      const results = await Promise.all(
         topicIds.map((id, index) =>
           supabase.from('topics').update({ order_index: index + 1 }).eq('id', id)
         )
       );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) {
+        throw new Error(`Không lưu được thứ tự chủ đề lên máy chủ: ${failed.error.message}`);
+      }
       syncEventBus.emit('content');
     } catch (err) {
       console.error('[SupabaseContent] Ngoại lệ reorderTopics:', err);
+      throw err;
     }
   }
 
@@ -3488,7 +3537,9 @@ export class SupabaseContentRepository implements ContentRepository {
     }
   }
 
-  private async pushContentById(type: 'topic' | 'video' | 'theory', id: string): Promise<void> {
+  // Đợt QA 26/10: mở thành public để publishQuiz dùng chung đường xuất bản
+  // chủ đề cha (mirror publishContent video/lý thuyết) — xem publishQuiz.
+  async pushContentById(type: 'topic' | 'video' | 'theory', id: string): Promise<void> {
     if (type === 'topic') {
       await this.pushTopicRecord(id);
     } else if (type === 'video') {

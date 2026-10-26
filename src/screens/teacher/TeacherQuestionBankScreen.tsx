@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Sparkles,
   HelpCircle,
@@ -111,12 +111,18 @@ function blocksToSections(blocks: any[]): any[] {
   return sections;
 }
 
-function readQuestionDraftSets(): QuestionDraftSet[] {
+// Đợt QA 26/10, blocker 3: trước đây lỗi đọc 1 khóa nháp (JSON hỏng,
+// localStorage lỗi) làm cả hàm văng vào catch rồi trả [] — tab Bản nháp hiện
+// "Chưa có bản nháp nào đang chờ" như thể không có nháp. Nay: đọc từng khóa
+// riêng (khóa hỏng không chôn các khóa còn lại) và báo readError để UI hiện
+// banner lỗi thay vì câu "không có nháp".
+function readQuestionDraftSets(): { sets: QuestionDraftSet[]; readError: boolean } {
   const out: QuestionDraftSet[] = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith(QUESTION_DRAFT_PREFIX)) continue;
+  let readError = false;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(QUESTION_DRAFT_PREFIX)) continue;
+    try {
       const parsed = JSON.parse(localStorage.getItem(key) || 'null');
       if (Array.isArray(parsed?.questions) && parsed.questions.length > 0) {
         out.push({
@@ -129,19 +135,21 @@ function readQuestionDraftSets(): QuestionDraftSet[] {
           teacherId: parsed.teacherId || undefined,
         });
       }
+    } catch (e) {
+      readError = true;
+      console.warn('Lỗi đọc mục nháp câu hỏi:', key, e);
     }
-  } catch (e) {
-    console.warn('Lỗi đọc mục nháp câu hỏi:', e);
   }
-  return out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  return { sets: out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || '')), readError };
 }
 
-function readTheoryDrafts(): TheoryDraftItem[] {
+function readTheoryDrafts(): { items: TheoryDraftItem[]; readError: boolean } {
   const out: TheoryDraftItem[] = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith(THEORY_DRAFT_PREFIX)) continue;
+  let readError = false;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(THEORY_DRAFT_PREFIX)) continue;
+    try {
       const parsed = JSON.parse(localStorage.getItem(key) || 'null');
       if (parsed?.data?.blocks?.length > 0) {
         out.push({
@@ -153,11 +161,12 @@ function readTheoryDrafts(): TheoryDraftItem[] {
           teacherId: parsed.teacherId || undefined,
         });
       }
+    } catch (e) {
+      readError = true;
+      console.warn('Lỗi đọc mục nháp lý thuyết:', key, e);
     }
-  } catch (e) {
-    console.warn('Lỗi đọc mục nháp lý thuyết:', e);
   }
-  return out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  return { items: out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || '')), readError };
 }
 
 export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps> = ({
@@ -201,16 +210,21 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   // đang đăng nhập + nháp cũ chưa đóng dấu (tương thích ngược). Nháp có dấu
   // của giáo viên khác không hiện, không chuyển được.
   const isOwnDraft = (d?: string) => !d || d === teacherId;
-  const questionDraftSets = useMemo(
-    () => readQuestionDraftSets().filter((s) => isOwnDraft(s.teacherId)),
+  const questionDraftsRead = useMemo(
+    () => readQuestionDraftSets(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draftsVersion, activeMainTab, teacherId]
   );
-  const theoryDraftItems = useMemo(
-    () => readTheoryDrafts().filter((s) => isOwnDraft(s.teacherId)),
+  const theoryDraftsRead = useMemo(
+    () => readTheoryDrafts(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draftsVersion, activeMainTab, teacherId]
   );
+  const questionDraftSets = questionDraftsRead.sets.filter((s) => isOwnDraft(s.teacherId));
+  const theoryDraftItems = theoryDraftsRead.items.filter((s) => isOwnDraft(s.teacherId));
+  // Đợt QA 26/10, blocker 3: lỗi đọc nháp phải hiện banner lỗi, không được
+  // ngụy trang thành "không có nháp".
+  const draftReadError = questionDraftsRead.readError || theoryDraftsRead.readError;
   const pendingDraftCount =
     questionDraftSets.reduce((acc, set) => acc + set.questions.length, 0) + theoryDraftItems.length;
   const [expandedDraftKey, setExpandedDraftKey] = useState<string | null>(null);
@@ -389,6 +403,18 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   // Form State cho Câu hỏi thủ công
   const [formTopicId, setFormTopicId] = useState<string>('');
+  // Đợt QA 26/10, blocker 2: lần đầu mở Studio mà formTopicId còn rỗng thì
+  // mặc định lấy chủ đề đầu tiên — tránh lưu video/lý thuyết với topicId rỗng
+  // (nội dung mồ côi). Chỉ mặc định 1 lần duy nhất và KHÔNG chen ngang khi
+  // đang mở màn duyệt nháp (draftOpenRequest khác null — trong đó formTopicId
+  // rỗng là có chủ đích cho nháp 'global', theo fix 984dc5f).
+  const topicDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (topicDefaultedRef.current) return;
+    if (formTopicId !== '' || topics.length === 0 || draftOpenRequest) return;
+    topicDefaultedRef.current = true;
+    setFormTopicId(topics[0].id);
+  }, [topics, formTopicId, draftOpenRequest]);
   const [formType, setFormType] = useState<QuestionType>('single');
   const [formLevel, setFormLevel] = useState<SkillLevel>('NHAN_BIET');
   const [formDifficulty, setFormDifficulty] = useState<Difficulty>('TB');
@@ -546,6 +572,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   }) => {
     try {
       if (payload.type === 'quiz') {
+        // Đợt QA 26/10, blocker 2: không lưu câu hỏi với topic rỗng.
+        if (!payload.data.topicId && !formTopicId) {
+          showToast('Hãy chọn chủ đề trước khi lưu — câu hỏi chưa được lưu để khỏi rơi vào chủ đề rỗng.');
+          return;
+        }
         const generatedQuestions: Question[] = payload.data.questions || [];
         const savedIds: string[] = [];
         for (const q of generatedQuestions) {
@@ -565,6 +596,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         }
         showToast(`🎉 Đã lưu ${generatedQuestions.length} câu hỏi AI vừa chọn vào Ngân hàng! Các câu mới được làm nổi bật trên đầu.`);
       } else if (payload.type === 'video') {
+        // Đợt QA 26/10, blocker 2: không lưu video với topicId rỗng (mồ côi).
+        if (!formTopicId) {
+          showToast('Hãy chọn chủ đề trước khi lưu — bài giảng chưa được lưu để khỏi rơi vào chủ đề rỗng.');
+          return;
+        }
         await contentService.saveVideoLesson({
           ...payload.data,
           topicId: formTopicId,
@@ -572,6 +608,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         });
         showToast('🎉 Đã lưu bài giảng video & ý trọng tâm vào Ngân hàng học liệu!');
       } else if (payload.type === 'theory') {
+        // Đợt QA 26/10, blocker 2: không lưu lý thuyết với topicId rỗng (mồ côi).
+        if (!formTopicId) {
+          showToast('Hãy chọn chủ đề trước khi lưu — lý thuyết chưa được lưu để khỏi rơi vào chủ đề rỗng.');
+          return;
+        }
         const blocks = payload.data.blocks || [];
         const sections =
           payload.data.sections && payload.data.sections.length > 0
@@ -823,6 +864,9 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                 onChange={(e) => setFormTopicId(e.target.value)}
                 className="px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] outline-none focus:border-[#E2704A]"
               >
+                <option value="" disabled>
+                  — Chọn chủ đề —
+                </option>
                 {topics.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.title}
@@ -1672,7 +1716,19 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
             </p>
           </div>
 
-          {questionDraftSets.length === 0 && theoryDraftItems.length === 0 && (
+          {draftReadError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+              <p className="text-sm font-bold text-red-700">
+                Không đọc được một phần bản nháp đã lưu trên trình duyệt này (dữ liệu nháp có thể bị hỏng).
+              </p>
+              <p className="text-xs text-red-600 mt-1">
+                Các bản nháp đọc được vẫn hiện bên dưới. Đây là lỗi đọc, không phải "không có nháp" — nếu cần,
+                hãy xóa bản nháp hỏng trong bộ nhớ trình duyệt rồi tải lại trang.
+              </p>
+            </div>
+          )}
+
+          {!draftReadError && questionDraftSets.length === 0 && theoryDraftItems.length === 0 && (
             <div className="p-10 text-center bg-white border border-[#E6DCC8] rounded-2xl">
               <NotebookPen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm font-semibold text-slate-500">Chưa có bản nháp nào đang chờ.</p>

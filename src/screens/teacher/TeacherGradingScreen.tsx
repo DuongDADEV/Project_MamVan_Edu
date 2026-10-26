@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
 import { GradingQueueTable } from '../../components/teacher/grading/GradingQueueTable.tsx';
 import { StudentGradingDetail } from '../../components/teacher/grading/StudentGradingDetail.tsx';
@@ -73,33 +73,38 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Tải toàn bộ dữ liệu
+  // Tối ưu tải màn chấm (26/10): lần tải đầu mới đặt cờ loading; các lần
+  // tải lại sau (event 'essay', đổi lớp, sau khi lưu rubric/mẫu/cấu hình)
+  // giữ danh sách cũ hiển thị tới khi dữ liệu mới về, tránh nhấp nháy.
+  const didFirstLoadRef = useRef(false);
+
+  // Tải TIẾN TRIỂN: hàng đợi chấm về trước, hiện ngay — không chờ 7 phần
+  // còn lại (rubric, mẫu, cấu hình, metrics, topics, quizzes, questions).
+  // Trước đây cả 8 thứ nằm chung 1 Promise.all nên hàng đợi trống tới khi
+  // thứ chậm nhất xong, dù getSubmissions đã về từ lâu. (Lưu ý: cờ
+  // isLoadingSubmissions trước đây cũng không chặn render — màn hình vẫn
+  // vẽ bảng rỗng trong lúc chờ; nay cờ này chỉ còn nghĩa "đang tải đợt
+  // submissions đầu tiên" để hiện dòng "Đang tải…" thay vì bảng trống.)
   const loadData = useCallback(async () => {
+    if (!didFirstLoadRef.current) setIsLoadingSubmissions(true);
     try {
-      const [subs, rubrics, samples, cfg, metrics, topicList, quizList, questionMap] =
-        await Promise.all([
-          essayRepository.getSubmissions({ classId: selectedClassId }),
-          essayRepository.getRubricTemplates(),
-          essayRepository.getGradedSamples(),
-          essayRepository.getGradingConfig(),
-          essayRepository.getAIAccuracyMetrics(),
-          contentService.getTopics().catch(() => [] as TopicWithMeta[]),
-          quizService.getQuizzes().catch(() => [] as QuizWithMeta[]),
-          quizService.getQuestions().catch(() => ({}) as Record<string, QuestionWithMeta>),
-        ]);
+      const subs = await essayRepository.getSubmissions({ classId: selectedClassId });
       setSubmissions(subs);
-      setTopics(topicList || []);
-      setQuizzes(quizList || []);
-      setQuestionsMap(questionMap || {});
-      setRubricTemplates(rubrics);
-      setGradedSamples(samples);
-      setAiConfig(cfg);
-      setAccuracyMetrics(metrics);
     } catch (err) {
-      console.error('Lỗi nạp dữ liệu chấm bài:', err);
+      console.error('Lỗi nạp hàng đợi chấm bài:', err);
     } finally {
       setIsLoadingSubmissions(false);
+      didFirstLoadRef.current = true;
     }
+    // Phần còn lại tải nền, về tới đâu hiện tới đó; lỗi phần nào giữ giá
+    // trị cũ phần đó (không xóa sạch màn hình vì 1 phần lỗi).
+    essayRepository.getRubricTemplates().then(setRubricTemplates).catch((err) => console.error('Lỗi nạp rubric:', err));
+    essayRepository.getGradedSamples().then(setGradedSamples).catch((err) => console.error('Lỗi nạp bài mẫu:', err));
+    essayRepository.getGradingConfig().then(setAiConfig).catch((err) => console.error('Lỗi nạp cấu hình chấm:', err));
+    essayRepository.getAIAccuracyMetrics().then(setAccuracyMetrics).catch((err) => console.error('Lỗi nạp metrics AI:', err));
+    contentService.getTopics().then((t) => setTopics(t || [])).catch(() => {});
+    quizService.getQuizzes().then((q) => setQuizzes(q || [])).catch(() => {});
+    quizService.getQuestions().then((m) => setQuestionsMap(m || {})).catch(() => {});
   }, [selectedClassId]);
 
   // Lắng nghe realtime eventBus
@@ -287,7 +292,11 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
         />
       ) : activeMainTab === 'queue' ? (
         /* HÀNG ĐỢI BÀI CHỜ CHỐT */
-        <GradingQueueTable
+        <>
+          {isLoadingSubmissions && submissions.length === 0 && (
+            <p className="text-xs font-bold text-slate-500">Đang tải hàng đợi chấm…</p>
+          )}
+          <GradingQueueTable
           submissions={submissions}
           topics={topics}
           quizzes={quizzes}
@@ -296,7 +305,8 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
           selectedClassId={selectedClassId}
           onSelectSubmission={(sub) => setSelectedSubmissionId(sub.id)}
           onViewStudent={(sub) => setDetailStudentId(sub.studentId)}
-        />
+          />
+        </>
       ) : (
         /* TAB HUẤN LUYỆN AI CHẤM */
         <AiTrainingStudio

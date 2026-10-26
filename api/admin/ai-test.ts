@@ -9,7 +9,8 @@ import { resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys.ts';
 
 /**
  * POST /api/admin/ai-test — admin test từng nấc AI.
- * Chỉ JWT admin. Prompt cực ngắn, timeout 30s/nấc. Trả về kết quả
+ * Chỉ JWT admin. Prompt cực ngắn, timeout 12s/nấc (4 nấc xấu nhất 48s, dưới
+ * maxDuration 60s của Vercel). Trả về kết quả
  * từng nấc (kể cả nấc sau khi 1 nấc đã ok) + latency. Không trả key,
  * thông báo lỗi đã lược bỏ chuỗi giống key.
  */
@@ -75,7 +76,7 @@ export default async function handler(req: any, res: any) {
       leg as 'gemini' | 'groq' | 'openrouter' | 'workersai',
       models[leg],
       key,
-      15000,
+      12000,
       leg === 'workersai' && workersAcct.value
         ? `https://api.cloudflare.com/client/v4/accounts/${workersAcct.value}/ai/v1`
         : undefined

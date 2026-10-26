@@ -78,6 +78,21 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     cappedNotice?: string;
   } | null>(null);
 
+  // Đợt QA 26/10, blocker 8: bài tự luận gửi lên máy chủ lỗi thì giữ lại để
+  // gửi lại — trước đây chỉ .catch(console.error) rồi im, học sinh tưởng đã
+  // nộp trong khi giáo viên không thấy bài (hàng đợi chấm nay chỉ đọc DB).
+  const [failedEssays, setFailedEssays] = useState<Array<{
+    payload: Omit<EssaySubmission, 'id' | 'submittedAt'>;
+    error: string;
+  }>>([]);
+  const retryFailedEssays = async () => {
+    const pending = failedEssays;
+    setFailedEssays([]);
+    const results = await Promise.allSettled(pending.map((f) => essayRepository.createSubmission(f.payload)));
+    const stillFailed = pending.filter((_, i) => results[i].status === 'rejected');
+    if (stillFailed.length > 0) setFailedEssays(stillFailed);
+  };
+
 
   const isUnderstoodAlready = state.completedSteps.includes(`theory_understood:${theoryId}`);
 
@@ -241,21 +256,31 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     const qId = step.quiz.id;
 
     if (essays && essays.length > 0) {
-      essays.forEach((e) => {
-        essayRepository.createSubmission({
-          studentId: state.profile?.id || 'hs001',
-          studentName: state.profile?.name || 'Học sinh',
-          classId: (state.profile as any)?.classId,
-          className: state.profile?.grade || '7A1',
-          questionId: e.questionId,
-          quizId: qId,
-          content: e.content,
-          wordCount: e.wordCount,
-          status: 'PENDING_TEACHER',
-          promptTitle: e.promptTitle || 'Viết đoạn văn theo yêu cầu',
-          quizTitle: `${step.label}: ${theory.title}`,
-          skillLevel: 'VAN_DUNG',
-        }).catch((err: any) => console.error('Lỗi gửi bài tự luận:', err));
+      // Đợt QA 26/10, blocker 8: không nuốt lỗi gửi bài — bài nào lỗi thì
+      // vào failedEssays để hiện banner gửi lại (nội dung vẫn còn trong
+      // bài làm của học sinh qua nextState bên dưới).
+      const payloads: Array<Omit<EssaySubmission, 'id' | 'submittedAt'>> = essays.map((e) => ({
+        studentId: state.profile?.id || 'hs001',
+        studentName: state.profile?.name || 'Học sinh',
+        classId: (state.profile as any)?.classId,
+        className: state.profile?.grade || '7A1',
+        questionId: e.questionId,
+        quizId: qId,
+        content: e.content,
+        wordCount: e.wordCount,
+        status: 'PENDING_TEACHER' as const,
+        promptTitle: e.promptTitle || 'Viết đoạn văn theo yêu cầu',
+        quizTitle: `${step.label}: ${theory.title}`,
+        skillLevel: 'VAN_DUNG' as const,
+      }));
+      Promise.allSettled(payloads.map((p) => essayRepository.createSubmission(p))).then((results) => {
+        const failed = payloads.filter((_, i) => results[i].status === 'rejected');
+        if (failed.length > 0) {
+          setFailedEssays((prev) => [
+            ...prev,
+            ...failed.map((payload) => ({ payload, error: 'Không gửi được lên máy chủ' })),
+          ]);
+        }
       });
     }
 
@@ -428,6 +453,26 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   return (
     <div className="w-full max-w-4xl mx-auto py-6 px-4 sm:px-8 space-y-6 text-[#1E1B4B]">
       {/* HEADER: Quay lại + Nhãn */}
+      {failedEssays.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100%-2rem)] px-4 py-3 rounded-2xl bg-red-600 text-white shadow-xl">
+          <p className="text-sm font-bold">Có {failedEssays.length} bài tự luận chưa gửi được lên máy chủ.</p>
+          <p className="text-xs mt-1 opacity-90">Nội dung vẫn còn trong bài làm của em — bấm Gửi lại để gửi lên cho thầy/cô chấm.</p>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={retryFailedEssays}
+              className="px-3 py-1.5 rounded-xl bg-white text-red-700 text-xs font-bold"
+            >
+              Gửi lại
+            </button>
+            <button
+              onClick={() => setFailedEssays([])}
+              className="px-3 py-1.5 rounded-xl bg-red-700 text-white text-xs font-bold border border-red-400"
+            >
+              Để sau
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <button
           onClick={onBackToList}

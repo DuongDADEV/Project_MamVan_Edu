@@ -68,6 +68,9 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
   const [sandboxRubricId, setSandboxRubricId] = useState(rubricTemplates[0]?.id || '');
   const [sandboxResult, setSandboxResult] = useState<any | null>(null);
   const [isSandboxRunning, setIsSandboxRunning] = useState(false);
+  // Đợt QA 26/10, blocker 5: lỗi chấm sandbox phải hiện rõ cho giáo viên,
+  // không được chỉ console.error rồi để khung kết quả trống như "chưa chạy".
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
 
   // State Modal chỉnh sửa Rubric
   const [editingRubric, setEditingRubric] = useState<RubricTemplate | null>(null);
@@ -95,6 +98,7 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
     if (!sandboxText.trim()) return;
     setIsSandboxRunning(true);
     setSandboxResult(null);
+    setSandboxError(null);
     try {
       const selectedRubric =
         rubricTemplates.find((t) => t.id === sandboxRubricId) || rubricTemplates[0];
@@ -113,7 +117,10 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
         feedbackLength: configDraft.feedbackLength,
       });
       setSandboxResult(res);
-    } catch (e) {
+    } catch (e: any) {
+      // Đường chấm nay ném lỗi thay vì trả điểm mock im lặng (blocker 5) —
+      // hiện lỗi để giáo viên biết mà thử lại, không dùng điểm ước lượng.
+      setSandboxError(e?.message || 'AI chấm lỗi, vui lòng thử lại sau.');
       console.error('Lỗi chạy Sandbox AI:', e);
     } finally {
       setIsSandboxRunning(false);
@@ -649,12 +656,20 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
               <Sparkles className="w-4 h-4 text-purple-600" /> Kết quả AI gợi ý
             </h3>
 
-            {!sandboxResult && !isSandboxRunning && (
+            {!sandboxResult && !isSandboxRunning && !sandboxError && (
               <div className="h-64 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-200 rounded-2xl">
                 <Play className="w-8 h-8 text-slate-300 mb-2" />
                 <p className="text-xs text-slate-400 font-semibold">
                   Bấm "Thử AI chấm ngay" ở cột bên trái để xem phân tích chi tiết.
                 </p>
+              </div>
+            )}
+
+            {sandboxError && !isSandboxRunning && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+                <p className="text-sm font-bold text-red-700">AI chấm lỗi — chưa có điểm gợi ý.</p>
+                <p className="text-xs text-red-600 mt-1">{sandboxError}</p>
+                <p className="text-xs text-red-600 mt-1">Hãy thử lại sau ít phút. Hệ thống không dùng điểm ước lượng thay cho điểm AI.</p>
               </div>
             )}
 

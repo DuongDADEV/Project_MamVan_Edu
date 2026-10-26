@@ -3,9 +3,15 @@ import { tryChain, allLegsBadRequest, DEFAULT_MODELS, LegConfig } from '../_lib/
 import { resolveKeys, loadWorkersAiAccountId } from '../_lib/aiKeys.ts';
 
 /**
- * POST /api/ai/chat — proxy AI cho giáo viên/học sinh.
+ * POST /api/ai/chat — proxy AI cho giáo viên/admin.
  * - Bắt buộc JWT Supabase Auth (Bearer). Verify qua Auth API getUser
  *   (không xử lý signing secret). Không có JWT hợp lệ → 401.
+ * - Đợt QA 26/10, blocker 7: chỉ role teacher/admin được gọi (học sinh →
+ *   403). Đã grep: không tính năng học sinh nào gọi route này qua
+ *   proxyClient (chỉ trợ lý phân tích + Studio của giáo viên).
+ * - Giới hạn đầu vào (blocker 7): contents ≤ 50 phần, systemInstruction
+ *   ≤ 20.000 ký tự, tools JSON ≤ 50.000 ký tự — chặn request khổng lồ
+ *   đốt token/quota trước khi vào chain.
  * - Body theo dialect Gemini generateContent: { contents,
  *   systemInstruction?, tools? }. Trả về đúng shape đó để vòng lặp
  *   tool của trình duyệt không phải sửa.
@@ -63,6 +69,12 @@ export default async function handler(req: any, res: any) {
     res.status(401).json({ error: 'UNAUTHORIZED' });
     return;
   }
+  // Đợt QA 26/10, blocker 7: học sinh không được dùng proxy AI (trợ lý phân
+  // tích + Studio đều là tính năng giáo viên; không caller học sinh nào).
+  if (user.role !== 'teacher' && user.role !== 'admin') {
+    res.status(403).json({ error: 'FORBIDDEN_ROLE' });
+    return;
+  }
   let body: any = {};
   try {
     body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
@@ -78,6 +90,15 @@ export default async function handler(req: any, res: any) {
     typeof body.systemInstruction === 'string'
       ? body.systemInstruction
       : body.systemInstruction?.parts?.map((p: any) => p.text || '').join('') || '';
+  // Đợt QA 26/10, blocker 7: giới hạn đầu vào trước khi vào chain.
+  if (contents.length > 50 || systemInstruction.length > 20000) {
+    res.status(413).json({ error: { kind: 'PAYLOAD_TOO_LARGE', message: 'contents hoặc systemInstruction vượt giới hạn' } });
+    return;
+  }
+  if (body.tools && JSON.stringify(body.tools).length > 50000) {
+    res.status(413).json({ error: { kind: 'PAYLOAD_TOO_LARGE', message: 'tools vượt giới hạn' } });
+    return;
+  }
 
   const settings = await loadSettings();
   const order = (settings.order || ['gemini', 'groq', 'openrouter', 'workersai']).filter((l) =>
@@ -99,11 +120,15 @@ export default async function handler(req: any, res: any) {
     }));
   const keys = await resolveKeys();
 
+  // Đợt QA 26/10, blocker 4: 12s/nấc + ngân sách tổng 50s — 4 nấc xấu nhất
+  // 48s + overhead vẫn dưới maxDuration 60s của Vercel (plan Hobby), thay vì
+  // 25s/nấc × 4 ≈ 100s bị Vercel cắt giữa chừng.
   const result = await tryChain(
     { contents, systemInstruction, tools: body.tools },
     legs,
     keys,
-    25000
+    12000,
+    50000
   );
 
   if (result.parts) {

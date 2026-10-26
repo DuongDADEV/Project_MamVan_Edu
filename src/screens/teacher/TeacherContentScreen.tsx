@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   contentService,
   quizService,
@@ -122,6 +122,34 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   }, [selectedItem?.id, selectedItem?.type]);
   const treeCollapsed = (editorOpen || treeManualCollapsed) && !treeUserExpanded;
 
+  // Toast lỗi chung cho màn Nội dung (đợt QA 26/10, blocker 8): các thao tác
+  // lưu/xóa/sắp xếp/xuất bản trước đây await trần — lỗi chỉ vào console.
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
+  // Chủ đề ĐANG LÀM VIỆC cho Mầm AI Studio (đợt QA 26/10, blocker 1): trước
+  // đây Studio luôn gắn topics[0] bất kể giáo viên đang mở chủ đề nào — nội
+  // dung AI sinh ra rơi nhầm chủ đề. Nay: chủ đề đang chọn > chủ đề của bài
+  // đang mở > chủ đề đầu tiên.
+  const aiTopic = useMemo(() => {
+    if (selectedItem?.type === 'topic') {
+      return topics.find((t) => t.id === selectedItem.id) || null;
+    }
+    if (selectedItem?.type === 'video' || selectedItem?.type === 'theory' || selectedItem?.type === 'quiz') {
+      const ownerId =
+        selectedItem.type === 'video'
+          ? videos.find((v) => v.id === selectedItem.id)?.topicId
+          : selectedItem.type === 'theory'
+            ? theories.find((th) => th.id === selectedItem.id)?.topicId
+            : quizzes.find((q) => q.id === selectedItem.id)?.topicId;
+      if (ownerId) return topics.find((t) => t.id === ownerId) || null;
+    }
+    return topics[0] || null;
+  }, [selectedItem, topics, videos, theories, quizzes]);
+
   // Mặc định chọn video đầu tiên nếu chưa chọn mục nào
   useEffect(() => {
     if (!selectedItem && videos.length > 0) {
@@ -215,10 +243,18 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
   const handleSaveTopic = async (topicData: Partial<TopicWithMeta>) => {
     const isCreating = !topicData.id;
-    const saved = await contentService.saveTopic({
-      ...topicData,
-      class_ids: topicData.class_ids || ['all', 'class_7a2'],
-    });
+    let saved;
+    try {
+      saved = await contentService.saveTopic({
+        ...topicData,
+        class_ids: topicData.class_ids || ['all', 'class_7a2'],
+      });
+    } catch (err: any) {
+      // Ném lại để TopicModal hiện lỗi tại chỗ và giữ modal mở; toast để lỗi
+      // không chìm khi modal đóng.
+      showToast(`Lưu chủ đề lỗi: ${err?.message || 'không rõ nguyên nhân'}. Chủ đề chưa được lưu lên máy chủ.`);
+      throw err;
+    }
     // VỪA TẠO CHỦ ĐỀ MỚI: chủ đề TRỐNG (không tự sinh video nháp như trước —
     // theo yêu cầu chủ dự án 22/10). Chỉ chọn chủ đề vừa tạo; giáo viên bấm
     // "Thêm vào chủ đề" / nút + trên dải luồng để tạo bài đầu tiên.
@@ -247,15 +283,19 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     if (topic) {
       const currentVideoIds = Array.isArray(topic.videoIds) ? topic.videoIds : [];
       if (!currentVideoIds.includes(newVid.id)) {
-        await contentService.saveTopic({
-          ...topic,
-          videoIds: [...currentVideoIds, newVid.id],
-          flowOrder: insertFlowKeyAfter(
-            effectiveFlowKeys(topic),
-            flowKeyOf('video', newVid.id),
-            flowAnchorKeyFor(targetTopicId)
-          ),
-        });
+        try {
+          await contentService.saveTopic({
+            ...topic,
+            videoIds: [...currentVideoIds, newVid.id],
+            flowOrder: insertFlowKeyAfter(
+              effectiveFlowKeys(topic),
+              flowKeyOf('video', newVid.id),
+              flowAnchorKeyFor(targetTopicId)
+            ),
+          });
+        } catch (err: any) {
+          showToast(`Gắn bài giảng vào chủ đề lỗi: ${err?.message || 'không rõ nguyên nhân'}. Bài giảng đã tạo nhưng chưa gắn vào luồng chủ đề.`);
+        }
       }
     }
     setSelectedItem({ type: 'video', id: newVid.id });
@@ -276,7 +316,12 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
   const confirmDeleteTopic = async () => {
     if (!topicToDelete) return;
-    await contentService.deleteTopic(topicToDelete.id, teacherId);
+    try {
+      await contentService.deleteTopic(topicToDelete.id, teacherId);
+    } catch (err: any) {
+      showToast(`Xóa chủ đề lỗi: ${err?.message || 'không rõ nguyên nhân'}. Chủ đề chưa được xóa khỏi máy chủ.`);
+      return;
+    }
     if (selectedItem?.id === topicToDelete.id) {
       setSelectedItem(null);
     }
@@ -285,7 +330,11 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
   // Kéo-thả đổi thứ tự: sidebar trả về danh sách id đã sắp xếp lại
   const handleReorderTopics = async (orderedIds: string[]) => {
-    await contentService.reorderTopics(orderedIds);
+    try {
+      await contentService.reorderTopics(orderedIds);
+    } catch (err: any) {
+      showToast(`Sắp xếp chủ đề lỗi: ${err?.message || 'không rõ nguyên nhân'}. Thứ tự chưa được lưu lên máy chủ.`);
+    }
   };
 
   // ==========================================
@@ -327,10 +376,14 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     if (ownerTopic && Array.isArray(ownerTopic.flowOrder)) {
       const key = flowKeyOf(type as FlowItemType, id);
       if (ownerTopic.flowOrder.includes(key)) {
-        await contentService.saveTopic({
-          ...ownerTopic,
-          flowOrder: ownerTopic.flowOrder.filter((k) => k !== key),
-        });
+        try {
+          await contentService.saveTopic({
+            ...ownerTopic,
+            flowOrder: ownerTopic.flowOrder.filter((k) => k !== key),
+          });
+        } catch (err: any) {
+          showToast(`Cập nhật luồng chủ đề sau khi xóa lỗi: ${err?.message || 'không rõ nguyên nhân'}. Mục đã xóa nhưng thứ tự luồng chưa được lưu.`);
+        }
       }
     }
     if (selectedItem?.id === id) {
@@ -387,10 +440,14 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     const key = flowKeyOf(type, itemId);
     const keys = effectiveFlowKeys(topic);
     if (keys.includes(key)) return;
-    await contentService.saveTopic({
-      ...topic,
-      flowOrder: insertFlowKeyAfter(keys, key, flowAnchorKeyFor(topicId)),
-    });
+    try {
+      await contentService.saveTopic({
+        ...topic,
+        flowOrder: insertFlowKeyAfter(keys, key, flowAnchorKeyFor(topicId)),
+      });
+    } catch (err: any) {
+      showToast(`Đặt mục vào luồng lỗi: ${err?.message || 'không rõ nguyên nhân'}. Vị trí luồng chưa được lưu.`);
+    }
   };
 
   // Tạo mới thủ công từng loại. Menu đã hợp nhất còn 3 mục (Video / Lý thuyết /
@@ -552,7 +609,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
   // Áp dụng bản nháp từ AI đưa thẳng vào trình soạn thảo thủ công
   const handleApplyAiDraft = async (payload: { type: 'video' | 'theory' | 'quiz'; data: any }) => {
-    const targetTopicId = topics[0]?.id || 'topic_tho_bon_nam';
+    const targetTopicId = aiTopic?.id || topics[0]?.id || 'topic_tho_bon_nam';
+    try {
     if (payload.type === 'video') {
       const saved = await contentService.saveVideoLesson({
         ...payload.data,
@@ -592,6 +650,9 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         class_ids: ['all', 'class_7a2'],
       });
       setSelectedItem({ type: 'quiz', id: savedQuiz.id });
+    }
+    } catch (err: any) {
+      showToast(`Áp dụng bản nháp AI lỗi: ${err?.message || 'không rõ nguyên nhân'}. Nội dung chưa được lưu.`);
     }
   };
 
@@ -673,10 +734,16 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   const handleConfirmPublish = async (options: { classIds: string[]; notifyStudent: boolean }) => {
     if (!publishTarget) return;
 
-    if (publishTarget.type === 'quiz') {
-      await quizService.publishQuiz(publishTarget.id, options, teacherId);
-    } else {
-      await contentService.publishContent(publishTarget.type, publishTarget.id, options, teacherId);
+    try {
+      if (publishTarget.type === 'quiz') {
+        await quizService.publishQuiz(publishTarget.id, options, teacherId);
+      } else {
+        await contentService.publishContent(publishTarget.type, publishTarget.id, options, teacherId);
+      }
+    } catch (err: any) {
+      // Ném lại để PublishModal giữ modal mở; toast để lỗi không chìm.
+      showToast(`Xuất bản lỗi: ${err?.message || 'không rõ nguyên nhân'}. Nội dung chưa được xuất bản lên máy chủ.`);
+      throw err;
     }
   };
 
@@ -769,7 +836,12 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   const handleFlowReorder = async (keys: string[]) => {
     if (!stripTopic) return;
     setLocalFlow((prev) => ({ ...prev, [stripTopic.id]: keys }));
-    await contentService.saveTopic({ ...stripTopic, flowOrder: keys });
+    try {
+      await contentService.saveTopic({ ...stripTopic, flowOrder: keys });
+    } catch (err: any) {
+      // Giữ thứ tự vừa kéo ở local để giáo viên thấy và thử lại; chỉ báo lỗi.
+      showToast(`Lưu thứ tự luồng lỗi: ${err?.message || 'không rõ nguyên nhân'}. Thứ tự chưa được lưu lên máy chủ.`);
+    }
   };
 
   // Dọn bản thứ tự tạm khi dữ liệu nạp lại đã khớp
@@ -1050,6 +1122,11 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
       </div>
 
       {/* Modals */}
+      {toastMessage && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100%-2rem)] px-4 py-3 rounded-2xl bg-red-600 text-white text-sm font-semibold shadow-xl">
+          {toastMessage}
+        </div>
+      )}
       <TopicModal
         isOpen={isTopicModalOpen}
         onClose={() => setIsTopicModalOpen(false)}
@@ -1061,8 +1138,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
         targetTypeInitial={aiInitialType}
-        topicId={topics[0]?.id || 'topic_tho_bon_nam'}
-        topicTitle={topics[0]?.title || 'Thơ bốn chữ, năm chữ'}
+        topicId={aiTopic?.id || 'topic_tho_bon_nam'}
+        topicTitle={aiTopic?.title || 'Thơ bốn chữ, năm chữ'}
         onApplyDraft={handleApplyAiDraft}
       />
 
