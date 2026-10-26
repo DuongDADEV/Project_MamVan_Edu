@@ -196,7 +196,9 @@ async function callGeminiLeg(
   const started = Date.now();
   const url = `${GEMINI_BASE}/${model}:generateContent`;
   const generationConfig: any = { temperature: 0.2, maxOutputTokens: 4096 };
-  if (model.includes('flash')) {
+  // Dòng lite (flash-lite) KHÔNG hỗ trợ thinkingConfig — gửi kèm là Google
+  // trả 400 INVALID_ARGUMENT ngay. Chỉ gửi cho flash lớn.
+  if (model.includes('flash') && !model.includes('lite')) {
     generationConfig.thinkingConfig = { thinkingBudget: 0 };
   }
   // gemini-3.x từ chối role 'function' (400 "Role 'function' is not supported"):
