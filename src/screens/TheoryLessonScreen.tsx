@@ -27,7 +27,10 @@ import {
   QuizWithMeta,
   QuestionWithMeta,
   TopicWithMeta,
+  VideoLessonWithMeta,
 } from '../services/index.ts';
+import { buildTopicFlowPath, nextFlowItem } from '../logic/topicFlow.ts';
+import { StudentTopicFlowStrip } from '../components/StudentTopicFlowStrip.tsx';
 import { selectTheoryPracticeQuizzes } from '../logic/theoryFlow.ts';
 
 interface FlowStep {
@@ -43,6 +46,7 @@ interface TheoryLessonScreenProps {
   state: StudentState;
   onUpdateState: (updater: (prev: StudentState) => StudentState) => void;
   onBackToList: () => void;
+  onOpenFlowItem?: (type: 'video' | 'theory' | 'quiz', id: string) => void;
 }
 
 export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
@@ -50,6 +54,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   state,
   onUpdateState,
   onBackToList,
+  onOpenFlowItem,
 }) => {
   const { data: liveTheory } = useLiveQuery<TheoryLessonWithMeta | null>(
     () => contentService.getTheoryLessonById(theoryId),
@@ -76,6 +81,15 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   const { data: liveTopicTheories } = useLiveQuery<TheoryLessonWithMeta[]>(
     () => contentService.getTheoryLessons(undefined, false),
     ['content']
+  );
+  // Du lieu cho dai luong chu de (26/10): chi bai DA XUAT BAN.
+  const { data: liveVideos } = useLiveQuery<VideoLessonWithMeta[]>(
+    () => contentService.getVideoLessons(undefined, true),
+    ['content']
+  );
+  const { data: livePublishedQuizzes } = useLiveQuery<QuizWithMeta[]>(
+    () => quizService.getQuizzes(undefined, true),
+    ['quiz']
   );
 
   // Đếm ngược thời gian đọc tối thiểu (25s) trước khi nút "Đã hiểu" bật
@@ -174,6 +188,25 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     return (theory?.testQuizId && quizzesMap[theory.testQuizId]) ||
       topicQuizzes.find((q: Quiz) => (q.kind === 'quick' || q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') && !practiceQuizIds.has(q.id));
   }, [theory?.testQuizId, quizzesMap, topicQuizzes, practiceQuizIds]);
+
+  // Luong chu de (26/10): du cac bai co da dang theo dung thu tu co xep.
+  const topicFlowPath = useMemo(() => {
+    if (!theory) return [];
+    const topic = (liveTopics || []).find((t) => t.id === theory.topicId);
+    if (!topic) return [];
+    return buildTopicFlowPath({
+      flowOrder: topic.flowOrder,
+      videos: (liveVideos || []).filter((v) => v.topicId === theory.topicId),
+      theories: (liveTopicTheories || []).filter(
+        (t) => t.topicId === theory.topicId && !(t as any).deleted_at
+      ),
+      quizzes: (livePublishedQuizzes || []).filter((q) => q.topicId === theory.topicId),
+    });
+  }, [theory, liveTopics, liveVideos, liveTopicTheories, livePublishedQuizzes]);
+  const nextTopicFlowItem = useMemo(
+    () => (theory ? nextFlowItem(topicFlowPath, 'theory', theoryId) : undefined),
+    [topicFlowPath, theory, theoryId]
+  );
 
   const dynamicSteps = useMemo<FlowStep[]>(() => {
     const steps: FlowStep[] = [
@@ -524,6 +557,15 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
         </span>
       </div>
 
+      {topicFlowPath.length > 1 && (
+        <StudentTopicFlowStrip
+          path={topicFlowPath}
+          currentType="theory"
+          currentId={theoryId}
+          onJump={onOpenFlowItem}
+        />
+      )}
+
       {/* STEPPER LUỒNG LÝ THUYẾT */}
       <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between">
@@ -853,10 +895,23 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                 </p>
               </div>
 
-              <div className="flex justify-center gap-3">
+              <div className="flex justify-center gap-3 flex-wrap">
+                {nextTopicFlowItem && onOpenFlowItem && (
+                  <button
+                    onClick={() => onOpenFlowItem(nextTopicFlowItem.type, nextTopicFlowItem.id)}
+                    className="px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]"
+                  >
+                    <span>Bài tiếp theo: {nextTopicFlowItem.title}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={onBackToList}
-                  className="px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]"
+                  className={
+                    nextTopicFlowItem && onOpenFlowItem
+                      ? 'px-8 py-3.5 rounded-2xl bg-white border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 flex items-center gap-2 transition-all active:scale-[0.99]'
+                      : 'px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]'
+                  }
                 >
                   <span>Về danh sách bài học</span>
                   <ArrowRight className="w-4 h-4" />

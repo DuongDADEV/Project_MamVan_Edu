@@ -918,6 +918,15 @@ export default function App() {
             state={studentState}
             onUpdateState={setStudentState}
             onBackToList={() => setActiveFlow(null)}
+            onOpenFlowItem={(type, id) =>
+              setActiveFlow(
+                type === 'video'
+                  ? { type: 'video', videoId: id }
+                  : type === 'theory'
+                    ? { type: 'theory', theoryId: id }
+                    : { type: 'homework', homeworkQuizId: id }
+              )
+            }
           />
         ) : activeFlow?.type === 'theory' ? (
           <TheoryLessonScreen
@@ -925,6 +934,15 @@ export default function App() {
             state={studentState}
             onUpdateState={setStudentState}
             onBackToList={() => setActiveFlow(null)}
+            onOpenFlowItem={(type, id) =>
+              setActiveFlow(
+                type === 'video'
+                  ? { type: 'video', videoId: id }
+                  : type === 'theory'
+                    ? { type: 'theory', theoryId: id }
+                    : { type: 'homework', homeworkQuizId: id }
+              )
+            }
           />
         ) : activeFlow?.type === 'homework' ? (
           /* Luồng làm BTVN cô giao */

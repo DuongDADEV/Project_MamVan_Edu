@@ -1,3 +1,11 @@
+## 2026-10-26 (HỌC SINH CHỈ THẤY 1 VIDEO DÙ CÔ ĐĂNG 2 + THỨ TỰ KHÔNG KHỚP)
+
+- Báo cáo: chủ đề "bài học 1" cô đăng 4 bài theo thứ tự video → bài tập → lý thuyết → video, nhưng màn học sinh chỉ hiện luồng Xem video → Trọng tâm → Luyện tập → Hoàn thành (1 video).
+- Phân tích bằng DB: dữ liệu đúng hết — cả 2 video đều đã xuất bản, videoIds đủ 2, flowOrder đúng [video, quiz, theory, video]. Danh sách chủ đề phía học sinh cũng hiện đủ 4 bài đúng thứ tự. Vấn đề nằm ở màn bài học: VideoLessonScreen chỉ dựng luồng RIÊNG của 1 video (xem video + tóm tắt của nó + bài luyện tập đầu tiên của chủ đề + hoàn thành) nên video thứ 2 vô hình trong luồng đó, và thứ tự trong luồng là mẫu cố định của bài video chứ không phải thứ tự cô đăng. Nút cuối luồng chỉ có "Về danh sách bài học" nên học sinh khó đi tiếp đúng thứ tự.
+- Sửa (luồng cấp chủ đề, logic/topicFlow.ts + components/TopicFlowStrip.tsx): trên màn video và màn lý thuyết, thêm dải "Luồng chủ đề" hiện ĐỦ các bài đã xuất bản theo ĐÚNG thứ tự flowOrder của cô (bài đang học tô đậm, bấm vào bài khác để nhảy tới); nút cuối mỗi bài thêm "Bài tiếp theo: <tên bài>" đi đúng thứ tự, hết bài mới về danh sách. App truyền callback chuyển bài theo luồng cho cả 2 màn.
+- Ranh giới thật: các bước con trong từng bài (xem video, trọng tâm, luyện tập) vẫn là mẫu riêng của bài đó; bài tập gắn trong bài video/lý thuyết vẫn hiện như trước (cùng một bài tập nên làm một lần là xong ở mọi chỗ). Dải luồng chủ đề mới là thứ tự cô đăng mà học sinh đi theo.
+- Test: topic_flow 12/12 (mới); tsc 0; các suite cũ vẫn xanh.
+
 ## 2026-10-26 (XƯỞNG AI + NGÂN HÀNG THẤY DỮ LIỆU NGƯỜI KHÁC + XÓA BÀI MẪU CÂY DỪA)
 
 - Báo cáo: tài khoản mới toangv mở Ngân hàng câu hỏi thấy "Bài thơ: Cây dừa" + "Bài văn tả mẹ của em" và đoạn chat tóm tắt văn bản — dù đó không phải dữ liệu của nó.

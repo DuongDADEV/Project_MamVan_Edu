@@ -24,8 +24,12 @@ import {
   essayRepository,
   VideoLessonWithMeta,
   QuizWithMeta,
+  TheoryLessonWithMeta,
+  TopicWithMeta,
   QuestionWithMeta,
 } from '../services/index.ts';
+import { buildTopicFlowPath, nextFlowItem } from '../logic/topicFlow.ts';
+import { StudentTopicFlowStrip } from '../components/StudentTopicFlowStrip.tsx';
 
 interface FlowStep {
   key: 'video' | 'summary' | 'practice' | 'quick' | 'mastery' | 'complete';
@@ -39,6 +43,7 @@ interface VideoLessonScreenProps {
   state: StudentState;
   onUpdateState: (updater: (prev: StudentState) => StudentState) => void;
   onBackToList: () => void;
+  onOpenFlowItem?: (type: 'video' | 'theory' | 'quiz', id: string) => void;
 }
 
 export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
@@ -46,6 +51,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   state,
   onUpdateState,
   onBackToList,
+  onOpenFlowItem,
 }) => {
   const { data: liveVideo } = useLiveQuery<VideoLessonWithMeta | null>(
     () => contentService.getVideoLessonById(videoId),
@@ -74,6 +80,19 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   );
   const { data: liveQuestions } = useLiveQuery<Record<string, QuestionWithMeta>>(
     () => quizService.getQuestions(),
+    ['quiz']
+  );
+  // Du lieu cho dai luong chu de (26/10): chi bai DA XUAT BAN.
+  const { data: liveTopics } = useLiveQuery<TopicWithMeta[]>(
+    () => contentService.getTopics(undefined, true),
+    ['content']
+  );
+  const { data: liveTheories } = useLiveQuery<TheoryLessonWithMeta[]>(
+    () => contentService.getTheoryLessons(undefined, true),
+    ['content']
+  );
+  const { data: livePublishedQuizzes } = useLiveQuery<QuizWithMeta[]>(
+    () => quizService.getQuizzes(undefined, true),
     ['quiz']
   );
 
@@ -132,6 +151,23 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       (q: Quiz) => q && q.topicId && video && q.topicId === video.topicId
     );
   }, [quizzesMap, video]);
+
+  // Luong chu de (26/10): du cac bai co da dang theo dung thu tu co xep.
+  const topicFlowPath = useMemo(() => {
+    if (!video) return [];
+    const topic = (liveTopics || []).find((t) => t.id === video.topicId);
+    if (!topic) return [];
+    return buildTopicFlowPath({
+      flowOrder: topic.flowOrder,
+      videos: (allVideos || []).filter((v) => v.topicId === video.topicId),
+      theories: (liveTheories || []).filter((t) => t.topicId === video.topicId),
+      quizzes: (livePublishedQuizzes || []).filter((q) => q.topicId === video.topicId),
+    });
+  }, [video, liveTopics, allVideos, liveTheories, livePublishedQuizzes]);
+  const nextTopicFlowItem = useMemo(
+    () => (video ? nextFlowItem(topicFlowPath, 'video', videoId) : undefined),
+    [topicFlowPath, video, videoId]
+  );
 
   // 1. Bài Luyện tập: ưu tiên video.practiceQuizId hoặc tìm bài kind 'practice' trong chủ đề
   const practiceQuiz: Quiz | undefined = useMemo(() => {
@@ -436,6 +472,15 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
           Luồng Bài giảng Video
         </span>
       </div>
+
+      {topicFlowPath.length > 1 && (
+        <StudentTopicFlowStrip
+          path={topicFlowPath}
+          currentType="video"
+          currentId={videoId}
+          onJump={onOpenFlowItem}
+        />
+      )}
 
       {/* STEPPER THANH TIẾN TRÌNH ĐỘNG THEO NỘI DUNG GIAO */}
       <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm">
@@ -869,11 +914,24 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                 </p>
               </div>
 
-              {/* Nút quay lại học bài tiếp theo */}
-              <div className="flex justify-center gap-3">
+              {/* Nut sang bai tiep theo dung thu tu chu de (26/10) */}
+              <div className="flex justify-center gap-3 flex-wrap">
+                {nextTopicFlowItem && onOpenFlowItem && (
+                  <button
+                    onClick={() => onOpenFlowItem(nextTopicFlowItem.type, nextTopicFlowItem.id)}
+                    className="px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]"
+                  >
+                    <span>Bài tiếp theo: {nextTopicFlowItem.title}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={onBackToList}
-                  className="px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]"
+                  className={
+                    nextTopicFlowItem && onOpenFlowItem
+                      ? 'px-8 py-3.5 rounded-2xl bg-white border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 flex items-center gap-2 transition-all active:scale-[0.99]'
+                      : 'px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]'
+                  }
                 >
                   <span>Về danh sách bài học</span>
                   <ArrowRight className="w-4 h-4" />
