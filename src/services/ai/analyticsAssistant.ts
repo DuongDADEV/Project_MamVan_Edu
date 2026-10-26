@@ -236,6 +236,20 @@ function effectiveFilter(ctx: AssistantContext, args: any): AnalyticsFilter {
   return f;
 }
 
+// Nhãn lớp thật của phạm vi dữ liệu — để evidence và dữ liệu tool luôn gắn
+// đúng lớp, model không thể gắn nhãn lớp khác (ca 7A6: tool chạy đúng dữ
+// liệu 7A4 nhưng evidence không ghi tên lớp nên model kể thành 7A6).
+// Giáo viên chỉ có 1 lớp thì mọi kết quả đều là lớp đó; nhiều lớp mà filter
+// không khoanh đúng 1 lớp thì không ghi nhãn (tránh ghi sai).
+export function classScopeLabel(ctx: AssistantContext, f: AnalyticsFilter): string | null {
+  if (ctx.classes.length === 1) return `Lớp ${ctx.classes[0].name}`;
+  if (f.classIds && f.classIds.length === 1) {
+    const c = ctx.classes.find((x) => x.id === f.classIds![0]);
+    if (c) return `Lớp ${c.name}`;
+  }
+  return null;
+}
+
 function sampleInfo(ctx: AssistantContext, f: AnalyticsFilter): string {
   const students = filterStudents(ctx.students, f);
   const range = getFilterDateRange(f);
@@ -247,7 +261,8 @@ function sampleInfo(ctx: AssistantContext, f: AnalyticsFilter): string {
       range
     ).length;
   });
-  return `${students.length} học sinh · ${results} lượt trả lời câu hỏi · kỳ ${periodLabel(f)}`;
+  const label = classScopeLabel(ctx, f);
+  return `${label ? `${label} · ` : ''}${students.length} học sinh · ${results} lượt trả lời câu hỏi · kỳ ${periodLabel(f)}`;
 }
 
 interface ToolOutcome {
@@ -711,6 +726,7 @@ export async function executeTool(
       return {
         evidence,
         data: {
+          lop: classScopeLabel(ctx, f) || 'các lớp của thầy/cô',
           diemDanh6Tuan: seriesRows,
           hocSinhHoatDongTBNgay7NgayQua: avgActiveStudents,
           phienDangNhap: sessions,
@@ -2090,6 +2106,20 @@ export function selectToolsForQuery(latestUserText: string): any[] | null {
     }
   }
   if (picked.size === 0) return null;
+  // ĐỢT này (26/10): câu hỏi đọc khớp từ khóa 'bai tap' nên kéo cả tool
+  // ghi (create/update) vào — nhiễu, model càng dễ chọn sai. Chỉ giữ tool
+  // ghi khi câu hỏi có ý định ghi (tạo/sửa/cập nhật/đổi/giao/thêm/xóa).
+  // Tool chấm bài/duyệt quà là hành động giáo viên yêu cầu trực tiếp nên
+  // không nằm trong diện lọc này.
+  const CONTENT_WRITE_TOOLS = new Set([
+    'create_topic', 'create_video_draft', 'create_theory_draft', 'create_quiz',
+    'create_question', 'create_assignment', 'update_assignment',
+    'publish_content', 'publish_quiz', 'unpublish_content',
+    'delete_content', 'delete_quiz', 'delete_question',
+  ]);
+  if (!/(tao|sua|cap nhat|doi|giao|them|xoa)/.test(text)) {
+    for (const t of CONTENT_WRITE_TOOLS) picked.delete(t);
+  }
   if (picked.has('render_chart')) {
     // Vẽ luôn cần dữ liệu: kèm các tool dữ liệu vẽ được để model tự lấy.
     for (const t of CHARTABLE_TOOLS) picked.add(t);
@@ -2126,6 +2156,7 @@ export async function askAnalyticsAssistant(
   const toolRuns: AssistantToolRun[] = [];
   let chart: AssistantChart | undefined;
   let lastError: any = null;
+  let nudged = false;
 
   // ĐỢT 5 (26/10): chặn số bịa — câu trả lời không kèm kết quả tool thật
   // mà chứa số liệu thì bỏ câu đó, hiện 'chưa đủ dữ liệu' (kèm gợi ý hỏi
@@ -2157,6 +2188,24 @@ export async function askAnalyticsAssistant(
 
         if (calls.length === 0) {
           if (textPart) {
+            // NUDGE (luật trung thực, 26/10): model trả chữ có số liệu mà
+            // chưa gọi tool nào trong khi câu hỏi đã route tool dữ liệu
+            // (ca thật: hỏi lại câu cũ, model chép đáp án từ lịch sử) →
+            // đừng vội trả (trả là guard chặn thành 'chưa đủ dữ liệu'):
+            // nhắc 1 lần rồi cho thêm 1 vòng gọi tool. Câu hỏi làm rõ
+            // không có số thì không nhắc. Nhắc rồi mà vẫn trả chữ không
+            // tool thì rơi xuống guardReply như cũ, không lặp vô hạn.
+            if (!nudged && isUngroundedDataAnswer(textPart, toolRuns.length, routed)) {
+              nudged = true;
+              contents.push({ role: 'model', parts: [{ text: textPart }] });
+              contents.push({
+                role: 'user',
+                parts: [{
+                  text: 'Bạn chưa gọi công cụ nào mà đã trả lời bằng số liệu. Hãy gọi công cụ dữ liệu phù hợp trước khi trả lời, rồi mới diễn đạt kết quả từ dữ liệu công cụ trả về.',
+                }],
+              });
+              continue;
+            }
             const parsed = parseFollowups(textPart);
             return guardReply(parsed);
           }
