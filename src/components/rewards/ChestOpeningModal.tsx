@@ -93,9 +93,10 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
           style={{ background: tierConfig.glowColor }}
         />
 
-        {/* Nút đóng góc phải */}
+        {/* Nút đóng góc phải — sau khi quà đã lộ diện, đóng cũng tính là đã nhận
+            (trước đây đóng bằng X làm yêu cầu kẹt ở trạng thái GIVEN mãi mãi) */}
         <button
-          onClick={onClose}
+          onClick={phase === 'revealed' ? handleCollect : onClose}
           className="absolute top-4 right-4 p-2 rounded-full text-[#7A6A55] hover:bg-[#FAF5EB] transition-colors"
           title="Đóng"
         >

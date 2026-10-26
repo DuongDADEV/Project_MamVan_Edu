@@ -28,6 +28,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { BrandWordmark } from '../../components/MamVanLogo.tsx';
+import { AdminAiSettings } from '../../components/admin/AdminAiSettings.tsx';
 import {
   teacherService,
   classService,
@@ -315,6 +316,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* CẤU HÌNH MẦM AI (chỉ admin) */}
+        <AdminAiSettings />
 
         {/* BẢNG QUẢN LÝ GIÁO VIÊN */}
         <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl shadow-xs overflow-hidden">

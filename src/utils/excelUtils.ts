@@ -112,7 +112,8 @@ export async function parseUploadedExcel(
 
   const firstSheetName = wb.SheetNames[0];
   const worksheet = wb.Sheets[firstSheetName];
-  const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+  // blankrows: true để dòng trống vẫn chiếm chỉ số — số dòng báo lỗi khớp dòng thật trong Excel
+  const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '', blankrows: true });
 
   const existingCodes = new Set(
     existingStudents.map((s) => s.student_code?.trim().toLowerCase()).filter(Boolean)

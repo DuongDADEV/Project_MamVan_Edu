@@ -10,7 +10,8 @@ import {
 import {
   settingService,
   auditService,
-  resetAllDemoData,
+  authService,
+  teacherService,
   useLiveQuery,
   DEFAULT_SYSTEM_SETTINGS,
 } from '../../services/index.ts';
@@ -39,20 +40,7 @@ import {
   Layers,
   History,
   Info,
-  Eye,
-  EyeOff,
-  ExternalLink,
-  Zap,
-  RefreshCw,
 } from 'lucide-react';
-import {
-  getGeminiApiKey,
-  setGeminiApiKey,
-  getGeminiModel,
-  setGeminiModel,
-  testGeminiApiKey,
-} from '../../services/ai/index.ts';
-
 interface TeacherSettingsScreenProps {
   teacher: TeacherProfile;
   auditLogs?: AuditLog[];
@@ -91,7 +79,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
   const [passwordSuccess, setPasswordSuccess] = useState<boolean>(false);
 
   // Confirm dialogs
-  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState<boolean>(false);
   const [resetGroupTarget, setResetGroupTarget] = useState<'general' | 'mastery' | 'xp' | 'time' | 'notifications' | null>(null);
   const [isResetGroupConfirmOpen, setIsResetGroupConfirmOpen] = useState<boolean>(false);
 
@@ -99,52 +86,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
   const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
   const [auditTimeFilter, setAuditTimeFilter] = useState<string>('all');
   const [auditSearchQuery, setAuditSearchQuery] = useState<string>('');
-
-  // Google AI Studio (Gemini) State
-  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => getGeminiApiKey());
-  const [geminiModelInput, setGeminiModelInput] = useState<string>(() => getGeminiModel());
-  const [showGeminiKey, setShowGeminiKey] = useState<boolean>(false);
-  const [isTestingAi, setIsTestingAi] = useState<boolean>(false);
-  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string; latencyMs: number } | null>(null);
-  const [isAiConfigSaved, setIsAiConfigSaved] = useState<boolean>(() => !!getGeminiApiKey());
-
-  const handleSaveAiConfig = () => {
-    setGeminiApiKey(geminiKeyInput);
-    setGeminiModel(geminiModelInput);
-    setIsAiConfigSaved(!!geminiKeyInput.trim());
-    showToast(
-      geminiKeyInput.trim()
-        ? 'Đã lưu API Key và kích hoạt Google AI Studio thật!'
-        : 'Đã xóa API Key. Hệ thống chuyển về dùng AI giả lập (Mock AI).'
-    );
-  };
-
-  const handleTestAiConnection = async () => {
-    if (!geminiKeyInput.trim()) {
-      showToast('Vui lòng nhập API Key trước khi kiểm tra kết nối.', 'error');
-      return;
-    }
-    setIsTestingAi(true);
-    setAiTestResult(null);
-    try {
-      const res = await testGeminiApiKey(geminiKeyInput.trim(), geminiModelInput);
-      setAiTestResult(res);
-      if (res.success) {
-        showToast(`Kết nối thành công (${res.latencyMs}ms)!`);
-      } else {
-        showToast('Kết nối thất bại. Vui lòng kiểm tra lại thông báo.', 'error');
-      }
-    } catch (e: any) {
-      setAiTestResult({
-        success: false,
-        message: e.message || 'Lỗi không xác định khi kết nối.',
-        latencyMs: 0,
-      });
-      showToast('Lỗi khi kiểm tra kết nối AI.', 'error');
-    } finally {
-      setIsTestingAi(false);
-    }
-  };
 
   useEffect(() => {
     if (remoteSettings) {
@@ -161,13 +102,37 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
   // XỬ LÝ LƯU CÀI ĐẶT
   // ==========================================
   const handleSaveSettings = async () => {
-    // 1. Kiểm tra validation trần XP
-    if (settingsForm.xp.weeklyCap < settingsForm.xp.dailyCapTotal) {
-      showToast('Lỗi: Trần XP tuần không thể nhỏ hơn trần XP ngày tối đa!', 'error');
+    // 0. Chặn giá trị rỗng/0/âm (xóa trắng ô số thành 0) và thứ tự ngưỡng mastery
+    const numericFields: [string, number][] = [
+      ['XP điểm danh/ngày', settingsForm.xp.attendanceDailyXp],
+      ['Ngưỡng Cần ôn lại', settingsForm.mastery.thresholdNeedsReview],
+      ['Ngưỡng Đang tiến bộ', settingsForm.mastery.thresholdProgressing],
+      ['Số câu tối thiểu', settingsForm.mastery.minQuestionsRequired],
+    ];
+    const badField = numericFields.find(
+      ([, v]) => typeof v !== 'number' || Number.isNaN(v) || v <= 0
+    );
+    if (badField) {
+      showToast(`Lỗi: "${badField[0]}" phải là số lớn hơn 0 (ô đang trống hoặc bằng 0)`, 'error');
       return;
     }
-    if (settingsForm.xp.dailyCapTotal < settingsForm.xp.dailyCapUnder45Min) {
-      showToast('Lỗi: Trần XP ngày tối đa không thể nhỏ hơn trần XP dưới 45 phút!', 'error');
+    if (
+      !(
+        settingsForm.mastery.thresholdNeedsReview <
+        settingsForm.mastery.thresholdProgressing
+      )
+    ) {
+      showToast(
+        'Lỗi: Ngưỡng "Cần ôn lại" phải nhỏ hơn ngưỡng "Đang tiến bộ"!',
+        'error'
+      );
+      return;
+    }
+    if (
+      settingsForm.mastery.weightDecayFactor <= 0 ||
+      settingsForm.mastery.weightDecayFactor > 1
+    ) {
+      showToast('Lỗi: Hệ số suy giảm phải nằm trong khoảng (0, 1]!', 'error');
       return;
     }
 
@@ -200,16 +165,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
     }
   };
 
-  // Đặt lại toàn bộ dữ liệu demo
-  const handleResetDemoData = () => {
-    resetAllDemoData();
-    setIsResetConfirmOpen(false);
-    showToast('Đã đặt lại toàn bộ dữ liệu demo (28 học sinh, 6 tuần điểm số, 4 chuyên đề) về trạng thái ban đầu!');
-    refreshSettings();
-    refreshLogs();
-    if (onRefreshData) onRefreshData();
-  };
-
   // Đổi mật khẩu giáo viên (mock + ghi audit an toàn)
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,6 +181,22 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
     }
     if (newPassword !== confirmPassword) {
       setPasswordError('Mật khẩu mới và xác nhận mật khẩu không khớp');
+      return;
+    }
+
+    // Kiểm tra mật khẩu hiện tại bằng chính đường đăng nhập thật
+    try {
+      await authService.signIn('teacher', teacher.username, currentPassword);
+    } catch {
+      setPasswordError('Mật khẩu hiện tại không đúng');
+      return;
+    }
+
+    // Lưu mật khẩu mới thật vào hồ sơ giáo viên
+    try {
+      await teacherService.updateTeacher(teacher.id, { password: newPassword });
+    } catch (err: any) {
+      setPasswordError(err?.message || 'Không lưu được mật khẩu mới, vui lòng thử lại');
       return;
     }
 
@@ -261,7 +232,10 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
       target_name: `Đăng xuất toàn bộ phiên (${teacher.username})`,
       details: { notes: 'Yêu cầu hủy mọi phiên đăng nhập trên thiết bị khác' },
     });
-    showToast('Đã đăng xuất khỏi tất cả các thiết bị khác thành công!');
+    showToast(
+      'Đã ghi nhận yêu cầu. Lưu ý: phiên bản hiện tại chưa hỗ trợ đăng xuất từ xa — hãy đăng xuất trực tiếp trên từng thiết bị.',
+      'info'
+    );
     refreshLogs();
   };
 
@@ -331,17 +305,8 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
     showToast('Đã xuất file nhật ký kiểm toán thành công!');
   };
 
-  // Cảnh báo bất hợp lý XP
-  const xpWarning = useMemo(() => {
-    const { dailyCapUnder45Min, dailyCapTotal, weeklyCap } = settingsForm.xp;
-    if (weeklyCap < dailyCapTotal) {
-      return `Trần XP tuần (${weeklyCap}) nhỏ hơn trần XP ngày tối đa (${dailyCapTotal})! Học sinh sẽ nhanh chóng chạm trần tuần.`;
-    }
-    if (dailyCapTotal < dailyCapUnder45Min) {
-      return `Trần XP ngày tối đa (${dailyCapTotal}) nhỏ hơn trần ngày dưới 45 phút (${dailyCapUnder45Min})!`;
-    }
-    return null;
-  }, [settingsForm.xp]);
+  // Mô hình XP mới: không còn trần XP — không còn cảnh báo bất hợp lý.
+  const xpWarning: string | null = null;
 
   return (
     <div className="space-y-6">
@@ -894,122 +859,19 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
             </div>
           )}
 
-          {/* KHỐI 1: CÁC TRẦN XP (CAPS) */}
-          <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E6DCC8]/70">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#E2704A]/10 text-[#E2704A] flex items-center justify-center font-bold">
-                  <Sliders className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-lora font-bold text-sm text-[#2F3E6B]">
-                    Trần giới hạn XP Ngày & Tuần
-                  </h3>
-                  <p className="text-[11px] text-[#6B7280]">
-                    Tránh cày cuốc quá sức, đảm bảo thói quen học tập bền vững
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setResetGroupTarget('xp');
-                  setIsResetGroupConfirmOpen(true);
-                }}
-                className="text-xs text-[#8C7E6A] hover:text-[#2F3E6B] flex items-center gap-1 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Khôi phục nhóm XP</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div className="p-4 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                  Trần ngày (&lt;45 phút học tích cực)
-                </label>
-                <div className="relative mt-2">
-                  <input
-                    type="number"
-                    min={50}
-                    max={500}
-                    step={10}
-                    value={settingsForm.xp.dailyCapUnder45Min}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, dailyCapUnder45Min: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-sm text-[#2F3E6B] font-bold focus:outline-none focus:border-[#2F3E6B]"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A] font-bold">XP</span>
-                </div>
-                <p className="text-[11px] text-[#6B7280] mt-1.5">
-                  Mặc định: 130 XP. Học dưới 45 phút tối đa đạt mức này.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                  Trần ngày tối đa (45-90 phút)
-                </label>
-                <div className="relative mt-2">
-                  <input
-                    type="number"
-                    min={60}
-                    max={600}
-                    step={10}
-                    value={settingsForm.xp.dailyCapTotal}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, dailyCapTotal: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-sm text-[#2F3E6B] font-bold focus:outline-none focus:border-[#2F3E6B]"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A] font-bold">XP</span>
-                </div>
-                <p className="text-[11px] text-[#6B7280] mt-1.5">
-                  Mặc định: 150 XP. Học thêm sau 45 phút tích lũy thêm tối đa 20 XP.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                  Trần tuần tích lũy (Đổi quà)
-                </label>
-                <div className="relative mt-2">
-                  <input
-                    type="number"
-                    min={300}
-                    max={2500}
-                    step={50}
-                    value={settingsForm.xp.weeklyCap}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, weeklyCap: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-sm text-[#2F3E6B] font-bold focus:outline-none focus:border-[#2F3E6B]"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A] font-bold">XP</span>
-                </div>
-                <p className="text-[11px] text-[#6B7280] mt-1.5">
-                  Mặc định: 900 XP. Khống chế mức quà đổi tối đa trong tuần.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* KHỐI 2: BẢNG XP THEO HÀNH ĐỘNG HỌC TẬP */}
+          {/* KHỐI 2: ĐIỂM DANH NGÀY — mục XP duy nhất còn cấu hình tại đây.
+              XP của chủ đề đặt trong cửa sổ Chỉnh sửa chủ đề; XP của bài
+              kiểm tra/bài được giao đặt ngay trong màn soạn bài đó. */}
           <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs space-y-4">
             <h3 className="font-lora font-bold text-sm text-[#2F3E6B] pb-2 border-b border-[#E6DCC8]/70">
-              Bảng điểm XP cho từng hành động học tập
+              Điểm danh ngày
             </h3>
+            <p className="text-[11px] text-[#6B7280] leading-relaxed">
+              Hệ thống không còn trần XP ngày/tuần và không cộng XP theo từng hành động lẻ.
+              Học sinh nhận XP từ 3 nguồn: điểm danh ngày (mục này), hoàn thành toàn bộ
+              chủ đề (số XP đặt trong cửa sổ &quot;Chỉnh sửa chủ đề&quot;) và nộp bài kiểm tra /
+              bài được giao (số XP đặt trong màn soạn của từng bài).
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
@@ -1032,165 +894,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Xem video đạt 80%</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.videoWatchXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoWatchXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Đọc tóm tắt trọng tâm</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={settingsForm.xp.videoSummaryReadXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoSummaryReadXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Luyện tập video</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.videoPracticeXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoPracticeXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Kiểm tra nhanh video</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.videoQuickTestXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoQuickTestXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Kiểm tra năng lực Mastery</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={40}
-                    value={settingsForm.xp.videoMasteryCheckXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, videoMasteryCheckXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Đọc hiểu lý thuyết</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.theoryReadXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, theoryReadXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Luyện tập lý thuyết</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={settingsForm.xp.theoryPracticeXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, theoryPracticeXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#2F3E6B] mb-1">Hoàn thành bài tập về nhà</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={5}
-                    max={50}
-                    value={settingsForm.xp.homeworkCompletedXp}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        xp: { ...settingsForm.xp, homeworkCompletedXp: Number(e.target.value) },
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-[#D1C7B7] bg-[#FFFDF8] text-xs font-semibold text-[#2F3E6B] focus:outline-none"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C7E6A]">XP</span>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1203,7 +906,7 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
               className="px-6 py-3 rounded-2xl bg-[#2F3E6B] hover:bg-[#23325B] disabled:opacity-50 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Đang lưu...' : 'Lưu cấu hình XP & Giới hạn'}</span>
+              <span>{isSaving ? 'Đang lưu...' : 'Lưu cấu hình XP'}</span>
             </button>
           </div>
         </div>
@@ -1323,7 +1026,7 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                       <div>
                         <div className="font-bold text-[#2F3E6B]">Thiết bị này (Trình duyệt hiện tại)</div>
-                        <div className="text-[10px] text-[#6B7280]">Windows 11 • Chrome 134 • Đang hoạt động</div>
+                        <div className="text-[10px] text-[#6B7280]">Đang hoạt động</div>
                       </div>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
@@ -1331,18 +1034,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-2xl bg-[#FFFDF8] border border-[#E6DCC8] flex items-center justify-between text-xs opacity-75">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
-                      <div>
-                        <div className="font-bold text-[#4B5563]">iPad Air (Lớp học)</div>
-                        <div className="text-[10px] text-[#6B7280]">iOS 17 • Safari • Hoạt động 2 ngày trước</div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">
-                      Đã lưu
-                    </span>
-                  </div>
                 </div>
               </div>
 
@@ -1357,191 +1048,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
             </div>
           </div>
 
-          {/* CẤU HÌNH GOOGLE AI STUDIO (GEMINI API) */}
-          <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#E6DCC8]/70 gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#E2704A] to-[#F2B84B] text-white flex items-center justify-center font-bold shadow-xs">
-                  <Sparkles className="w-5 h-5 animate-pulse" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-lora font-bold text-base text-[#2F3E6B]">
-                      Cấu hình Google AI Studio (Gemini API)
-                    </h3>
-                    {isAiConfigSaved ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
-                        AI Thật Đang Hoạt Động
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF5EB] text-[#8C7E6A] border border-[#E6DCC8]">
-                        Đang dùng AI Giả lập (Mock Demo)
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-[#6B7280] mt-0.5">
-                    Kích hoạt trí tuệ nhân tạo thật cho Xưởng NotebookLM, sinh câu hỏi, video và chấm bài tự luận
-                  </p>
-                </div>
-              </div>
-
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold text-[#E2704A] hover:bg-[#FAF5EB]/80 transition-colors w-fit shrink-0"
-              >
-                <span>Lấy API Key tại Google AI Studio</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              {/* Ô NHẬP API KEY */}
-              <div className="lg:col-span-2 space-y-2">
-                <label className="block text-xs font-bold text-[#2F3E6B]">
-                  Google Gemini API Key <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showGeminiKey ? 'text' : 'password'}
-                    value={geminiKeyInput}
-                    onChange={(e) => setGeminiKeyInput(e.target.value)}
-                    placeholder="Dán API Key (bắt đầu bằng AIzaSy...)"
-                    className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-[#D1C7B7] bg-[#FAF5EB]/50 text-xs text-[#2F3E6B] font-mono focus:outline-none focus:border-[#E2704A]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowGeminiKey(!showGeminiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C7E6A] hover:text-[#2F3E6B]"
-                    title={showGeminiKey ? 'Ẩn key' : 'Hiện key'}
-                  >
-                    {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-[11px] text-[#6B7280]">
-                  🔒 Khóa API được lưu cục bộ an toàn trong trình duyệt của thầy/cô, không chia sẻ cho bên thứ ba.
-                </p>
-              </div>
-
-              {/* CHỌN MODEL */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-[#2F3E6B]">
-                  Mô hình Gemini AI
-                </label>
-                <select
-                  value={geminiModelInput}
-                  onChange={(e) => setGeminiModelInput(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-[#D1C7B7] bg-[#FAF5EB]/50 text-xs text-[#2F3E6B] font-bold focus:outline-none focus:border-[#E2704A]"
-                >
-                  <option value="gemini-flash-latest">gemini-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định & Thông minh)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn)</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Ngữ văn phân tích sâu)</option>
-                </select>
-                <p className="text-[11px] text-[#6B7280]">
-                  Gợi ý: Hệ thống hỗ trợ đa model và tự động chuyển model dự phòng khi có tình trạng nghẽn token.
-                </p>
-              </div>
-            </div>
-
-            {/* KẾT QUẢ TEST NẾU CÓ */}
-            {aiTestResult && (
-              <div
-                className={`p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in duration-200 ${
-                  aiTestResult.success
-                    ? 'bg-emerald-50/80 border-emerald-300 text-emerald-900'
-                    : 'bg-rose-50/80 border-rose-300 text-rose-900'
-                }`}
-              >
-                <div className="flex items-center justify-between font-bold flex-wrap gap-2">
-                  <span className="flex items-center gap-1.5">
-                    {aiTestResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                    )}
-                    <span>{aiTestResult.success ? 'Kết nối thành công!' : 'Kết nối thất bại!'}</span>
-                  </span>
-                  {aiTestResult.latencyMs > 0 && (
-                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/60 font-mono">
-                      Độ trễ: {aiTestResult.latencyMs}ms
-                    </span>
-                  )}
-                </div>
-                <div className="p-2.5 rounded-xl bg-white/70 border border-black/5 text-[11px] leading-relaxed italic">
-                  "{aiTestResult.message}"
-                </div>
-              </div>
-            )}
-
-            {/* HÀNG NÚT THAO TÁC */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <span className="text-xs text-[#8C7E6A]">
-                {isAiConfigSaved
-                  ? '✓ Đã kích hoạt. Khi có lệnh sinh nội dung, hệ thống sẽ gọi trực tiếp Google AI Studio.'
-                  : 'Chưa lưu API Key. Hệ thống đang chạy ở chế độ mô phỏng sư phạm.'}
-              </span>
-
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={handleTestAiConnection}
-                  disabled={isTestingAi || !geminiKeyInput.trim()}
-                  className="px-4 py-2.5 rounded-xl border border-[#2F3E6B] text-[#2F3E6B] hover:bg-[#2F3E6B]/5 disabled:opacity-40 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  {isTestingAi ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Đang kiểm tra kết nối...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Kiểm tra kết nối AI</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveAiConfig}
-                  className="px-5 py-2.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Lưu cấu hình AI</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* KHU VỰC ĐẶT LẠI DỮ LIỆU DEMO */}
-          <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <RotateCcw className="w-5 h-5 text-[#E2704A]" />
-                <h3 className="font-lora font-bold text-base text-[#2F3E6B]">
-                  Khôi phục & Đặt lại dữ liệu thử nghiệm (Demo)
-                </h3>
-              </div>
-              <p className="text-xs text-[#6B7280] mt-1 max-w-xl">
-                Bấm nút bên dưới để khôi phục toàn bộ danh sách 28 học sinh seed chuẩn, 6 tuần lịch sử điểm số,
-                4 chuyên đề Ngữ văn 7 và cài đặt mặc định ban đầu.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsResetConfirmOpen(true)}
-              className="px-5 py-2.5 rounded-2xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-all shadow-xs flex items-center gap-2 shrink-0"
-            >
-              <RotateCcw className="w-4 h-4 text-rose-600" />
-              <span>Đặt lại dữ liệu demo</span>
-            </button>
-          </div>
         </div>
       )}
 
@@ -1693,16 +1199,6 @@ export const TeacherSettingsScreen: React.FC<TeacherSettingsScreenProps> = ({
         onConfirm={handleConfirmResetGroup}
       />
 
-      {/* CONFIRM DIALOG ĐẶT LẠI TOÀN BỘ DEMO */}
-      <ConfirmDialog
-        isOpen={isResetConfirmOpen}
-        title="Đặt lại toàn bộ dữ liệu thử nghiệm (Demo)?"
-        message="Hành động này sẽ khôi phục danh sách học sinh, bài tập, điểm số 6 tuần và cài đặt về trạng thái chuẩn ban đầu. Bạn có chắc chắn muốn thực hiện?"
-        confirmLabel="Đặt lại ngay"
-        variant="danger"
-        onCancel={() => setIsResetConfirmOpen(false)}
-        onConfirm={async () => handleResetDemoData()}
-      />
     </div>
   );
 };

@@ -55,8 +55,10 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- STATE TAB NHẬP TAY ---
+  // Lớp đã lưu trữ không nhận thêm học sinh
+  const selectableClasses = classes.filter((c) => c.status !== 'archived');
   const activeClassId =
-    defaultClassId !== 'all' ? defaultClassId : classes[0]?.id || 'class_7a2';
+    defaultClassId !== 'all' ? defaultClassId : selectableClasses[0]?.id || 'class_7a2';
 
   const [manualRows, setManualRows] = useState<ManualRow[]>([
     {
@@ -141,13 +143,18 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     setUploadedFile(file);
     setIsParsing(true);
     try {
-      const classNames = classes.map((c) => c.name);
-      const defaultClsName = classes.find((c) => c.id === activeClassId)?.name || '7A2';
+      const classNames = selectableClasses.map((c) => c.name);
+      const defaultClsName = selectableClasses.find((c) => c.id === activeClassId)?.name || '';
       const result = await parseUploadedExcel(file, existingStudents, classNames, defaultClsName);
       setExcelRows(result.rows);
       setExcelSummary({ validCount: result.validCount, errorCount: result.errorCount });
-    } catch (e) {
+    } catch (e: any) {
       console.error('Lỗi khi đọc file Excel:', e);
+      setExcelRows([]);
+      setExcelSummary(null);
+      alert(
+        'Không đọc được file Excel này (file hỏng hoặc sai định dạng). Vui lòng kiểm tra lại file và thử lại!'
+      );
     } finally {
       setIsParsing(false);
     }
@@ -168,11 +175,23 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     const updated = [...excelRows];
     updated[index] = { ...updated[index], [field]: val };
 
-    // Tái kiểm tra dòng đó
+    // Tái kiểm tra dòng đó — gồm cả trùng Mã HS như lúc đọc file
+    // (trước đây sửa ô xong là mất cảnh báo trùng mã)
     const row = updated[index];
     const errors: string[] = [];
     if (!row.name.trim()) errors.push('Thiếu họ và tên');
+    else if (row.name.trim().length < 2) errors.push('Họ và tên quá ngắn');
     if (!row.className.trim()) errors.push('Thiếu lớp học');
+    const code = row.studentCode?.trim().toLowerCase();
+    if (code) {
+      const dupExisting = existingStudents.some(
+        (st) => st.student_code?.trim().toLowerCase() === code
+      );
+      const dupInBatch = updated.some(
+        (r, i) => i !== index && r.studentCode?.trim().toLowerCase() === code
+      );
+      if (dupExisting || dupInBatch) errors.push('Mã HS bị trùng lặp');
+    }
     row.errors = errors;
     row.isValid = errors.length === 0;
 
@@ -212,7 +231,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
         name: r.name.trim(),
         class_id: r.class_id,
         student_code: r.student_code.trim() || undefined,
-        dob: r.dob || undefined,
         custom_username: u || undefined,
       };
     });
@@ -247,7 +265,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
           name: r.name.trim(),
           class_id: cls ? cls.id : activeClassId,
           student_code: r.studentCode?.trim() || undefined,
-          dob: r.dob || undefined,
         };
       });
 
@@ -340,8 +357,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                     <th className="py-2.5 px-3 w-8 text-center">#</th>
                     <th className="py-2.5 px-3">Họ và tên học sinh (*)</th>
                     <th className="py-2.5 px-3 w-28">Lớp</th>
-                    <th className="py-2.5 px-3 w-28">Mã HS (tùy chọn)</th>
-                    <th className="py-2.5 px-3 w-32">Ngày sinh (tùy chọn)</th>
+                    <th className="py-2.5 px-3 w-28">Mã HS</th>
                     <th className="py-2.5 px-3 w-40">Tên đăng nhập (tự sinh / sửa)</th>
                     <th className="py-2.5 px-3 w-10 text-center">Xóa</th>
                   </tr>
@@ -376,7 +392,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                             }
                             className="w-full px-2 py-1.5 rounded-lg border border-[#E6DCC8] bg-white focus:border-[#2F3E6B] outline-none text-xs text-[#2F3E6B]"
                           >
-                            {classes.map((c) => (
+                            {selectableClasses.map((c) => (
                               <option key={c.id} value={c.id}>
                                 Lớp {c.name}
                               </option>
@@ -390,18 +406,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                             onChange={(e) =>
                               handleUpdateManualRow(row.id, 'student_code', e.target.value)
                             }
-                            placeholder="HS7A2-..."
+                            placeholder="Tự động"
                             className="w-full px-2.5 py-1.5 rounded-lg border border-[#E6DCC8] bg-white focus:border-[#2F3E6B] outline-none text-xs text-[#2F3E6B]"
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="date"
-                            value={row.dob}
-                            onChange={(e) =>
-                              handleUpdateManualRow(row.id, 'dob', e.target.value)
-                            }
-                            className="w-full px-2 py-1.5 rounded-lg border border-[#E6DCC8] bg-white focus:border-[#2F3E6B] outline-none text-xs text-[#2F3E6B]"
                           />
                         </td>
                         <td className="py-2 px-3">
@@ -524,7 +530,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                         <th className="py-2.5 px-3">Họ và tên</th>
                         <th className="py-2.5 px-3 w-28">Lớp</th>
                         <th className="py-2.5 px-3 w-28">Mã HS</th>
-                        <th className="py-2.5 px-3 w-28">Ngày sinh</th>
                         <th className="py-2.5 px-3">Trạng thái kiểm tra</th>
                         <th className="py-2.5 px-3 w-10 text-center">Bỏ</th>
                       </tr>
@@ -571,17 +576,6 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                               onChange={(e) =>
                                 handleEditExcelCell(idx, 'studentCode', e.target.value)
                               }
-                              className="w-full px-2 py-1 rounded border border-[#E6DCC8] bg-white text-xs"
-                            />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input
-                              type="text"
-                              value={row.dob || ''}
-                              onChange={(e) =>
-                                handleEditExcelCell(idx, 'dob', e.target.value)
-                              }
-                              placeholder="YYYY-MM-DD"
                               className="w-full px-2 py-1 rounded border border-[#E6DCC8] bg-white text-xs"
                             />
                           </td>

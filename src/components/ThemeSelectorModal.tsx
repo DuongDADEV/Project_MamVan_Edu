@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeId } from '../types.ts';
 import { THEMES_LIST } from '../data/themes.ts';
 import { Palette, Check, X, Sparkles } from 'lucide-react';
@@ -16,6 +16,13 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
   currentTheme,
   onSelectTheme,
 }) => {
+  // Chọn trước trong modal (bản nháp) — chỉ áp dụng thật khi bấm nút Áp dụng,
+  // đóng bằng X là hủy lựa chọn
+  const [draftTheme, setDraftTheme] = useState<ThemeId>(currentTheme);
+  useEffect(() => {
+    if (isOpen) setDraftTheme(currentTheme);
+  }, [isOpen, currentTheme]);
+
   if (!isOpen) return null;
 
   return (
@@ -48,12 +55,12 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
         {/* Danh sách 5 Theme Cards */}
         <div className="space-y-3 overflow-y-auto flex-1 pr-1">
           {THEMES_LIST.map((th) => {
-            const isSelected = currentTheme === th.id;
+            const isSelected = draftTheme === th.id;
 
             return (
               <div
                 key={th.id}
-                onClick={() => onSelectTheme(th.id)}
+                onClick={() => setDraftTheme(th.id)}
                 className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                   isSelected
                     ? 'border-[#4F46E5] bg-indigo-50/50 shadow-sm ring-2 ring-indigo-500/20'
@@ -120,7 +127,10 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
         {/* Footer */}
         <div className="pt-4 border-t border-slate-100 mt-4 flex justify-end">
           <button
-            onClick={onClose}
+            onClick={() => {
+              onSelectTheme(draftTheme);
+              onClose();
+            }}
             className="px-6 py-2.5 rounded-2xl gradient-primary text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 active:scale-[0.99] transition-all"
           >
             Áp dụng phong cách này

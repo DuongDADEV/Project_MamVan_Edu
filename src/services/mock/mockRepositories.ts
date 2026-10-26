@@ -16,6 +16,7 @@ import {
   QuestionWithMeta,
   AttemptRepository,
   EssayRepository,
+  AIAccuracyMetrics,
   RewardRepository,
   EnrichedRewardRequest,
   SystemSettings,
@@ -38,14 +39,12 @@ import {
   getSeedRewards,
   getSeedStudentStates,
   createFreshStudentState,
-  SEED_AUDIT_LOGS,
-  SEED_RUBRIC_TEMPLATES,
-  SEED_GRADED_SAMPLES,
   SEED_AI_GRADING_CONFIG,
 } from './seedData.ts';
 import {
   generateUsername,
   generateFriendlyPassword,
+  generateStudentCode,
   generateUUID,
 } from './credentialUtils.ts';
 import { syncEventBus } from './eventBus.ts';
@@ -63,8 +62,7 @@ import {
   AIGradingConfig,
   SkillLevel,
 } from '../../types.ts';
-import { createInitialStateHs001 } from '../../data/mockData.ts';
-import { generateDemoSeedData } from './demoSeedHistory.ts';
+import { REWARDS_CATALOG } from '../../data/rewards.ts';
 
 export const STORAGE_SCHEMA_VERSION = 'mam_van_v4_real_data';
 
@@ -93,10 +91,11 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   schoolInfo: {
-    schoolName: 'Trường THCS Lê Quý Đôn',
+    // Không gieo tên trường/lớp bịa: để trống cho giáo viên tự điền thật.
+    schoolName: '',
     academicYear: '2026-2027',
     semester: 'Học kỳ I',
-    classNameDefault: '7A2',
+    classNameDefault: '',
   },
   mastery: {
     thresholdNeedsReview: 50,
@@ -105,9 +104,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     weightDecayFactor: 0.88,
   },
   xp: {
-    dailyCapUnder45Min: 130,
-    dailyCapTotal: 150,
-    weeklyCap: 900,
+    // Mô hình XP hiện hành KHÔNG còn trần XP ngày/tuần (đã bãi bỏ 21–22/10)
+    // nên defaults không còn các trường trần; chỉ giữ mức XP điểm danh là
+    // cấu hình còn hiệu lực ở màn Cài đặt.
     attendanceDailyXp: 2,
     videoWatchXp: 5,
     videoSummaryReadXp: 2,
@@ -146,7 +145,24 @@ function readStorage<T>(key: string, defaultVal: T): T {
     } else {
       val = memoryStorage[key] || null;
     }
-    return val ? JSON.parse(val) : defaultVal;
+    if (!val) return defaultVal;
+    const parsed = JSON.parse(val);
+    // Chặn dữ liệu hỏng/lệch kiểu (vd mảng bị ghi đè thành object sau nâng cấp):
+    // trả mặc định thay vì để cả app sập ở các .map/.includes phía sau
+    if (Array.isArray(defaultVal) && !Array.isArray(parsed)) {
+      console.warn(`[Storage] Dữ liệu [${key}] không phải mảng như mong đợi, dùng mặc định.`);
+      return defaultVal;
+    }
+    if (
+      defaultVal !== null &&
+      typeof defaultVal === 'object' &&
+      !Array.isArray(defaultVal) &&
+      (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+    ) {
+      console.warn(`[Storage] Dữ liệu [${key}] không phải object như mong đợi, dùng mặc định.`);
+      return defaultVal;
+    }
+    return parsed;
   } catch (e) {
     console.error(`Lỗi đọc localStorage [${key}]:`, e);
     return defaultVal;
@@ -236,6 +252,17 @@ export function bootstrapStorage(): { reset: boolean } {
         STORAGE_KEYS.STATES,
         STORAGE_KEYS.ESSAYS,
         STORAGE_KEYS.SETTINGS,
+        // Dữ liệu chỉ sống ở local (Supabase ủy quyền mock): mất là mất hẳn khi đổi version
+        STORAGE_KEYS.RUBRICS,
+        STORAGE_KEYS.SAMPLES,
+        STORAGE_KEYS.AI_CONFIG,
+        STORAGE_KEYS.REWARDS,
+        STORAGE_KEYS.REQUESTS,
+        STORAGE_KEYS.AUDIT,
+        'mam_van_announcements',
+        // Lịch sử trò chuyện Trợ lý phân tích: dữ liệu thật của giáo viên,
+        // không được dọn khi đổi schema (cùng nguyên tắc các key trên).
+        'mam_van_assistant_chat_v1',
       ]);
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -360,26 +387,42 @@ export class MockAuthRepository implements AuthRepository {
     const pClean = password.trim();
 
     if (role === 'admin') {
-      if ((uClean === 'admin' || uClean === 'quantri') && pClean === '123456') {
-        const session: AuthSession = {
-          user: {
-            id: 'admin_001',
-            name: 'Quản trị viên Hệ thống',
-            username: 'admin',
-            role: 'admin',
-            email: 'admin@mamvan.edu.vn',
-          },
-          role: 'admin',
-          signedInAt: Date.now(),
+      // Admin ở chế độ mock = tài khoản role='admin' trong kho giáo viên local
+      // (nếu có). Đã gỡ thông tin đăng nhập ghi cứng khỏi mã nguồn (đợt 21/10) —
+      // tài khoản Admin thật nằm trong DB (migration_006_admin_account.sql).
+      const teachers = readStorage<TeacherProfile[]>(STORAGE_KEYS.TEACHERS, SEED_TEACHERS);
+      const matched = teachers.find((t) => t.role === 'admin' && t.username.toLowerCase() === uClean);
+      if (!matched) {
+        return {
+          success: false,
+          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
         };
-        writeStorage(STORAGE_KEYS.SESSION, session);
-        syncEventBus.emit('auth', session, 'auth-service');
-        return { success: true, session };
       }
-      return {
-        success: false,
-        error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: admin / 123456)',
+
+      if (matched.status === 'locked') {
+        return {
+          success: false,
+          isLocked: true,
+          error: 'Tài khoản Quản trị viên đã bị tạm khóa. Vui lòng liên hệ hỗ trợ!',
+        };
+      }
+
+      const validPw = !!(matched.password && matched.password === pClean);
+      if (!validPw) {
+        return {
+          success: false,
+          error: 'Tài khoản Quản trị viên hoặc mật khẩu không chính xác',
+        };
+      }
+
+      const session: AuthSession = {
+        user: matched,
+        role: 'admin',
+        signedInAt: Date.now(),
       };
+      writeStorage(STORAGE_KEYS.SESSION, session);
+      syncEventBus.emit('auth', session, 'auth-service');
+      return { success: true, session };
     }
 
     if (role === 'teacher') {
@@ -388,7 +431,7 @@ export class MockAuthRepository implements AuthRepository {
       if (!matched) {
         return {
           success: false,
-          error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+          error: 'Tài khoản giáo viên hoặc mật khẩu không chính xác',
         };
       }
 
@@ -401,7 +444,7 @@ export class MockAuthRepository implements AuthRepository {
       }
 
       // Mật khẩu giáo viên (mặc định 123456 hoặc mật khẩu riêng)
-      const validPw = (matched.password && matched.password === pClean) || pClean === '123456';
+      const validPw = !!(matched.password && matched.password === pClean);
       if (validPw) {
         const session: AuthSession = {
           user: matched,
@@ -414,7 +457,7 @@ export class MockAuthRepository implements AuthRepository {
       }
       return {
         success: false,
-        error: 'Mật khẩu giáo viên chưa chính xác (Gợi ý tài khoản demo: gv001 / 123456)',
+        error: 'Mật khẩu giáo viên chưa chính xác',
       };
     }
 
@@ -456,7 +499,7 @@ export class MockAuthRepository implements AuthRepository {
       if (!states[student.id]) {
         const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
         const cls = classes.find((c) => c.id === student.class_id);
-        states[student.id] = createFreshStudentState(student, cls ? `Lớp ${cls.name}` : 'Lớp 7A2');
+        states[student.id] = createFreshStudentState(student, cls ? `Lớp ${cls.name}` : '');
         writeStorage(STORAGE_KEYS.STATES, states);
       }
 
@@ -485,6 +528,25 @@ export class MockAuthRepository implements AuthRepository {
   async signOut(): Promise<void> {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEYS.SESSION);
+      // TÁCH DỮ LIỆU THEO TÀI KHOẢN: dọn bộ nhớ đệm nội dung/dữ liệu học tập
+      // của tài khoản vừa đăng xuất (xem ghi chú tương tự ở SupabaseAuth).
+      try {
+        [
+          STORAGE_KEYS.TOPICS,
+          STORAGE_KEYS.VIDEOS,
+          STORAGE_KEYS.THEORIES,
+          STORAGE_KEYS.QUIZZES,
+          STORAGE_KEYS.QUESTIONS,
+          STORAGE_KEYS.STATES,
+          STORAGE_KEYS.ESSAYS,
+          STORAGE_KEYS.REQUESTS,
+        ].forEach((k) => localStorage.removeItem(k));
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith(STORAGE_KEYS.SETTINGS))
+          .forEach((k) => localStorage.removeItem(k));
+      } catch {
+        /* bỏ qua lỗi dọn dẹp */
+      }
     }
     syncEventBus.emit('auth', null, 'auth-service');
   }
@@ -542,7 +604,7 @@ export class MockClassRepository implements ClassRepository {
     const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
     const newClass: ClassItem = {
       ...data,
-      id: 'class_' + generateUUID().slice(0, 8),
+      id: 'class_' + generateUUID(),
       studentCount: 0,
       active7DaysCount: 0,
       created_at: new Date().toISOString(),
@@ -659,6 +721,7 @@ export class MockStudentRepository implements StudentRepository {
     const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
     const states = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
     const existingUsernames = students.map((s) => s.username.toLowerCase());
+    const existingCodes: (string | undefined)[] = students.map((s) => s.student_code);
 
     const createdStudents: StudentAccount[] = [];
     const credentials: StudentCredentialVoucher[] = [];
@@ -684,7 +747,15 @@ export class MockStudentRepository implements StudentRepository {
         // KHÔNG lưu mật khẩu thô ở production. Trong mock lưu phục vụ đăng nhập demo.
         password_hash: rawPassword,
         class_id: item.class_id,
-        student_code: item.student_code?.trim(),
+        // Mã HS nhập tay bị trùng (với HS đã có hoặc trong cùng lô) -> cấp mã mới duy nhất,
+        // không để hai học sinh mang cùng một mã
+        student_code:
+          item.student_code?.trim() &&
+          !existingCodes.some(
+            (c) => c?.toLowerCase() === item.student_code!.trim().toLowerCase()
+          )
+            ? item.student_code.trim()
+            : generateStudentCode(existingCodes),
         dob: item.dob,
         status: 'active',
         has_logged_in: false,
@@ -694,6 +765,7 @@ export class MockStudentRepository implements StudentRepository {
       };
 
       students.push(newStudent);
+      existingCodes.push(newStudent.student_code);
       createdStudents.push(newStudent);
 
       // Khởi tạo StudentState sạch bắt đầu từ 0
@@ -705,7 +777,7 @@ export class MockStudentRepository implements StudentRepository {
         username: newStudent.username,
         initialPassword: rawPassword,
         class_id: newStudent.class_id,
-        className: cls?.name || '7A2',
+        className: cls?.name || '',
         student_code: newStudent.student_code,
       });
 
@@ -821,7 +893,7 @@ export class MockStudentRepository implements StudentRepository {
         username: target.username,
         initialPassword: newPassword,
         class_id: target.class_id,
-        className: cls?.name || '7A2',
+        className: cls?.name || '',
         student_code: target.student_code,
       },
     };
@@ -865,7 +937,7 @@ export class MockContentRepository implements ContentRepository {
       topics = topics.filter((t) => t.status === 'published');
     }
     if (classId && classId !== 'all') {
-      topics = topics.filter((t) => t.class_ids.includes('all') || t.class_ids.includes(classId));
+      topics = topics.filter((t) => (t.class_ids || []).includes('all') || (t.class_ids || []).includes(classId));
     }
     return topics;
   }
@@ -882,7 +954,7 @@ export class MockContentRepository implements ContentRepository {
       videos = videos.filter((v) => v.status === 'published');
     }
     if (classId && classId !== 'all') {
-      videos = videos.filter((v) => v.class_ids.includes('all') || v.class_ids.includes(classId));
+      videos = videos.filter((v) => (v.class_ids || []).includes('all') || (v.class_ids || []).includes(classId));
     }
     return videos;
   }
@@ -899,7 +971,7 @@ export class MockContentRepository implements ContentRepository {
       theories = theories.filter((t) => t.status === 'published');
     }
     if (classId && classId !== 'all') {
-      theories = theories.filter((t) => t.class_ids.includes('all') || t.class_ids.includes(classId));
+      theories = theories.filter((t) => (t.class_ids || []).includes('all') || (t.class_ids || []).includes(classId));
     }
     return theories;
   }
@@ -924,7 +996,7 @@ export class MockContentRepository implements ContentRepository {
       topics[idx] = saved;
     } else {
       saved = {
-        id: topic.id || 'topic_' + generateUUID().slice(0, 8),
+        id: topic.id || 'topic_' + generateUUID(),
         title: topic.title || '',
         shortDesc: topic.shortDesc || '',
         tag: topic.tag || '',
@@ -961,7 +1033,7 @@ export class MockContentRepository implements ContentRepository {
     } else {
       saved = {
         ...video,
-        id: video.id || 'video_' + generateUUID().slice(0, 8),
+        id: video.id || 'video_' + generateUUID(),
         created_at: now,
         updated_at: now,
         status: video.status || 'draft',
@@ -992,7 +1064,7 @@ export class MockContentRepository implements ContentRepository {
     } else {
       saved = {
         ...theory,
-        id: theory.id || 'theory_' + generateUUID().slice(0, 8),
+        id: theory.id || 'theory_' + generateUUID(),
         created_at: now,
         updated_at: now,
         status: theory.status || 'draft',
@@ -1275,7 +1347,7 @@ export class MockContentRepository implements ContentRepository {
       if (!t) throw new Error('Không tìm thấy chủ đề');
       const cloned: TopicWithMeta = {
         ...t,
-        id: 'topic_' + generateUUID().slice(0, 8),
+        id: 'topic_' + generateUUID(),
         title: `${t.title} (Bản sao)`,
         status: 'draft',
         created_at: now,
@@ -1293,7 +1365,7 @@ export class MockContentRepository implements ContentRepository {
       if (!v) throw new Error('Không tìm thấy video');
       const cloned: VideoLessonWithMeta = {
         ...v,
-        id: 'video_' + generateUUID().slice(0, 8),
+        id: 'video_' + generateUUID(),
         title: `${v.title} (Bản sao)`,
         status: 'draft',
         created_at: now,
@@ -1320,7 +1392,7 @@ export class MockContentRepository implements ContentRepository {
       if (!th) throw new Error('Không tìm thấy lý thuyết');
       const cloned: TheoryLessonWithMeta = {
         ...th,
-        id: 'theory_' + generateUUID().slice(0, 8),
+        id: 'theory_' + generateUUID(),
         title: `${th.title} (Bản sao)`,
         status: 'draft',
         created_at: now,
@@ -1349,7 +1421,7 @@ export class MockQuizRepository implements QuizRepository {
       quizzes = quizzes.filter((q) => q.status === 'published');
     }
     if (classId && classId !== 'all') {
-      quizzes = quizzes.filter((q) => q.class_ids.includes('all') || q.class_ids.includes(classId));
+      quizzes = quizzes.filter((q) => (q.class_ids || []).includes('all') || (q.class_ids || []).includes(classId));
     }
     return quizzes;
   }
@@ -1361,7 +1433,13 @@ export class MockQuizRepository implements QuizRepository {
 
   async getQuestions(topicId?: string): Promise<Record<string, QuestionWithMeta>> {
     const questions = readStorage<Record<string, QuestionWithMeta>>(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    if (!topicId) return questions;
+    if (!topicId) {
+      const alive: Record<string, QuestionWithMeta> = {};
+      for (const [k, q] of Object.entries(questions)) {
+        if (!q.deleted_at) alive[k] = q;
+      }
+      return alive;
+    }
     const filtered: Record<string, QuestionWithMeta> = {};
     for (const [k, q] of Object.entries(questions)) {
       if (q.topicId === topicId && !q.deleted_at) {
@@ -1373,7 +1451,8 @@ export class MockQuizRepository implements QuizRepository {
 
   async getQuestionById(id: string): Promise<QuestionWithMeta | null> {
     const questions = readStorage<Record<string, QuestionWithMeta>>(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    return questions[id] || null;
+    const q = questions[id];
+    return q && !q.deleted_at ? q : null;
   }
 
   async saveQuiz(quiz: Partial<QuizWithMeta>): Promise<QuizWithMeta> {
@@ -1392,7 +1471,7 @@ export class MockQuizRepository implements QuizRepository {
     } else {
       saved = {
         ...quiz,
-        id: quiz.id || 'quiz_' + generateUUID().slice(0, 8),
+        id: quiz.id || 'quiz_' + generateUUID(),
         created_at: now,
         updated_at: now,
         status: quiz.status || 'draft',
@@ -1409,7 +1488,7 @@ export class MockQuizRepository implements QuizRepository {
 
   async saveQuestion(question: Partial<QuestionWithMeta>): Promise<QuestionWithMeta> {
     const questions = readStorage<Record<string, QuestionWithMeta>>(STORAGE_KEYS.QUESTIONS, getSeedQuestions());
-    const qId = question.id || 'q_' + generateUUID().slice(0, 8);
+    const qId = question.id || 'q_' + generateUUID();
     const now = new Date().toISOString();
     const saved: QuestionWithMeta = {
       ...(questions[qId] || {}),
@@ -1486,7 +1565,7 @@ export class MockQuizRepository implements QuizRepository {
         return true;
       }
       // Hoặc trong questionResults
-      const match = studentState.questionResults?.some((qr) => quiz.questionIds.includes(qr.questionId));
+      const match = studentState.questionResults?.some((qr) => (quiz.questionIds || []).includes(qr.questionId));
       if (match) return true;
     }
     return false;
@@ -1606,7 +1685,7 @@ export class MockQuizRepository implements QuizRepository {
     for (const qId of target.questionIds) {
       const originalQ = questions[qId];
       if (originalQ) {
-        const newQId = 'q_' + generateUUID().slice(0, 8);
+        const newQId = 'q_' + generateUUID();
         questions[newQId] = {
           ...originalQ,
           id: newQId,
@@ -1621,7 +1700,7 @@ export class MockQuizRepository implements QuizRepository {
 
     const clonedQuiz: QuizWithMeta = {
       ...target,
-      id: 'quiz_' + generateUUID().slice(0, 8),
+      id: 'quiz_' + generateUUID(),
       title: `${target.title} (Bản sao)`,
       questionIds: clonedQuestionIds,
       status: 'draft',
@@ -1687,10 +1766,14 @@ export class MockAttemptRepository implements AttemptRepository {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      cls ? `Lớp ${cls.name}` : 'Lớp 7A2'
+      cls ? `Lớp ${cls.name}` : ''
     );
-    states[studentId] = fresh;
-    writeStorage(STORAGE_KEYS.STATES, states);
+    // Chỉ lưu state cho học sinh CÓ tài khoản thật; id lạ (đã xóa/gõ sai) mà
+    // cũng lưu sẽ sinh "học sinh ma" làm phồng số liệu của giáo viên
+    if (acc) {
+      states[studentId] = fresh;
+      writeStorage(STORAGE_KEYS.STATES, states);
+    }
     return fresh;
   }
 
@@ -1754,10 +1837,7 @@ export class MockAttemptRepository implements AttemptRepository {
         }
       } catch {}
     }
-    // Nếu vẫn rỗng, luôn nạp sẵn state hs001 để đảm bảo có dữ liệu
-    if (Object.keys(states).length === 0) {
-      states['hs001'] = createInitialStateHs001();
-    }
+    // Không còn gieo state mẫu khi rỗng — rỗng là rỗng (dữ liệu demo đã gỡ).
     return states;
   }
 }
@@ -1785,7 +1865,7 @@ export class MockEssayRepository implements EssayRepository {
         const enriched = st.essaySubmissions.map((e) => ({
           ...e,
           studentName: e.studentName || student?.name || st.profile?.name || 'Học sinh',
-          className: e.className || st.profile?.grade || '7A2',
+          className: e.className || st.profile?.grade || '',
           classId: e.classId || student?.class_id || 'class_7a2',
           hoursWaiting: Math.max(0, Math.floor((Date.now() - e.submittedAt) / 3600000)),
         }));
@@ -1823,11 +1903,12 @@ export class MockEssayRepository implements EssayRepository {
     }
 
     if (filter?.classId && filter.classId !== 'all') {
+      const classId = filter.classId;
       const allowedStudentIds = new Set(
-        students.filter((s) => s.class_id === filter.classId).map((s) => s.id)
+        students.filter((s) => s.class_id === classId).map((s) => s.id)
       );
       result = result.filter(
-        (e) => allowedStudentIds.has(e.studentId) || e.classId === filter.classId || e.className?.toLowerCase().includes(filter.classId.toLowerCase())
+        (e) => allowedStudentIds.has(e.studentId) || e.classId === classId || e.className?.toLowerCase().includes(classId.toLowerCase())
       );
     }
 
@@ -1837,6 +1918,11 @@ export class MockEssayRepository implements EssayRepository {
   async getSubmissionById(id: string): Promise<EssaySubmission | null> {
     const all = await this.getSubmissions();
     return all.find((e) => e.id === id) || null;
+  }
+
+  async getReviewAnswerContent(_answerId: string): Promise<string> {
+    // Mock không có đường review hoãn text — bài mock đã mang đủ content.
+    return '';
   }
 
   async createSubmission(
@@ -1849,11 +1935,11 @@ export class MockEssayRepository implements EssayRepository {
 
     const newEssay: EssaySubmission = {
       ...submission,
-      id: 'sub_' + generateUUID().slice(0, 8),
+      id: 'sub_' + generateUUID(),
       submittedAt: Date.now(),
       status: 'PENDING_TEACHER',
       studentName: submission.studentName || student?.name || 'Học sinh',
-      className: submission.className || cls?.name || '7A2',
+      className: submission.className || cls?.name || '',
       classId: submission.classId || student?.class_id || 'class_7a2',
       hoursWaiting: 0,
     };
@@ -1977,18 +2063,29 @@ export class MockEssayRepository implements EssayRepository {
         st.essaySubmissions[eIdx] = gradedEssay;
         targetStudentId = sId;
 
-        // Cập nhật Mastery (Phân tích / Vận dụng) cho học sinh lúc này
+        // Cập nhật Mastery cho học sinh lúc này.
+        // Chủ đề phải là chủ đề THẬT của bài tập chứa câu hỏi này (qua quiz chứa nó,
+        // hoặc ngân hàng câu hỏi) — trước đây mọi bài đều bị ghi vào chủ đề thơ
         const masteryLevel: SkillLevel = original.skillLevel || 'VAN_DUNG';
         const isPassed = grading.totalScore >= 5;
+        const quizzes = readStorage<QuizWithMeta[]>(STORAGE_KEYS.QUIZZES, []);
+        const localQuestions = readStorage<Record<string, any>>(STORAGE_KEYS.QUESTIONS, {});
+        const essayTopicId =
+          quizzes.find((q) => q.id === original.quizId)?.topicId ||
+          localQuestions[original.questionId || '']?.topicId;
         if (!st.questionResults) st.questionResults = [];
-        st.questionResults.push({
-          questionId: original.questionId || id,
-          level: masteryLevel,
-          isCorrect: isPassed,
-          scoreRatio: grading.finalRatio,
-          timestamp: Date.now(),
-          topicId: 'topic_tho_bon_nam',
-        });
+        if (essayTopicId) {
+          st.questionResults.push({
+            questionId: original.questionId || id,
+            level: masteryLevel,
+            isCorrect: isPassed,
+            scoreRatio: grading.finalRatio,
+            timestamp: Date.now(),
+            topicId: essayTopicId,
+          });
+        } else {
+          console.warn('[Essay] Không xác định được chủ đề của bài viết, bỏ qua ghi mastery.');
+        }
 
         await attemptRepo.saveStudentState(sId, st);
         break;
@@ -2058,12 +2155,13 @@ export class MockEssayRepository implements EssayRepository {
   // HUẤN LUYỆN & CẤU HÌNH AI
   // ==========================================
   async getRubricTemplates(): Promise<RubricTemplate[]> {
-    return readStorage<RubricTemplate[]>(STORAGE_KEYS.RUBRICS, SEED_RUBRIC_TEMPLATES);
+    // Mặc định RỖNG: chỉ trả rubric giáo viên đã tự tạo/lưu (không còn rubric mẫu gieo sẵn)
+    return readStorage<RubricTemplate[]>(STORAGE_KEYS.RUBRICS, []);
   }
 
   async saveRubricTemplate(template: Partial<RubricTemplate>): Promise<RubricTemplate> {
     const list = await this.getRubricTemplates();
-    const id = template.id || 'rubric_' + generateUUID().slice(0, 8);
+    const id = template.id || 'rubric_' + generateUUID();
     const saved: RubricTemplate = {
       id,
       title: template.title || 'Rubric mới',
@@ -2089,12 +2187,13 @@ export class MockEssayRepository implements EssayRepository {
   }
 
   async getGradedSamples(): Promise<GradedSampleEssay[]> {
-    return readStorage<GradedSampleEssay[]>(STORAGE_KEYS.SAMPLES, SEED_GRADED_SAMPLES);
+    // Mặc định RỖNG: chỉ trả bài mẫu giáo viên đã tự lưu (không còn bài mẫu chấm sẵn gieo sẵn)
+    return readStorage<GradedSampleEssay[]>(STORAGE_KEYS.SAMPLES, []);
   }
 
   async saveGradedSample(sample: Partial<GradedSampleEssay>): Promise<GradedSampleEssay> {
     const list = await this.getGradedSamples();
-    const id = sample.id || 'sample_' + generateUUID().slice(0, 8);
+    const id = sample.id || 'sample_' + generateUUID();
     const saved: GradedSampleEssay = {
       id,
       title: sample.title || 'Bài mẫu mới',
@@ -2134,52 +2233,75 @@ export class MockEssayRepository implements EssayRepository {
     return updated;
   }
 
-  async getAIAccuracyMetrics(): Promise<{
-    averageDiff: number;
-    highDiffRatio: number;
-    weeklyTrends: { week: string; diff: number; total: number }[];
-    diffByCriterion: { name: string; diff: number }[];
-  }> {
+  async getAIAccuracyMetrics(): Promise<AIAccuracyMetrics | null> {
     const all = await this.getSubmissions();
     const gradedWithDiff = all.filter((e) => e.status === 'GRADED' && e.ai_vs_teacher_diff !== undefined);
 
+    // Chưa có bài nào vừa có gợi ý AI vừa có điểm chốt của giáo viên -> CHƯA
+    // ĐỦ DỮ LIỆU, trả null để giao diện báo rõ (trước đây trả số mẫu bịa:
+    // 0.35, xu hướng tuần, diff theo tiêu chí chế sẵn).
     if (gradedWithDiff.length === 0) {
-      return {
-        averageDiff: 0.35,
-        highDiffRatio: 10,
-        weeklyTrends: [
-          { week: 'Tuần 1', diff: 0.6, total: 4 },
-          { week: 'Tuần 2', diff: 0.4, total: 7 },
-          { week: 'Tuần 3', diff: 0.35, total: 11 },
-          { week: 'Tuần 4', diff: 0.25, total: 14 },
-        ],
-        diffByCriterion: [
-          { name: 'Nội dung ý', diff: 0.35 },
-          { name: 'Bố cục & Liên kết', diff: 0.2 },
-          { name: 'Dùng từ đặt câu', diff: 0.15 },
-          { name: 'Sáng tạo cảm xúc', diff: 0.45 },
-        ],
-      };
+      return null;
     }
 
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+
     const totalDiff = gradedWithDiff.reduce((acc, curr) => acc + (curr.ai_vs_teacher_diff || 0), 0);
-    const avg = Math.round((totalDiff / gradedWithDiff.length) * 10) / 10;
+    const avg = r2(totalDiff / gradedWithDiff.length);
     const highCount = gradedWithDiff.filter((e) => (e.ai_vs_teacher_diff || 0) > 1.5).length;
     const highRatio = Math.round((highCount / gradedWithDiff.length) * 100);
+
+    // Xu hướng theo tuần THẬT: gom bài theo tuần (thứ Hai) của thời điểm
+    // chốt điểm (gradedAt, thiếu thì dùng submittedAt), tính chênh TB tuần đó.
+    const weekMap = new Map<number, { sum: number; total: number }>();
+    gradedWithDiff.forEach((e) => {
+      const ts = e.gradedAt || e.submittedAt || 0;
+      const d = new Date(ts);
+      const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      const key = monday.getTime();
+      const bucket = weekMap.get(key) || { sum: 0, total: 0 };
+      bucket.sum += e.ai_vs_teacher_diff || 0;
+      bucket.total += 1;
+      weekMap.set(key, bucket);
+    });
+    const weeklyTrends = Array.from(weekMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([key, b]) => {
+        const d = new Date(key);
+        return {
+          week: `Tuần ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+          diff: r2(b.sum / b.total),
+          total: b.total,
+        };
+      });
+
+    // Độ chênh theo tiêu chí THẬT: ghép cặp điểm tiêu chí của giáo viên
+    // (rubricScores) với điểm tiêu chí AI gợi ý (aiSuggestion.rubricScores)
+    // theo đúng tên tiêu chí, lấy trung bình |GV - AI| của từng tiêu chí.
+    const critMap = new Map<string, { sum: number; total: number }>();
+    gradedWithDiff.forEach((e) => {
+      const aiScores = e.aiSuggestion?.rubricScores || [];
+      if (aiScores.length === 0) return;
+      (e.rubricScores || []).forEach((rs) => {
+        const ai = aiScores.find((a) => a.criterionName === rs.criterionName);
+        if (!ai) return;
+        const bucket = critMap.get(rs.criterionName) || { sum: 0, total: 0 };
+        bucket.sum += Math.abs((rs.score || 0) - (ai.score || 0));
+        bucket.total += 1;
+        critMap.set(rs.criterionName, bucket);
+      });
+    });
+    const diffByCriterion = Array.from(critMap.entries())
+      .map(([name, b]) => ({ name, diff: r2(b.sum / b.total) }))
+      .sort((a, b) => b.diff - a.diff);
 
     return {
       averageDiff: avg,
       highDiffRatio: highRatio,
-      weeklyTrends: [
-        { week: 'Tuần 3', diff: avg + 0.1, total: gradedWithDiff.length },
-        { week: 'Tuần 4', diff: avg, total: gradedWithDiff.length },
-      ],
-      diffByCriterion: [
-        { name: 'Nội dung ý & Cảm thụ', diff: Math.round(avg * 1.1 * 10) / 10 },
-        { name: 'Bố cục & Liên kết', diff: Math.round(avg * 0.7 * 10) / 10 },
-        { name: 'Dùng từ & Chính tả', diff: Math.round(avg * 0.5 * 10) / 10 },
-        { name: 'Sáng tạo & Cảm xúc', diff: Math.round(avg * 1.2 * 10) / 10 },
-      ],
+      gradedCount: gradedWithDiff.length,
+      weeklyTrends,
+      diffByCriterion,
     };
   }
 }
@@ -2232,7 +2354,7 @@ export class MockRewardRepository implements RewardRepository {
       const xpReq = reward.requiredXp ?? 300;
       const tierKey = reward.tierKey || (xpReq <= 300 ? 'HAT' : xpReq <= 500 ? 'LA' : xpReq <= 700 ? 'HOA' : 'VANG');
       saved = {
-        id: 'reward_' + generateUUID().slice(0, 8),
+        id: 'reward_' + generateUUID(),
         tierKey,
         requiredXp: xpReq,
         xpCost: xpReq,
@@ -2311,9 +2433,9 @@ export class MockRewardRepository implements RewardRepository {
           allReqs.push({
             ...r,
             studentId: sId,
-            studentName: student?.name || (sId === 'hs001' ? 'Nguyễn Minh Anh' : sId === 'hs002' ? 'Trần Gia Bảo' : sId),
+            studentName: student?.name || sId,
             classId: student?.class_id,
-            className: cls?.name || '7A2',
+            className: cls?.name || '',
             xpWeekActual,
             attendanceDaysActual,
             isEligible,
@@ -2339,14 +2461,34 @@ export class MockRewardRepository implements RewardRepository {
   }
 
   async createRequest(studentId: string, rewardId: string): Promise<RewardRequest> {
+    const state = await attemptRepo.getStudentState(studentId);
+    const rewards = await this.getRewards();
+    const reward =
+      rewards.find((r) => r.id === rewardId) ||
+      REWARDS_CATALOG.find((r) => r.id === rewardId);
+
+    // Đổi quà TRỪ vào TỔNG XP của tài khoản (XP vĩnh viễn, chỉ giảm khi xin
+    // quà): giữ số XP ngay khi gửi yêu cầu để không tiêu hai lần; bị từ chối
+    // sẽ hoàn lại. Mốc mở rương vẫn xét theo XP tuần như thiết kế.
+    let deductedXp = 0;
+    if (reward) {
+      if ((state.totalXp || 0) < reward.requiredXp) {
+        throw new Error(
+          `Chưa đủ XP để xin phần quà này (cần ${reward.requiredXp} XP, hiện có ${state.totalXp || 0} XP)`
+        );
+      }
+      deductedXp = reward.requiredXp;
+      state.totalXp = (state.totalXp || 0) - deductedXp;
+    }
+
     const newReq: RewardRequest = {
-      id: 'req_' + generateUUID().slice(0, 8),
+      id: 'req_' + generateUUID(),
       rewardId,
       requestedAt: Date.now(),
       status: 'PENDING_APPROVAL',
+      deductedXp,
     };
 
-    const state = await attemptRepo.getStudentState(studentId);
     state.rewardRequests = [newReq, ...(state.rewardRequests || [])];
     await attemptRepo.saveStudentState(studentId, state);
 
@@ -2368,10 +2510,31 @@ export class MockRewardRepository implements RewardRepository {
       const idx = st.rewardRequests?.findIndex((r) => r.id === requestId);
       if (idx !== undefined && idx >= 0) {
         const cur = st.rewardRequests[idx];
+        // Chặn chuyển trạng thái ngược/không hợp lệ (vd PENDING -> GIVEN bỏ qua duyệt,
+        // OPENED/REJECTED là trạng thái cuối không được hồi sinh)
+        const ALLOWED: Record<string, string[]> = {
+          PENDING_APPROVAL: ['APPROVED', 'REJECTED'],
+          APPROVED: ['GIVEN', 'REJECTED'],
+          GIVEN: ['OPENED'],
+          OPENED: [],
+          REJECTED: [],
+        };
+        if (cur.status !== status && !(ALLOWED[cur.status] || []).includes(status)) {
+          throw new Error(
+            `Không thể chuyển yêu cầu quà từ "${cur.status}" sang "${status}"`
+          );
+        }
         const now = Date.now();
+        // Bị TỪ CHỐI -> hoàn lại vào TỔNG XP số đã trừ khi gửi yêu cầu
+        let refundedXp = 0;
+        if (status === 'REJECTED' && (cur.deductedXp || 0) > 0) {
+          refundedXp = cur.deductedXp || 0;
+          st.totalXp = (st.totalXp || 0) + refundedXp;
+        }
         updatedReq = {
           ...cur,
           status,
+          deductedXp: refundedXp > 0 ? 0 : cur.deductedXp,
           rejectReason: reason || cur.rejectReason,
           approvedAt: status === 'APPROVED' ? now : cur.approvedAt,
           givenAt: status === 'GIVEN' ? now : cur.givenAt,
@@ -2418,8 +2581,14 @@ export class MockRewardRepository implements RewardRepository {
     reason?: string,
     teacherActorId?: string
   ): Promise<void> {
+    // Xử lý từng yêu cầu độc lập: yêu cầu không hợp lệ bị bỏ qua,
+    // các yêu cầu còn lại vẫn được xử lý (không hủy cả lô vì 1 lỗi)
     for (const id of requestIds) {
-      await this.updateRequestStatus(id, status, reason, teacherActorId);
+      try {
+        await this.updateRequestStatus(id, status, reason, teacherActorId);
+      } catch (err) {
+        console.error(`Bỏ qua yêu cầu ${id} khi cập nhật hàng loạt:`, err);
+      }
     }
   }
 }
@@ -2429,8 +2598,29 @@ export const rewardRepo = new MockRewardRepository();
 // ==========================================
 // 10. SETTING REPOSITORY
 // ==========================================
+/**
+ * Cài đặt gắn RIÊNG theo giáo viên đang đăng nhập: khóa lưu trữ có hậu tố
+ * id giáo viên (trước đây mọi tài khoản trên cùng trình duyệt dùng chung
+ * một bản cài đặt). Chưa có bản riêng thì kế thừa bản chung cũ (mặc định).
+ */
+function settingsStorageKey(): string {
+  try {
+    const session = readStorage<any>(STORAGE_KEYS.SESSION, null);
+    const u = session?.user;
+    if (u && u.role === 'teacher' && u.id) {
+      return STORAGE_KEYS.SETTINGS + ':' + u.id;
+    }
+  } catch {
+    /* bỏ qua */
+  }
+  return STORAGE_KEYS.SETTINGS;
+}
+
 export class MockSettingRepository implements SettingRepository {
   async getSettings(): Promise<SystemSettings> {
+    const key = settingsStorageKey();
+    const own = readStorage<SystemSettings | null>(key, null);
+    if (own) return own;
     return readStorage<SystemSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
   }
 
@@ -2444,15 +2634,10 @@ export class MockSettingRepository implements SettingRepository {
       notifications: { ...current.notifications, ...(newSettings.notifications || {}) },
     };
 
-    // Kiểm tra ràng buộc hợp lệ:
-    if (updated.xp.weeklyCap < updated.xp.dailyCapTotal) {
-      throw new Error('Trần XP tuần không thể nhỏ hơn trần XP ngày tối đa');
-    }
-    if (updated.xp.dailyCapTotal < updated.xp.dailyCapUnder45Min) {
-      throw new Error('Trần XP ngày tối đa không thể nhỏ hơn trần XP dưới 45 phút');
-    }
+    // (Đã bỏ kiểm tra ràng buộc trần XP: mô hình XP hiện hành không còn
+    // trần ngày/tuần nên không còn các trường đó trong cài đặt.)
 
-    writeStorage(STORAGE_KEYS.SETTINGS, updated);
+    writeStorage(settingsStorageKey(), updated);
 
     await auditRepo.log({
       actor_id: actorId || 'teacher_001',
@@ -2485,7 +2670,7 @@ export class MockSettingRepository implements SettingRepository {
       updated.notifications = { ...DEFAULT_SYSTEM_SETTINGS.notifications };
     }
 
-    writeStorage(STORAGE_KEYS.SETTINGS, updated);
+    writeStorage(settingsStorageKey(), updated);
     await auditRepo.log({
       actor_id: 'teacher_001',
       actor_name: 'Thầy/Cô',
@@ -2501,7 +2686,7 @@ export class MockSettingRepository implements SettingRepository {
   }
 
   async resetAll(): Promise<SystemSettings> {
-    writeStorage(STORAGE_KEYS.SETTINGS, DEFAULT_SYSTEM_SETTINGS);
+    writeStorage(settingsStorageKey(), DEFAULT_SYSTEM_SETTINGS);
     await auditRepo.log({
       actor_id: 'teacher_001',
       actor_name: 'Thầy/Cô',

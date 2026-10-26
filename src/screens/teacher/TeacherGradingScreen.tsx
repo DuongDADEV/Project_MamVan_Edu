@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
 import { GradingQueueTable } from '../../components/teacher/grading/GradingQueueTable.tsx';
+import { StudentGradingDetail } from '../../components/teacher/grading/StudentGradingDetail.tsx';
 import { SplitGradingWorkspace } from '../../components/teacher/grading/SplitGradingWorkspace.tsx';
 import { AiTrainingStudio } from '../../components/teacher/grading/AiTrainingStudio.tsx';
 import {
@@ -10,7 +11,15 @@ import {
   AIGradingConfig,
   ClassItem,
 } from '../../types.ts';
-import { essayRepository, syncEventBus } from '../../services/index.ts';
+import {
+  essayRepository,
+  syncEventBus,
+  contentService,
+  quizService,
+  TopicWithMeta,
+  QuizWithMeta,
+  QuestionWithMeta,
+} from '../../services/index.ts';
 import {
   PenTool,
   Sparkles,
@@ -37,7 +46,12 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
 
   // Dữ liệu bài viết
   const [submissions, setSubmissions] = useState<EssaySubmission[]>([]);
+  // Dữ liệu tham chiếu để gom bài theo CHỦ ĐỀ (bài nộp chỉ mang quizId/questionId)
+  const [topics, setTopics] = useState<TopicWithMeta[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizWithMeta[]>([]);
+  const [questionsMap, setQuestionsMap] = useState<Record<string, QuestionWithMeta>>({});
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
+  const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(true);
 
   // Dữ liệu huấn luyện AI
@@ -59,25 +73,57 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Tải toàn bộ dữ liệu
+  // Tối ưu tải màn chấm (26/10): lần tải đầu mới đặt cờ loading; các lần
+  // tải lại sau (event 'essay', đổi lớp, sau khi lưu rubric/mẫu/cấu hình)
+  // giữ danh sách cũ hiển thị tới khi dữ liệu mới về, tránh nhấp nháy.
+  const didFirstLoadRef = useRef(false);
+
+  // Tải 2 GIAI ĐOẠN (26/10, sửa chậm khi VÀO MÀN trên điện thoại + 4G):
+  // giai đoạn 1 hiện NGAY bài nộp từ essay_submissions (includeReviews:
+  // false) — không chờ gộp phiếu review (phần nặng nhất: 38 phiếu chờ +
+  // 10 phiếu chốt kèm full bài văn, nhiều vòng query); giai đoạn 2 gộp thêm
+  // phiếu review:<id> rồi thay toàn bộ danh sách — danh sách cuối bằng đúng
+  // hành vi cũ. Chọn bài theo id nên bài đang chọn không nhảy khi giai đoạn
+  // 2 đổ thêm vào; giai đoạn 2 lỗi thì giữ danh sách giai đoạn 1.
+  // loadSeqRef chống lần tải cũ (đổi lớp/event 'essay' mới) ghi đè danh
+  // sách của lần tải mới hơn — lần cũ resolve muộn thì bị bỏ qua.
+  const loadSeqRef = useRef(0);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+
   const loadData = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    if (!didFirstLoadRef.current) setIsLoadingSubmissions(true);
     try {
-      const [subs, rubrics, samples, cfg, metrics] = await Promise.all([
-        essayRepository.getSubmissions({ classId: selectedClassId }),
-        essayRepository.getRubricTemplates(),
-        essayRepository.getGradedSamples(),
-        essayRepository.getGradingConfig(),
-        essayRepository.getAIAccuracyMetrics(),
-      ]);
+      const subs = await essayRepository.getSubmissions({ classId: selectedClassId, includeReviews: false, includeReviewText: false });
+      if (seq !== loadSeqRef.current) return;
       setSubmissions(subs);
-      setRubricTemplates(rubrics);
-      setGradedSamples(samples);
-      setAiConfig(cfg);
-      setAccuracyMetrics(metrics);
     } catch (err) {
-      console.error('Lỗi nạp dữ liệu chấm bài:', err);
+      console.error('Lỗi nạp hàng đợi chấm bài:', err);
     } finally {
-      setIsLoadingSubmissions(false);
+      if (seq === loadSeqRef.current) {
+        setIsLoadingSubmissions(false);
+        didFirstLoadRef.current = true;
+      }
+    }
+    // Phần còn lại tải nền, về tới đâu hiện tới đó; lỗi phần nào giữ giá
+    // trị cũ phần đó (không xóa sạch màn hình vì 1 phần lỗi).
+    essayRepository.getRubricTemplates().then(setRubricTemplates).catch((err) => console.error('Lỗi nạp rubric:', err));
+    essayRepository.getGradedSamples().then(setGradedSamples).catch((err) => console.error('Lỗi nạp bài mẫu:', err));
+    essayRepository.getGradingConfig().then(setAiConfig).catch((err) => console.error('Lỗi nạp cấu hình chấm:', err));
+    essayRepository.getAIAccuracyMetrics().then(setAccuracyMetrics).catch((err) => console.error('Lỗi nạp metrics AI:', err));
+    contentService.getTopics().then((t) => setTopics(t || [])).catch(() => {});
+    quizService.getQuizzes().then((q) => setQuizzes(q || [])).catch(() => {});
+    quizService.getQuestions().then((m) => setQuestionsMap(m || {})).catch(() => {});
+    // Giai đoạn 2: gộp phiếu review — chạy SAU giai đoạn 1, không chặn nó.
+    if (seq === loadSeqRef.current) setIsLoadingReviews(true);
+    try {
+      const full = await essayRepository.getSubmissions({ classId: selectedClassId, includeReviewText: false });
+      if (seq !== loadSeqRef.current) return;
+      setSubmissions(full);
+    } catch (err) {
+      console.error('Lỗi nạp phiếu chấm từ bài tập:', err);
+    } finally {
+      if (seq === loadSeqRef.current) setIsLoadingReviews(false);
     }
   }, [selectedClassId]);
 
@@ -95,6 +141,44 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
     if (!selectedSubmissionId) return null;
     return submissions.find((s) => s.id === selectedSubmissionId) || null;
   }, [submissions, selectedSubmissionId]);
+
+  // Đợt sửa 3 (26/10): đường list hoãn tải full bài văn của phiếu review —
+  // khi mở chi tiết phiếu thì fetch text 1 lần rồi điền vào danh sách, để
+  // khung chấm + nút lưu mẫu (dùng submission.content) thấy đủ bài làm.
+  // Trong lúc chờ, workspace hiện "Đang tải bài làm…" thay cho hộp
+  // "nộp bài trắng" (tránh hiển thị sai). Không dùng ref chặn fetch lại:
+  // giai đoạn 2 có thể thay toàn bộ danh sách (content về '') sau khi fetch
+  // xong thì effect chạy lại và fetch lại — chặn vĩnh viễn sẽ kẹt hộp trắng.
+  const [detailContentLoadingId, setDetailContentLoadingId] = useState<string | null>(null);
+  useEffect(() => {
+    const sel = selectedSubmission;
+    if (!sel) {
+      setDetailContentLoadingId(null);
+      return;
+    }
+    if (!sel.id.startsWith('review:') || (sel.content && sel.content.trim().length > 0)) return;
+    const answerId = sel.answerId;
+    if (!answerId) return;
+    let cancelled = false;
+    setDetailContentLoadingId(sel.id);
+    essayRepository.getReviewAnswerContent(answerId).then((text) => {
+      if (cancelled) return;
+      setDetailContentLoadingId((cur) => (cur === sel.id ? null : cur));
+      if (!text) return;
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === sel.id
+            ? { ...s, content: text, wordCount: text.trim() ? text.trim().split(/\s+/).length : 0 }
+            : s
+        )
+      );
+    }).catch(() => {
+      if (!cancelled) setDetailContentLoadingId((cur) => (cur === sel.id ? null : cur));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSubmission]);
 
   // Vị trí bài hiện tại trong danh sách
   const currentIndex = useMemo(() => {
@@ -195,7 +279,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
       )}
 
       {/* HEADER MÀN HÌNH (Chỉ hiển thị khi đang ở hàng đợi hoặc huấn luyện) */}
-      {!selectedSubmission && (
+      {!selectedSubmission && !detailStudentId && (
         <>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <PageHeader
@@ -243,6 +327,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
         /* MÀN CHẤM CHIA ĐÔI (SPLIT SCREEN WORKSPACE) */
         <SplitGradingWorkspace
           submission={selectedSubmission}
+          contentLoading={detailContentLoadingId === selectedSubmission.id}
           rubricTemplates={rubricTemplates}
           onBack={() => setSelectedSubmissionId(null)}
           onFinalizeGrading={handleFinalizeGrading}
@@ -253,14 +338,37 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
           hasPrevSubmission={hasPrev}
           onSaveToSampleLibrary={handleSaveToSampleLibrary}
         />
+      ) : detailStudentId ? (
+        /* XEM CHI TIẾT THEO HỌC SINH (Figma Giao diện 1) */
+        <StudentGradingDetail
+          studentId={detailStudentId}
+          submissions={submissions}
+          topics={topics}
+          quizzes={quizzes}
+          questionsMap={questionsMap}
+          onBack={() => setDetailStudentId(null)}
+          onSelectSubmission={(sub) => setSelectedSubmissionId(sub.id)}
+        />
       ) : activeMainTab === 'queue' ? (
         /* HÀNG ĐỢI BÀI CHỜ CHỐT */
-        <GradingQueueTable
+        <>
+          {isLoadingSubmissions && submissions.length === 0 && (
+            <p className="text-xs font-bold text-slate-500">Đang tải hàng đợi chấm…</p>
+          )}
+          {isLoadingReviews && submissions.length > 0 && (
+            <p className="text-xs font-bold text-slate-500">Đang tải thêm phiếu chấm từ bài tập…</p>
+          )}
+          <GradingQueueTable
           submissions={submissions}
+          topics={topics}
+          quizzes={quizzes}
+          questionsMap={questionsMap}
           classes={classes}
           selectedClassId={selectedClassId}
           onSelectSubmission={(sub) => setSelectedSubmissionId(sub.id)}
-        />
+          onViewStudent={(sub) => setDetailStudentId(sub.studentId)}
+          />
+        </>
       ) : (
         /* TAB HUẤN LUYỆN AI CHẤM */
         <AiTrainingStudio

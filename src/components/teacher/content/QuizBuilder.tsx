@@ -13,6 +13,7 @@ import {
 import { StatusBadge } from './StatusBadge.tsx';
 import { QuestionBankModal } from './QuestionBankModal.tsx';
 import {
+  ArrowLeft,
   FileQuestion,
   Settings,
   Plus,
@@ -24,7 +25,6 @@ import {
   Save,
   UploadCloud,
   CheckCircle2,
-  AlertTriangle,
   HelpCircle,
   Clock,
   Shuffle,
@@ -46,6 +46,8 @@ import { aiService } from '../../../services/index.ts';
 import { XP_CONFIG } from '../../../config.ts';
 
 interface QuizBuilderProps {
+  /** Tab mở đầu: Bài tập MỚI TẠO mở thẳng 'settings' (Cài đặt bài trước, soạn câu sau). */
+  initialTab?: 'questions' | 'settings';
   quiz: QuizWithMeta;
   allQuestions: Record<string, QuestionWithMeta>;
   topics: TopicWithMeta[];
@@ -56,6 +58,7 @@ interface QuizBuilderProps {
   ) => Promise<void>;
   onPublish: (warnings: string[], isBlocked: boolean) => void;
   onPreviewStudent: (draftQuiz: QuizWithMeta, draftQuestions: QuestionWithMeta[]) => void;
+  onBack?: () => void;
 }
 
 // Cấu hình mặc định cho từng loại bài kiểm tra
@@ -116,6 +119,7 @@ const SKILL_TOOLTIPS: Record<SkillLevel, { title: string; desc: string }> = {
 };
 
 export const QuizBuilder: React.FC<QuizBuilderProps> = ({
+  initialTab,
   quiz,
   allQuestions,
   topics,
@@ -123,6 +127,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   onSaveQuiz,
   onPublish,
   onPreviewStudent,
+  onBack,
 }) => {
   // 1. Cài đặt bài kiểm tra (Quiz Settings)
   const [title, setTitle] = useState(quiz.title || '');
@@ -147,7 +152,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   });
 
   // Tab đang mở trên giao diện: 'questions' (Soạn câu) hoặc 'settings' (Cài đặt)
-  const [activeTab, setActiveTab] = useState<'questions' | 'settings'>('questions');
+  const [activeTab, setActiveTab] = useState<'questions' | 'settings'>(initialTab ?? 'questions');
 
   // Modal Ngân hàng câu hỏi
   const [isBankOpen, setIsBankOpen] = useState(false);
@@ -481,90 +486,35 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   }, [title, kind, topicId, isUnlimitedTime, timeLimitMinutes, xp, questions, shuffleQuestions, shuffleOptions, dueDate]);
 
   // ==========================================
-  // KIỂM TRA CHẤT LƯỢNG TRƯỚC KHI XUẤT BẢN
-  // ==========================================
+  // (Đã gỡ runQualityCheck 24/10 theo yêu cầu chủ dự án: không còn hộp cảnh báo
+  // chất lượng "Lưu ý chất lượng bài kiểm tra" / "Có lỗi cần sửa trước khi xuất
+  // bản", không còn chặn xuất bản vì thiếu câu hỏi hay sai số câu tiêu chuẩn.)
 
-  const runQualityCheck = () => {
-    const criticalErrors: string[] = [];
-    const lightWarnings: string[] = [];
-
-    if (!title.trim()) {
-      criticalErrors.push('Tiêu đề bài kiểm tra không được để trống.');
-    }
-
-    if (questions.length === 0) {
-      criticalErrors.push('Bài kiểm tra phải có ít nhất 1 câu hỏi.');
-    }
-
-    // Kiểm tra từng câu hỏi
-    questions.forEach((q, idx) => {
-      const qNum = idx + 1;
-      if (!String(q.prompt || '').trim()) {
-        criticalErrors.push(`Câu ${qNum}: Đề bài đang để trống.`);
-      }
-
-      // Kiểm tra đáp án
-      if (q.type === 'single') {
-        if (!q.answer) {
-          criticalErrors.push(`Câu ${qNum} (Trắc nghiệm): Chưa chọn đáp án đúng.`);
-        }
-      } else if (q.type === 'multi') {
-        const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
-        if (ans.length === 0) {
-          criticalErrors.push(`Câu ${qNum} (Chọn nhiều): Chưa đánh dấu đáp án đúng.`);
-        }
-      } else if (q.type === 'fill') {
-        const ans = Array.isArray(q.answer) ? (q.answer as string[]) : q.answer ? [String(q.answer)] : [];
-        if (ans.length === 0 || ans.every((a) => !String(a || '').trim())) {
-          criticalErrors.push(`Câu ${qNum} (Điền từ): Ô trống chưa cấu hình đáp án chấp nhận.`);
-        }
-      }
-    });
-
-    // Cảnh báo nhẹ (không chặn)
-    const expectedCount = QUIZ_KIND_CONFIG[kind].defaultCount;
-    if (questions.length !== expectedCount) {
-      lightWarnings.push(
-        `Số câu hỏi (${questions.length} câu) khác với số câu tiêu chuẩn của ${QUIZ_KIND_CONFIG[kind].name} (${expectedCount} câu).`
-      );
-    }
-
-    // Thiếu câu phân tích / vận dụng
-    const hasHigherOrder = questions.some(
-      (q) => q.level === 'PHAN_TICH' || q.level === 'VAN_DUNG'
-    );
-    if (!hasHigherOrder && questions.length > 2) {
-      lightWarnings.push(
-        'Bài kiểm tra chưa có câu hỏi ở mức Phân tích hoặc Vận dụng (Hệ thống Mastery Check sẽ không đo lường trọn vẹn năng lực học sinh).'
-      );
-    }
-
-    // Thời gian bất hợp lý
-    if (!isUnlimitedTime && timeLimitMinutes <= 2 && questions.length >= 5) {
-      lightWarnings.push(
-        `Thời gian làm bài (${timeLimitMinutes} phút) quá ngắn cho ${questions.length} câu hỏi.`
-      );
-    }
-
-    return { criticalErrors, lightWarnings };
-  };
-
-  const { criticalErrors, lightWarnings } = runQualityCheck();
-  const isPublishBlocked = criticalErrors.length > 0;
-
+  // Gỡ hộp cảnh báo chất lượng + chặn xuất bản (24/10 theo yêu cầu chủ dự án):
+  // nút xuất bản luôn lưu bản đang soạn rồi mở hộp thoại xuất bản, không còn
+  // chặn vì thiếu câu hỏi / sai số câu tiêu chuẩn / thiếu đáp án.
   const handlePublishClick = async () => {
     // Lưu bản đang soạn vào database trước khi xuất bản để không mất dữ liệu
-    if (!isPublishBlocked) {
-      await performSave();
-    }
-    onPublish([...criticalErrors, ...lightWarnings], isPublishBlocked);
+    await performSave();
+    onPublish([], false);
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-hidden shadow-xs">
-      {/* Top Header */}
-      <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
+      {/* Top Header — dính chặt phía trên khi thân trình soạn cuộn */}
+      <div className="sticky top-0 z-20 shrink-0 p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] hover:border-[#2F3E6B] transition-colors shrink-0"
+              title="Quay lại chủ đề"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Quay lại</span>
+            </button>
+          )}
           <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-[#4F46E5] flex items-center justify-center shrink-0">
             <FileQuestion className="w-4 h-4" />
           </div>
@@ -617,22 +567,22 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => onPreviewStudent(quiz, questions)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
             title="Làm thử bài bằng đúng giao diện học sinh (không tính điểm thật)"
           >
             <Eye className="w-3.5 h-3.5 text-[#2F3E6B]" />
-            <span>Xem trước như học sinh</span>
+            <span>Xem trước</span>
           </button>
 
           <button
             type="button"
             disabled={isSaving}
             onClick={performSave}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
           >
             <Save className="w-3.5 h-3.5 text-[#8C7E6A]" />
             <span>{isSaving ? 'Đang lưu...' : 'Lưu nháp'}</span>
@@ -641,52 +591,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           <button
             type="button"
             onClick={handlePublishClick}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all shadow-xs ${
-              isPublishBlocked
-                ? 'bg-rose-600 hover:bg-rose-700'
-                : 'bg-emerald-600 hover:bg-emerald-700'
-            }`}
-            title={isPublishBlocked ? 'Còn lỗi nghiêm trọng chặn xuất bản' : 'Cập nhật lên web học sinh'}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-white text-xs font-bold transition-all shadow-xs bg-emerald-600 hover:bg-emerald-700"
+            title="Cập nhật lên web học sinh"
           >
             <UploadCloud className="w-3.5 h-3.5" />
-            <span>Cập nhật lên web học sinh</span>
+            <span>Cập nhật lên web</span>
           </button>
         </div>
       </div>
-
-      {/* Quality Check Alert Banner */}
-      {(criticalErrors.length > 0 || lightWarnings.length > 0) && (
-        <div
-          className={`px-4 py-2.5 border-b text-xs flex items-start gap-2.5 ${
-            criticalErrors.length > 0
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-amber-50 border-amber-200 text-amber-800'
-          }`}
-        >
-          <AlertTriangle
-            className={`w-4 h-4 shrink-0 mt-0.5 ${
-              criticalErrors.length > 0 ? 'text-rose-600' : 'text-amber-600'
-            }`}
-          />
-          <div className="flex-1 space-y-0.5">
-            <span className="font-bold">
-              {criticalErrors.length > 0
-                ? 'Có lỗi cần sửa trước khi xuất bản:'
-                : 'Lưu ý chất lượng bài kiểm tra:'}
-            </span>
-            <ul className="list-disc list-inside space-y-0.5 pl-1 text-[11px]">
-              {criticalErrors.map((err, i) => (
-                <li key={`err_${i}`} className="font-medium text-rose-700">
-                  {err}
-                </li>
-              ))}
-              {lightWarnings.map((w, i) => (
-                <li key={`warn_${i}`}>{w}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
 
       {/* AI Generated Review Banner */}
       {questions.some((q) => q.isAiGenerated && !q.isTeacherReviewed) && (
@@ -939,6 +851,17 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                 </div>
               )}
             </div>
+            {initialTab === 'settings' && (
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('questions')}
+                  className="px-5 py-2.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-sm font-black shadow-xs"
+                >
+                  Tiếp tục: Soạn câu hỏi →
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           /* =========================================================
@@ -951,9 +874,6 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                 <h4 className="font-lora font-bold text-sm text-[#2F3E6B]">
                   Danh sách câu hỏi ({questions.length} câu)
                 </h4>
-                <p className="text-[11px] text-[#8C7E6A] mt-0.5">
-                  Kiểu Google Form • Hỗ trợ 4 định dạng chuyên biệt cho môn Ngữ văn
-                </p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -963,7 +883,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-[#E2704A] to-[#D45E36] hover:from-[#D45E36] hover:to-[#C34F28] text-white text-xs font-bold shadow-xs transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>+ Thêm câu bằng AI</span>
+                  <span>Thêm câu bằng AI</span>
                 </button>
 
                 <button
@@ -1118,7 +1038,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                             className="hover:underline flex items-center gap-1 font-medium"
                           >
                             <Quote className="w-3 h-3 text-[#E2704A]" />
-                            <span>{q.passage ? 'Bỏ ngữ liệu trích' : '+ Chèn ngữ liệu/đoạn trích'}</span>
+                            <span>{q.passage ? 'Bỏ ngữ liệu trích' : 'Chèn ngữ liệu/đoạn trích'}</span>
                           </button>
                         </div>
                       </div>
@@ -1190,7 +1110,19 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                                   type="button"
                                   onClick={() => {
                                     const newOpts = (q.options || []).filter((_, i) => i !== optIdx);
-                                    handleUpdateQuestion(q.id, { options: newOpts });
+                                    // Xóa luôn đáp án trỏ vào phương án vừa xóa
+                                    // (tránh đáp án "ma" không còn trong danh sách)
+                                    const removedText = (q.options || [])[optIdx];
+                                    const removedLetter = String.fromCharCode(65 + optIdx);
+                                    let newAns: any = q.answer;
+                                    if (Array.isArray(q.answer)) {
+                                      newAns = q.answer.filter(
+                                        (a: string) => a !== removedText && a !== removedLetter
+                                      );
+                                    } else if (q.answer === removedText || q.answer === removedLetter) {
+                                      newAns = '';
+                                    }
+                                    handleUpdateQuestion(q.id, { options: newOpts, answer: newAns });
                                   }}
                                   className="p-1 text-[#8C7E6A] hover:text-rose-600"
                                 >
@@ -1280,7 +1212,19 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                                   type="button"
                                   onClick={() => {
                                     const newOpts = (q.options || []).filter((_, i) => i !== optIdx);
-                                    handleUpdateQuestion(q.id, { options: newOpts });
+                                    // Xóa luôn đáp án trỏ vào phương án vừa xóa
+                                    // (tránh đáp án "ma" không còn trong danh sách)
+                                    const removedText = (q.options || [])[optIdx];
+                                    const removedLetter = String.fromCharCode(65 + optIdx);
+                                    let newAns: any = q.answer;
+                                    if (Array.isArray(q.answer)) {
+                                      newAns = q.answer.filter(
+                                        (a: string) => a !== removedText && a !== removedLetter
+                                      );
+                                    } else if (q.answer === removedText || q.answer === removedLetter) {
+                                      newAns = '';
+                                    }
+                                    handleUpdateQuestion(q.id, { options: newOpts, answer: newAns });
                                   }}
                                   className="p-1 text-[#8C7E6A] hover:text-rose-600"
                                 >

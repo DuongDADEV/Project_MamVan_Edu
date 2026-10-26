@@ -1,6 +1,7 @@
 import React from 'react';
 import { StudentState, ThemeId } from '../types.ts';
 import { APP_NAME } from '../config.ts';
+import { countLearningSteps } from '../logic/studentStateUtils.ts';
 import { THEMES_LIST } from '../data/themes.ts';
 import {
   User,
@@ -8,7 +9,6 @@ import {
   VolumeX,
   Sparkles,
   Type,
-  RotateCcw,
   LogOut,
   CheckCircle2,
   BookOpen,
@@ -21,14 +21,12 @@ import {
 interface ProfileScreenProps {
   state: StudentState;
   onUpdateState: (updater: (prev: StudentState) => StudentState) => void;
-  onResetData: () => void;
   onLogout: () => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   state,
   onUpdateState,
-  onResetData,
   onLogout,
 }) => {
   const currentTheme = state.themePreference || 'creative_edtech';
@@ -115,7 +113,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs text-center">
           <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Hoạt động</span>
           <span className="text-xl sm:text-2xl font-black text-[#8B5CF6] font-mono tabular-nums">
-            {state.completedSteps.length}
+            {countLearningSteps(state.completedSteps)}
           </span>
         </div>
       </div>
@@ -218,6 +216,56 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
           </div>
 
+        {/* 4. Giao diện (Theme) */}
+        <div className="space-y-3 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Palette className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#1E1B4B]">Giao diện hiển thị</p>
+              <p className="text-xs text-slate-400">Chọn bộ màu chủ đạo cho không gian học của em</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {THEMES_LIST.map((theme) => {
+              const isActive = currentTheme === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  onClick={() => selectTheme(theme.id)}
+                  className={`text-left p-3.5 rounded-2xl border transition-all ${
+                    isActive
+                      ? 'border-[#4F46E5] ring-2 ring-indigo-100 bg-indigo-50/40'
+                      : 'border-slate-200 hover:border-indigo-200 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-xs font-extrabold text-[#1E1B4B]">{theme.name}</span>
+                    {isActive && <Check className="w-4 h-4 text-[#4F46E5]" />}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mb-2.5">{theme.subtitle}</p>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      theme.palette.primaryTitle,
+                      theme.palette.accentAction,
+                      theme.palette.successSage,
+                      theme.palette.backgroundPage,
+                    ].map((color, i) => (
+                      <span
+                        key={i}
+                        className="w-5 h-5 rounded-full border border-black/10"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
           {/* Hộp xem trước cỡ chữ trực quan */}
           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
@@ -242,13 +290,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {/* HÀNH ĐỘNG DỮ LIỆU & ĐĂNG XUẤT */}
       <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-3">
-        <button
-          onClick={onResetData}
-          className="w-full py-3 rounded-2xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4 text-slate-500" />
-          <span>Đặt lại dữ liệu demo của tài khoản</span>
-        </button>
 
         <button
           onClick={onLogout}

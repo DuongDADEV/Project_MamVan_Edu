@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Users,
   UserPlus,
@@ -61,7 +61,6 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   isAddModalOpenInitially = false,
   onCloseAddModalInitial,
 }) => {
-  const [activeTab, setActiveTab] = useState<'students' | 'classes'>('students');
 
   // Quản lý xem chi tiết lớp học
   const [detailClassId, setDetailClassId] = useState<string | null>(null);
@@ -72,7 +71,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   const [editingStudent, setEditingStudent] = useState<StudentAccount | null>(null);
 
   // Lọc
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'locked' | 'new'>('all');
+  const [classSearch, setClassSearch] = useState('');
 
   // Multi-select
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -88,6 +87,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   const [drawerStudentId, setDrawerStudentId] = useState<string | null>(null);
 
   // Dialog xác nhận thao tác
+  const resetCustomPasswordRef = useRef('');
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -145,31 +145,14 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
       });
   }, [students, classes, studentStates, teacherClassIds]);
 
-  // Lọc theo lớp và trạng thái
-  const filteredStudents = useMemo(() => {
-    return enrichedStudents.filter((s) => {
-      if (selectedClassId !== 'all' && s.class_id !== selectedClassId) {
-        return false;
-      }
-      if (statusFilter === 'active' && (s.status !== 'active' || !s.has_logged_in)) {
-        return false;
-      }
-      if (statusFilter === 'locked' && s.status !== 'locked') {
-        return false;
-      }
-      if (statusFilter === 'new' && (s.has_logged_in || s.status === 'locked')) {
-        return false;
-      }
-      return true;
-    });
-  }, [enrichedStudents, selectedClassId, statusFilter]);
-
   // --- CÁC HÀNH ĐỘNG HỌC SINH ---
 
-  // Đặt lại mật khẩu (sinh mật khẩu mới 8 ký tự, hiện 1 lần)
+  // Đặt lại mật khẩu: Thầy/Cô TỰ ĐẶT theo ý mình, hoặc để trống để hệ thống
+  // sinh ngẫu nhiên — phiếu tài khoản hiện 1 lần sau khi đặt
   const handleResetPassword = async (studentId: string) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
+    resetCustomPasswordRef.current = '';
 
     setConfirmDialog({
       isOpen: true,
@@ -178,15 +161,41 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
         <div>
           Bạn có chắc chắn muốn đặt lại mật khẩu cho học sinh{' '}
           <strong className="text-[#2F3E6B]">{student.name}</strong> ({student.username})?
+          <div className="mt-3 text-left">
+            <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5">
+              Mật khẩu mới (Thầy/Cô tự đặt)
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              placeholder="Để trống = hệ thống sinh ngẫu nhiên"
+              onChange={(e) => {
+                resetCustomPasswordRef.current = e.target.value;
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-indigo-100 outline-none text-sm text-[#1E1B4B] font-medium transition-all"
+            />
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Nếu tự đặt, mật khẩu cần tối thiểu 6 ký tự.
+            </p>
+          </div>
           <p className="mt-2 text-xs text-amber-800 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
-            Hệ thống sẽ sinh một mật khẩu ngẫu nhiên mới và hiển thị phiếu tài khoản 1 lần để Thầy/Cô gửi cho em.
+            Sau khi đặt, hệ thống sẽ hiển thị phiếu tài khoản 1 lần để Thầy/Cô gửi cho em.
           </p>
         </div>
       ),
       confirmLabel: 'Đặt lại mật khẩu',
       variant: 'warning',
       action: async () => {
-        const res = await studentService.resetPassword(studentId, teacherId);
+        const custom = resetCustomPasswordRef.current.trim();
+        if (custom && custom.length < 6) {
+          alert('Mật khẩu tự đặt cần tối thiểu 6 ký tự. Thầy/Cô nhập lại nhé.');
+          return;
+        }
+        const res = await studentService.resetPassword(
+          studentId,
+          teacherId,
+          custom || undefined
+        );
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         setVoucherModalData({
           isOpen: true,
@@ -255,27 +264,49 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   // Chuyển lớp hàng loạt hoặc 1 em
   const handleConfirmChangeClass = async () => {
     if (changeClassModal.studentIds.length === 0 || !changeClassModal.targetClassId) return;
-    for (const sId of changeClassModal.studentIds) {
-      await studentService.changeClass(sId, changeClassModal.targetClassId, teacherId);
+    try {
+      for (const sId of changeClassModal.studentIds) {
+        await studentService.changeClass(sId, changeClassModal.targetClassId, teacherId);
+      }
+      setChangeClassModal({ isOpen: false, studentIds: [], targetClassId: '' });
+      setSelectedStudentIds([]);
+      onRefreshData();
+    } catch (err: any) {
+      alert('Không chuyển lớp được: ' + (err?.message || 'đã xảy ra lỗi, vui lòng thử lại'));
     }
-    setChangeClassModal({ isOpen: false, studentIds: [], targetClassId: '' });
-    setSelectedStudentIds([]);
-    onRefreshData();
   };
 
   // Khóa hàng loạt
   const handleBulkToggleLock = async (isLock: boolean) => {
-    for (const sId of selectedStudentIds) {
-      await studentService.toggleLock(sId, isLock, teacherId);
+    try {
+      for (const sId of selectedStudentIds) {
+        await studentService.toggleLock(sId, isLock, teacherId);
+      }
+      setSelectedStudentIds([]);
+      onRefreshData();
+    } catch (err: any) {
+      alert('Không cập nhật được trạng thái khóa: ' + (err?.message || 'đã xảy ra lỗi'));
     }
-    setSelectedStudentIds([]);
-    onRefreshData();
   };
 
   // Tạo lớp mới
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
+    const dup = classes.find(
+      (c) =>
+        c.name.trim().toLowerCase() === newClassName.trim().toLowerCase() &&
+        c.schoolYear === (newClassYear.trim() || '2026-2027') &&
+        c.status !== 'archived'
+    );
+    if (
+      dup &&
+      !window.confirm(
+        `Đã có lớp "${dup.name}" (${dup.schoolYear}) đang hoạt động. Vẫn tạo thêm một lớp trùng tên?`
+      )
+    ) {
+      return;
+    }
     await classService.createClass({
       name: newClassName.trim(),
       grade: 'Lớp 7',
@@ -650,7 +681,9 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                       setChangeClassModal({
                         isOpen: true,
                         studentIds: ids,
-                        targetClassId: classes.find((c) => c.id !== detailClass.id)?.id || '',
+                        targetClassId:
+                          classes.find((c) => c.id !== detailClass.id && c.status !== 'archived')
+                            ?.id || '',
                       })
                     }
                     className="px-2.5 py-1 rounded-lg border border-[#E6DCC8] bg-white hover:bg-[#FAF5EB] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1"
@@ -704,145 +737,38 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
             title="Quản lý Lớp & Học sinh"
             subtitle="Quản lý danh sách lớp, cấp tài khoản học tập tự động và theo dõi năng lực học sinh"
             actions={
-              <>
-                <button
-                  type="button"
-                  onClick={() => exportStudentsList(filteredStudents, 'xlsx')}
-                  className="px-4 py-2.5 rounded-2xl border border-[#E6DCC8] bg-[#FFFDF8] hover:bg-[#FAF5EB] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1.5 transition-colors shadow-xs"
-                >
-                  <Download className="w-4 h-4 text-[#7FA88A]" />
-                  <span>Xuất danh sách (Excel)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(true)}
-                  className="px-5 py-2.5 rounded-2xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-[#E2704A]/25 transition-all active:scale-[0.98]"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Thêm học sinh</span>
-                </button>
-              </>
-            }
-          />
-
-          {/* CHUYỂN TAB: DANH SÁCH HỌC SINH / QUẢN LÝ LỚP HỌC */}
-          <div className="flex items-center justify-between border-b border-[#E6DCC8] pb-3">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab('students')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 ${
-                  activeTab === 'students'
-                    ? 'bg-[#2F3E6B] text-white shadow-xs'
-                    : 'text-[#4B5563] hover:bg-[#FAF5EB] hover:text-[#2F3E6B]'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>Danh sách học sinh ({filteredStudents.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('classes')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 ${
-                  activeTab === 'classes'
-                    ? 'bg-[#2F3E6B] text-white shadow-xs'
-                    : 'text-[#4B5563] hover:bg-[#FAF5EB] hover:text-[#2F3E6B]'
-                }`}
-              >
-                <Layers className="w-4 h-4" />
-                <span>Quản lý lớp học ({classes.length})</span>
-              </button>
-            </div>
-
-            {activeTab === 'classes' && (
               <button
                 type="button"
                 onClick={() => setIsCreateClassModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-[#FAF5EB] hover:bg-[#E6DCC8]/50 border border-[#E6DCC8] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1.5 transition-colors"
+                className="px-5 py-2.5 rounded-2xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-[#E2704A]/25 transition-all active:scale-[0.98]"
               >
-                <PlusCircle className="w-3.5 h-3.5 text-[#E2704A]" />
-                <span>Tạo lớp học mới</span>
+                <PlusCircle className="w-4 h-4" />
+                <span>Tạo lớp mới</span>
               </button>
-            )}
+            }
+          />
+
+          {/* TÌM KIẾM LỚP */}
+          <div className="flex items-center justify-between gap-3 border-b border-[#E6DCC8] pb-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#8C7E6A]" />
+              <input
+                type="text"
+                value={classSearch}
+                onChange={(e) => setClassSearch(e.target.value)}
+                placeholder="Tìm theo tên lớp..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#E6DCC8] bg-[#FFFDF8] text-xs sm:text-sm text-[#2F3E6B] placeholder-[#8C7E6A]/60 focus:outline-none focus:border-[#2F3E6B] transition-colors"
+              />
+            </div>
+            <span className="text-xs text-[#6B7280] font-medium">{classes.length} lớp học</span>
           </div>
-
-          {/* ======================================================== */}
-          {/* TAB 1: DANH SÁCH HỌC SINH (DATATABLE) */}
-          {/* ======================================================== */}
-          {activeTab === 'students' && (
-            <DataTable
-              data={filteredStudents}
-              columns={studentColumns}
-              keyExtractor={(item) => item.id}
-              searchPlaceholder="Tìm theo tên học sinh, mã HS hoặc tên đăng nhập..."
-              selectable={true}
-              selectedIds={selectedStudentIds}
-              onSelectionChange={setSelectedStudentIds}
-              emptyTitle="Chưa có học sinh nào"
-              emptyDescription="Hãy bấm nút 'Thêm học sinh' để nhập tay hoặc tải file danh sách Excel lên."
-              emptyActionText="Thêm học sinh ngay"
-              onEmptyAction={() => setIsAddModalOpen(true)}
-              filterComponent={
-                <div className="flex items-center gap-2">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
-                    className="px-3 py-1.5 rounded-xl border border-[#E6DCC8] bg-[#FAF5EB]/50 text-xs font-medium text-[#2F3E6B] outline-none"
-                  >
-                    <option value="all">Tất cả trạng thái</option>
-                    <option value="active">Đang hoạt động</option>
-                    <option value="new">Chưa đăng nhập lần nào</option>
-                    <option value="locked">Bị tạm khóa</option>
-                  </select>
-                </div>
-              }
-              bulkActions={(ids, clear) => (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setChangeClassModal({
-                        isOpen: true,
-                        studentIds: ids,
-                        targetClassId: classes[0]?.id || '',
-                      })
-                    }
-                    className="px-2.5 py-1 rounded-lg border border-[#E6DCC8] bg-white hover:bg-[#FAF5EB] text-xs font-semibold text-[#2F3E6B] flex items-center gap-1"
-                  >
-                    <ArrowRightLeft className="w-3.5 h-3.5" />
-                    <span>Chuyển lớp</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleBulkToggleLock(true)}
-                    className="px-2.5 py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs font-semibold text-amber-800 flex items-center gap-1"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Khóa tài khoản</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleBulkToggleLock(false)}
-                    className="px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 flex items-center gap-1"
-                  >
-                    <Unlock className="w-3.5 h-3.5" />
-                    <span>Mở khóa</span>
-                  </button>
-                </div>
-              )}
-            />
-          )}
 
           {/* ======================================================== */}
           {/* TAB 2: QUẢN LÝ LỚP HỌC */}
           {/* ======================================================== */}
-          {activeTab === 'classes' && (
+          {(
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {classes.map((cls) => {
+              {classes.filter((cls) => cls.name.toLowerCase().includes(classSearch.trim().toLowerCase())).map((cls) => {
                 const isSelected = selectedClassId === cls.id;
 
                 return (
@@ -876,11 +802,11 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                         />
                       </div>
 
-                      {cls.description && (
-                        <p className="text-xs text-[#4B5563] mb-4 line-clamp-2">
-                          {cls.description}
-                        </p>
-                      )}
+                      {/* Dòng mô tả luôn chiếm đúng 1 dòng cố định (kể cả khi
+                          trống) để khối số liệu của mọi thẻ lớp thẳng hàng nhau */}
+                      <p className="text-xs text-[#4B5563] mb-4 h-4 line-clamp-1">
+                        {cls.description || ''}
+                      </p>
 
                       <div className="grid grid-cols-2 gap-2 p-3 bg-[#FAF5EB] rounded-xl border border-[#E6DCC8]/70 text-xs mb-4">
                         <div>
@@ -907,7 +833,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                         }}
                         className="font-semibold text-[#2F3E6B] hover:text-[#E2704A] transition-colors flex items-center gap-1"
                       >
-                        <span>Xem chi tiết lớp →</span>
+                        <span>Vào lớp →</span>
                       </button>
 
                       <div className="flex items-center gap-1">
@@ -922,11 +848,25 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
 
                         <button
                           type="button"
-                          onClick={async () => {
-                            if (confirm(`Bạn muốn lưu trữ lớp ${cls.name}?`)) {
-                              await classService.archiveClass(cls.id);
-                              onRefreshData();
-                            }
+                          onClick={() => {
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: 'Lưu trữ lớp học',
+                              message: (
+                                <span>
+                                  Bạn muốn lưu trữ lớp{' '}
+                                  <strong className="text-[#2F3E6B]">{cls.name}</strong>?
+                                  Lớp sẽ ẩn khỏi danh sách đang mở nhưng dữ liệu học sinh và điểm số vẫn được giữ nguyên.
+                                </span>
+                              ),
+                              confirmLabel: 'Lưu trữ lớp',
+                              variant: 'warning',
+                              action: async () => {
+                                await classService.archiveClass(cls.id);
+                                setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+                                onRefreshData();
+                              },
+                            });
                           }}
                           className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#6B7280] hover:bg-[#FAF5EB] transition-colors"
                           title="Lưu trữ lớp"
@@ -998,7 +938,11 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
           setChangeClassModal({
             isOpen: true,
             studentIds: [id],
-            targetClassId: drawerStudent?.class_id || classes[0]?.id || '',
+            // Mặc định chọn lớp KHÁC lớp hiện tại của học sinh (và chưa lưu trữ)
+            targetClassId:
+              classes.find(
+                (c) => c.id !== drawerStudent?.class_id && c.status !== 'archived'
+              )?.id || '',
           });
         }}
         onEditStudent={(s) => {
@@ -1123,11 +1067,13 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                   }
                   className="w-full px-3 py-2.5 rounded-xl border border-[#E6DCC8] bg-white text-xs text-[#2F3E6B] outline-none"
                 >
-                  {classes.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      Lớp {cls.name} ({cls.schoolYear})
-                    </option>
-                  ))}
+                  {classes
+                    .filter((cls) => cls.status !== 'archived')
+                    .map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        Lớp {cls.name} ({cls.schoolYear})
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -1296,11 +1242,13 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                   }
                   className="w-full px-3 py-2 rounded-xl border border-[#E6DCC8] bg-white text-xs text-[#2F3E6B] outline-none"
                 >
-                  {classes.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      Lớp {cls.name} ({cls.schoolYear})
-                    </option>
-                  ))}
+                  {classes
+                    .filter((cls) => cls.status !== 'archived')
+                    .map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        Lớp {cls.name} ({cls.schoolYear})
+                      </option>
+                    ))}
                 </select>
               </div>
 

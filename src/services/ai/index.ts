@@ -1,8 +1,9 @@
 /**
  * XUẤT KHẨU AISERVICE INSTANCE VÀ CÁC KIỂU DỮ LIỆU
- * Tự động chuyển đổi thông minh:
- * - Khi người dùng đã nhập Google AI Studio API Key: Gọi Gemini AI thật 100%
- * - Khi chưa có API Key: Báo rõ ràng cần nhập API Key để kích hoạt AI thật, tránh trả lời mặc định gây hiểu lầm
+ * Đợt 25/10: AI chạy qua proxy của admin (/api/ai/chat) — giáo viên
+ * không nhập key nữa, key và model do admin quản lý. Mock chỉ còn là
+ * dự phòng khi proxy lỗi (UI bắt buộc kiểm tra getLastAiFallback để
+ * cảnh báo, không gắn nhãn "Sinh bởi AI" cho nội dung dự phòng).
  */
 
 import {
@@ -23,6 +24,9 @@ import { Question, KeyPoint, TheoryBlock } from '../../types.ts';
 
 const STORAGE_API_KEY = 'mamvan_gemini_api_key';
 const STORAGE_MODEL_KEY = 'mamvan_gemini_model';
+
+// LEGACY (đợt 25/10): key giáo viên không còn dùng — key nằm ở admin/proxy.
+// Giữ lại các hàm này để không vỡ import cũ; màn hình nhập key đã xóa.
 
 export const getGeminiApiKey = (): string => {
   if (typeof window === 'undefined') return '';
@@ -62,15 +66,33 @@ export const testGeminiApiKey = async (
 /**
  * SmartAIService: Gọi Gemini AI thật khi có API Key, báo rõ ràng khi chưa cấu hình
  */
+// Sổ ghi nhận lần gần nhất Gemini lỗi và hệ thống phải dùng bản dự phòng (Mock).
+// UI BẮT BUỘC kiểm tra sau mỗi lần sinh nội dung để cảnh báo giáo viên —
+// không được lặng lẽ gắn nhãn "Sinh bởi Gemini AI" cho nội dung dự phòng.
+export interface AiFallbackInfo {
+  method: string;
+  reason: string;
+  at: number;
+}
+let lastAiFallback: AiFallbackInfo | null = null;
+export const getLastAiFallback = (): AiFallbackInfo | null => lastAiFallback;
+export const clearLastAiFallback = (): void => {
+  lastAiFallback = null;
+};
+const noteAiFallback = (method: string, err: any): void => {
+  lastAiFallback = {
+    method,
+    reason: err?.message || String(err || 'Không rõ lỗi'),
+    at: Date.now(),
+  };
+};
+
 class SmartAIService implements AIService {
   private mock = new MockAIService();
 
-  private getGeminiService(): GeminiAIService | null {
-    const key = getGeminiApiKey();
-    if (key && key.trim().length > 5) {
-      return new GeminiAIService(key, getGeminiModel());
-    }
-    return null;
+  private getGeminiService(): GeminiAIService {
+    // Đợt 25/10: AI luôn chạy qua proxy admin — không còn cổng key nữa.
+    return new GeminiAIService();
   }
 
   async generateKeySummary(sources: AISource[], options?: AIKeySummaryOptions): Promise<KeyPoint[]> {
@@ -80,6 +102,7 @@ class SmartAIService implements AIService {
         return await gemini.generateKeySummary(sources, options);
       } catch (err: any) {
         console.warn('GeminiAIService lỗi generateKeySummary, tự động dùng bộ sinh dự phòng chuẩn GDPT 2018:', err);
+        noteAiFallback('generateKeySummary', err);
         return this.mock.generateKeySummary(sources, options);
       }
     }
@@ -94,6 +117,7 @@ class SmartAIService implements AIService {
         return await gemini.generateTheory(sources, options);
       } catch (err: any) {
         console.warn('GeminiAIService lỗi generateTheory, tự động dùng bộ sinh dự phòng chuẩn GDPT 2018:', err);
+        noteAiFallback('generateTheory', err);
         return this.mock.generateTheory(sources, options);
       }
     }
@@ -107,6 +131,7 @@ class SmartAIService implements AIService {
         return await gemini.generateQuestions(sources, options);
       } catch (err: any) {
         console.warn('Gemini generateQuestions lỗi, tự động dùng bộ sinh câu hỏi sư phạm:', err);
+        noteAiFallback('generateQuestions', err);
         return this.mock.generateQuestions(sources, options);
       }
     }
@@ -120,15 +145,16 @@ class SmartAIService implements AIService {
     sampleEssays?: any[],
     options?: AIEssayGradingOptions
   ): Promise<AIEssayGradingResult> {
+    // Đợt QA 26/10, blocker 5: đường chấm bài KHÔNG được trả điểm mock im
+    // lặng. Trước đây Gemini lỗi → rơi xuống mock.suggestEssayGrade (điểm
+    // công thức, confidenceScore 0.92 bịa) mà giáo viên không biết. Nay: lỗi
+    // thì ném rõ — caller phải hiện lỗi cho người dùng (xem AiTrainingStudio;
+    // đường auto-gợi ý khi nộp bài đã bắt lỗi và giữ trạng thái chờ chấm).
     const gemini = this.getGeminiService();
     if (gemini) {
-      try {
-        return await gemini.suggestEssayGrade(essayText, rubric, sampleEssays, options);
-      } catch (err: any) {
-        console.error('GeminiAIService lỗi:', err);
-      }
+      return await gemini.suggestEssayGrade(essayText, rubric, sampleEssays, options);
     }
-    return this.mock.suggestEssayGrade(essayText, rubric, sampleEssays, options);
+    throw new Error('Chưa cấu hình dịch vụ AI — không thể chấm tự luận. Vui lòng thử lại sau, đừng dùng điểm ước lượng.');
   }
 
   async chatWithSources(
@@ -137,35 +163,25 @@ class SmartAIService implements AIService {
     history?: { role: 'user' | 'assistant'; text: string }[]
   ): Promise<AIChatResponse> {
     const gemini = this.getGeminiService();
-    if (gemini) {
-      try {
-        return await gemini.chatWithSources(sources, message, history);
-      } catch (err: any) {
-        console.error('Gemini live chat error:', err);
-        return {
-          reply: `⚠️ Lỗi khi kết nối Google AI Studio (${err.message || 'Lỗi mạng'}).\n\nVui lòng kiểm tra lại API Key hoặc đổi mô hình (Model) trong phần cài đặt API Key.`,
-          citations: [],
-        };
-      }
+    try {
+      return await gemini.chatWithSources(sources, message, history);
+    } catch (err: any) {
+      console.error('AI proxy chat error:', err);
+      return {
+        reply: `⚠️ Lỗi khi kết nối AI (${err.message || 'Lỗi mạng'}).\n\nVui lòng thử lại sau ít phút.`,
+        citations: [],
+      };
     }
-
-    // Khi CHƯA có API key:
-    return {
-      reply: `⚠️ **Chưa kích hoạt Google AI Studio API Key!**\n\nĐể AI hoạt động **thật 100% giống như NotebookLM** (đọc hiểu, đối chiếu ngữ liệu, trích dẫn từng câu thơ và trả lời theo ngữ cảnh), thầy/cô vui lòng bấm vào nút **"🔑 Cấu hình API Key"** ở thanh trên cùng để dán API Key của Google AI Studio (miễn phí tại \`aistudio.google.com\`).`,
-      citations: [],
-    };
   }
 
   async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
+    // Đợt QA 26/10, blocker 5: đường trích xuất KHÔNG được trả nội dung mock
+    // im lặng. Lỗi thì ném rõ để caller báo người dùng.
     const gemini = this.getGeminiService();
     if (gemini) {
-      try {
-        return await gemini.extractContentFromUrl(url);
-      } catch (err: any) {
-        console.error('Gemini extractContentFromUrl error:', err);
-      }
+      return await gemini.extractContentFromUrl(url);
     }
-    return this.mock.extractContentFromUrl(url);
+    throw new Error('Chưa cấu hình dịch vụ AI — không trích xuất được nội dung từ liên kết.');
   }
 }
 

@@ -72,12 +72,12 @@ export const BrandWordmark: React.FC<BrandWordmarkProps> = ({
       aria-label="Mầm Văn"
     >
       <div
-        className={`flex items-baseline font-serif font-bold tracking-tight ${current.text}`}
+        className={`flex items-baseline whitespace-nowrap font-serif font-bold tracking-tight ${current.text}`}
         style={{ fontFamily: "'Lora', 'Be Vietnam Pro', Georgia, serif" }}
         aria-hidden="true"
       >
         {/* Chữ "Mầm" (xanh lá đậm) với dấu huyền hình chiếc lá xanh của logo */}
-        <span className="text-[#1E5238] relative inline-block">
+        <span className="text-[#1E5238] relative inline-block whitespace-nowrap">
           M
           {/* Chữ "â" gắn chiếc lá dấu huyền nghiêng xéo */}
           <span className="relative inline-block">
@@ -237,7 +237,7 @@ export const BrandHeaderLockup: React.FC<BrandHeaderLockupProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`inline-flex items-center gap-2.5 select-none ${className}`}>
+    <div className={`inline-flex items-center gap-2.5 select-none shrink-0 ${className}`}>
       <BrandLogoIcon size={size} />
       <BrandWordmark
         size={size}

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StudentState, RewardTier, RewardRequest } from '../types.ts';
-import { REWARDS_CATALOG } from '../data/rewards.ts';
+import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../data/rewards.ts';
+import { rewardService, classService, studentService, useLiveQuery } from '../services/index.ts';
 import { RewardTrack } from '../components/rewards/RewardTrack.tsx';
 import { ChestCard } from '../components/rewards/ChestCard.tsx';
 import { ChestOpeningModal } from '../components/rewards/ChestOpeningModal.tsx';
@@ -26,8 +27,36 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
   onRequestReward,
   onClaimRewardChest,
 }) => {
-  // Sắp xếp các mốc quà tăng dần theo yêu cầu XP
-  const sortedRewards = [...REWARDS_CATALOG].sort((a, b) => a.requiredXp - b.requiredXp);
+  // Danh mục HỢP NHẤT (hướng c 24/10): mặc định + mốc của GV phụ trách lớp mình,
+  // sắp xếp tăng dần theo XP yêu cầu. Trong lúc chưa tra được GV thì chỉ hiện mặc định.
+  const { data: dbRewards } = useLiveQuery<RewardTier[]>(() => rewardService.getRewards(), ['reward']);
+  const [studentTeacherId, setStudentTeacherId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const account = await studentService.getStudentById(state.profile.id);
+        const classId = account?.class_id;
+        if (!classId) {
+          if (!cancelled) setStudentTeacherId(null);
+          return;
+        }
+        const classes = await classService.getClasses();
+        if (!cancelled) setStudentTeacherId(classes.find((c) => c.id === classId)?.teacherId ?? null);
+      } catch {
+        if (!cancelled) setStudentTeacherId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.profile.id]);
+  const sortedRewards = useMemo(() => {
+    if (studentTeacherId === undefined) {
+      return [...REWARDS_CATALOG].sort((a, b) => a.requiredXp - b.requiredXp);
+    }
+    return mergeRewardTiers(filterDbRewardsForOwner(dbRewards || [], studentTeacherId));
+  }, [dbRewards, studentTeacherId]);
 
   // Quản lý Modal mở rương hoạt ảnh
   const [openingTarget, setOpeningTarget] = useState<{
@@ -50,7 +79,21 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
     .filter((req) => req.status === 'OPENED')
     .map((req) => ({
       request: req,
-      reward: REWARDS_CATALOG.find((r) => r.id === req.rewardId) || REWARDS_CATALOG[0],
+      // Không tìm thấy trong danh mục hợp nhất (quà đã xóa) -> nhãn trung tính,
+      // TUYỆT ĐỐI không thay bằng một phần quà khác gây hiểu nhầm
+      reward: sortedRewards.find((r) => r.id === req.rewardId) || {
+        id: req.rewardId,
+        requiredXp: 0,
+        xpCost: 0,
+        requiredAttendanceDays: 0,
+        tierKey: 'HAT' as const,
+        teaserDescription: '',
+        secret: {
+          name: 'Phần quà từ thầy/cô',
+          description: 'Món quà đặc biệt do thầy/cô trao tặng.',
+        },
+        isPhysical: false,
+      },
     }));
 
   return (
@@ -129,7 +172,7 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
       {/* 5. MỤC "LỊCH SỬ ĐỀ XUẤT NHẬN QUÀ" (GHI "QUÀ BÍ MẬT" CHO CÁC YÊU CẦU CHƯA MỞ) */}
       <RequestHistory
         requests={state.rewardRequests}
-        rewards={REWARDS_CATALOG}
+        rewards={sortedRewards}
         onOpenChest={handleOpenChest}
       />
 

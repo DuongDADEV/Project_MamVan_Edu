@@ -68,6 +68,11 @@ export interface Question {
 
 export type QuizKind = 'practice' | 'quick' | 'mastery' | 'reading' | 'final' | 'homework';
 
+// Các loại quiz nội dung được tính là "Kiểm tra" — làm 1 lần, lần sau chỉ xem
+// lại (không tính điểm mới, không cộng XP). BTVN (homework) và các loại còn
+// lại không giới hạn số lần làm. Dùng chung cho màn Bài tập và điểm chặn ở App.
+export const TEST_QUIZ_KINDS: QuizKind[] = ['quick', 'mastery', 'final'];
+
 export interface Quiz {
   id: string;
   title: string;
@@ -158,6 +163,11 @@ export interface Topic {
   videoIds: string[];
   theoryId: string;
   colorScheme: string;
+  /** Thứ tự luồng học hỗn hợp trong chủ đề: các khóa "video:<id>" | "theory:<id>" | "quiz:<id>". */
+  flowOrder?: string[];
+  /** Quỹ XP giáo viên đặt cho chủ đề: học sinh nhận đủ một lần khi hoàn
+      thành TOÀN BỘ chủ đề (xem 100% video, xong lý thuyết, đúng hết bài tập). */
+  xpReward?: number;
 }
 
 export interface QuestionResult {
@@ -178,6 +188,7 @@ export interface EssaySubmission {
   wordCount: number;
   status: 'PENDING_TEACHER' | 'AI_SUGGESTED' | 'GRADED';
   quizId?: string;
+  answerId?: string; // id đáp án của phiếu review (đường list hoãn tải text — mở chi tiết mới fetch qua getReviewAnswerContent)
   quizTitle?: string;
   classId?: string;
   studentName?: string;
@@ -276,6 +287,7 @@ export interface RewardTier {
   description?: string;
   stock?: number; // Số lượng còn lại (tùy chọn)
   isActive?: boolean; // Bật/tắt hiển thị cho học sinh
+  teacherId?: string; // GV tạo mốc (hướng c 24/10); undefined = mốc cũ chưa gắn dấu
 }
 
 export type RewardItem = RewardTier;
@@ -287,6 +299,11 @@ export interface RewardRequest {
   rewardId: string;
   requestedAt: number;
   status: RewardStatus;
+  // XP đã TRỪ vào TỔNG XP của tài khoản khi gửi yêu cầu (chốt 18/10/2026:
+  // đổi quà trừ XP của acc — XP vĩnh viễn, chỉ giảm khi xin quà).
+  // > 0 nghĩa là đang giữ số XP này; khi bị TỪ CHỐI sẽ hoàn lại và đặt về 0.
+  // (Mốc mở rương vẫn xét theo XP tuần như thiết kế; chỉ ví chi tiêu là tổng XP.)
+  deductedXp?: number;
   rejectReason?: string;
   approvedAt?: number;
   givenAt?: number;
@@ -319,6 +336,9 @@ export interface StudentState {
   xpToday: number;
   xpWeek: number;
   totalXp: number;
+  // Mốc lật ngày/tuần cho bộ đếm XP (YYYY-MM-DD giờ địa phương; tuần = ngày thứ Hai)
+  lastXpResetDate?: string;
+  xpWeekKey?: string;
   activeSecondsToday: number;
   activeSecondsContinuous: number;
   lastActiveTimestamp: number;
@@ -333,6 +353,11 @@ export interface StudentState {
   // Bước học đã hoàn thành lần đầu (Set lưu dạng mảng chuỗi)
   // Ví dụ: 'video_watch:v1', 'summary_read:v1', 'quiz_completed:q1', 'theory_understood:t1'
   completedSteps: string[];
+  // Các bước ĐÃ ĐƯỢC TRẢ XP thật (tách khỏi completedSteps = tiến độ học):
+  // một bước học lúc chạm trần XP vẫn tính tiến độ nhưng chưa được trả XP,
+  // hôm sau làm lại sẽ được trả đúng một lần. State cũ không có trường này
+  // thì coi completedSteps là đã trả (giữ nguyên chống farm như trước).
+  xpAwardedSteps?: string[];
   
   // Lịch sử trả lời câu hỏi để tính Mastery
   questionResults: QuestionResult[];
@@ -356,6 +381,8 @@ export interface StudentState {
   soundEnabled: boolean;
   animationsEnabled: boolean;
   fontSizePreference: 'normal' | 'large' | 'larger';
+  // Id các thông báo "có bài mới" học sinh đã xem (đồng bộ theo tài khoản)
+  seenNotificationIds?: string[];
   themePreference?: ThemeId;
   
   // Đang học dở (để nút "Học tiếp" dẫn đến đúng chỗ)
@@ -364,6 +391,9 @@ export interface StudentState {
     topicId: string;
     itemId: string;
     stepIndex: number;
+    // Khóa của bước (ổn định hơn stepIndex khi GV thêm/bớt bài tập liên kết
+    // làm thứ tự bước thay đổi — khôi phục ưu tiên theo khóa này)
+    stepKey?: string;
     videoSeconds?: number;
   };
 

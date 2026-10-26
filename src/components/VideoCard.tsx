@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { VideoLesson, Topic, StudentState, Quiz } from '../types.ts';
 import { XP_CONFIG, TOTAL_VIDEO_XP } from '../config.ts';
-import { useLiveQuery, contentService, QuizWithMeta } from '../services/index.ts';
-import { QUIZZES } from '../data/mockData.ts';
+import { useLiveQuery, contentService, quizService, QuizWithMeta } from '../services/index.ts';
 import {
   Clock,
   Play,
@@ -170,18 +169,16 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   quizzes,
   onClick,
 }) => {
-  const [imgError, setImgError] = useState(false);
+
 
   // Lắng nghe realtime quizzes nếu component chưa được truyền quizzes
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
-    () => contentService.getQuizzes(undefined, true),
+    () => quizService.getQuizzes(undefined, true),
     ['content']
   );
 
-  const effectiveQuizzes = quizzes || [
-    ...Object.values(QUIZZES),
-    ...(liveQuizzes || []),
-  ];
+  // CHỈ dùng bài tập THẬT từ máy chủ — không gộp bài mẫu (đã gỡ mockData).
+  const effectiveQuizzes = quizzes || [...(liveQuizzes || [])];
 
   const { status, completedStepsCount, totalStepsCount, maxXP, isFlowCompleted, isInProgress } =
     getVideoCardStatus(video, topic, state, effectiveQuizzes);
@@ -191,7 +188,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const lessonNumber = match ? match[1] : `Bài ${index + 1}`;
   const shortTitle = video.title.replace(/^(Bài\s*\d+[:\-.]?\s*)/i, '');
 
-  const durationMinutes = Math.round(video.durationSec / 60);
+  const durationMinutes = Math.round((video.durationSec || 60) / 60);
 
   // Bảng màu & Icon theo chủ đề
   const palette =
@@ -252,17 +249,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         status === 'Chưa học' ? 'opacity-95' : 'opacity-100'
       }`}
     >
-      {/* ================= PHẦN THUMBNAIL (16:9, BO GÓC TRÊN 16-18PX) ================= */}
+      {/* ================= PHẦN ẢNH BÌA (16:9, BO GÓC TRÊN 16-18PX) =================
+          Đợt sửa 24/10: bỏ hẳn ảnh thumbnail tải lên — thẻ chỉ còn nền SVG
+          phong cách Giấy & Mực (không còn đọc video.thumbnailUrl). */}
       <div className="relative aspect-video w-full rounded-t-[17px] overflow-hidden select-none bg-slate-900">
-        {video.thumbnailUrl && !imgError ? (
-          <img
-            src={video.thumbnailUrl}
-            alt={video.title}
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[1.03] motion-reduce:transform-none"
-          />
-        ) : (
-          /* Thumbnail SVG phong cách Giấy & Mực độc quyền */
           <div
             className={`w-full h-full relative p-4 flex flex-col justify-between bg-gradient-to-br ${palette.bgGradient} overflow-hidden transition-transform duration-200 group-hover:scale-[1.03] motion-reduce:transform-none`}
           >
@@ -315,7 +305,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               <span className="truncate max-w-[120px]">{topic.tag}</span>
             </div>
           </div>
-        )}
 
         {/* NHÃN TRẠNG THÁI (GÓC TRÊN BÊN TRÁI) */}
         <div className="absolute top-2.5 left-2.5 z-10">

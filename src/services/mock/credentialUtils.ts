@@ -16,12 +16,32 @@ export function removeVietnameseTones(str: string): string {
  * Sinh username theo quy tắc: tên + chữ đầu họ đệm + 2 số
  * Nguyễn Minh Anh -> "anh" + "n" + "m" + "27" = "anhnm27"
  */
+// Số ngẫu nhiên an toàn (crypto) cho mật khẩu/UUID — Math.random đoán được
+function secureRandomInt(maxExclusive: number): number {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const arr = new Uint32Array(1);
+      crypto.getRandomValues(arr);
+      return arr[0] % maxExclusive;
+    }
+  } catch {
+    /* rơi xuống fallback */
+  }
+  return Math.floor(Math.random() * maxExclusive);
+}
+
 export function generateUsername(fullName: string, existingUsernames: string[] = []): string {
   const cleanName = removeVietnameseTones(fullName.trim().toLowerCase());
   const parts = cleanName.split(/\s+/).filter(Boolean);
 
   if (parts.length === 0) {
-    return 'hocsinh' + Math.floor(10 + Math.random() * 90);
+    // Cũng phải qua vòng kiểm tra trùng bên dưới như tên thường
+    const taken = new Set(existingUsernames.map((u) => u.toLowerCase()));
+    for (let num = 10; num <= 9999; num++) {
+      const candidate = `hocsinh${num}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+    return `hocsinh${Date.now()}`;
   }
 
   const firstName = parts[parts.length - 1]; // Tên chính (vd: Anh -> anh)
@@ -32,21 +52,35 @@ export function generateUsername(fullName: string, existingUsernames: string[] =
 
   const baseUsername = `${firstName}${initialLetters}`;
 
-  // Thử sinh số từ 10 đến 99 (hoặc tiếp tục nếu trùng)
-  let attempts = 0;
-  let candidate = '';
-  do {
-    const num = Math.floor(10 + Math.random() * 90);
-    candidate = `${baseUsername}${num}`;
-    attempts++;
-    if (attempts > 50) {
-      // Nếu trùng quá nhiều, dùng 3 chữ số
-      candidate = `${baseUsername}${Math.floor(100 + Math.random() * 900)}`;
-      break;
+  // Sinh hậu tố số XÁC ĐỊNH (không ngẫu nhiên): chọn số nhỏ nhất chưa bị dùng.
+  // Cách này bảo đảm không bao giờ trùng khi danh sách hiện có đầy đủ,
+  // kể cả khi thêm nhiều học sinh trùng tên trong cùng một lần.
+  const taken = new Set(existingUsernames.map((u) => u.toLowerCase()));
+  for (let num = 10; num <= 9999; num++) {
+    const candidate = `${baseUsername}${num}`;
+    if (!taken.has(candidate)) {
+      return candidate;
     }
-  } while (existingUsernames.includes(candidate));
+  }
 
-  return candidate;
+  return `${baseUsername}${Date.now()}`;
+}
+
+/**
+ * Sinh Mã HS tự động dạng HS + 4 chữ số (HS0001, HS0002, ...):
+ * chọn số nhỏ nhất chưa bị dùng trong danh sách hiện có.
+ */
+export function generateStudentCode(existingCodes: (string | undefined | null)[] = []): string {
+  const taken = new Set(
+    existingCodes.filter(Boolean).map((c) => String(c).toUpperCase())
+  );
+  for (let num = 1; num <= 9999; num++) {
+    const candidate = `HS${String(num).padStart(4, '0')}`;
+    if (!taken.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `HS${Date.now()}`;
 }
 
 /**
@@ -57,7 +91,7 @@ export function generateFriendlyPassword(length = 8): string {
   const chars = '23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
   let password = '';
   for (let i = 0; i < length; i++) {
-    const idx = Math.floor(Math.random() * chars.length);
+    const idx = secureRandomInt(chars.length);
     password += chars.charAt(idx);
   }
   return password;
@@ -67,8 +101,15 @@ export function generateFriendlyPassword(length = 8): string {
  * Tạo UUID đơn giản cho mock
  */
 export function generateUUID(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* rơi xuống fallback */
+  }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0;
+    const r = secureRandomInt(16);
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });

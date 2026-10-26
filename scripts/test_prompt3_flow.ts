@@ -204,12 +204,19 @@ async function runPrompt3Tests() {
     'Cấu hình phong cách chấm của AI được lưu thành công'
   );
 
-  // 4. Chỉ số độ tin cậy AI
+  // 4. Chỉ số độ tin cậy AI — hợp đồng trung thực: chưa có bài nào có
+  // ai_vs_teacher_diff thì trả null (không bịa số như trước); có dữ liệu
+  // thật thì mọi trường phải tính từ dữ liệu đó.
   console.log('Testing AI accuracy metrics...');
   const metrics = await essayRepository.getAIAccuracyMetrics();
   assert(
-    typeof metrics.averageDiff === 'number' && metrics.weeklyTrends.length > 0,
-    `Chỉ số độ tin cậy AI: chênh lệch TB = ${metrics.averageDiff}đ, có biểu đồ xu hướng`
+    metrics === null ||
+      (typeof metrics.averageDiff === 'number' &&
+        metrics.weeklyTrends.length > 0 &&
+        metrics.gradedCount > 0),
+    metrics === null
+      ? 'Chỉ số độ tin cậy AI: chưa có bài nào ghi diff -> trả null trung thực (không bịa số)'
+      : `Chỉ số độ tin cậy AI: chênh lệch TB = ${metrics.averageDiff}đ, có biểu đồ xu hướng, dựa trên ${metrics.gradedCount} bài thật`
   );
 
   console.log('\n====================================================');

@@ -1,0 +1,1086 @@
+import { supabase, isSupabaseReady } from './client.ts';
+
+/**
+ * Kho dữ liệu PHÂN TÍCH & TIẾN ĐỘ (các bảng bổ sung ở migration_008):
+ * learning_activities, assignments, assignment_targets, attempts,
+ * attempt_answers, answer_reviews, student_sessions, dim_date.
+ * Mọi hàm đọc đều bị chặn theo phạm vi học sinh/lớp của giáo viên
+ * (tách dữ liệu riêng theo giáo viên — migration_007).
+ */
+
+export interface BiSession {
+  id: string;
+  studentId: string;
+  studentName: string;
+  loginAt: string | null;
+  logoutAt: string | null;
+  loginDate: string | null;
+  durationMinutes: number | null;
+  deviceType: string | null;
+  status: string | null;
+}
+
+export interface BiSessionSummary {
+  sessions: BiSession[];
+  activeLast7: number;
+  activePrev7: number;
+  anchorDate: string | null;
+  perDay: { date: string; count: number }[];
+}
+
+export interface BiTarget {
+  id: string;
+  studentId: string;
+  studentName: string;
+  status: string | null;
+  assignedAt: string | null;
+  dueAt: string | null;
+  firstSubmittedAt: string | null;
+  attemptsCount: number;
+  bestScore: number | null;
+  maxScore: number | null;
+}
+
+export interface BiAssignment {
+  id: string;
+  title: string;
+  activityType: string | null;
+  displayLocation: string | null;
+  publishedAt: string | null;
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  xpReward: number;
+  questionCount: number;
+  targets: BiTarget[];
+  submittedCount: number;
+}
+
+export interface BiAnswer {
+  id: string;
+  questionId: string;
+  prompt: string;
+  questionType: string;
+  responseText: string;
+  isCorrect: boolean | null;
+  score: number | null;
+  maxScore: number | null;
+  gradingStatus: string | null;
+  gradingMethod: string | null;
+  responseTimeSeconds: number | null;
+}
+
+export interface BiAttempt {
+  id: string;
+  studentId: string;
+  studentName: string;
+  sourceType: 'assignment' | 'activity';
+  sourceTitle: string;
+  attemptNo: number | null;
+  status: string | null;
+  submittedAt: string | null;
+  score: number | null;
+  maxScore: number | null;
+  gradingStatus: string | null;
+  gradingMode: string | null;
+  answers: BiAnswer[];
+}
+
+export interface BiPendingReview {
+  reviewId: string;
+  answerId: string;
+  attemptId: string;
+  studentId: string;
+  questionId: string;
+  studentName: string;
+  sourceTitle: string;
+  questionPrompt: string;
+  questionType: string;
+  responseText: string;
+  maxScore: number | null;
+  rubricText: string | null;
+  createdAt: string | null;
+  scoreAwarded?: number | null;
+  feedback?: string | null;
+  reviewedAt?: string | null;
+}
+
+export interface BiFlowStep {
+  id: string;
+  title: string;
+  activityType: string;
+  sequenceNo: number | null;
+  required: boolean;
+}
+
+export interface BiTopicFlow {
+  topicId: string;
+  topicTitle: string;
+  flows: { flowType: string; steps: BiFlowStep[] }[];
+}
+
+async function studentNameMap(studentIds: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!studentIds.length) return map;
+  const { data } = await supabase.from('students').select('id, name').in('id', studentIds);
+  for (const s of data || []) map.set(s.id, s.name);
+  return map;
+}
+
+export function renderResponse(responseJson: any): string {
+  if (responseJson == null) return '—';
+  let r = responseJson;
+  if (typeof r === 'string') {
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return r;
+    }
+  }
+  if (r && typeof r === 'object') {
+    if (Array.isArray(r.selected)) return 'Chọn: ' + r.selected.join(', ');
+    if (typeof r.selected === 'string') return 'Chọn: ' + r.selected;
+    if (typeof r.text === 'string') return r.text;
+  }
+  return String(r);
+}
+
+function shiftDate(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Phiên đăng nhập của học sinh thuộc giáo viên + KPI 7 ngày (neo theo ngày dữ liệu mới nhất). */
+export async function getSessionsSummary(studentIds: string[]): Promise<BiSessionSummary> {
+  const empty: BiSessionSummary = { sessions: [], activeLast7: 0, activePrev7: 0, anchorDate: null, perDay: [] };
+  if (!isSupabaseReady() || !studentIds.length) return empty;
+  const names = await studentNameMap(studentIds);
+  const { data, error } = await supabase
+    .from('student_sessions')
+    .select('*')
+    .in('student_id', studentIds)
+    .order('login_at', { ascending: false });
+  if (error || !data) return empty;
+  const sessions: BiSession[] = data.map((s: any) => ({
+    id: s.session_id,
+    studentId: s.student_id,
+    studentName: names.get(s.student_id) || 'Học sinh',
+    loginAt: s.login_at,
+    logoutAt: s.logout_at,
+    loginDate: s.login_date,
+    durationMinutes: s.session_duration_minutes,
+    deviceType: s.device_type,
+    status: s.session_status,
+  }));
+  const dates = sessions.map((s) => s.loginDate).filter(Boolean) as string[];
+  if (!dates.length) return { ...empty, sessions };
+  const anchor = dates.slice().sort().slice(-1)[0];
+  const inWin = (d: string, from: string, to: string) => d >= from && d <= to;
+  const last7 = new Set(
+    sessions.filter((s) => s.loginDate && inWin(s.loginDate, shiftDate(anchor, -6), anchor)).map((s) => s.studentId)
+  );
+  const prev7 = new Set(
+    sessions
+      .filter((s) => s.loginDate && inWin(s.loginDate!, shiftDate(anchor, -13), shiftDate(anchor, -7)))
+      .map((s) => s.studentId)
+  );
+  const perDay: { date: string; count: number }[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = shiftDate(anchor, -i);
+    perDay.push({ date: d, count: sessions.filter((s) => s.loginDate === d).length });
+  }
+  return { sessions, activeLast7: last7.size, activePrev7: prev7.size, anchorDate: anchor, perDay };
+}
+
+/** Bài độc lập của giáo viên + tiến độ nộp theo từng học sinh. */
+export async function getAssignmentsProgress(
+  teacherId: string,
+  studentIds: string[]
+): Promise<BiAssignment[]> {
+  if (!isSupabaseReady()) return [];
+  const names = await studentNameMap(studentIds);
+  const { data: asgs } = await supabase
+    .from('assignments')
+    .select('*')
+    .eq('teacher_id', teacherId)
+    .not('published_at', 'is', null)
+    .order('published_at', { ascending: true });
+  if (!asgs?.length) return [];
+  const asgIds = asgs.map((a: any) => a.id);
+  const [{ data: targets }, { data: aqs }, { data: atts }] = await Promise.all([
+    supabase.from('assignment_targets').select('*').in('assignment_id', asgIds),
+    supabase.from('assignment_questions').select('assignment_id').in('assignment_id', asgIds),
+    supabase
+      .from('attempts')
+      .select('assignment_id, student_id, score_awarded, max_score')
+      .in('assignment_id', asgIds),
+  ]);
+  const qCount = new Map<string, number>();
+  for (const r of aqs || []) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
+  const attByKey = new Map<string, { count: number; best: number | null; max: number | null }>();
+  for (const a of atts || []) {
+    const k = a.assignment_id + '|' + a.student_id;
+    const cur = attByKey.get(k) || { count: 0, best: null, max: null };
+    cur.count += 1;
+    if (a.score_awarded != null && (cur.best == null || a.score_awarded > cur.best)) {
+      cur.best = a.score_awarded;
+      cur.max = a.max_score;
+    }
+    attByKey.set(k, cur);
+  }
+  return asgs.map((a: any) => {
+    const tlist: BiTarget[] = (targets || [])
+      .filter((t: any) => t.assignment_id === a.id && studentIds.includes(t.student_id))
+      .map((t: any) => {
+        const att = attByKey.get(a.id + '|' + t.student_id);
+        return {
+          id: t.target_id,
+          studentId: t.student_id,
+          studentName: names.get(t.student_id) || 'Học sinh',
+          status: t.submission_status,
+          assignedAt: t.assigned_at,
+          dueAt: t.due_at,
+          firstSubmittedAt: t.first_submitted_at,
+          attemptsCount: att?.count || 0,
+          bestScore: att?.best ?? null,
+          maxScore: att?.max ?? null,
+        };
+      })
+      .sort((x: BiTarget, y: BiTarget) => x.studentName.localeCompare(y.studentName, 'vi'));
+    return {
+      id: a.id,
+      title: a.title,
+      activityType: a.activity_type,
+      displayLocation: a.display_location,
+      publishedAt: a.published_at,
+      dueAt: a.due_at,
+      isTimed: !!a.is_timed,
+      timeLimitMinutes: a.time_limit_minutes,
+      xpReward: a.xp_reward ?? 0,
+    questionCount: qCount.get(a.id) || 0,
+      targets: tlist,
+      submittedCount: tlist.filter((t) => t.status === 'SUBMITTED').length,
+    };
+  });
+}
+
+/** Các lượt làm bài (luồng học + bài độc lập) kèm chi tiết từng câu. */
+export async function getAttemptsWithAnswers(studentIds: string[]): Promise<BiAttempt[]> {
+  if (!isSupabaseReady() || !studentIds.length) return [];
+  const names = await studentNameMap(studentIds);
+  const { data: atts } = await supabase
+    .from('attempts')
+    .select('*')
+    .in('student_id', studentIds)
+    .order('submitted_at', { ascending: false })
+    .limit(200);
+  if (!atts?.length) return [];
+  const attIds = atts.map((a: any) => a.attempt_id);
+  const asgIds = [...new Set(atts.map((a: any) => a.assignment_id).filter(Boolean))];
+  const actIds = [...new Set(atts.map((a: any) => a.learning_activity_id).filter(Boolean))];
+  const [{ data: answers }, { data: asgs }, { data: acts }] = await Promise.all([
+    supabase.from('attempt_answers').select('*').in('attempt_id', attIds),
+    asgIds.length
+      ? supabase.from('assignments').select('id, title').in('id', asgIds)
+      : Promise.resolve({ data: [] as any[] }),
+    actIds.length
+      ? supabase.from('learning_activities').select('id, title').in('id', actIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const qIds = [...new Set((answers || []).map((a: any) => a.question_id))];
+  const { data: qs } = qIds.length
+    ? await supabase.from('questions').select('id, prompt, type').in('id', qIds)
+    : { data: [] as any[] };
+  const qMap = new Map((qs || []).map((q: any) => [q.id, q]));
+  const asgMap = new Map((asgs || []).map((a: any) => [a.id, a.title]));
+  const actMap = new Map((acts || []).map((a: any) => [a.id, a.title]));
+  const ansByAtt = new Map<string, BiAnswer[]>();
+  for (const a of answers || []) {
+    const q = qMap.get(a.question_id);
+    const item: BiAnswer = {
+      id: a.answer_id,
+      questionId: a.question_id,
+      prompt: q?.prompt || a.question_id,
+      questionType: q?.type || '',
+      responseText: renderResponse(a.response_json),
+      isCorrect: a.is_correct,
+      score: a.score_awarded,
+      maxScore: a.max_score,
+      gradingStatus: a.grading_status,
+      gradingMethod: a.grading_method,
+      responseTimeSeconds: a.response_time_seconds,
+    };
+    const list = ansByAtt.get(a.attempt_id) || [];
+    list.push(item);
+    ansByAtt.set(a.attempt_id, list);
+  }
+  return atts.map((a: any) => ({
+    id: a.attempt_id,
+    studentId: a.student_id,
+    studentName: names.get(a.student_id) || 'Học sinh',
+    sourceType: a.assignment_id ? 'assignment' : 'activity',
+    sourceTitle: a.assignment_id
+      ? asgMap.get(a.assignment_id) || a.assignment_id
+      : actMap.get(a.learning_activity_id) || a.learning_activity_id,
+    attemptNo: a.attempt_no,
+    status: a.status,
+    submittedAt: a.submitted_at,
+    score: a.score_awarded,
+    maxScore: a.max_score,
+    gradingStatus: a.grading_status,
+    gradingMode: a.grading_mode,
+    answers: ansByAtt.get(a.attempt_id) || [],
+  }));
+}
+
+/** Đọc phiếu review theo trạng thái của học sinh thuộc giáo viên.
+ * Đợt sửa 3 (26/10, tải phiếu review nhanh hơn trên mạng chậm):
+ * - 6 vòng tuần tự cũ → 3 vòng: (1) tên HS + attempts + reviews song song
+ *   (3 query độc lập — reviews lọc theo học sinh ở bộ nhớ sau qua attMap
+ *   nên tập kết quả không đổi; ca attempts rỗng thì query reviews chạy
+ *   thừa rồi bị bỏ — chấp nhận để đổi lấy 1 vòng ít hơn ở ca thường);
+ *   (2) answers + assignments + activities song song; (3) questions.
+ * - opts.includeResponseText === false → đường list KHÔNG select response_json
+ *   (chỉ cột cần cho bảng), responseText trả '' — full bài văn chỉ tải khi mở
+ *   chi tiết qua getReviewAnswerContent. Mặc định true để các nơi gọi khác
+ *   (trợ lý AI list_pending/graded_reviews, LearningResults) giữ nguyên hành vi.
+ */
+async function getReviewsByStatus(
+  studentIds: string[],
+  status: 'PENDING' | 'GRADED',
+  opts?: { includeResponseText?: boolean }
+): Promise<BiPendingReview[]> {
+  if (!isSupabaseReady() || !studentIds.length) return [];
+  const includeResponseText = opts?.includeResponseText !== false;
+  const [names, { data: atts }, { data: reviews }] = await Promise.all([
+    studentNameMap(studentIds),
+    supabase
+      .from('attempts')
+      .select('attempt_id, student_id, assignment_id, learning_activity_id')
+      .in('student_id', studentIds),
+    supabase
+      .from('answer_reviews')
+      .select('*')
+      .eq('review_status', status)
+      .order('created_at', { ascending: true }),
+  ]);
+  if (!atts?.length) return [];
+  const attMap = new Map((atts || []).map((a: any) => [a.attempt_id, a]));
+  const myReviews = (reviews || []).filter((r: any) => r.answer_id);
+  if (!myReviews.length) return [];
+  const ansIds = myReviews.map((r: any) => r.answer_id);
+  const asgIds = [...new Set(atts.map((a: any) => a.assignment_id).filter(Boolean))];
+  const actIds = [...new Set(atts.map((a: any) => a.learning_activity_id).filter(Boolean))];
+  const [{ data: answers }, { data: asgs }, { data: acts }] = await Promise.all([
+    includeResponseText
+      ? supabase.from('attempt_answers').select('*').in('answer_id', ansIds)
+      : supabase
+          .from('attempt_answers')
+          .select('answer_id, attempt_id, question_id, is_correct, score_awarded, max_score, grading_status, grading_method, response_time_seconds')
+          .in('answer_id', ansIds),
+    asgIds.length
+      ? supabase.from('assignments').select('id, title').in('id', asgIds)
+      : Promise.resolve({ data: [] as any[] }),
+    actIds.length
+      ? supabase.from('learning_activities').select('id, title').in('id', actIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const ansMap = new Map((answers || []).map((a: any) => [a.answer_id, a]));
+  const qIds = [...new Set((answers || []).map((a: any) => a.question_id))];
+  const { data: qs } = qIds.length
+    ? await supabase.from('questions').select('id, prompt, type').in('id', qIds)
+    : { data: [] as any[] };
+  const qMap = new Map((qs || []).map((q: any) => [q.id, q]));
+  const asgMap = new Map((asgs || []).map((a: any) => [a.id, a.title]));
+  const actMap = new Map((acts || []).map((a: any) => [a.id, a.title]));
+
+  const out: BiPendingReview[] = [];
+  for (const r of myReviews) {
+    const ans = ansMap.get(r.answer_id);
+    if (!ans) continue;
+    const att = attMap.get(ans.attempt_id);
+    if (!att) continue; // không thuộc học sinh của giáo viên này
+    const q = qMap.get(ans.question_id);
+    const rubric =
+      r.rubric_scores && typeof r.rubric_scores === 'object'
+        ? typeof r.rubric_scores.text === 'string'
+          ? r.rubric_scores.text
+          : JSON.stringify(r.rubric_scores)
+        : null;
+    out.push({
+      reviewId: r.review_id,
+      answerId: r.answer_id,
+      attemptId: ans.attempt_id,
+      studentId: att.student_id,
+      questionId: ans.question_id,
+      studentName: names.get(att.student_id) || 'Học sinh',
+      sourceTitle: att.assignment_id
+        ? asgMap.get(att.assignment_id) || att.assignment_id
+        : actMap.get(att.learning_activity_id) || att.learning_activity_id,
+      questionPrompt: q?.prompt || ans.question_id,
+      questionType: q?.type || '',
+      responseText: includeResponseText ? renderResponse(ans.response_json) : '',
+      maxScore: ans.max_score,
+      rubricText: rubric,
+      createdAt: r.created_at,
+      scoreAwarded: r.score_awarded != null ? Number(r.score_awarded) : null,
+      feedback: r.feedback ?? null,
+      reviewedAt: r.reviewed_at ?? null,
+    });
+  }
+  return out;
+}
+
+/** Hàng chờ chấm: các phiếu review PENDING của học sinh thuộc giáo viên. */
+export async function getPendingReviews(studentIds: string[], opts?: { includeResponseText?: boolean }): Promise<BiPendingReview[]> {
+  return getReviewsByStatus(studentIds, 'PENDING', opts);
+}
+
+/** Phiếu đã chấm (để hàng đợi chấm hiển thị cả lịch sử chấm). */
+export async function getGradedReviews(studentIds: string[], opts?: { includeResponseText?: boolean }): Promise<BiPendingReview[]> {
+  return getReviewsByStatus(studentIds, 'GRADED', opts);
+}
+
+/** Lấy full bài văn của 1 đáp án khi mở chi tiết chấm — đường list đã hoãn
+ * tải response_json khi includeResponseText=false (xem getReviewsByStatus),
+ * nên chi tiết phải fetch riêng 1 đáp án này, không dùng text từ list. */
+export async function getReviewAnswerContent(answerId: string): Promise<string> {
+  if (!isSupabaseReady() || !answerId) return '';
+  const { data } = await supabase
+    .from('attempt_answers')
+    .select('response_json')
+    .eq('answer_id', answerId)
+    .maybeSingle();
+  if (!data) return '';
+  return renderResponse((data as any).response_json);
+}
+
+/** Chấm 1 câu chờ: ghi review + điểm câu + tính lại tổng của lượt làm. */
+export async function gradePendingAnswer(
+  review: Pick<BiPendingReview, 'reviewId' | 'answerId' | 'attemptId'>,
+  score: number,
+  feedback: string,
+  teacherId: string,
+  rubricScores?: unknown
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error: e1 } = await supabase
+    .from('answer_reviews')
+    .update({
+      score_awarded: score,
+      feedback: feedback || null,
+      review_status: 'GRADED',
+      reviewed_at: now,
+      reviewer_id: teacherId,
+      ...(rubricScores !== undefined ? { rubric_scores: rubricScores as any } : {}),
+    })
+    .eq('review_id', review.reviewId);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabase
+    .from('attempt_answers')
+    .update({ score_awarded: score, grading_status: 'GRADED' })
+    .eq('answer_id', review.answerId);
+  if (e2) throw new Error(e2.message);
+  const { data: answers } = await supabase
+    .from('attempt_answers')
+    .select('score_awarded, grading_status')
+    .eq('attempt_id', review.attemptId);
+  const list = answers || [];
+  const total = list.reduce((s: number, a: any) => s + (a.score_awarded ?? 0), 0);
+  const allGraded = list.every((a: any) => a.grading_status === 'GRADED');
+  await supabase
+    .from('attempts')
+    .update({
+      score_awarded: total,
+      grading_status: allGraded ? 'GRADED' : 'PARTIALLY_GRADED',
+    })
+    .eq('attempt_id', review.attemptId);
+}
+
+/** Cây luồng học (VIDEO_FLOW / THEORY_FLOW) theo từng chủ đề của giáo viên. */
+export async function getTopicFlows(teacherId: string): Promise<BiTopicFlow[]> {
+  if (!isSupabaseReady()) return [];
+  const [{ data: topics }, { data: acts }] = await Promise.all([
+    supabase.from('topics').select('id, title').eq('teacher_id', teacherId).order('order_index'),
+    supabase
+      .from('learning_activities')
+      .select('*')
+      .eq('teacher_id', teacherId)
+      .order('sequence_no', { ascending: true }),
+  ]);
+  if (!topics?.length) return [];
+  return topics.map((t: any) => {
+    const mine = (acts || []).filter((a: any) => a.topic_id === t.id);
+    const flowTypes = [...new Set(mine.map((a: any) => a.flow_type || 'KHAC'))];
+    return {
+      topicId: t.id,
+      topicTitle: t.title,
+      flows: flowTypes.map((ft) => ({
+        flowType: ft as string,
+        steps: mine
+          .filter((a: any) => (a.flow_type || 'KHAC') === ft)
+          .map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            activityType: a.activity_type,
+            sequenceNo: a.sequence_no,
+            required: !!a.required_for_flow,
+          })),
+      })),
+    };
+  });
+}
+
+/** Chuẩn hóa loại câu hỏi: app dùng single/multi/fill/essay, DB/payload có thể là
+ *  single_choice/multiple_choice/fill_in_blank/essay — quy về 1 hệ tên của DB. */
+export function normalizeQType(t: string | null | undefined): string {
+  switch ((t || '').toString()) {
+    case 'single':
+    case 'single_choice':
+      return 'single_choice';
+    case 'multi':
+    case 'multiple_choice':
+      return 'multiple_choice';
+    case 'fill':
+    case 'fill_in_blank':
+      return 'fill_in_blank';
+    default:
+      return 'essay';
+  }
+}
+
+function genId(prefix: string): string {
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+export interface CreateAssignmentInput {
+  teacherId: string;
+  classId: string | null;
+  title: string;
+  questionIds: string[];
+  studentIds: string[];
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+}
+
+/** Giáo viên tạo bài tập độc lập & giao cho từng học sinh (assignment + questions + targets). */
+export async function createAssignment(input: CreateAssignmentInput): Promise<string> {
+  const id = genId('asg_');
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('assignments').insert({
+    id,
+    title: input.title,
+    activity_type: 'ASSIGNMENT',
+    display_location: 'HOMEWORK',
+    target_class_id: input.classId,
+    teacher_id: input.teacherId,
+    published_at: now,
+    due_at: input.dueAt,
+    is_timed: input.isTimed,
+    time_limit_minutes: input.isTimed ? input.timeLimitMinutes : null,
+  });
+  if (error) throw new Error(error.message);
+  if (input.questionIds.length) {
+    const { error: e2 } = await supabase.from('assignment_questions').insert(
+      input.questionIds.map((qid, i) => ({ assignment_id: id, question_id: qid, position: i + 1 }))
+    );
+    if (e2) throw new Error(e2.message);
+  }
+  if (input.studentIds.length) {
+    const { error: e3 } = await supabase.from('assignment_targets').insert(
+      input.studentIds.map((sid) => ({
+        target_id: genId('tgt_') + sid.slice(0, 4),
+        assignment_id: id,
+        student_id: sid,
+        assigned_at: now,
+        due_at: input.dueAt,
+        submission_status: 'NOT_SUBMITTED',
+      }))
+    );
+    if (e3) throw new Error(e3.message);
+  }
+  return id;
+}
+
+/* ===== Bài tập & đánh giá NHƯ MỘT MỤC RIÊNG ngang hàng chủ đề =====
+ * Giáo viên bấm "Thêm bài tập & đánh giá" → tạo ngay một bản nháp (chưa có
+ * published_at, chưa có học sinh nào được giao) rồi soạn trong màn riêng:
+ * tiêu đề, hạn nộp, câu hỏi, đối tượng — bấm Giao bài mới chốt published_at
+ * + ghi assignment_targets. Học sinh chỉ thấy bài ĐÃ giao. */
+
+export interface TeacherAssignmentSummary {
+  id: string;
+  title: string;
+  published: boolean;
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  xpReward: number;
+  questionCount: number;
+  targetCount: number;
+  submittedCount: number;
+  createdAt: string | null;
+}
+
+/** Danh sách bài tập & đánh giá của giáo viên cho cây nội dung (kèm đếm nhanh). */
+export async function getTeacherAssignments(
+  teacherId: string
+): Promise<TeacherAssignmentSummary[]> {
+  if (!isSupabaseReady()) return [];
+  const { data: asgs } = await supabase
+    .from('assignments')
+    .select('*')
+    .eq('teacher_id', teacherId)
+    .order('created_at', { ascending: true });
+  if (!asgs?.length) return [];
+  const ids = asgs.map((a: any) => a.id);
+  const [{ data: aqs }, { data: targets }] = await Promise.all([
+    supabase.from('assignment_questions').select('assignment_id').in('assignment_id', ids),
+    supabase
+      .from('assignment_targets')
+      .select('assignment_id, submission_status')
+      .in('assignment_id', ids),
+  ]);
+  const qCount = new Map<string, number>();
+  for (const r of aqs || []) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
+  const tCount = new Map<string, number>();
+  const sCount = new Map<string, number>();
+  for (const t of targets || []) {
+    tCount.set(t.assignment_id, (tCount.get(t.assignment_id) || 0) + 1);
+    if (t.submission_status === 'SUBMITTED')
+      sCount.set(t.assignment_id, (sCount.get(t.assignment_id) || 0) + 1);
+  }
+  return asgs.map((a: any) => ({
+    id: a.id,
+    title: a.title,
+    published: !!a.published_at,
+    dueAt: a.due_at,
+    isTimed: !!a.is_timed,
+    timeLimitMinutes: a.time_limit_minutes,
+    xpReward: a.xp_reward ?? 0,
+    questionCount: qCount.get(a.id) || 0,
+    targetCount: tCount.get(a.id) || 0,
+    submittedCount: sCount.get(a.id) || 0,
+    createdAt: a.created_at,
+  }));
+}
+
+/** Tạo ngay một bài tập & đánh giá NHÁP rỗng (mục riêng trong cây). */
+export async function createEmptyAssignment(teacherId: string): Promise<string> {
+  const id = genId('asg_');
+  const { error } = await supabase.from('assignments').insert({
+    id,
+    title: 'Bài kiểm tra mới',
+    activity_type: 'ASSIGNMENT',
+    display_location: 'HOMEWORK',
+    teacher_id: teacherId,
+    published_at: null,
+    due_at: null,
+    is_timed: false,
+    time_limit_minutes: null,
+  });
+  if (error) throw new Error(error.message);
+  return id;
+}
+
+export interface AssignmentForEdit {
+  id: string;
+  title: string;
+  classId: string | null;
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  xpReward: number;
+  published: boolean;
+  questionIds: string[];
+  studentIds: string[];
+}
+
+/** Đọc toàn bộ nội dung một bài để mở màn soạn. */
+export async function getAssignmentForEdit(id: string): Promise<AssignmentForEdit | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: a } = await supabase.from('assignments').select('*').eq('id', id).maybeSingle();
+  if (!a) return null;
+  const [{ data: aqs }, { data: targets }] = await Promise.all([
+    supabase
+      .from('assignment_questions')
+      .select('question_id, position')
+      .eq('assignment_id', id)
+      .order('position', { ascending: true }),
+    supabase.from('assignment_targets').select('student_id').eq('assignment_id', id),
+  ]);
+  return {
+    id: a.id,
+    title: a.title,
+    classId: a.target_class_id,
+    dueAt: a.due_at,
+    isTimed: !!a.is_timed,
+    timeLimitMinutes: a.time_limit_minutes,
+    xpReward: a.xp_reward ?? 0,
+    published: !!a.published_at,
+    questionIds: (aqs || []).map((r: any) => r.question_id),
+    studentIds: (targets || []).map((t: any) => t.student_id),
+  };
+}
+
+export interface UpdateAssignmentInput {
+  title: string;
+  classId: string | null;
+  dueAt: string | null;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  xpReward: number;
+  questionIds: string[];
+  studentIds: string[];
+  publish: boolean;
+}
+
+/** Lưu bài (nháp hoặc giao): thay toàn bộ câu hỏi, đồng bộ đối tượng được giao.
+ *  Học sinh đã có lượt làm thì KHÔNG bị gỡ khỏi danh sách giao. */
+export async function updateAssignment(id: string, input: UpdateAssignmentInput): Promise<void> {
+  const { data: cur } = await supabase
+    .from('assignments')
+    .select('published_at')
+    .eq('id', id)
+    .maybeSingle();
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('assignments')
+    .update({
+      title: input.title,
+      target_class_id: input.classId,
+      due_at: input.dueAt,
+      is_timed: input.isTimed,
+      time_limit_minutes: input.isTimed ? input.timeLimitMinutes : null,
+      xp_reward: Math.max(0, Math.floor(input.xpReward || 0)),
+      published_at: input.publish ? cur?.published_at || now : cur?.published_at || null,
+      updated_at: now,
+    })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+
+  await supabase.from('assignment_questions').delete().eq('assignment_id', id);
+  if (input.questionIds.length) {
+    const { error: e2 } = await supabase.from('assignment_questions').insert(
+      input.questionIds.map((qid, i) => ({ assignment_id: id, question_id: qid, position: i + 1 }))
+    );
+    if (e2) throw new Error(e2.message);
+  }
+
+  const { data: existing } = await supabase
+    .from('assignment_targets')
+    .select('target_id, student_id')
+    .eq('assignment_id', id);
+  const existingIds = new Set((existing || []).map((t: any) => t.student_id));
+  const wanted = new Set(input.studentIds);
+  const toAdd = input.studentIds.filter((sid) => !existingIds.has(sid));
+  if (toAdd.length) {
+    const { error: e3 } = await supabase.from('assignment_targets').insert(
+      toAdd.map((sid) => ({
+        target_id: genId('tgt_') + sid.slice(0, 4),
+        assignment_id: id,
+        student_id: sid,
+        assigned_at: now,
+        due_at: input.dueAt,
+        submission_status: 'NOT_SUBMITTED',
+      }))
+    );
+    if (e3) throw new Error(e3.message);
+  }
+  const extras = (existing || []).filter((t: any) => !wanted.has(t.student_id));
+  if (extras.length) {
+    const { data: atts } = await supabase
+      .from('attempts')
+      .select('student_id')
+      .eq('assignment_id', id)
+      .in(
+        'student_id',
+        extras.map((t: any) => t.student_id)
+      );
+    const attempted = new Set((atts || []).map((a: any) => a.student_id));
+    const removable = extras.filter((t: any) => !attempted.has(t.student_id));
+    if (removable.length) {
+      await supabase
+        .from('assignment_targets')
+        .delete()
+        .in(
+          'target_id',
+          removable.map((t: any) => t.target_id)
+        );
+    }
+  }
+  await supabase.from('assignment_targets').update({ due_at: input.dueAt }).eq('assignment_id', id);
+}
+
+/** Xóa hẳn một bài tập & đánh giá cùng mọi dữ liệu con (đúng thứ tự FK). */
+export async function deleteAssignmentCompletely(id: string): Promise<void> {
+  const { data: atts } = await supabase.from('attempts').select('id').eq('assignment_id', id);
+  const attIds = (atts || []).map((a: any) => a.id);
+  if (attIds.length) {
+    const { data: answers } = await supabase
+      .from('attempt_answers')
+      .select('answer_id')
+      .in('attempt_id', attIds);
+    const ansIds = (answers || []).map((a: any) => a.answer_id);
+    if (ansIds.length) await supabase.from('answer_reviews').delete().in('answer_id', ansIds);
+    await supabase.from('attempt_answers').delete().in('attempt_id', attIds);
+    await supabase.from('attempts').delete().in('id', attIds);
+  }
+  await supabase.from('assignment_targets').delete().eq('assignment_id', id);
+  await supabase.from('assignment_questions').delete().eq('assignment_id', id);
+  const { error } = await supabase.from('assignments').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export interface AssignmentDetailQuestion {
+  id: string;
+  prompt: string;
+  passage: string | null;
+  type: string;
+  options: string[];
+  points: number;
+}
+
+export interface AssignmentDetail {
+  id: string;
+  title: string;
+  isTimed: boolean;
+  timeLimitMinutes: number | null;
+  xpReward: number;
+  dueAt: string | null;
+  questions: AssignmentDetailQuestion[];
+}
+
+/** Đề bài cho học sinh làm — KHÔNG kèm đáp án đúng. */
+export async function getAssignmentDetail(assignmentId: string): Promise<AssignmentDetail | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: a } = await supabase.from('assignments').select('*').eq('id', assignmentId).maybeSingle();
+  if (!a) return null;
+  const { data: links } = await supabase
+    .from('assignment_questions')
+    .select('question_id, position')
+    .eq('assignment_id', assignmentId)
+    .order('position', { ascending: true });
+  const qIds = (links || []).map((l: any) => l.question_id);
+  if (!qIds.length)
+    return { id: a.id, title: a.title, isTimed: !!a.is_timed, timeLimitMinutes: a.time_limit_minutes, xpReward: a.xp_reward ?? 0, dueAt: a.due_at, questions: [] };
+  const { data: qs } = await supabase.from('questions').select('id, payload').in('id', qIds);
+  const qMap = new Map((qs || []).map((q: any) => [q.id, q.payload || {}]));
+  return {
+    id: a.id,
+    title: a.title,
+    isTimed: !!a.is_timed,
+    timeLimitMinutes: a.time_limit_minutes,
+    xpReward: a.xp_reward ?? 0,
+    dueAt: a.due_at,
+    questions: qIds.map((qid) => {
+      const p = qMap.get(qid) || {};
+      return {
+        id: qid,
+        prompt: p.prompt || qid,
+        passage: p.passage || null,
+        type: normalizeQType(p.type),
+        options: Array.isArray(p.options) ? p.options : [],
+        points: typeof p.points === 'number' ? p.points : 10,
+      };
+    }),
+  };
+}
+
+function normText(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export interface SubmitResult {
+  attemptId: string;
+  autoScore: number;
+  maxScore: number;
+  pendingCount: number;
+  gradedCount: number;
+}
+
+/** Học sinh nộp bài: ghi attempts + attempt_answers, chấm tự động phần có đáp án,
+ *  phần tự luận tạo phiếu chờ giáo viên chấm (answer_reviews PENDING). */
+export async function submitAssignmentAttempt(input: {
+  assignmentId: string;
+  studentId: string;
+  startedAt: string;
+  responses: Record<string, { selected?: string[]; text?: string }>;
+}): Promise<SubmitResult> {
+  const { data: links } = await supabase
+    .from('assignment_questions')
+    .select('question_id, position')
+    .eq('assignment_id', input.assignmentId)
+    .order('position', { ascending: true });
+  const qIds = (links || []).map((l: any) => l.question_id);
+  const { data: qs } = await supabase
+    .from('questions')
+    .select('id, type, correct_answer, max_score, payload, grading_method')
+    .in('id', qIds);
+  const qMap = new Map((qs || []).map((q: any) => [q.id, q]));
+
+  const { count } = await supabase
+    .from('attempts')
+    .select('*', { count: 'exact', head: true })
+    .eq('assignment_id', input.assignmentId)
+    .eq('student_id', input.studentId);
+  const attemptId = genId('att_');
+  const now = new Date().toISOString();
+  const totalSeconds = Math.max(
+    0,
+    Math.round((new Date(now).getTime() - new Date(input.startedAt).getTime()) / 1000)
+  );
+
+  let autoScore = 0;
+  let maxTotal = 0;
+  let pendingCount = 0;
+  let gradedCount = 0;
+  const answerRows: any[] = [];
+  const pendingAnswers: string[] = [];
+
+  for (const qid of qIds) {
+    const q = qMap.get(qid);
+    if (!q) continue;
+    const payload = q.payload || {};
+    const max = q.max_score ?? (typeof payload.points === 'number' ? payload.points : 10);
+    maxTotal += max;
+    const resp = input.responses[qid] || {};
+    const qtype = normalizeQType(q.type || payload.type);
+    const responseJson =
+      qtype === 'single_choice' || qtype === 'multiple_choice'
+        ? { selected: qtype === 'single_choice' ? (resp.selected || [])[0] || null : resp.selected || [] }
+        : { text: resp.text || '' };
+    const key = q.correct_answer ?? payload.answer ?? null;
+    const isAuto = q.grading_method === 'AUTO' && key != null && qtype !== 'essay';
+    let isCorrect: boolean | null = null;
+    let score: number | null = null;
+    let gStatus = 'PENDING_TEACHER_REVIEW';
+    if (isAuto) {
+      if (qtype === 'single_choice') {
+        isCorrect = normText(String((resp.selected || [])[0] || '')) === normText(String(key));
+      } else if (qtype === 'multiple_choice') {
+        const mine = new Set((resp.selected || []).map((s) => normText(s)));
+        const keys = new Set((Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s))));
+        isCorrect = mine.size === keys.size && [...mine].every((s) => keys.has(s));
+      } else {
+        // fill_in_blank: đáp án đúng có thể là 1 chuỗi hoặc mảng các đáp án chấp nhận được
+        const accepted = (Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s)));
+        isCorrect = accepted.includes(normText(resp.text || ''));
+      }
+      const sc = isCorrect ? max : 0;
+      score = sc;
+      autoScore += sc;
+      gStatus = 'GRADED';
+      gradedCount += 1;
+    } else {
+      pendingCount += 1;
+    }
+    const ansId = genId('ans_');
+    if (gStatus === 'PENDING_TEACHER_REVIEW') pendingAnswers.push(ansId);
+    answerRows.push({
+      answer_id: ansId,
+      attempt_id: attemptId,
+      question_id: qid,
+      response_json: responseJson,
+      is_correct: isCorrect,
+      score_awarded: score,
+      max_score: max,
+      grading_status: gStatus,
+      grading_method: q.grading_method || (qtype === 'essay' ? 'TEACHER' : 'AUTO'),
+    });
+  }
+
+  const gradingStatus =
+    pendingCount === 0 ? 'GRADED' : gradedCount === 0 ? 'PENDING_TEACHER_REVIEW' : 'PARTIALLY_GRADED';
+  const { error: e1 } = await supabase.from('attempts').insert({
+    attempt_id: attemptId,
+    student_id: input.studentId,
+    assignment_id: input.assignmentId,
+    attempt_no: (count || 0) + 1,
+    status: 'SUBMITTED',
+    started_at: input.startedAt,
+    submitted_at: now,
+    submitted_date: new Date(new Date(now).getTime() + 7 * 3600_000).toISOString().slice(0, 10),
+    total_time_seconds: totalSeconds,
+    score_awarded: gradedCount > 0 ? autoScore : null,
+    max_score: maxTotal,
+    grading_status: gradingStatus,
+    grading_mode: pendingCount === 0 ? 'AUTO' : gradedCount === 0 ? 'TEACHER' : 'MIXED',
+  });
+  if (e1) throw new Error(e1.message);
+  if (answerRows.length) {
+    const { error: e2 } = await supabase.from('attempt_answers').insert(answerRows);
+    if (e2) throw new Error(e2.message);
+  }
+  if (pendingAnswers.length) {
+    await supabase.from('answer_reviews').insert(
+      pendingAnswers.map((aid) => ({
+        review_id: genId('rev_'),
+        answer_id: aid,
+        reviewer_id: null,
+        review_status: 'PENDING',
+      }))
+    );
+  }
+  const { data: target } = await supabase
+    .from('assignment_targets')
+    .select('target_id, first_submitted_at')
+    .eq('assignment_id', input.assignmentId)
+    .eq('student_id', input.studentId)
+    .maybeSingle();
+  if (target) {
+    await supabase
+      .from('assignment_targets')
+      .update({
+        submission_status: 'SUBMITTED',
+        first_submitted_at: target.first_submitted_at || now,
+      })
+      .eq('target_id', target.target_id);
+  }
+  return { attemptId, autoScore, maxScore: maxTotal, pendingCount, gradedCount };
+}
+
+/** Phía học sinh: bài độc lập được giao cho em + trạng thái + các lượt đã làm. */
+export async function getStudentAssignments(studentId: string) {
+  if (!isSupabaseReady()) return [];
+  const { data: targets } = await supabase
+    .from('assignment_targets')
+    .select('*')
+    .eq('student_id', studentId);
+  if (!targets?.length) return [];
+  const asgIds = targets.map((t: any) => t.assignment_id);
+  const [{ data: asgs }, { data: atts }, { data: aqs }] = await Promise.all([
+    supabase.from('assignments').select('*').in('id', asgIds),
+    supabase
+      .from('attempts')
+      .select('assignment_id, attempt_no, score_awarded, max_score, grading_status, submitted_at')
+      .eq('student_id', studentId)
+      .in('assignment_id', asgIds)
+      .order('submitted_at', { ascending: false }),
+    supabase.from('assignment_questions').select('assignment_id').in('assignment_id', asgIds),
+  ]);
+  const qCount = new Map<string, number>();
+  for (const r of aqs || []) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
+  const asgMap = new Map((asgs || []).map((a: any) => [a.id, a]));
+  // Học sinh chỉ thấy bài ĐÃ GIAO (có published_at) — bản nháp dù đã chọn
+  // sẵn đối tượng lúc soạn cũng không lộ ra phía học sinh.
+  return targets
+    .filter((t: any) => asgMap.get(t.assignment_id)?.published_at)
+    .map((t: any) => {
+      const a = asgMap.get(t.assignment_id) || {};
+    return {
+      targetId: t.target_id,
+      assignmentId: t.assignment_id,
+      title: a.title || t.assignment_id,
+      dueAt: t.due_at || a.due_at,
+      isTimed: !!a.is_timed,
+      timeLimitMinutes: a.time_limit_minutes,
+      questionCount: qCount.get(t.assignment_id) || 0,
+      status: t.submission_status,
+      firstSubmittedAt: t.first_submitted_at,
+      attempts: (atts || []).filter((x: any) => x.assignment_id === t.assignment_id),
+    };
+  });
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FolderPlus, Palette, Tag, AlignLeft } from 'lucide-react';
+import { X, FolderPlus, Palette, Tag, AlignLeft, Sparkles } from 'lucide-react';
 import { TopicWithMeta } from '../../../services/types.ts';
 
 interface TopicModalProps {
@@ -9,11 +9,13 @@ interface TopicModalProps {
   initialData?: TopicWithMeta | null;
 }
 
+// Đợt sửa 24/10: 2 màu nhạt nhất được tăng đậm lên (Xanh tre, Hổ phách) để
+// thẻ chủ đề + viền nhìn rõ hơn; các màu còn lại vốn đã đậm nên giữ nguyên.
 const COLOR_PRESETS = [
   { name: 'Xanh mực', value: '#2F3E6B' },
-  { name: 'Xanh tre', value: '#7FA88A' },
+  { name: 'Xanh tre', value: '#4F7D5F' },
   { name: 'Cam đất', value: '#E2704A' },
-  { name: 'Hổ phách', value: '#F2B84B' },
+  { name: 'Hổ phách', value: '#D99A26' },
   { name: 'Tím mận', value: '#7C3AED' },
   { name: 'Xanh ngọc', value: '#0D9488' },
 ];
@@ -28,6 +30,7 @@ export const TopicModal: React.FC<TopicModalProps> = ({
   const [shortDesc, setShortDesc] = useState('');
   const [tag, setTag] = useState('');
   const [colorScheme, setColorScheme] = useState('#2F3E6B');
+  const [xpReward, setXpReward] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,11 +40,13 @@ export const TopicModal: React.FC<TopicModalProps> = ({
       setShortDesc(initialData.shortDesc || '');
       setTag(initialData.tag || '');
       setColorScheme(initialData.colorScheme || '#2F3E6B');
+      setXpReward(initialData.xpReward ?? 0);
     } else {
       setTitle('');
       setShortDesc('');
-      setTag('Ngữ văn 7');
+      setTag('');
       setColorScheme('#2F3E6B');
+      setXpReward(0);
     }
     setError(null);
   }, [initialData, isOpen]);
@@ -62,8 +67,9 @@ export const TopicModal: React.FC<TopicModalProps> = ({
         id: initialData?.id,
         title: title.trim(),
         shortDesc: shortDesc.trim(),
-        tag: tag.trim() || 'Ngữ văn 7',
+        tag: tag.trim(),
         colorScheme,
+        xpReward: Math.max(0, Math.floor(Number(xpReward) || 0)),
       });
       onClose();
     } catch (err: any) {
@@ -145,6 +151,27 @@ export const TopicModal: React.FC<TopicModalProps> = ({
               placeholder="VD: Nhận diện đặc điểm thể thơ bốn chữ năm chữ, cách ngắt nhịp và phân tích hình ảnh..."
               className="w-full px-3.5 py-2.5 rounded-2xl bg-white border border-[#E6DCC8] text-sm text-[#2F3E6B] placeholder-[#8C7E6A]/50 focus:outline-none focus:border-[#2F3E6B] transition-colors resize-none leading-relaxed"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#8C7E6A]" />
+              <span>XP thưởng khi hoàn thành toàn bộ chủ đề</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={xpReward}
+                onChange={(e) => setXpReward(Number(e.target.value))}
+                className="w-32 px-3.5 py-2.5 rounded-2xl bg-white border border-[#E6DCC8] text-sm font-bold text-[#2F3E6B] focus:outline-none focus:border-[#2F3E6B] transition-colors"
+              />
+              <span className="text-xs font-bold text-[#8C7E6A]">XP</span>
+              <span className="text-[11px] text-[#8C7E6A] leading-snug">
+                Học sinh nhận đủ số XP này (1 lần) khi xem hết 100% video, học xong lý thuyết và làm đúng hết bài tập của chủ đề. Để 0 = không thưởng.
+              </span>
+            </div>
           </div>
 
           <div>

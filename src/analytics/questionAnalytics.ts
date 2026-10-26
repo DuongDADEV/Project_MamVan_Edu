@@ -18,18 +18,21 @@ export function computeQuestionAnalytics(
   const dateRange = getFilterDateRange(filter);
   const items: QuestionAnalyticsItem[] = [];
 
-  // Gom toàn bộ QuestionResult từ tất cả học sinh
-  const questionMap: Record<string, { attempts: number; correct: number; totalSeconds: number }> = {};
+  // Gom toàn bộ QuestionResult từ tất cả học sinh. LƯU Ý TRUNG THỰC SỐ LIỆU:
+  // QuestionResult KHÔNG lưu thời gian làm từng câu và KHÔNG lưu đáp án học
+  // sinh đã chọn — hai chỉ số đó không suy ra được từ dữ liệu thật nên không
+  // tính (trước đây bị gán cứng 140/45 giây theo mức và hệ số 0,65 cho đáp án
+  // nhiễu; đã gỡ hẳn).
+  const questionMap: Record<string, { attempts: number; correct: number }> = {};
 
   Object.values(allStates).forEach((st) => {
     const qList = filterQuestionResults(st.questionResults || [], filter, dateRange);
     qList.forEach((r) => {
       if (!questionMap[r.questionId]) {
-        questionMap[r.questionId] = { attempts: 0, correct: 0, totalSeconds: 0 };
+        questionMap[r.questionId] = { attempts: 0, correct: 0 };
       }
       questionMap[r.questionId].attempts++;
       if (r.isCorrect) questionMap[r.questionId].correct++;
-      questionMap[r.questionId].totalSeconds += (r.level === 'PHAN_TICH' || r.level === 'VAN_DUNG') ? 140 : 45;
     });
   });
 
@@ -43,10 +46,12 @@ export function computeQuestionAnalytics(
       return;
     }
 
-    const stat = questionMap[qId] || { attempts: 18, correct: 13, totalSeconds: 850 };
-    const attempts = Math.max(1, stat.attempts);
-    const accuracyRate = Math.round((stat.correct / attempts) * 100);
-    const avgTimeSeconds = Math.round(stat.totalSeconds / attempts);
+    // Chưa có lượt làm thật -> mọi chỉ số bằng 0 (không bịa số liệu mẫu)
+    const stat = questionMap[qId] || { attempts: 0, correct: 0 };
+    const attempts = stat.attempts;
+    const accuracyRate = attempts > 0 ? Math.round((stat.correct / attempts) * 100) : 0;
+    // Không có dữ liệu thời gian làm bài thật theo từng câu -> 0 (không suy đoán)
+    const avgTimeSeconds = 0;
 
     // Gán cờ cảnh báo sư phạm
     let flag: 'too_hard' | 'too_easy' | 'possible_flaw' | undefined = undefined;
@@ -63,18 +68,10 @@ export function computeQuestionAnalytics(
       flagLabel = 'Nghi ngờ câu hỏi gài bẫy/sai đáp án';
     }
 
-    // Phân tích đáp án nhiễu (Distractor Analysis)
-    let mostChosenDistractor: any = undefined;
-    if (qDef.options && qDef.options.length > 1) {
-      const wrongOptions = qDef.options.filter((o) => o !== qDef.answer);
-      if (wrongOptions.length > 0) {
-        mostChosenDistractor = {
-          option: wrongOptions[0],
-          count: Math.round(attempts * ((100 - accuracyRate) / 100) * 0.65),
-          percentage: Math.round((100 - accuracyRate) * 0.65),
-        };
-      }
-    }
+    // Phân tích đáp án nhiễu: KHÔNG tính — dữ liệu làm bài không lưu đáp án
+    // học sinh đã chọn nên không đếm thật được; để trống để giao diện ẩn khối
+    // này thay vì gán một đáp án sai bất kỳ với tỉ lệ phần trăm suy đoán.
+    const mostChosenDistractor = undefined;
 
     const topicObj = topics.find((t) => t.id === qDef.topicId);
 

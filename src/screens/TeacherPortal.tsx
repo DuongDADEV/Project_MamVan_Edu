@@ -12,11 +12,13 @@ import { TeacherGradingScreen } from './teacher/TeacherGradingScreen.tsx';
 import { TeacherRewardsScreen } from './teacher/TeacherRewardsScreen.tsx';
 import { TeacherAnalyticsScreen, AnalyticsTabKey } from './teacher/TeacherAnalyticsScreen.tsx';
 import { TeacherSettingsScreen } from './teacher/TeacherSettingsScreen.tsx';
+import { AnalyticsAssistantBubble } from '../components/teacher/AnalyticsAssistantBubble.tsx';
 import {
   classService,
   studentService,
   contentService,
   essayService,
+  quizService,
   rewardService,
   auditService,
   attemptService,
@@ -26,7 +28,7 @@ import {
   StudentAccount,
   AuditLog,
 } from '../services/index.ts';
-import { StudentState, EssaySubmission, RewardRequest } from '../types.ts';
+import { StudentState, EssaySubmission, RewardRequest, Question } from '../types.ts';
 import { AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { MamMuc } from '../components/MamMuc.tsx';
 
@@ -41,9 +43,11 @@ interface TeacherPortalData {
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
   topics: any[];
+  quizzes: any[];
   allEssays: EssaySubmission[];
   allRewards: RewardRequest[];
   auditLogs: AuditLog[];
+  questions: Record<string, Question>;
 }
 
 export const TeacherPortal: React.FC<TeacherPortalProps> = ({
@@ -55,7 +59,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [openAddStudentInitially, setOpenAddStudentInitially] = useState(false);
-  const [analyticsInitialTab, setAnalyticsInitialTab] = useState<AnalyticsTabKey>('score');
+  const [analyticsInitialTab, setAnalyticsInitialTab] = useState<AnalyticsTabKey>('assistant');
   const [analyticsInitialStudentId, setAnalyticsInitialStudentId] = useState<string | undefined>(undefined);
 
   // Gộp các truy vấn dùng chung thành 1 Promise.all tối ưu
@@ -74,6 +78,8 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         allEssays,
         allRewards,
         auditLogs,
+        questions,
+        quizzes,
       ] = await Promise.all([
         classService.getClasses(teacher.id),
         studentService.getStudents(),
@@ -82,18 +88,22 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         essayService.getSubmissions({ status: 'ALL' }),
         rewardService.getRequests(),
         auditService.getLogs({ limit: 100 }),
+        quizService.getQuestions(),
+        quizService.getQuizzes(undefined, false),
       ]);
       return {
         classes: classes || [],
         students: students || [],
         studentStates: studentStates || {},
         topics: topics || [],
+        quizzes: quizzes || [],
         allEssays: allEssays || [],
         allRewards: allRewards || [],
         auditLogs: auditLogs || [],
+        questions: questions || {},
       };
     },
-    ['class', 'student', 'state', 'content', 'essay', 'reward', 'audit'],
+    ['class', 'student', 'state', 'content', 'essay', 'reward', 'audit', 'quiz'],
     [teacher.id]
   );
 
@@ -101,6 +111,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const students = portalData?.students ?? [];
   const studentStates = portalData?.studentStates ?? {};
   const topics = portalData?.topics ?? [];
+  const quizzes = portalData?.quizzes ?? [];
   const allEssays = portalData?.allEssays ?? [];
   const allRewards = portalData?.allRewards ?? [];
   const auditLogs = portalData?.auditLogs ?? [];
@@ -218,15 +229,30 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
             onLogout={onLogout}
           />
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#FAF5EB]">
-            <div className="max-w-7xl mx-auto w-full min-w-0">
+          <main
+            className={
+              currentTab === 'content'
+                ? 'flex-1 overflow-hidden flex flex-col p-4 sm:p-6 lg:p-8 bg-[#FAF5EB]'
+                : 'flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#FAF5EB]'
+            }
+          >
+            <div
+              className={
+                currentTab === 'content'
+                  ? 'max-w-7xl mx-auto w-full min-w-0 flex-1 min-h-0 flex flex-col'
+                  : 'max-w-7xl mx-auto w-full min-w-0'
+              }
+            >
               {currentTab === 'overview' && (
                 <TeacherOverviewScreen
+                  teacherId={teacher.id}
                   teacherName={teacher.name}
                   classes={classes || []}
                   students={students || []}
                   studentStates={studentStates || {}}
                   topics={topics || []}
+                  quizzes={quizzes || []}
+                  questions={portalData?.questions ?? {}}
                   essays={allEssays || []}
                   rewards={allRewards || []}
                   auditLogs={auditLogs || []}
@@ -288,6 +314,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                 <TeacherRewardsScreen
                   pendingCount={pendingRewards.length}
                   selectedClassId={selectedClassId}
+                  teacherId={teacher.id}
                 />
               )}
 
@@ -297,8 +324,11 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
                   students={students || []}
                   studentStates={studentStates || {}}
                   topics={topics || []}
+                  quizzes={quizzes || []}
                   essays={allEssays || []}
                   rewards={allRewards || []}
+                  questions={portalData?.questions ?? {}}
+                  teacherId={teacher.id}
                   initialTab={analyticsInitialTab}
                   initialStudentId={analyticsInitialStudentId}
                   onRefreshData={refreshPortalData}
@@ -316,6 +346,18 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
           </main>
         </div>
       </div>
+
+      {/* Bong bóng chat Trợ lý phân tích — mở hỏi đáp số liệu từ mọi màn hình */}
+      <AnalyticsAssistantBubble
+        classes={classes || []}
+        students={students || []}
+        studentStates={studentStates || {}}
+        topics={topics || []}
+        essays={allEssays || []}
+        rewards={allRewards || []}
+        questions={portalData?.questions ?? {}}
+        teacherId={teacher.id}
+      />
     </div>
   );
 };

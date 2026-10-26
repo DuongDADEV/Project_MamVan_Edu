@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Sparkles,
   HelpCircle,
@@ -13,6 +13,7 @@ import {
   FileQuestion,
   Layers,
   ChevronDown,
+  ChevronUp,
   Quote,
   Check,
   X,
@@ -20,10 +21,10 @@ import {
   Award,
   RefreshCw,
   FolderOpen,
+  NotebookPen,
   BookOpenCheck,
   Eye,
   Copy,
-  KeyRound,
   Zap,
   ExternalLink,
 } from 'lucide-react';
@@ -38,15 +39,9 @@ import {
   TeacherProfile,
   ClassItem,
 } from '../../services/index.ts';
-import {
-  getGeminiApiKey,
-  setGeminiApiKey,
-  getGeminiModel,
-  setGeminiModel,
-  testGeminiApiKey,
-} from '../../services/ai/index.ts';
 import { QuestionType, SkillLevel, Difficulty, Question } from '../../types.ts';
 import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
+import { ConfirmDialog } from '../../components/teacher/ui/ConfirmDialog.tsx';
 import { AiContentStudioModal } from '../../components/teacher/ai/AiContentStudioModal.tsx';
 import { MamMuc } from '../../components/MamMuc.tsx';
 
@@ -55,6 +50,123 @@ interface TeacherQuestionBankScreenProps {
   classes?: ClassItem[];
   selectedClassId?: string;
   onRefreshData?: () => void;
+}
+
+// ============================
+// MỤC BẢN NHÁP (nội dung AI chưa duyệt)
+// Bản nháp do Mầm AI Studio tự lưu (localStorage theo chủ đề). Chưa duyệt thì
+// nằm ở đây; duyệt xong mới được đẩy vào Ngân hàng câu hỏi / học liệu.
+// ============================
+const QUESTION_DRAFT_PREFIX = 'mamvan_ai_question_draft_';
+const THEORY_DRAFT_PREFIX = 'mamvan_ai_theory_draft_';
+
+interface QuestionDraftSet {
+  key: string;
+  topicId: string;
+  topicTitle: string;
+  questions: Question[];
+  selectedIds: string[];
+  savedAt: string;
+  // Đợt sửa 24/10: người tạo bản nháp. Nháp cũ chưa có dấu thì coi là nháp
+  // của người đang dùng trình duyệt này (tương thích ngược); nháp mới có dấu
+  // thì chỉ chính người tạo mới thấy và mới được chuyển vào ngân hàng.
+  teacherId?: string;
+}
+
+interface TheoryDraftItem {
+  key: string;
+  topicId: string;
+  title: string;
+  blocksCount: number;
+  savedAt: string;
+  teacherId?: string;
+}
+
+/** Chuyển blocks lý thuyết AI thành sections của bài lý thuyết (dùng chung cho
+ *  cả luồng đẩy từ Studio và luồng đẩy trực tiếp từ thẻ nháp). */
+function blocksToSections(blocks: any[]): any[] {
+  const sections: any[] = [];
+  let currentSec: any = null;
+  for (const b of blocks) {
+    if (b.type === 'heading' || !currentSec) {
+      if (currentSec) sections.push(currentSec);
+      currentSec = {
+        id: 'sec_' + (b.id || Date.now() + Math.random().toString(36).substring(2, 5)),
+        title: b.content || 'Nội dung bài học',
+        body: [],
+        takeaway: '',
+      };
+    } else if (b.type === 'paragraph' && b.content) {
+      currentSec.body.push(b.content);
+    } else if (b.type === 'takeaway' && (b.takeawayText || b.content)) {
+      currentSec.takeaway = b.takeawayText || b.content;
+    } else if (b.type === 'example') {
+      currentSec.example = {
+        text: b.exampleText || b.content || '',
+        analysis: b.exampleAnalysis || '',
+      };
+    }
+  }
+  if (currentSec) sections.push(currentSec);
+  return sections;
+}
+
+// Đợt QA 26/10, blocker 3: trước đây lỗi đọc 1 khóa nháp (JSON hỏng,
+// localStorage lỗi) làm cả hàm văng vào catch rồi trả [] — tab Bản nháp hiện
+// "Chưa có bản nháp nào đang chờ" như thể không có nháp. Nay: đọc từng khóa
+// riêng (khóa hỏng không chôn các khóa còn lại) và báo readError để UI hiện
+// banner lỗi thay vì câu "không có nháp".
+function readQuestionDraftSets(): { sets: QuestionDraftSet[]; readError: boolean } {
+  const out: QuestionDraftSet[] = [];
+  let readError = false;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(QUESTION_DRAFT_PREFIX)) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+      if (Array.isArray(parsed?.questions) && parsed.questions.length > 0) {
+        out.push({
+          key,
+          topicId: key.slice(QUESTION_DRAFT_PREFIX.length),
+          topicTitle: parsed.topicTitle || '',
+          questions: parsed.questions,
+          selectedIds: Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [],
+          savedAt: parsed.savedAt || '',
+          teacherId: parsed.teacherId || undefined,
+        });
+      }
+    } catch (e) {
+      readError = true;
+      console.warn('Lỗi đọc mục nháp câu hỏi:', key, e);
+    }
+  }
+  return { sets: out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || '')), readError };
+}
+
+function readTheoryDrafts(): { items: TheoryDraftItem[]; readError: boolean } {
+  const out: TheoryDraftItem[] = [];
+  let readError = false;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(THEORY_DRAFT_PREFIX)) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+      if (parsed?.data?.blocks?.length > 0) {
+        out.push({
+          key,
+          topicId: key.slice(THEORY_DRAFT_PREFIX.length),
+          title: parsed.data.title || 'Lý thuyết chưa đặt tên',
+          blocksCount: parsed.data.blocks.length,
+          savedAt: parsed.savedAt || '',
+          teacherId: parsed.teacherId || undefined,
+        });
+      }
+    } catch (e) {
+      readError = true;
+      console.warn('Lỗi đọc mục nháp lý thuyết:', key, e);
+    }
+  }
+  return { items: out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || '')), readError };
 }
 
 export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps> = ({
@@ -89,24 +201,170 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   const videos = rawVideos ?? [];
   const theories = rawTheories ?? [];
 
-  // 2. TABS ĐIỀU HƯỚNG CHÍNH: 'bank' (Kho câu hỏi) HOẶC 'ai_studio' (Xưởng AI NotebookLM)
-  const [activeMainTab, setActiveMainTab] = useState<'bank' | 'ai_studio'>('bank');
+  // 2. TABS ĐIỀU HƯỚNG CHÍNH: 'bank' (Kho câu hỏi) HOẶC 'ai_studio' (Mầm AI Studio)
+  const [activeMainTab, setActiveMainTab] = useState<'bank' | 'ai_studio' | 'drafts'>('bank');
 
-  // Trạng thái AI Key & Model
-  const [hasApiKey, setHasApiKey] = useState<boolean>(() => !!getGeminiApiKey());
-  const [activeModel, setActiveModel] = useState<string>(() => getGeminiModel());
-  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
-  const [modalKeyInput, setModalKeyInput] = useState<string>(() => getGeminiApiKey());
-  const [modalModelInput, setModalModelInput] = useState<string>(() => getGeminiModel());
-  const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
-  const [keyTestResult, setKeyTestResult] = useState<{
-    success: boolean;
-    message: string;
-    latencyMs: number;
+  // MỤC BẢN NHÁP: đọc lại mỗi khi đổi tab / sau mỗi thao tác xử lý nháp
+  const [draftsVersion, setDraftsVersion] = useState(0);
+  // Ngân hàng riêng từng giáo viên: mục nháp chỉ hiện nháp của chính giáo viên
+  // đang đăng nhập + nháp cũ chưa đóng dấu (tương thích ngược). Nháp có dấu
+  // của giáo viên khác không hiện, không chuyển được.
+  const isOwnDraft = (d?: string) => !d || d === teacherId;
+  const questionDraftsRead = useMemo(
+    () => readQuestionDraftSets(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draftsVersion, activeMainTab, teacherId]
+  );
+  const theoryDraftsRead = useMemo(
+    () => readTheoryDrafts(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draftsVersion, activeMainTab, teacherId]
+  );
+  const questionDraftSets = questionDraftsRead.sets.filter((s) => isOwnDraft(s.teacherId));
+  const theoryDraftItems = theoryDraftsRead.items.filter((s) => isOwnDraft(s.teacherId));
+  // Đợt QA 26/10, blocker 3: lỗi đọc nháp phải hiện banner lỗi, không được
+  // ngụy trang thành "không có nháp".
+  const draftReadError = questionDraftsRead.readError || theoryDraftsRead.readError;
+  const pendingDraftCount =
+    questionDraftSets.reduce((acc, set) => acc + set.questions.length, 0) + theoryDraftItems.length;
+  const [expandedDraftKey, setExpandedDraftKey] = useState<string | null>(null);
+  const [draftSelections, setDraftSelections] = useState<Record<string, string[]>>({});
+  const [draftToDelete, setDraftToDelete] = useState<{ key: string; label: string } | null>(null);
+  const [draftOpenRequest, setDraftOpenRequest] = useState<{
+    kind: 'questions' | 'theory';
+    nonce: number;
   } | null>(null);
+
+  const getDraftSelection = (set: QuestionDraftSet): string[] =>
+    draftSelections[set.key] ?? set.selectedIds.filter((id) => set.questions.some((q) => q.id === id));
+
+  const handleReviewDraftInStudio = (topicId: string, kind: 'questions' | 'theory') => {
+    // Đặt đúng chủ đề của bản nháp (kể cả nháp 'global' -> topic rỗng) để
+    // Studio nạp đúng khóa nháp; trước đây chỉ đặt khi chủ đề còn tồn tại
+    // nên bấm Duyệt với nháp global/chủ đề đã xóa thì Studio mở ra mà
+    // không mở màn duyệt (nạp sai khóa).
+    setFormTopicId(topicId === 'global' ? '' : topicId);
+    setDraftOpenRequest({ kind, nonce: Date.now() });
+    setActiveMainTab('ai_studio');
+  };
+
+  // Đẩy các câu ĐÃ DUYỆT (đã tích chọn) từ bản nháp vào Ngân hàng.
+  // CHUYỂN HẲN: câu đã đẩy bị xóa khỏi bản nháp (phần còn lại giữ nguyên,
+  // vẫn giữ dấu người tạo); hết nháp thì xóa luôn khóa nháp. Chỉ chính giáo
+  // viên tạo ra nháp mới được chuyển.
+  const handlePushDraftQuestions = async (set: QuestionDraftSet) => {
+    if (set.teacherId && set.teacherId !== teacherId) {
+      alert('Bản nháp này thuộc về giáo viên khác — thầy/cô không thể chuyển nó vào ngân hàng của mình.');
+      return;
+    }
+    const ids = getDraftSelection(set);
+    const toPush = set.questions.filter((q) => ids.includes(q.id));
+    if (toPush.length === 0) {
+      alert('Thầy/cô hãy tích chọn ít nhất 1 câu đã duyệt để đưa vào Ngân hàng.');
+      return;
+    }
+    try {
+      for (const q of toPush) {
+        await quizService.saveQuestion({
+          ...q,
+          topicId: set.topicId !== 'global' ? set.topicId : q.topicId || formTopicId,
+          isAiGenerated: true,
+          isTeacherReviewed: true,
+        });
+      }
+      const remaining = set.questions.filter((q) => !ids.includes(q.id));
+      if (remaining.length > 0) {
+        localStorage.setItem(
+          set.key,
+          JSON.stringify({
+            questions: remaining,
+            selectedIds: remaining.map((q) => q.id),
+            savedAt: new Date().toISOString(),
+            topicTitle: set.topicTitle,
+            teacherId: set.teacherId || teacherId,
+          })
+        );
+      } else {
+        localStorage.removeItem(set.key);
+      }
+      setNewlyCreatedQuestionIds(toPush.map((q) => q.id));
+      showToast(`🎉 Đã đưa ${toPush.length} câu từ bản nháp vào Ngân hàng!`);
+      onRefreshData?.();
+      setDraftsVersion((v) => v + 1);
+    } catch (e) {
+      alert('Không thể đưa câu hỏi vào Ngân hàng. Vui lòng thử lại.');
+    }
+  };
+
+  // Đẩy bản nháp LÝ THUYẾT vào học liệu — đối tác của handlePushDraftQuestions
+  // nhưng đích đến KHÁC: lý thuyết là học liệu, không phải câu hỏi, nên nó trở
+  // thành bài lý thuyết (trạng thái nháp) trong cây nội dung của chủ đề đó, chứ
+  // không nhét vào ngân hàng câu hỏi. CHUYỂN HẲN: đẩy xong xóa luôn khóa nháp.
+  // Chỉ chính giáo viên tạo ra nháp mới được đẩy.
+  const handlePushDraftTheory = async (item: TheoryDraftItem) => {
+    if (item.teacherId && item.teacherId !== teacherId) {
+      alert('Bản nháp này thuộc về giáo viên khác — thầy/cô không thể chuyển nó vào học liệu của mình.');
+      return;
+    }
+    let blocks: any[] = [];
+    let title = item.title;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(item.key) || 'null');
+      blocks = parsed?.data?.blocks || [];
+      title = parsed?.data?.title || item.title;
+    } catch {
+      blocks = [];
+    }
+    if (blocks.length === 0) {
+      alert('Bản nháp này không còn nội dung để đưa vào học liệu.');
+      return;
+    }
+    const topicId = topics.some((t) => t.id === item.topicId)
+      ? item.topicId
+      : topics.some((t) => t.id === formTopicId)
+        ? formTopicId
+        : '';
+    if (!topicId) {
+      alert('Bản nháp này chưa gắn chủ đề nào — thầy/cô mở trong Studio để chọn chủ đề rồi đẩy lại.');
+      return;
+    }
+    const topicTitle = topics.find((t) => t.id === topicId)?.title || 'chủ đề đã chọn';
+    try {
+      await contentService.saveTheoryLesson({
+        title,
+        topicId,
+        sections: blocksToSections(blocks),
+        blocks,
+        status: 'draft',
+        isAiGenerated: true,
+        isTeacherReviewed: true,
+      } as any);
+      localStorage.removeItem(item.key);
+      showToast(`🎉 Đã đưa lý thuyết "${title}" vào học liệu của chủ đề "${topicTitle}"!`);
+      onRefreshData?.();
+      setDraftsVersion((v) => v + 1);
+    } catch (e) {
+      alert('Không thể đưa lý thuyết vào học liệu. Vui lòng thử lại.');
+    }
+  };
+
+  const handleDeleteDraft = () => {
+    if (!draftToDelete) return;
+    try {
+      localStorage.removeItem(draftToDelete.key);
+    } catch (e) {
+      /* bỏ qua */
+    }
+    setDraftToDelete(null);
+    setDraftsVersion((v) => v + 1);
+    showToast('Đã xóa bản nháp.');
+  };
+
+
 
   // 3. BỘ LỌC KHO CÂU HỎI
   const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
+  const [openFilterGroups, setOpenFilterGroups] = useState({ type: true, level: true, difficulty: true });
   const [selectedContentType, setSelectedContentType] = useState<
     'all' | 'single' | 'multi' | 'fill' | 'essay' | 'video' | 'theory'
   >('all');
@@ -117,6 +375,23 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   // 4. TOAST THÔNG BÁO
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const fmtDraftTime = (iso: string) =>
+    iso
+      ? new Date(iso).toLocaleString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          day: '2-digit',
+          month: '2-digit',
+        })
+      : '';
+  const DRAFT_QTYPE_LABELS: Record<string, string> = {
+    single: 'Trắc nghiệm',
+    multi: 'Chọn nhiều',
+    fill: 'Điền khuyết',
+    essay: 'Tự luận',
+  };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -128,6 +403,18 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   // Form State cho Câu hỏi thủ công
   const [formTopicId, setFormTopicId] = useState<string>('');
+  // Đợt QA 26/10, blocker 2: lần đầu mở Studio mà formTopicId còn rỗng thì
+  // mặc định lấy chủ đề đầu tiên — tránh lưu video/lý thuyết với topicId rỗng
+  // (nội dung mồ côi). Chỉ mặc định 1 lần duy nhất và KHÔNG chen ngang khi
+  // đang mở màn duyệt nháp (draftOpenRequest khác null — trong đó formTopicId
+  // rỗng là có chủ đích cho nháp 'global', theo fix 984dc5f).
+  const topicDefaultedRef = useRef(false);
+  useEffect(() => {
+    if (topicDefaultedRef.current) return;
+    if (formTopicId !== '' || topics.length === 0 || draftOpenRequest) return;
+    topicDefaultedRef.current = true;
+    setFormTopicId(topics[0].id);
+  }, [topics, formTopicId, draftOpenRequest]);
   const [formType, setFormType] = useState<QuestionType>('single');
   const [formLevel, setFormLevel] = useState<SkillLevel>('NHAN_BIET');
   const [formDifficulty, setFormDifficulty] = useState<Difficulty>('TB');
@@ -203,17 +490,23 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     setIsQuestionModalOpen(true);
   };
 
-  // Xóa câu hỏi
-  const handleDeleteQuestion = async (id: string) => {
-    if (window.confirm('Thầy/cô có chắc chắn muốn xóa câu hỏi này khỏi ngân hàng không?')) {
-      try {
-        await quizService.deleteQuestion(id, teacherId);
-        showToast('Đã xóa câu hỏi khỏi ngân hàng.');
-        onRefreshData?.();
-      } catch (e) {
-        showToast('Lỗi khi xóa câu hỏi.');
-      }
+  // Xóa câu hỏi (hỏi xác nhận bằng hộp thoại giữa màn hình của app)
+  const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
+
+  const handleDeleteQuestion = (id: string) => {
+    setQuestionToDelete(id);
+  };
+
+  const confirmDeleteQuestion = async () => {
+    if (!questionToDelete) return;
+    try {
+      await quizService.deleteQuestion(questionToDelete, teacherId);
+      showToast('Đã xóa câu hỏi khỏi ngân hàng.');
+      onRefreshData?.();
+    } catch (e) {
+      showToast('Lỗi khi xóa câu hỏi.');
     }
+    setQuestionToDelete(null);
   };
 
   // Lưu câu hỏi thủ công
@@ -279,6 +572,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   }) => {
     try {
       if (payload.type === 'quiz') {
+        // Đợt QA 26/10, blocker 2: không lưu câu hỏi với topic rỗng.
+        if (!payload.data.topicId && !formTopicId) {
+          showToast('Hãy chọn chủ đề trước khi lưu — câu hỏi chưa được lưu để khỏi rơi vào chủ đề rỗng.');
+          return;
+        }
         const generatedQuestions: Question[] = payload.data.questions || [];
         const savedIds: string[] = [];
         for (const q of generatedQuestions) {
@@ -298,6 +596,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         }
         showToast(`🎉 Đã lưu ${generatedQuestions.length} câu hỏi AI vừa chọn vào Ngân hàng! Các câu mới được làm nổi bật trên đầu.`);
       } else if (payload.type === 'video') {
+        // Đợt QA 26/10, blocker 2: không lưu video với topicId rỗng (mồ côi).
+        if (!formTopicId) {
+          showToast('Hãy chọn chủ đề trước khi lưu — bài giảng chưa được lưu để khỏi rơi vào chủ đề rỗng.');
+          return;
+        }
         await contentService.saveVideoLesson({
           ...payload.data,
           topicId: formTopicId,
@@ -305,34 +608,16 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         });
         showToast('🎉 Đã lưu bài giảng video & ý trọng tâm vào Ngân hàng học liệu!');
       } else if (payload.type === 'theory') {
-        const blocks = payload.data.blocks || [];
-        let sections = payload.data.sections || [];
-
-        // Nếu có blocks mà thiếu sections, tự động convert blocks thành sections
-        if ((!sections || sections.length === 0) && blocks.length > 0) {
-          let currentSec: any = null;
-          for (const b of blocks) {
-            if (b.type === 'heading' || !currentSec) {
-              if (currentSec) sections.push(currentSec);
-              currentSec = {
-                id: 'sec_' + (b.id || Date.now() + Math.random().toString(36).substring(2, 5)),
-                title: b.content || 'Nội dung bài học',
-                body: [],
-                takeaway: '',
-              };
-            } else if (b.type === 'paragraph' && b.content) {
-              currentSec.body.push(b.content);
-            } else if (b.type === 'takeaway' && (b.takeawayText || b.content)) {
-              currentSec.takeaway = b.takeawayText || b.content;
-            } else if (b.type === 'example') {
-              currentSec.example = {
-                text: b.exampleText || b.content || '',
-                analysis: b.exampleAnalysis || '',
-              };
-            }
-          }
-          if (currentSec) sections.push(currentSec);
+        // Đợt QA 26/10, blocker 2: không lưu lý thuyết với topicId rỗng (mồ côi).
+        if (!formTopicId) {
+          showToast('Hãy chọn chủ đề trước khi lưu — lý thuyết chưa được lưu để khỏi rơi vào chủ đề rỗng.');
+          return;
         }
+        const blocks = payload.data.blocks || [];
+        const sections =
+          payload.data.sections && payload.data.sections.length > 0
+            ? payload.data.sections
+            : blocksToSections(blocks);
 
         await contentService.saveTheoryLesson({
           ...payload.data,
@@ -477,41 +762,86 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      {/* 1. THANH TIÊU ĐỀ TRANG */}
+      {/* 1. KHỐI ĐẦU TRANG GỘP (theo yêu cầu chủ dự án): tiêu đề bên trái;
+          bên phải là MỘT CỤM 4 NÚT SÁT NHAU ở đúng vị trí nút "Thêm câu hỏi
+          thủ công": 3 tab (Kho ngân hàng / Bản nháp / Mầm AI Studio) + nút
+          Thêm câu hỏi thủ công. Nút cam "Mở Mầm AI Studio" ĐÃ XÓA (trùng
+          chức năng với tab Mầm AI Studio). */}
+      <div className="bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl px-5 pt-4 pb-4 shadow-2xs">
+      <div className="[&>*]:mb-0 [&>*]:pb-0 [&>*]:border-b-0">
       <PageHeader
         title="Ngân hàng câu hỏi & Kho học liệu"
-        subtitle="Quản lý toàn bộ câu hỏi trắc nghiệm, tự luận, video bài giảng và lý thuyết; tích hợp Xưởng Sáng Tạo AI (NotebookLM Style) đối chiếu trực tiếp từ ngữ liệu."
+        subtitle="Quản lý toàn bộ câu hỏi trắc nghiệm, tự luận, video bài giảng và lý thuyết; tích hợp Mầm AI Studio đối chiếu trực tiếp từ ngữ liệu."
         badge={
           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#E2704A]/10 text-[#E2704A] border border-[#E2704A]/20 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-[#E2704A]" />
-            <span>NotebookLM AI Studio</span>
+            <span>Mầm AI Studio</span>
           </span>
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Cụm 3 tab */}
+            <div className="flex items-center gap-1 p-1 bg-[#FAF5EB] border border-[#E6DCC8] rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('bank')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeMainTab === 'bank'
+                    ? 'bg-[#2F3E6B] text-white shadow-xs'
+                    : 'text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-black/5'
+                }`}
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span>Kho ngân hàng</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftsVersion((v) => v + 1);
+                  setActiveMainTab('drafts');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeMainTab === 'drafts'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-[#8C7E6A] hover:text-amber-600 hover:bg-amber-50'
+                }`}
+              >
+                <NotebookPen className="w-4 h-4" />
+                <span>Bản nháp</span>
+                {pendingDraftCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">
+                    {pendingDraftCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('ai_studio')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeMainTab === 'ai_studio'
+                    ? 'bg-[#E2704A] text-white shadow-xs'
+                    : 'text-[#8C7E6A] hover:text-[#E2704A] hover:bg-[#E2704A]/5'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Mầm AI Studio</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-black/5 font-bold">RAG Studio</span>
+              </button>
+            </div>
+            {/* Nút thêm câu hỏi thủ công — sát ngay cụm tab */}
             <button
               type="button"
               onClick={handleOpenAddQuestionModal}
               className="px-4 py-2 rounded-2xl bg-white border border-[#E6DCC8] hover:bg-[#FAF5EB] text-[#2F3E6B] font-bold text-xs flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4 text-[#E2704A]" />
-              <span>+ Thêm câu hỏi thủ công</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveMainTab(activeMainTab === 'ai_studio' ? 'bank' : 'ai_studio')}
-              className={`px-4 py-2 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer ${
-                activeMainTab === 'ai_studio'
-                  ? 'bg-[#2F3E6B] text-white hover:bg-[#233055]'
-                  : 'bg-gradient-to-r from-[#E2704A] to-[#D45E36] hover:from-[#D45E36] hover:to-[#C34F28] text-white'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{activeMainTab === 'ai_studio' ? '📚 Quay lại Kho ngân hàng' : '⚡ Mở Xưởng AI NotebookLM'}</span>
+              <span>Thêm câu hỏi thủ công</span>
             </button>
           </div>
         }
       />
+      </div>
+      </div>
 
       {/* TOAST THÔNG BÁO NỔI */}
       {toastMessage && (
@@ -520,82 +850,6 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           <span className="text-xs font-medium">{toastMessage}</span>
         </div>
       )}
-
-      {/* THANH BÁO TRẠNG THÁI AI GOOGLE STUDIO */}
-      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs transition-all ${
-        hasApiKey
-          ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
-          : 'bg-amber-50/80 border-amber-300 text-amber-950'
-      }`}>
-        <div className="flex items-center gap-3">
-          {hasApiKey ? (
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 font-bold">
-              <Sparkles className="w-4 h-4 text-emerald-700" />
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 font-bold">
-              <KeyRound className="w-4 h-4 text-amber-700" />
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-2 font-bold text-xs">
-              <span>{hasApiKey ? `🟢 Đang kích hoạt Google Gemini AI thật (${activeModel})` : '⚠️ Chưa cấu hình Google AI Studio API Key!'}</span>
-            </div>
-            <p className="text-[11px] text-[#6B7280] mt-0.5">
-              {hasApiKey
-                ? 'Khi bấm sinh nội dung hoặc trò chuyện trong Xưởng AI, hệ thống sẽ gọi trực tiếp Google Gemini AI thật theo đúng ngữ liệu.'
-                : 'Để AI sinh câu hỏi thật bám sát ngữ liệu chuẩn NotebookLM (thay vì dữ liệu mặc định), vui lòng dán API Key của Google AI Studio tại đây.'}
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setModalKeyInput(getGeminiApiKey());
-            setModalModelInput(getGeminiModel());
-            setKeyTestResult(null);
-            setShowApiKeyModal(true);
-          }}
-          className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors shrink-0 cursor-pointer ${
-            hasApiKey
-              ? 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-              : 'bg-[#E2704A] hover:bg-[#D45E36] text-white animate-pulse'
-          }`}
-        >
-          <KeyRound className="w-3.5 h-3.5" />
-          <span>{hasApiKey ? 'Cấu hình lại API Key' : '🔑 Nhập API Key ngay'}</span>
-        </button>
-      </div>
-
-      {/* 2. TAB SWITCHER CHÍNH */}
-      <div className="flex items-center gap-2 p-1.5 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl w-fit shadow-2xs">
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('bank')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeMainTab === 'bank'
-              ? 'bg-[#2F3E6B] text-white shadow-xs'
-              : 'text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-black/5'
-          }`}
-        >
-          <FolderOpen className="w-4 h-4" />
-          <span>Kho ngân hàng ({countStats.totalQuestions} câu hỏi, {countStats.videos} video, {countStats.theories} bài)</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('ai_studio')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-            activeMainTab === 'ai_studio'
-              ? 'bg-[#E2704A] text-white shadow-xs'
-              : 'text-[#8C7E6A] hover:text-[#E2704A] hover:bg-[#E2704A]/5'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Xưởng Sáng Tạo AI (NotebookLM Style)</span>
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-white/20 font-bold">RAG Studio</span>
-        </button>
-      </div>
 
       {/* ========================================================================= */}
       {/* PHÂN HỆ 1: XƯỞNG SÁNG TẠO AI NOTEBOOKLM (NHÚNG TRỰC TIẾP ĐẦY ĐỦ 3 CỘT)    */}
@@ -610,6 +864,9 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                 onChange={(e) => setFormTopicId(e.target.value)}
                 className="px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] outline-none focus:border-[#E2704A]"
               >
+                <option value="" disabled>
+                  — Chọn chủ đề —
+                </option>
                 {topics.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.title}
@@ -625,7 +882,10 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           <AiContentStudioModal
             isOpen={true}
             isEmbedded={true}
+            teacherId={teacherId}
             onClose={() => setActiveMainTab('bank')}
+            autoOpenDraftKind={draftOpenRequest?.kind ?? null}
+            autoOpenDraftNonce={draftOpenRequest?.nonce ?? 0}
             topicId={formTopicId}
             topicTitle={topics.find((t) => t.id === formTopicId)?.title || 'Ngữ văn 7'}
             onApplyDraft={handleApplyDraftFromAi}
@@ -657,7 +917,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               <span className="text-xl font-bold font-lora text-[#2F3E6B]">{countStats.fill}</span>
             </div>
             <div className="bg-[#FFFDF8] border border-[#E6DCC8] p-3.5 rounded-2xl shadow-2xs">
-              <span className="text-[11px] font-bold text-[#E2704A] block">Tự luận / Rubric</span>
+              <span className="text-[11px] font-bold text-[#E2704A] block">Tự luận</span>
               <span className="text-xl font-bold font-lora text-[#2F3E6B]">{countStats.essay}</span>
             </div>
             <div className="bg-[#FFFDF8] border border-[#E6DCC8] p-3.5 rounded-2xl shadow-2xs">
@@ -709,74 +969,133 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
               </div>
             </div>
 
-            {/* Dòng Tabs chọn Loại học liệu */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[#E6DCC8]/60">
-              <span className="text-xs font-bold text-[#8C7E6A] mr-2">Dạng học liệu:</span>
-              {[
-                { id: 'all', label: 'Tất cả' },
-                { id: 'single', label: 'Trắc nghiệm đơn' },
-                { id: 'multi', label: 'Nhiều đáp án' },
-                { id: 'fill', label: 'Điền từ' },
-                { id: 'essay', label: 'Tự luận' },
-                { id: 'video', label: 'Video & Ý trọng tâm' },
-                { id: 'theory', label: 'Lý thuyết chi tiết' },
-              ].map((item) => (
+            {/* BỘ LỌC DẠNG DANH SÁCH (LIST) — 3 nhóm theo Figma */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-[#E6DCC8]/60">
+              <div>
                 <button
-                  key={item.id}
-                  onClick={() => setSelectedContentType(item.id as any)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
-                    selectedContentType === item.id
-                      ? 'bg-[#2F3E6B] text-white shadow-2xs'
-                      : 'bg-[#FAF5EB] text-[#8C7E6A] hover:text-[#2F3E6B] hover:bg-[#E6DCC8]/40'
-                  }`}
+                  type="button"
+                  onClick={() => setOpenFilterGroups((prev) => ({ ...prev, type: !prev.type }))}
+                  className="w-full flex items-center justify-between text-xs font-bold text-[#2F3E6B] mb-1.5 hover:text-[#E2704A] transition-colors"
                 >
-                  {item.label}
+                  <span>
+                    1. Dạng học liệu
+                    {!openFilterGroups.type && (
+                      <span className="ml-1.5 font-semibold text-[#E2704A]">· {({ all: 'Tất cả', single: 'Trắc nghiệm đơn', multi: 'Nhiều đáp án', fill: 'Điền từ', essay: 'Tự luận', video: 'Video & Ý trọng tâm', theory: 'Lý thuyết chi tiết' } as Record<string, string>)[selectedContentType]}</span>
+                    )}
+                  </span>
+                  {openFilterGroups.type ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
-              ))}
-            </div>
-
-            {/* Lọc theo Năng lực & Độ khó */}
-            <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-[#E6DCC8]/60">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-[#8C7E6A]">Năng lực:</span>
-                {(['all', 'NHAN_BIET', 'THONG_HIEU', 'PHAN_TICH', 'VAN_DUNG'] as const).map((lvl) => (
-                  <button
-                    key={lvl}
-                    onClick={() => setSelectedLevel(lvl)}
-                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition-colors ${
-                      selectedLevel === lvl
-                        ? 'bg-[#E2704A] text-white'
-                        : 'bg-[#FAF5EB] text-[#8C7E6A] hover:text-[#2F3E6B]'
-                    }`}
-                  >
-                    {lvl === 'all'
-                      ? 'Tất cả'
-                      : lvl === 'NHAN_BIET'
-                      ? 'NB'
-                      : lvl === 'THONG_HIEU'
-                      ? 'TH'
-                      : lvl === 'PHAN_TICH'
-                      ? 'PT'
-                      : 'VD'}
-                  </button>
-                ))}
+                {openFilterGroups.type && (
+                <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
+                  {[
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'single', label: 'Trắc nghiệm đơn' },
+                    { id: 'multi', label: 'Nhiều đáp án' },
+                    { id: 'fill', label: 'Điền từ' },
+                    { id: 'essay', label: 'Tự luận' },
+                    { id: 'video', label: 'Video & Ý trọng tâm' },
+                    { id: 'theory', label: 'Lý thuyết chi tiết' },
+                  ].map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedContentType(item.id as any)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                          selectedContentType === item.id
+                            ? 'bg-[#2F3E6B] text-white font-bold'
+                            : 'bg-[#FFFDF8] text-[#4B5563] hover:bg-[#FAF5EB]'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selectedContentType === item.id ? 'bg-white' : 'bg-[#E6DCC8]'}`} />
+                        {item.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                )}
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-[#8C7E6A]">Độ khó:</span>
-                {(['all', 'DE', 'TB', 'KHO'] as const).map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setSelectedDifficulty(d)}
-                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-colors ${
-                      selectedDifficulty === d
-                        ? 'bg-[#2F3E6B] text-white'
-                        : 'bg-[#FAF5EB] text-[#8C7E6A] hover:text-[#2F3E6B]'
-                    }`}
-                  >
-                    {d === 'all' ? 'Tất cả' : d === 'DE' ? 'Dễ' : d === 'TB' ? 'TB' : 'Khó'}
-                  </button>
-                ))}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setOpenFilterGroups((prev) => ({ ...prev, level: !prev.level }))}
+                  className="w-full flex items-center justify-between text-xs font-bold text-[#2F3E6B] mb-1.5 hover:text-[#E2704A] transition-colors"
+                >
+                  <span>
+                    2. Năng lực
+                    {!openFilterGroups.level && (
+                      <span className="ml-1.5 font-semibold text-[#E2704A]">· {({ all: 'Tất cả', NHAN_BIET: 'Nhận biết', THONG_HIEU: 'Thông hiểu', PHAN_TICH: 'Phân tích', VAN_DUNG: 'Vận dụng' } as Record<string, string>)[selectedLevel]}</span>
+                    )}
+                  </span>
+                  {openFilterGroups.level ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                {openFilterGroups.level && (
+                <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
+                  {([
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'NHAN_BIET', label: 'Nhận biết' },
+                    { id: 'THONG_HIEU', label: 'Thông hiểu' },
+                    { id: 'PHAN_TICH', label: 'Phân tích' },
+                    { id: 'VAN_DUNG', label: 'Vận dụng' },
+                  ] as const).map((lvl) => (
+                    <li key={lvl.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLevel(lvl.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                          selectedLevel === lvl.id
+                            ? 'bg-[#E2704A] text-white font-bold'
+                            : 'bg-[#FFFDF8] text-[#4B5563] hover:bg-[#FAF5EB]'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selectedLevel === lvl.id ? 'bg-white' : 'bg-[#E6DCC8]'}`} />
+                        {lvl.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                )}
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setOpenFilterGroups((prev) => ({ ...prev, difficulty: !prev.difficulty }))}
+                  className="w-full flex items-center justify-between text-xs font-bold text-[#2F3E6B] mb-1.5 hover:text-[#E2704A] transition-colors"
+                >
+                  <span>
+                    3. Độ khó
+                    {!openFilterGroups.difficulty && (
+                      <span className="ml-1.5 font-semibold text-[#E2704A]">· {({ all: 'Tất cả', DE: 'Dễ', TB: 'Trung bình', KHO: 'Khó' } as Record<string, string>)[selectedDifficulty]}</span>
+                    )}
+                  </span>
+                  {openFilterGroups.difficulty ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                {openFilterGroups.difficulty && (
+                <ul className="divide-y divide-[#E6DCC8]/50 rounded-xl border border-[#E6DCC8] overflow-hidden">
+                  {([
+                    { id: 'all', label: 'Tất cả' },
+                    { id: 'DE', label: 'Dễ' },
+                    { id: 'TB', label: 'Trung bình' },
+                    { id: 'KHO', label: 'Khó' },
+                  ] as const).map((d) => (
+                    <li key={d.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDifficulty(d.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
+                          selectedDifficulty === d.id
+                            ? 'bg-[#2F3E6B] text-white font-bold'
+                            : 'bg-[#FFFDF8] text-[#4B5563] hover:bg-[#FAF5EB]'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selectedDifficulty === d.id ? 'bg-white' : 'bg-[#E6DCC8]'}`} />
+                        {d.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                )}
               </div>
             </div>
           </div>
@@ -816,7 +1135,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                       {q.isAiGenerated && !newlyCreatedQuestionIds.includes(q.id) && (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-purple-500" />
-                          NotebookLM AI
+                          Mầm AI
                         </span>
                       )}
                     </div>
@@ -862,7 +1181,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       {options.map((opt, oIdx) => {
                         const optKey = String.fromCharCode(65 + oIdx);
-                        const isCorrect = q.answer === optKey;
+                        const isCorrect = q.answer === optKey || q.answer === opt;
                         return (
                           <div
                             key={oIdx}
@@ -893,7 +1212,9 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       {options.map((opt, oIdx) => {
                         const optKey = String.fromCharCode(65 + oIdx);
-                        const isCorrect = Array.isArray(q.answer) && q.answer.includes(optKey);
+                        const isCorrect =
+                          Array.isArray(q.answer) &&
+                          (q.answer.includes(optKey) || q.answer.includes(opt));
                         return (
                           <div
                             key={oIdx}
@@ -1107,7 +1428,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                     Không tìm thấy câu hỏi hoặc học liệu phù hợp
                   </h3>
                   <p className="text-xs text-[#8C7E6A] max-w-md mx-auto">
-                    Thử đổi bộ lọc hoặc dùng Xưởng Sáng Tạo AI (NotebookLM Style) để nạp ngữ liệu và sinh thêm câu hỏi tự động.
+                    Thử đổi bộ lọc hoặc dùng Mầm AI Studio để nạp ngữ liệu và sinh thêm câu hỏi tự động.
                   </p>
                   <div className="flex items-center justify-center gap-3">
                     <button
@@ -1129,7 +1450,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                       className="px-4 py-2 rounded-xl bg-[#E2704A] text-white text-xs font-bold flex items-center gap-2 shadow-xs hover:bg-[#D45E36]"
                     >
                       <Sparkles className="w-4 h-4" />
-                      <span>Mở Xưởng AI NotebookLM</span>
+                      <span>Mở Mầm AI Studio</span>
                     </button>
                   </div>
                 </div>
@@ -1378,148 +1699,229 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         </div>
       )}
 
-      {/* MODAL CẤU HÌNH API KEY TRỰC TIẾP TRÊN NGÂN HÀNG CÂU HỎI */}
-      {showApiKeyModal && (
-        <div className="fixed inset-0 z-60 bg-[#1E1B4B]/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-[#FFFDF8] border border-[#E6DCC8] rounded-3xl shadow-2xl p-6 space-y-4 text-[#2F3E6B] animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E6DCC8]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#E2704A]/10 text-[#E2704A] flex items-center justify-center font-bold">
-                  <KeyRound className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-lora font-bold text-base">Cấu hình Google AI Studio API Key</h3>
-                  <p className="text-[11px] text-[#8C7E6A]">Kích hoạt Gemini AI thật cho toàn hệ thống Mầm Văn</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowApiKeyModal(false)}
-                className="p-1 rounded-lg text-[#8C7E6A] hover:bg-black/5"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* ========================================================================= */}
+      {/* PHÂN HỆ 3: MỤC BẢN NHÁP — nội dung AI chưa duyệt, duyệt xong mới vào Ngân hàng */}
+      {/* ========================================================================= */}
+      {activeMainTab === 'drafts' && (
+        <div className="space-y-4 animate-in fade-in duration-150">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+            <h3 className="text-sm font-extrabold text-amber-800 flex items-center gap-2">
+              <NotebookPen className="w-4 h-4" /> Bản nháp chưa duyệt
+            </h3>
+            <p className="text-xs text-amber-700 mt-1">
+              Mọi nội dung Mầm AI tạo ra đều nằm ở đây trước. Thầy/cô duyệt từng câu, tích chọn
+              những câu đạt rồi bấm đẩy vào Ngân hàng — chưa duyệt thì chưa vào Ngân hàng.
+              Bản nháp lý thuyết thì bấm "Đưa vào học liệu" để thành bài lý thuyết trong cây
+              nội dung của chủ đề (lý thuyết không vào ngân hàng câu hỏi).
+            </p>
+          </div>
+
+          {draftReadError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+              <p className="text-sm font-bold text-red-700">
+                Không đọc được một phần bản nháp đã lưu trên trình duyệt này (dữ liệu nháp có thể bị hỏng).
+              </p>
+              <p className="text-xs text-red-600 mt-1">
+                Các bản nháp đọc được vẫn hiện bên dưới. Đây là lỗi đọc, không phải "không có nháp" — nếu cần,
+                hãy xóa bản nháp hỏng trong bộ nhớ trình duyệt rồi tải lại trang.
+              </p>
             </div>
+          )}
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold block mb-1">
-                  Google Gemini API Key <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Dán API Key (bắt đầu bằng AIzaSy...)"
-                  value={modalKeyInput}
-                  onChange={(e) => setModalKeyInput(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-mono outline-none focus:border-[#E2704A]"
-                />
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] text-[#E2704A] hover:underline inline-flex items-center gap-1 mt-1 font-medium"
-                >
-                  <span>Lấy API Key miễn phí tại Google AI Studio</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
+          {!draftReadError && questionDraftSets.length === 0 && theoryDraftItems.length === 0 && (
+            <div className="p-10 text-center bg-white border border-[#E6DCC8] rounded-2xl">
+              <NotebookPen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-500">Chưa có bản nháp nào đang chờ.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Khi Mầm AI Studio tạo bộ câu hỏi hoặc lý thuyết mà thầy/cô chưa duyệt ngay, bản
+                nháp sẽ xuất hiện tại đây.
+              </p>
+            </div>
+          )}
 
-              <div>
-                <label className="text-xs font-bold block mb-1">Mô hình AI (Model)</label>
-                <select
-                  value={modalModelInput}
-                  onChange={(e) => setModalModelInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold"
-                >
-                  <option value="gemini-flash-latest">gemini-flash-latest (Khuyên dùng - Chuẩn Google AI Studio)</option>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash (Thế hệ mới 2.5 - Siêu tốc)</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Ổn định & Thông minh)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Bản tiêu chuẩn)</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro (Suy luận chuyên sâu cao cấp)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Ngữ văn phân tích sâu)</option>
-                </select>
-              </div>
-
-              {keyTestResult && (
-                <div
-                  className={`p-3 rounded-xl border text-xs space-y-1 ${
-                    keyTestResult.success
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                      : 'bg-rose-50 border-rose-300 text-rose-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold">
-                    <span>{keyTestResult.success ? '✓ Kết nối thành công!' : '✗ Lỗi kết nối!'}</span>
-                    {keyTestResult.latencyMs > 0 && <span>{keyTestResult.latencyMs}ms</span>}
+          {questionDraftSets.map((set) => {
+            const selection = getDraftSelection(set);
+            const isExpanded = expandedDraftKey === set.key;
+            const topicTitle =
+              set.topicTitle ||
+              topics.find((t) => t.id === set.topicId)?.title ||
+              'Chưa gắn chủ đề';
+            return (
+              <div key={set.key} className="bg-white border border-[#E6DCC8] rounded-2xl overflow-hidden shadow-2xs">
+                <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E8D5]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-700 text-[10px] font-extrabold shrink-0">
+                      BỘ CÂU HỎI NHÁP
+                    </span>
+                    <span className="text-sm font-bold text-[#1E1B4B] truncate">{topicTitle}</span>
+                    <span className="text-[11px] text-slate-400 shrink-0">
+                      {set.questions.length} câu · Lưu nháp {fmtDraftTime(set.savedAt)}
+                    </span>
                   </div>
-                  <p className="text-[11px] italic">"{keyTestResult.message}"</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleReviewDraftInStudio(set.topicId, 'questions')}
+                      className="px-3 py-1.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold transition-colors"
+                    >
+                      Duyệt trong Studio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDraftToDelete({ key: set.key, label: `bộ câu hỏi nháp của "${topicTitle}"` })}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 text-xs font-bold text-rose-600 transition-colors"
+                    >
+                      Xóa nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedDraftKey(isExpanded ? null : set.key)}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-[#FAF5EB] text-xs font-bold text-[#2F3E6B] transition-colors flex items-center gap-1"
+                    >
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      {isExpanded ? 'Thu gọn' : 'Xem & chọn câu'}
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-[#E6DCC8]">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!modalKeyInput.trim()) {
-                    alert('Vui lòng dán API Key trước khi kiểm tra.');
-                    return;
-                  }
-                  setIsTestingKey(true);
-                  setKeyTestResult(null);
-                  try {
-                    const res = await testGeminiApiKey(modalKeyInput.trim(), modalModelInput);
-                    setKeyTestResult(res);
-                  } catch (err: any) {
-                    setKeyTestResult({ success: false, message: err.message, latencyMs: 0 });
-                  } finally {
-                    setIsTestingKey(false);
-                  }
-                }}
-                disabled={isTestingKey || !modalKeyInput.trim()}
-                className="px-3.5 py-2 rounded-xl border border-[#2F3E6B] text-[#2F3E6B] hover:bg-[#2F3E6B]/5 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-              >
-                {isTestingKey ? (
+                {isExpanded && (
                   <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Đang kiểm tra...</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Kiểm tra kết nối</span>
+                    <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
+                      {set.questions.map((q, idx) => {
+                        const checked = selection.includes(q.id);
+                        return (
+                          <label
+                            key={q.id || idx}
+                            className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-[#FAF8F3] transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setDraftSelections((prev) => ({
+                                  ...prev,
+                                  [set.key]: checked
+                                    ? selection.filter((id) => id !== q.id)
+                                    : [...selection, q.id],
+                                }))
+                              }
+                              className="mt-0.5 w-4 h-4 accent-[#E2704A] cursor-pointer shrink-0"
+                            />
+                            <span className="min-w-0">
+                              <span className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-[#4F46E5] border border-indigo-100">
+                                  {DRAFT_QTYPE_LABELS[q.type] || q.type}
+                                </span>
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                                  Câu {idx + 1}
+                                </span>
+                              </span>
+                              <span className="block text-xs text-slate-700 line-clamp-2">{q.prompt}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="px-4 py-3 bg-[#FAF5EB]/60 border-t border-[#F1E8D5] flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs text-slate-500">
+                        Đã chọn <strong className="text-[#E2704A]">{selection.length}</strong>/{set.questions.length} câu
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftSelections((prev) => ({
+                              ...prev,
+                              [set.key]:
+                                selection.length === set.questions.length
+                                  ? []
+                                  : set.questions.map((q) => q.id),
+                            }))
+                          }
+                          className="px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-[#FAF5EB] text-xs font-bold text-[#2F3E6B] transition-colors"
+                        >
+                          {selection.length === set.questions.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={selection.length === 0}
+                          onClick={() => handlePushDraftQuestions(set)}
+                          className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-[#E2704A] to-[#D45E36] disabled:opacity-40 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Đưa {selection.length} câu đã duyệt vào Ngân hàng
+                        </button>
+                      </div>
+                    </div>
                   </>
                 )}
-              </button>
+              </div>
+            );
+          })}
 
+          {theoryDraftItems.map((item) => (
+            <div key={item.key} className="bg-white border border-[#E6DCC8] rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="px-2 py-0.5 rounded-full bg-violet-100 border border-violet-200 text-violet-700 text-[10px] font-extrabold shrink-0">
+                  LÝ THUYẾT NHÁP
+                </span>
+                <span className="text-sm font-bold text-[#1E1B4B] truncate">{item.title}</span>
+                <span className="text-[11px] text-slate-400 shrink-0">
+                  {item.blocksCount} khối nội dung · Lưu nháp {fmtDraftTime(item.savedAt)}
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowApiKeyModal(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#8C7E6A] hover:bg-black/5"
+                  onClick={() => handlePushDraftTheory(item)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors"
+                  title="Tạo thành bài lý thuyết trong cây nội dung của chủ đề, xong xóa bản nháp này"
                 >
-                  Đóng
+                  Đưa vào học liệu
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setGeminiApiKey(modalKeyInput);
-                    setGeminiModel(modalModelInput);
-                    const keyValid = !!modalKeyInput.trim();
-                    setHasApiKey(keyValid);
-                    setActiveModel(modalModelInput);
-                    setShowApiKeyModal(false);
-                    showToast(keyValid ? 'Đã lưu API Key và kích hoạt Google AI Studio thật!' : 'Đã xóa API Key.');
-                  }}
-                  className="px-4 py-2 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shadow-xs cursor-pointer"
+                  onClick={() => handleReviewDraftInStudio(item.topicId, 'theory')}
+                  className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-colors"
                 >
-                  Lưu & Kích hoạt AI
+                  Duyệt trong Studio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftToDelete({ key: item.key, label: `bản nháp lý thuyết "${item.title}"` })}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 text-xs font-bold text-rose-600 transition-colors"
+                >
+                  Xóa nháp
                 </button>
               </div>
             </div>
-          </div>
+          ))}
         </div>
       )}
+
+      {/* Hộp thoại xác nhận xóa câu hỏi — giữa màn hình */}
+      <ConfirmDialog
+        isOpen={!!draftToDelete}
+        title="Xóa bản nháp?"
+        message={
+          draftToDelete
+            ? `Toàn bộ nội dung trong ${draftToDelete.label} sẽ bị xóa và không khôi phục được. Nội dung đã vào Ngân hàng không bị ảnh hưởng.`
+            : ''
+        }
+        confirmLabel="Xóa bản nháp"
+        variant="danger"
+        onConfirm={handleDeleteDraft}
+        onCancel={() => setDraftToDelete(null)}
+      />
+      <ConfirmDialog
+        isOpen={!!questionToDelete}
+        title="Xóa câu hỏi"
+        message="Thầy/cô có chắc chắn muốn xóa câu hỏi này khỏi ngân hàng không?"
+        confirmLabel="Xóa câu hỏi"
+        variant="danger"
+        onConfirm={confirmDeleteQuestion}
+        onCancel={() => setQuestionToDelete(null)}
+      />
     </div>
   );
 };

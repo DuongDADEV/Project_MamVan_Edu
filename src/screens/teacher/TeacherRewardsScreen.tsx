@@ -13,6 +13,7 @@ import {
   RewardStatus,
   ClassItem,
 } from '../../services/types.ts';
+import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../../data/rewards.ts';
 import {
   rewardService,
   classService,
@@ -43,10 +44,12 @@ import {
 interface TeacherRewardsScreenProps {
   pendingCount?: number;
   selectedClassId?: string;
+  teacherId?: string;
 }
 
 export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
   selectedClassId: initialClassId,
+  teacherId,
 }) => {
   // Tabs: 'queue' (Hàng đợi) | 'catalog' (Danh mục mốc) | 'history' (Lịch sử)
   const [activeTab, setActiveTab] = useState<'queue' | 'catalog' | 'history'>('queue');
@@ -98,7 +101,15 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
   };
 
   const requests = rawRequests || [];
-  const rewardsList = rewards || [];
+  // Danh mục HỢP NHẤT (hướng c 24/10): mốc mặc định + mốc của chính GV này.
+  // Mốc mặc định chỉ xem (không sửa/xóa); mốc kho thuộc GV này thì quản lý được.
+  const ownDbRewards = useMemo(
+    () => filterDbRewardsForOwner(rewards || [], teacherId ?? null),
+    [rewards, teacherId]
+  );
+  const rewardsList = useMemo(() => mergeRewardTiers(ownDbRewards), [ownDbRewards]);
+  const ownDbRewardIds = useMemo(() => new Set(ownDbRewards.map((r) => r.id)), [ownDbRewards]);
+  const isDefaultReward = (id: string) => !ownDbRewardIds.has(id);
   const classList = classes || [];
 
   // Thống kê nhanh
@@ -132,10 +143,25 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
     return list;
   }, [requests, selectedClassId, statusFilter, searchQuery]);
 
-  // Lọc lịch sử
+  // Lọc lịch sử (tôn trọng bộ lọc lớp + ô tìm kiếm giống hàng đợi)
   const historyList = useMemo(() => {
-    return requests.filter((r) => r.status === 'GIVEN' || r.status === 'OPENED' || r.status === 'REJECTED');
-  }, [requests]);
+    let list = requests.filter(
+      (r) => r.status === 'GIVEN' || r.status === 'OPENED' || r.status === 'REJECTED'
+    );
+    if (selectedClassId !== 'all') {
+      list = list.filter((r) => r.classId === selectedClassId);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (r) =>
+          r.studentName?.toLowerCase().includes(q) ||
+          r.className?.toLowerCase().includes(q) ||
+          r.reward?.teaserDescription.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [requests, selectedClassId, searchQuery]);
 
   // Xử lý đơn lẻ
   const handleApprove = async (req: EnrichedRewardRequest) => {
@@ -190,10 +216,18 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
 
   const handleBatchApprove = async () => {
     if (selectedRequestIds.size === 0) return;
+    // Chỉ yêu cầu đang CHỜ mới duyệt được — lọc trước để thông báo đúng số lượng
+    const actionable = Array.from(selectedRequestIds).filter(
+      (id) => requests.find((r) => r.id === id)?.status === 'PENDING_APPROVAL'
+    );
+    if (actionable.length === 0) {
+      showNotification('Không có yêu cầu nào đang chờ duyệt trong số đã chọn', 'info');
+      return;
+    }
     setBatchActionLoading(true);
     try {
-      await rewardService.batchUpdateStatus(Array.from(selectedRequestIds), 'APPROVED', undefined, 'teacher_001');
-      showNotification(`Đã phê duyệt hàng loạt ${selectedRequestIds.size} yêu cầu!`);
+      await rewardService.batchUpdateStatus(actionable, 'APPROVED', undefined, 'teacher_001');
+      showNotification(`Đã phê duyệt hàng loạt ${actionable.length} yêu cầu!`);
       setSelectedRequestIds(new Set());
       refreshRequests();
     } catch (err: any) {
@@ -205,10 +239,18 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
 
   const handleBatchGive = async () => {
     if (selectedRequestIds.size === 0) return;
+    // Chỉ yêu cầu ĐÃ DUYỆT mới trao được
+    const actionable = Array.from(selectedRequestIds).filter(
+      (id) => requests.find((r) => r.id === id)?.status === 'APPROVED'
+    );
+    if (actionable.length === 0) {
+      showNotification('Không có yêu cầu nào đã duyệt (chờ trao) trong số đã chọn', 'info');
+      return;
+    }
     setBatchActionLoading(true);
     try {
-      await rewardService.batchUpdateStatus(Array.from(selectedRequestIds), 'GIVEN', undefined, 'teacher_001');
-      showNotification(`Đã trao quà hàng loạt cho ${selectedRequestIds.size} học sinh!`);
+      await rewardService.batchUpdateStatus(actionable, 'GIVEN', undefined, 'teacher_001');
+      showNotification(`Đã trao quà hàng loạt cho ${actionable.length} học sinh!`);
       setSelectedRequestIds(new Set());
       refreshRequests();
     } catch (err: any) {
@@ -220,7 +262,8 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
 
   // Lưu mốc quà
   const handleSaveMilestone = async (data: Partial<RewardItem>) => {
-    await rewardService.saveReward(data);
+    // Gắn dấu GV tạo mốc (hướng c 24/10); mốc sửa giữ dấu cũ, mốc mới lấy GV hiện tại.
+    await rewardService.saveReward({ ...data, teacherId: data.teacherId || teacherId });
     showNotification(data.id ? 'Đã cập nhật mốc quà tặng!' : 'Đã tạo mốc quà tặng mới thành công!');
     refreshRewards();
   };
@@ -542,7 +585,7 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
                           <td className="py-3 px-3 font-semibold text-[#2F3E6B]">
                             <div className="font-bold text-xs">{req.studentName}</div>
                             <div className="text-[11px] text-[#6B7280]">
-                              Lớp {req.className || '7A2'}
+                              {req.className ? `Lớp ${req.className}` : 'Chưa rõ lớp'}
                             </div>
                           </td>
 
@@ -797,14 +840,21 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
                       >
                         {tier.name} • {tier.sizeLabel}
                       </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isActive
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {isActive ? 'Đang mở' : 'Tạm ẩn'}
+                      <span className="flex items-center gap-1.5">
+                        {isDefaultReward(reward.id) && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                            Mặc định
+                          </span>
+                        )}
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isActive
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {isActive ? 'Đang mở' : 'Tạm ẩn'}
+                        </span>
                       </span>
                     </div>
 
@@ -885,29 +935,32 @@ export const TeacherRewardsScreen: React.FC<TeacherRewardsScreenProps> = ({
                       <span>Xem trước</span>
                     </button>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingMilestone(reward);
-                          setMilestoneModalOpen(true);
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#2F3E6B]/10 hover:bg-[#2F3E6B]/20 text-[#2F3E6B] text-[11px] font-bold transition-colors"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeletingRewardId(reward.id);
-                          setDeleteConfirmOpen(true);
-                        }}
-                        className="px-2 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 text-[11px] transition-colors"
-                        title="Xóa mốc quà"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {/* Mốc mặc định chỉ xem — không sửa/xóa được */}
+                    {!isDefaultReward(reward.id) && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingMilestone(reward);
+                            setMilestoneModalOpen(true);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#2F3E6B]/10 hover:bg-[#2F3E6B]/20 text-[#2F3E6B] text-[11px] font-bold transition-colors"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeletingRewardId(reward.id);
+                            setDeleteConfirmOpen(true);
+                          }}
+                          className="px-2 py-1.5 rounded-lg hover:bg-rose-50 text-rose-600 text-[11px] transition-colors"
+                          title="Xóa mốc quà"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

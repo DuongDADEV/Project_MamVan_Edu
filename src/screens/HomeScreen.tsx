@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { StudentState, Topic } from '../types.ts';
-import { TOPICS, VIDEOS, REWARDS_CATALOG, QUIZZES } from '../data/mockData.ts';
-import { getCurrentDailyXpCap } from '../logic/xpEngine.ts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StudentState, Topic, RewardTier } from '../types.ts';
+import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../data/rewards.ts';
+import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
+import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
+import type { NavTab } from '../components/Navbar.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
 import { ChestIllustration } from '../components/rewards/ChestIllustration.tsx';
 import { getChestTierConfig } from '../config.ts';
@@ -29,6 +31,9 @@ import {
   useLiveQuery,
   contentService,
   quizService,
+  rewardService,
+  classService,
+  studentService,
   VideoLessonWithMeta,
   QuizWithMeta,
 } from '../services/index.ts';
@@ -36,13 +41,16 @@ import {
 interface HomeScreenProps {
   state: StudentState;
   topics?: Topic[];
+  latestNotification?: StudentNotification | null;
+  onOpenNotification?: (n: StudentNotification) => void;
   onCheckIn: () => void;
   onResumeLearning: (targetVideoId?: string) => void;
   onSelectTopic: (topicId: string) => void;
   onSelectVideo: (videoId: string) => void;
   onSelectTheory: (theoryId: string) => void;
   onSelectHomework: (homeworkQuizId?: string) => void;
-  onNavigateTab: (tab: 'learn' | 'tree' | 'rewards' | 'profile') => void;
+  onOpenAssignment?: (assignmentId: string) => void;
+  onNavigateTab: (tab: NavTab) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -54,7 +62,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectVideo,
   onSelectTheory,
   onSelectHomework,
+  onOpenAssignment,
   onNavigateTab,
+  latestNotification,
+  onOpenNotification,
 }) => {
   const [wateringTrigger, setWateringTrigger] = useState(false);
   const activeTopics = topics ?? [];
@@ -66,12 +77,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   );
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(state.profile.grade || undefined, true),
-    ['quizzes', 'content']
+    ['quiz', 'content']
   );
 
   // Xác định bài học tiếp tục / bắt đầu
   const currentVideo = state.currentProgress
-    ? ((liveVideos || []).find((v) => v.id === state.currentProgress?.itemId) || VIDEOS[state.currentProgress?.itemId])
+    ? ((liveVideos || []).find((v) => v.id === state.currentProgress?.itemId) || null)
     : null;
 
   const firstAvailableVideo = React.useMemo(() => {
@@ -96,11 +107,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const isQuizCompleted = (qId: string) =>
     (state.completedSteps || []).includes(`quiz_completed:${qId}`);
 
-  // Ưu tiên bài tập chưa làm
-  const pendingHomework = homeworkQuizzes.find((hw) => !isQuizCompleted(hw.id));
-  const completedHomework = homeworkQuizzes.find((hw) => isQuizCompleted(hw.id));
-  const activeHomework = pendingHomework || completedHomework;
-  const isHomeworkCompleted = !pendingHomework && !!completedHomework;
+  // Nhiệm vụ tuần (25/10, quyết định của chủ dự án): TRỞ VỀ như trước đợt 2 —
+  // thẻ CHỈ liệt kê BTVN quiz, KHÔNG gộp bài BI từ getStudentAssignments nữa.
+  // Hậu quả đã được chấp nhận: học sinh có bài BI được giao vẫn thấy thẻ này
+  // trống; danh sách đầy đủ nằm ở mục Bài tập (mục đó vẫn dùng
+  // getStudentAssignments, không đụng tới ở đây).
+
+  const toDueMs = (v?: string | null): number | null => {
+    if (!v) return null;
+    const ms = new Date(v).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  };
+
+  const weeklyTasks = React.useMemo(() => {
+    const quizItems = homeworkQuizzes.map((q) => ({
+      key: `quiz:${q.id}`,
+      source: 'quiz' as const,
+      id: q.id,
+      title: q.title,
+      questionCount: (q.questionIds || []).length,
+      dueMs: toDueMs(q.dueDate),
+      done: isQuizCompleted(q.id),
+      bestScoreText: null as string | null,
+    }));
+    const all = [...quizItems];
+    all.sort((a, b) => {
+      if (a.dueMs === null && b.dueMs === null) return a.title.localeCompare(b.title);
+      if (a.dueMs === null) return 1;
+      if (b.dueMs === null) return -1;
+      return a.dueMs - b.dueMs;
+    });
+    return all;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeworkQuizzes]);
+
+  const fmtWeeklyDue = (ms: number): string => {
+    const d = new Date(ms);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  };
 
   // Lời chào theo giờ
   const currentHour = new Date().getHours();
@@ -111,11 +155,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       ? 'Chào buổi chiều'
       : 'Chào buổi tối';
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalTodayStr();
   const hasCheckedInToday = state.lastAttendanceDate === todayStr;
 
   const activeMinutes = Math.floor(state.activeSecondsToday / 60);
-  const currentDailyCap = getCurrentDailyXpCap(activeMinutes);
 
   // Xác định câu nói của Mầm Mực
   let mascotText = `Chào ${state.profile.name}! Hôm nay chúng mình cùng khám phá những áng văn thật hay nhé!`;
@@ -127,13 +170,43 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   } else if (state.currentProgress) {
     mascotText = `Chúng mình đang học dở bài thơ, bấm "Học tiếp" để cùng hoàn thành nhé!`;
     mascotMood = 'cheer';
-  } else if (state.xpToday >= currentDailyCap) {
-    mascotText = `Hôm nay bạn học xuất sắc lắm, đạt trần ${currentDailyCap} XP rồi! Vẫn có thể học để nuôi Cây lớn nha!`;
+  } else if (state.xpToday >= 100) {
+    mascotText = `Hôm nay bạn học xuất sắc lắm, tích được rất nhiều XP rồi! Tiếp tục hoàn thành các chủ đề để nhận thêm XP nhé!`;
     mascotMood = 'proud';
   }
 
-  // Lấy dữ liệu quà gần đạt nhất
-  const closestReward = REWARDS_CATALOG[0];
+  // Danh mục HỢP NHẤT cho mốc gần đạt nhất (hướng c 24/10 — như RewardsScreen).
+  const { data: homeDbRewards } = useLiveQuery<RewardTier[]>(() => rewardService.getRewards(), ['reward']);
+  const [homeTeacherId, setHomeTeacherId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const account = await studentService.getStudentById(state.profile.id);
+        const classId = account?.class_id;
+        if (!classId) {
+          if (!cancelled) setHomeTeacherId(null);
+          return;
+        }
+        const classes = await classService.getClasses();
+        if (!cancelled) setHomeTeacherId(classes.find((c) => c.id === classId)?.teacherId ?? null);
+      } catch {
+        if (!cancelled) setHomeTeacherId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.profile.id]);
+  const mergedHomeRewards = useMemo(() => {
+    if (homeTeacherId === undefined) return REWARDS_CATALOG;
+    return mergeRewardTiers(filterDbRewardsForOwner(homeDbRewards || [], homeTeacherId));
+  }, [homeDbRewards, homeTeacherId]);
+
+  // Lấy dữ liệu quà gần đạt nhất: mốc đầu tiên chưa đạt, nếu đạt hết thì lấy mốc cao nhất
+  const closestReward =
+    mergedHomeRewards.find((r) => (r.requiredXp ?? r.xpCost) > state.xpWeek) ||
+    mergedHomeRewards[mergedHomeRewards.length - 1];
   const rewardXpPercent = Math.min(
     100,
     Math.round((state.xpWeek / Math.max(1, closestReward.xpCost)) * 100)
@@ -223,19 +296,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     },
   ];
 
-  // Lắng nghe thông báo bài học mới từ giáo viên
-  const { data: rawAnnouncements } = useLiveQuery<any[]>(
-    () => {
-      try {
-        const raw = localStorage.getItem('mam_van_announcements');
-        return Promise.resolve(raw ? JSON.parse(raw) : []);
-      } catch {
-        return Promise.resolve([]);
+  // Thông báo bài mới mới nhất chưa đọc (App suy ra từ nội dung vừa xuất bản)
+  const activeAnnouncement = latestNotification
+    ? {
+        title: `${latestNotification.kindLabel}: ${latestNotification.title}`,
+        content: latestNotification.topicTitle
+          ? `Thuộc chủ đề "${latestNotification.topicTitle}" — bấm "Vào làm ngay" để bắt đầu nhé!`
+          : 'Thầy/cô vừa đăng nội dung mới — bấm "Vào làm ngay" để bắt đầu nhé!',
       }
-    },
-    ['content']
-  );
-  const activeAnnouncement = (rawAnnouncements || [])[0];
+    : null;
 
   return (
     <div className="w-full max-w-5xl mx-auto py-6 px-4 sm:px-8 space-y-7">
@@ -256,10 +325,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
           <button
-            onClick={() => onNavigateTab('learn')}
+            onClick={() => {
+              if (latestNotification && onOpenNotification) {
+                onOpenNotification(latestNotification);
+              } else {
+                onNavigateTab('learn');
+              }
+            }}
             className="px-3.5 py-1.5 rounded-xl bg-[#E2704A] hover:bg-[#D45E36] text-white text-xs font-bold shrink-0 transition-colors shadow-2xs"
           >
-            Học ngay
+            Vào làm ngay
           </button>
         </div>
       )}
@@ -290,7 +365,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               {/* Stars / XP */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 backdrop-blur-md border border-white/20 text-xs font-bold">
                 <Star className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-                <span>{state.xpToday}/{currentDailyCap} XP</span>
+                <span>{state.xpToday} XP hôm nay</span>
               </div>
 
               {/* Time */}
@@ -345,7 +420,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {activeTopics.map((topic, idx) => {
+            {/* Chỉ hiện tối đa 4 thẻ chủ đề (24/10); xem toàn bộ bằng nút
+                "Tất cả bài học" → mục Học bài, vốn đã liệt kê đầy đủ. */}
+            {activeTopics.slice(0, 4).map((topic, idx) => {
               const visual = topicVisuals[idx % topicVisuals.length];
               const Icon = visual.icon;
 
@@ -353,7 +430,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <div
                   key={topic.id}
                   onClick={() => onSelectTopic(topic.id)}
-                  className={`relative overflow-hidden rounded-3xl p-5 text-white bg-gradient-to-br ${visual.gradient} shadow-md shadow-indigo-950/10 cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:shadow-xl group`}
+                  className={`relative overflow-hidden rounded-3xl p-5 text-white bg-gradient-to-br ${visual.gradient} shadow-md shadow-indigo-950/10 cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:shadow-xl group flex flex-col h-full`}
                 >
                   {/* Light reflection glow */}
                   <div className="absolute top-0 right-0 w-24 h-24 bg-white/15 rounded-full blur-xl pointer-events-none -mr-8 -mt-8 group-hover:scale-125 transition-transform" />
@@ -367,15 +444,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </div>
                   </div>
 
-                  <h4 className="font-extrabold text-base mb-1.5 leading-snug line-clamp-2">
+                  {/* Tiêu đề + mô tả giữ chiều cao cố định 2 dòng để mọi thẻ
+                      cao bằng nhau, chân thẻ thẳng hàng (kể cả khi thiếu mô tả) */}
+                  <h4 className="font-extrabold text-base mb-1.5 leading-snug line-clamp-2 min-h-[44px]">
                     {topic.title}
                   </h4>
 
-                  <p className="text-[11px] text-white/80 line-clamp-2 leading-relaxed mb-4">
-                    {topic.shortDesc}
+                  <p className="text-[11px] text-white/80 line-clamp-2 leading-relaxed mb-4 min-h-[34px]">
+                    {topic.shortDesc || ''}
                   </p>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs font-semibold">
+                  <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs font-semibold mt-auto">
                     <span>{(topic.videoIds || []).length} bài giảng</span>
                     <div className="flex items-center gap-1 text-white group-hover:translate-x-1 transition-transform">
                       <span>Vào học</span>
@@ -480,11 +559,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <>
                   Bước hiện tại:{' '}
                   <strong className="text-[#4F46E5]">
-                    {state.currentProgress?.stepIndex === 3
-                      ? 'Luyện tập sau video'
-                      : state.currentProgress?.stepIndex === 4
-                      ? 'Kiểm tra 1 (7 phút)'
-                      : 'Xem bài giảng & Tóm tắt'}
+                    {state.currentProgress?.type === 'theory'
+                      ? `Đọc lý thuyết (bước ${(state.currentProgress?.stepIndex ?? 0) + 1})`
+                      : `Học video (bước ${(state.currentProgress?.stepIndex ?? 0) + 1})`}
                   </strong>
                 </>
               ) : activeLesson ? (
@@ -539,7 +616,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="text-right">
               <span className="text-xs text-slate-500 block">XP hôm nay:</span>
               <span className="text-lg font-black text-[#4F46E5] font-mono tabular-nums">
-                {state.xpToday} / {currentDailyCap} XP
+                {state.xpToday} XP
               </span>
             </div>
           </div>
@@ -549,14 +626,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden p-0.5">
           <div
             className="h-full rounded-full gradient-primary transition-all duration-500"
-            style={{ width: `${Math.min(100, (state.xpToday / currentDailyCap) * 100)}%` }}
+            style={{ width: `${Math.min(100, state.xpToday)}%` }}
           />
         </div>
 
         <div className="flex justify-between items-center text-[11px] text-slate-500 mt-2 font-medium">
           <span>0 XP</span>
-          <span>Trần ngày: {currentDailyCap} XP (0–45p: 130 XP · 45–90p: 150 XP)</span>
-          <span>{currentDailyCap} XP</span>
+          <span>XP từ điểm danh, hoàn thành chủ đề và nộp bài kiểm tra — không giới hạn mỗi ngày</span>
+          <span></span>
         </div>
       </div>
 
@@ -582,7 +659,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <GrowthTree
             compact
-            completedStepsCount={state.completedSteps.length}
+            completedStepsCount={countLearningSteps(state.completedSteps)}
             topicLeaves={topicLeavesData}
             isWatering={wateringTrigger}
             onWaterComplete={() => setWateringTrigger(false)}
@@ -590,68 +667,70 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           />
         </div>
 
-        {/* Bài tập về nhà đặc biệt (BTVN từ giáo viên) */}
+        {/* Nhiệm vụ tuần: bài tập được giao (tối đa 4 bài, nhiều hơn thì Xem tất cả) */}
         <div className="edtech-card rounded-3xl p-6 border-indigo-100 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span
-                className={`text-xs font-extrabold px-3 py-1 rounded-full ${
-                  isHomeworkCompleted
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-purple-100 text-[#8B5CF6]'
-                }`}
-              >
-                {isHomeworkCompleted
-                  ? 'Đã hoàn thành ✓'
-                  : activeHomework?.dueDate
-                  ? `Hạn nộp: ${activeHomework.dueDate}`
-                  : 'Nhiệm vụ tuần'}
+              <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-purple-100 text-[#8B5CF6]">
+                {weeklyTasks.length > 0 ? `Nhiệm vụ tuần · ${weeklyTasks.length} bài` : 'Nhiệm vụ tuần'}
               </span>
-              <span
-                className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${
-                  isHomeworkCompleted
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                }`}
-              >
-                +{activeHomework?.xp || 20} XP
+              <span className="text-xs font-black px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200">
+                +20 XP
               </span>
             </div>
 
             <h3 className="font-extrabold text-base text-[#1E1B4B] mb-2">
-              {activeHomework
-                ? activeHomework.title
-                : 'Chưa có bài tập về nhà mới'}
+              {weeklyTasks.length > 0 ? 'Bài tập được giao' : 'Chưa có bài tập về nhà mới'}
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed mb-5">
-              {isHomeworkCompleted
-                ? 'Em đã hoàn thành xuất sắc bài tập này! Em có thể làm lại để nâng cao kết quả và củng cố tư duy.'
-                : activeHomework
-                ? (activeHomework as any).description ||
-                  'Bài tập rèn luyện do cô giáo giao riêng! Làm bài để tích lũy XP và rèn luyện kỹ năng nhé.'
-                : 'Thầy/cô chưa giao thêm bài tập về nhà mới cho lớp. Bạn hãy luyện tập các bài học trong kho tri thức nhé!'}
-            </p>
+            {weeklyTasks.length === 0 ? (
+              <p className="text-xs text-slate-600 leading-relaxed mb-5">
+                Thầy/cô chưa giao thêm bài tập về nhà mới cho lớp. Bạn hãy luyện tập các bài học trong kho tri thức nhé!
+              </p>
+            ) : (
+              <div className="space-y-2.5 mb-4">
+                {weeklyTasks.slice(0, 4).map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/70 border border-indigo-100/70"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-[#1E1B4B] truncate">{item.title}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {item.questionCount} câu
+                        {item.dueMs !== null && <> · Hạn nộp: {fmtWeeklyDue(item.dueMs)}</>}
+                        {item.bestScoreText && (
+                          <>
+                            {' '}
+                            · <span className="font-bold text-[#2F6B4F]">{item.bestScoreText}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        item.done ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {item.done ? 'Đã nộp' : 'Chưa nộp'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        item.source === 'quiz'
+                          ? onSelectHomework(item.id)
+                          : onOpenAssignment?.(item.id)
+                      }
+                      className="shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#10B981] to-[#059669] text-white text-xs font-bold hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer"
+                    >
+                      {item.done ? 'Làm lại' : 'Làm bài'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {activeHomework ? (
-            isHomeworkCompleted ? (
-              <button
-                onClick={() => onSelectHomework(activeHomework.id)}
-                className="w-full py-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm border border-emerald-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-              >
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span>Xem lại / Làm lại bài (+XP)</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => onSelectHomework(activeHomework.id)}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-bold text-sm hover:brightness-105 active:scale-[0.99] transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <FileCheck className="w-4 h-4" />
-                <span>Làm bài BTVN ngay (+{activeHomework?.xp || 20} XP)</span>
-              </button>
-            )
-          ) : (
+          {weeklyTasks.length === 0 ? (
             <button
               onClick={() => onNavigateTab('learn')}
               className="w-full py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-[#4F46E5] font-bold text-sm border border-indigo-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -659,7 +738,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <BookOpen className="w-4 h-4 text-[#4F46E5]" />
               <span>Đến kho bài học rèn luyện</span>
             </button>
-          )}
+          ) : weeklyTasks.length > 4 ? (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('assignments')}
+              className="w-full py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-[#4F46E5] font-bold text-sm border border-indigo-200 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>Xem tất cả ({weeklyTasks.length} bài) →</span>
+            </button>
+          ) : null}
         </div>
       </div>
 

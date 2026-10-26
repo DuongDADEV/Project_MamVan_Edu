@@ -30,6 +30,11 @@ export function computeScoreDistribution(
   let b3 = 0; // 6.5 - 7.9
   let b4 = 0; // 8.0 - 10
   let totalWithScores = 0;
+  // Thành viên từng khoảng (24/10 — để công cụ trả kèm tên học sinh).
+  const m1: { id: string; ten: string; diemTB: number }[] = [];
+  const m2: { id: string; ten: string; diemTB: number }[] = [];
+  const m3: { id: string; ten: string; diemTB: number }[] = [];
+  const m4: { id: string; ten: string; diemTB: number }[] = [];
 
   students.forEach((s) => {
     const st = allStates[s.id];
@@ -55,27 +60,29 @@ export function computeScoreDistribution(
     if (attemptCount > 0) {
       totalWithScores++;
       const avgScore = Math.round((totalScore / attemptCount) * 10) / 10;
-      if (avgScore < 5.0) b1++;
-      else if (avgScore < 6.5) b2++;
-      else if (avgScore < 8.0) b3++;
-      else b4++;
+      const member = { id: s.id, ten: s.name, diemTB: avgScore };
+      if (avgScore < 5.0) { b1++; m1.push(member); }
+      else if (avgScore < 6.5) { b2++; m2.push(member); }
+      else if (avgScore < 8.0) { b3++; m3.push(member); }
+      else { b4++; m4.push(member); }
     }
   });
 
   if (totalWithScores === 0) {
     return [
-      { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: 0, percentage: 0, color: '#E2704A' },
-      { rangeLabel: '5.0 – 6.4 (Trung bình)', count: 0, percentage: 0, color: '#F59E0B' },
-      { rangeLabel: '6.5 – 7.9 (Khá)', count: 0, percentage: 0, color: '#3B82F6' },
-      { rangeLabel: '8.0 – 10 (Giỏi)', count: 0, percentage: 0, color: '#10B981' },
+      { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: 0, percentage: 0, color: '#E2704A', hocSinh: [] },
+      { rangeLabel: '5.0 – 6.4 (Trung bình)', count: 0, percentage: 0, color: '#F59E0B', hocSinh: [] },
+      { rangeLabel: '6.5 – 7.9 (Khá)', count: 0, percentage: 0, color: '#3B82F6', hocSinh: [] },
+      { rangeLabel: '8.0 – 10 (Giỏi)', count: 0, percentage: 0, color: '#10B981', hocSinh: [] },
     ];
   }
 
+  const byScoreDesc = (a: { diemTB: number }, b: { diemTB: number }) => b.diemTB - a.diemTB;
   return [
-    { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: b1, percentage: Math.round((b1 / totalWithScores) * 100), color: '#E2704A' },
-    { rangeLabel: '5.0 – 6.4 (Trung bình)', count: b2, percentage: Math.round((b2 / totalWithScores) * 100), color: '#F59E0B' },
-    { rangeLabel: '6.5 – 7.9 (Khá)', count: b3, percentage: Math.round((b3 / totalWithScores) * 100), color: '#3B82F6' },
-    { rangeLabel: '8.0 – 10 (Giỏi)', count: b4, percentage: Math.round((b4 / totalWithScores) * 100), color: '#10B981' },
+    { rangeLabel: '0 – 4.9 (Cần cố gắng)', count: b1, percentage: Math.round((b1 / totalWithScores) * 100), color: '#E2704A', hocSinh: m1.sort(byScoreDesc) },
+    { rangeLabel: '5.0 – 6.4 (Trung bình)', count: b2, percentage: Math.round((b2 / totalWithScores) * 100), color: '#F59E0B', hocSinh: m2.sort(byScoreDesc) },
+    { rangeLabel: '6.5 – 7.9 (Khá)', count: b3, percentage: Math.round((b3 / totalWithScores) * 100), color: '#3B82F6', hocSinh: m3.sort(byScoreDesc) },
+    { rangeLabel: '8.0 – 10 (Giỏi)', count: b4, percentage: Math.round((b4 / totalWithScores) * 100), color: '#10B981', hocSinh: m4.sort(byScoreDesc) },
   ];
 }
 
@@ -177,39 +184,26 @@ export function computeWeeklyScoreTrends(
     const weekEnd = now - w * ONE_WEEK;
     const weekLabel = `Tuần ${6 - w}`;
 
-    let sum7A2 = 0;
-    let count7A2 = 0;
-    let sum7A3 = 0;
-    let count7A3 = 0;
-
+    // Điểm TB tuần tính từ TOÀN BỘ kết quả thật trong tuần — trước đây code
+    // chia đôi theo 2 lớp demo '7A2'/'7A3' (mọi học sinh thật đều rơi vào
+    // nhóm '7A3' bịa); đã bỏ hẳn cách chia đó.
+    let sum = 0;
+    let totalCount = 0;
     Object.values(allStates).forEach((st) => {
-      const is7A2 = st.profile.grade?.includes('7A2');
       (st.questionResults || []).forEach((q) => {
         if (q.timestamp >= weekStart && q.timestamp < weekEnd) {
-          const score = q.scoreRatio * 10;
-          if (is7A2) {
-            sum7A2 += score;
-            count7A2++;
-          } else {
-            sum7A3 += score;
-            count7A3++;
-          }
+          sum += q.scoreRatio * 10;
+          totalCount++;
         }
       });
     });
-
-    const avg7A2 = count7A2 === 0 ? 0 : Math.round((sum7A2 / count7A2) * 10) / 10;
-    const avg7A3 = count7A3 === 0 ? 0 : Math.round((sum7A3 / count7A3) * 10) / 10;
-    const totalCount = count7A2 + count7A3;
-    const overallAvg = totalCount === 0 ? 0 : Math.round(((sum7A2 + sum7A3) / totalCount) * 10) / 10;
+    const overallAvg = totalCount === 0 ? 0 : Math.round((sum / totalCount) * 10) / 10;
 
     trends.push({
       weekLabel,
       weekTimestamp: weekStart,
       averageScore: overallAvg,
       attemptCount: totalCount,
-      class7A2Score: avg7A2,
-      class7A3Score: avg7A3,
     });
   }
 
@@ -239,7 +233,9 @@ export function computeClassComparison(
           scoreCount++;
           if (q.scoreRatio >= 0.5) passCount++;
         });
-        totalMinutes += Math.round(((state.activeSecondsToday || 0) + (state.attendanceHistory?.length || 0) * 1800) / 60 / 6);
+        // Phút học GHI THẬT (giây hôm nay + giây phiên liên tục) — bỏ phép
+        // bịa "mỗi ngày điểm danh = 1800 giây" và phép chia 6 tuần vô căn cứ.
+        totalMinutes += Math.round(((state.activeSecondsToday || 0) + (state.activeSecondsContinuous || 0)) / 60);
       }
     });
 
@@ -247,10 +243,24 @@ export function computeClassComparison(
       classId: c.id,
       className: c.name,
       studentCount: classStudents.length,
-      averageScore: scoreCount === 0 ? 7.5 : Math.round((totalScore / scoreCount) * 10) / 10,
-      passRate: scoreCount === 0 ? 82 : Math.round((passCount / scoreCount) * 100),
+      averageScore: scoreCount === 0 ? 0 : Math.round((totalScore / scoreCount) * 10) / 10,
+      passRate: scoreCount === 0 ? 0 : Math.round((passCount / scoreCount) * 100),
       activeMinutesPerWeek: classStudents.length === 0 ? 0 : Math.round(totalMinutes / classStudents.length),
-      solidMasteryRate: c.id === 'class_7a2' ? 68 : 52,
+      solidMasteryRate: (() => {
+        // Tỉ lệ học sinh của lớp đạt mức vững (điểm TB các câu đã làm >= 8/10), tính từ dữ liệu thật
+        let solid = 0;
+        let withData = 0;
+        classStudents.forEach((stu: any) => {
+          const st: any = (allStates as any)[stu.id];
+          const results = st?.questionResults || [];
+          if (results.length > 0) {
+            withData++;
+            const avg = results.reduce((sum: number, r: any) => sum + (r.scoreRatio || 0) * 10, 0) / results.length;
+            if (avg >= 8) solid++;
+          }
+        });
+        return withData === 0 ? 0 : Math.round((solid / withData) * 100);
+      })(),
     };
   });
 }
@@ -261,7 +271,8 @@ export function computeClassComparison(
 export function computeStudentScoreRankings(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
-  filter: AnalyticsFilter
+  filter: AnalyticsFilter,
+  classes: { id: string; name: string }[] = []
 ): StudentRankingRow[] {
   const students = filterStudents(allStudents, filter);
   const dateRange = getFilterDateRange(filter);
@@ -279,16 +290,22 @@ export function computeStudentScoreRankings(
       });
     }
 
-    const averageScore = attemptCount === 0 ? 7.0 : Math.round((totalScore / attemptCount) * 10) / 10;
+    const averageScore = attemptCount === 0 ? 0 : Math.round((totalScore / attemptCount) * 10) / 10;
     const masteryStatus = averageScore >= 8.0 ? 'SOLID' : averageScore >= 5.5 ? 'PROGRESSING' : 'NEEDS_REVIEW';
     const statusLabel = averageScore >= 8.0 ? 'Vững' : averageScore >= 5.5 ? 'Đang tiến bộ' : 'Cần ôn lại';
-    const activeMinutesTotal = Math.round(((state?.activeSecondsToday || 0) + (state?.attendanceHistory?.length || 0) * 1800) / 60);
+    // Phút học GHI THẬT trong state — không cộng 1800 giây/ngày điểm danh (số bịa).
+    const activeMinutesTotal = Math.round(((state?.activeSecondsToday || 0) + (state?.activeSecondsContinuous || 0)) / 60);
 
     return {
       rank: 1,
       studentId: s.id,
       studentName: s.name,
-      className: s.class_id === 'class_7a2' ? '7A2' : '7A3',
+      // Tên lớp THẬT: tra trong danh sách lớp của giáo viên; không có thì
+      // lấy khối/lớp ghi trong hồ sơ của chính học sinh; tuyệt đối không
+      // gán nhãn lớp bịa theo kiểu thời demo ('7A2'/'7A3').
+      className:
+        classes.find((c) => c.id === s.class_id)?.name ||
+        (state?.profile?.grade ? state.profile.grade.replace(/^Lớp\s*/i, '') : '—'),
       studentCode: s.student_code || s.username.toUpperCase(),
       averageScore,
       totalAttempts: attemptCount,

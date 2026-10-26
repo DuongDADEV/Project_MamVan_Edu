@@ -15,19 +15,22 @@ import { MasteryAnalyticsTab } from '../../components/teacher/analytics/MasteryA
 import { QuestionAnalyticsTab } from '../../components/teacher/analytics/QuestionAnalyticsTab.tsx';
 import { EngagementAnalyticsTab } from '../../components/teacher/analytics/EngagementAnalyticsTab.tsx';
 import { StudentProfileTab } from '../../components/teacher/analytics/StudentProfileTab.tsx';
+import { AnalyticsAssistantTab } from '../../components/teacher/analytics/AnalyticsAssistantTab.tsx';
 import { ClassItem, StudentAccount } from '../../services/types.ts';
 import { StudentState, EssaySubmission, RewardRequest, Question } from '../../types.ts';
 
-export type AnalyticsTabKey = 'score' | 'mastery' | 'questions' | 'engagement' | 'profile';
+export type AnalyticsTabKey = 'assistant' | 'score' | 'mastery' | 'questions' | 'engagement' | 'profile';
 
 interface TeacherAnalyticsScreenProps {
   classes: ClassItem[];
   students: StudentAccount[];
   studentStates: Record<string, StudentState>;
-  topics: Array<{ id: string; title: string }>;
+  topics: Array<{ id: string; title: string; videoIds?: string[]; theoryId?: string }>;
+  quizzes?: Array<{ id: string; topicId?: string }>;
   essays: EssaySubmission[];
   rewards: RewardRequest[];
   questions?: Record<string, Question>;
+  teacherId?: string;
   initialTab?: AnalyticsTabKey;
   initialStudentId?: string;
   onRefreshData?: () => void;
@@ -48,10 +51,12 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
   students,
   studentStates,
   topics,
+  quizzes,
   essays,
   rewards,
   questions,
-  initialTab = 'score',
+  teacherId,
+  initialTab = 'assistant',
   initialStudentId,
   onRefreshData,
   onOpenQuestionEditor,
@@ -93,6 +98,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
   };
 
   const TABS = [
+    { key: 'assistant' as AnalyticsTabKey, label: 'Trợ lý phân tích AI', icon: Sparkles },
     { key: 'score' as AnalyticsTabKey, label: 'Điểm số', icon: TrendingUp },
     { key: 'mastery' as AnalyticsTabKey, label: 'Kỹ năng / Mastery 4 mức', icon: Award },
     { key: 'questions' as AnalyticsTabKey, label: 'Phân tích câu hỏi', icon: HelpCircle },
@@ -151,6 +157,21 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
 
       {/* NỘI DUNG TỪNG TAB */}
       <div>
+        {activeTab === 'assistant' && (
+          <AnalyticsAssistantTab
+            students={students}
+            studentStates={studentStates}
+            classes={classes}
+            topics={topics}
+            quizzes={quizzes}
+            essays={essays}
+            rewards={rewards}
+            questions={questions ?? {}}
+            filters={filters}
+            teacherId={teacherId}
+          />
+        )}
+
         {activeTab === 'score' && (
           <ScoreAnalyticsTab
             students={students}
@@ -164,6 +185,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
 
         {activeTab === 'mastery' && (
           <MasteryAnalyticsTab
+            classes={classes}
             students={students}
             studentStates={studentStates}
             topics={topics}
@@ -186,6 +208,7 @@ export const TeacherAnalyticsScreen: React.FC<TeacherAnalyticsScreenProps> = ({
           <EngagementAnalyticsTab
             students={students}
             studentStates={studentStates}
+            classes={classes}
             filters={filters}
             onSelectStudentDossier={handleSelectStudentDossier}
           />

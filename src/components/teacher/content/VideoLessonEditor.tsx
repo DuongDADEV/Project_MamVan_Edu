@@ -7,6 +7,7 @@ import {
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
 import {
+  ArrowLeft,
   Video,
   Upload,
   Link as LinkIcon,
@@ -21,7 +22,6 @@ import {
   Sparkles,
   ArrowRight,
   FileQuestion,
-  Image as ImageIcon,
   Layers,
   ArrowUp,
   ArrowDown,
@@ -36,6 +36,7 @@ interface VideoLessonEditorProps {
   onPublish: () => void;
   onPreviewStudent: () => void;
   onCreateLinkedQuiz: (kind: 'practice' | 'quick' | 'mastery') => void;
+  onBack?: () => void;
 }
 
 export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
@@ -46,13 +47,14 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   onPublish,
   onPreviewStudent,
   onCreateLinkedQuiz,
+  onBack,
 }) => {
   const [title, setTitle] = useState(video.title || '');
   const [description, setDescription] = useState(video.description || '');
   const [topicId, setTopicId] = useState(video.topicId || topics[0]?.id || '');
   const [durationSec, setDurationSec] = useState<number>(video.durationSec || 600);
   const [sampleUrl, setSampleUrl] = useState(video.sampleUrl || '');
-  const [thumbnailUrl, setThumbnailUrl] = useState(video.thumbnailUrl || '');
+
   const [subtopicsText, setSubtopicsText] = useState(video.subtopics?.join(', ') || '');
   const [summaryPoints, setSummaryPoints] = useState<VideoFocusPoint[]>(
     video.summaryPoints && video.summaryPoints.length > 0
@@ -73,7 +75,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
   // Hidden file inputs
   const videoFileInputRef = useRef<HTMLInputElement>(null);
-  const thumbFileInputRef = useRef<HTMLInputElement>(null);
+
   const videoProbeRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     setTopicId(video.topicId || topics[0]?.id || '');
     setDurationSec(video.durationSec || 600);
     setSampleUrl(video.sampleUrl || '');
-    setThumbnailUrl(video.thumbnailUrl || '');
+
     setSubtopicsText(video.subtopics?.join(', ') || '');
     setSummaryPoints(
       video.summaryPoints && video.summaryPoints.length > 0
@@ -144,20 +146,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     }
   };
 
-  // Chọn ảnh bìa (tải lên Supabase Storage)
-  const handleThumbSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const publicUrl = await uploadLessonMedia(file, 'thumbnails');
-      setThumbnailUrl(publicUrl);
-    } catch (err: any) {
-      console.error('Lỗi tải ảnh bìa lên Supabase:', err);
-      setUploadError(err?.message || 'Không tải được ảnh bìa lên.');
-    }
-  };
-
   // Thêm / sửa / xóa / đổi thứ tự ý trọng tâm
   const handleAddPoint = () => {
     setSummaryPoints((prev) => [
@@ -206,7 +194,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
         topicId,
         durationSec,
         sampleUrl: sampleUrl.trim(),
-        thumbnailUrl: thumbnailUrl.trim(),
+
         subtopics,
         summaryPoints,
         practiceQuizId,
@@ -237,10 +225,21 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   const topicQuizzes = quizzes.filter((q) => !topicId || q.topicId === topicId);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-hidden shadow-xs">
-      {/* Top Action Bar */}
-      <div className="p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
+      {/* Top Action Bar — dính chặt phía trên khi thân trình soạn cuộn */}
+      <div className="sticky top-0 z-20 shrink-0 p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] hover:border-[#2F3E6B] transition-colors shrink-0"
+              title="Quay lại chủ đề"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Quay lại</span>
+            </button>
+          )}
           <div className="w-8 h-8 rounded-xl bg-orange-50 border border-orange-200 text-[#E2704A] flex items-center justify-center shrink-0">
             <Video className="w-4 h-4" />
           </div>
@@ -265,22 +264,22 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
         </div>
 
         {/* Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onPreviewStudent}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
             title="Mô phỏng trải nghiệm học sinh khi xem bài giảng"
           >
             <Eye className="w-3.5 h-3.5 text-[#2F3E6B]" />
-            <span>Xem trước như học sinh</span>
+            <span>Xem trước</span>
           </button>
 
           <button
             type="button"
             disabled={isSaving}
             onClick={handleSaveDraft}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:bg-black/5 text-[#2F3E6B] text-xs font-bold transition-all shadow-2xs"
           >
             <Save className="w-3.5 h-3.5 text-[#8C7E6A]" />
             <span>{isSaving ? 'Đang lưu...' : 'Lưu nháp'}</span>
@@ -294,10 +293,11 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
               onPublish();
             }}
             disabled={isSaving || isUploading}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
+            title="Cập nhật lên web học sinh"
           >
             <UploadCloud className="w-3.5 h-3.5" />
-            <span>Cập nhật lên web học sinh</span>
+            <span>Cập nhật lên web</span>
           </button>
         </div>
       </div>
@@ -468,44 +468,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
             />
           </div>
 
-          {/* Ảnh bìa thumbnail */}
-          <div className="md:col-span-2 flex items-center gap-4 p-3.5 rounded-2xl bg-[#FAF5EB]/50 border border-[#E6DCC8]">
-            <div className="w-20 h-14 rounded-xl bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center border border-[#E6DCC8]">
-              {thumbnailUrl ? (
-                <img src={thumbnailUrl} alt="Thumbnail" className="w-full h-full object-cover" />
-              ) : (
-                <ImageIcon className="w-6 h-6 text-slate-400" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
-                Ảnh bìa Thumbnail (Tải lên hoặc để trống để tự tạo)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                  placeholder="Dán link ảnh hoặc để trống"
-                  className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-                />
-                <button
-                  type="button"
-                  onClick={() => thumbFileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] hover:bg-black/5 shrink-0"
-                >
-                  Chọn ảnh
-                </button>
-                <input
-                  ref={thumbFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleThumbSelect}
-                  className="hidden"
-                />
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* 3. KIẾN THỨC TRỌNG TÂM DƯỚI VIDEO (TÓM TẮT SAU VIDEO) */}
@@ -627,7 +589,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                   onClick={() => onCreateLinkedQuiz('practice')}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
-                  + Tạo mới ngay
+                  + Tạo mới
                 </button>
               </div>
               <select
@@ -653,7 +615,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                   onClick={() => onCreateLinkedQuiz('quick')}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
-                  + Tạo mới ngay
+                  + Tạo mới
                 </button>
               </div>
               <select
@@ -679,7 +641,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
                   onClick={() => onCreateLinkedQuiz('mastery')}
                   className="text-[10px] text-[#E2704A] hover:underline font-bold"
                 >
-                  + Tạo mới ngay
+                  + Tạo mới
                 </button>
               </div>
               <select

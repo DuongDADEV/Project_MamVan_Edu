@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatScore } from '../../../utils/scoreFormat.ts';
 import { EssaySubmission, RubricTemplate, RubricCriterion, GradedSampleEssay } from '../../../types.ts';
 import {
   ArrowLeft,
@@ -20,6 +21,10 @@ import {
 
 interface SplitGradingWorkspaceProps {
   submission: EssaySubmission;
+  // Đợt sửa 3 (26/10): true khi bài văn của phiếu review đang được fetch
+  // riêng (đường list đã hoãn tải text) — hiện "Đang tải bài làm…" thay cho
+  // hộp "nộp bài trắng" để không hiển thị sai trong lúc chờ.
+  contentLoading?: boolean;
   rubricTemplates: RubricTemplate[];
   onBack: () => void;
   onFinalizeGrading: (grading: {
@@ -42,6 +47,7 @@ interface SplitGradingWorkspaceProps {
 
 export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
   submission,
+  contentLoading,
   rubricTemplates,
   onBack,
   onFinalizeGrading,
@@ -75,6 +81,9 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
 
   // Khởi tạo điểm và nhận xét từ AI hoặc draft cũ hoặc đã chấm
   const [criterionScores, setCriterionScores] = useState<Record<string, number>>({});
+  // Chuỗi đang gõ trong ô điểm: giữ nguyên "7." / ô rỗng trong lúc gõ,
+  // tránh parseFloat ép ngược lại làm mất dấu thập phân (điểm chỉ chốt khi hợp lệ)
+  const [scoreTexts, setScoreTexts] = useState<Record<string, string>>({});
   const [criterionComments, setCriterionComments] = useState<Record<string, string>>({});
   const [generalFeedback, setGeneralFeedback] = useState<string>('');
   const [showSampleEssay, setShowSampleEssay] = useState<boolean>(false);
@@ -117,6 +126,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
     }
 
     setCriterionScores(scores);
+    setScoreTexts({});
     setCriterionComments(comments);
     setSavedToSamples(false);
   }, [submission, initialRubric]);
@@ -131,9 +141,12 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
     return Math.min(10, Math.max(0, Math.round(sum * 10) / 10));
   }, [criterionScores, initialRubric]);
 
-  // Điểm AI gợi ý
-  const aiTotalScore = submission.aiSuggestion?.suggestedTotalScore ?? 8.0;
-  const aiDiff = Math.round(Math.abs(totalTeacherScore - aiTotalScore) * 10) / 10;
+  // Điểm AI gợi ý (không có gợi ý thì không so lệch — trước đây mặc định bịa 8.0)
+  const aiTotalScore = submission.aiSuggestion?.suggestedTotalScore;
+  const aiDiff =
+    aiTotalScore !== undefined
+      ? Math.round(Math.abs(totalTeacherScore - aiTotalScore) * 10) / 10
+      : 0;
 
   // Hành động: Chấp nhận toàn bộ gợi ý AI
   const handleAcceptAllAI = () => {
@@ -254,7 +267,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-extrabold text-[#1E1B4B] text-base">
-                {submission.studentName || 'Học sinh'} · {submission.className ? (submission.className.toLowerCase().startsWith('lớp') ? submission.className : `Lớp ${submission.className}`) : 'Lớp 7A2'}
+                {submission.studentName || 'Học sinh'} · {submission.className ? (submission.className.toLowerCase().startsWith('lớp') ? submission.className : `Lớp ${submission.className}`) : 'Chưa rõ lớp'}
               </h2>
               {/* Badge mức năng lực ảnh hưởng Mastery */}
               <span
@@ -368,7 +381,11 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                 <span>Bài làm học sinh</span>
                 <span>{submission.studentName}</span>
               </div>
-              {submission.content && submission.content.trim().length > 0 ? (
+              {contentLoading ? (
+                <div className="py-12 px-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                  <p className="font-sans font-bold text-slate-500 text-sm">Đang tải bài làm…</p>
+                </div>
+              ) : submission.content && submission.content.trim().length > 0 ? (
                 <p className="font-serif text-base text-[#1E1B4B] leading-relaxed whitespace-pre-wrap select-text">
                   {submission.content}
                 </p>
@@ -393,13 +410,13 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                     <Sparkles className="w-4 h-4" />
                   </span>
                   <span className="font-extrabold text-purple-950 text-sm">
-                    Gợi ý chấm tự động từ AI (Chuẩn GDPT 2018)
+                    Gợi ý chấm tự động bởi AI (Chuẩn GDPT 2018)
                   </span>
                 </div>
                 <p className="text-xs text-purple-800">
                   AI đã phân tích ngữ nghĩa, cấu trúc và đề xuất mức điểm{' '}
                   <strong className="text-purple-950 text-sm font-black underline">
-                    {aiTotalScore} / 10
+                    {formatScore(aiTotalScore)} / 10
                   </strong>
                   . Thầy/cô có toàn quyền điều chỉnh.
                 </p>
@@ -429,7 +446,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
           <div className="p-6 space-y-6 flex-1">
             <div className="flex items-center justify-between">
               <h4 className="font-extrabold text-sm text-[#1E1B4B] flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-[#4F46E5]" /> Tiêu chí đánh giá & Cho điểm
+                <Layers className="w-4 h-4 text-[#4F46E5]" /> Tiêu chí đánh giá & Chấm điểm
               </h4>
               <span className="text-xs font-semibold text-slate-500">
                 Kéo thanh trượt hoặc gõ trực tiếp
@@ -475,14 +492,25 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                           step="0.1"
                           min="0"
                           max={maxPoints}
-                          value={teacherScore}
+                          value={scoreTexts[criterion.name] ?? String(teacherScore)}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            setCriterionScores({
-                              ...criterionScores,
-                              [criterion.name]: Math.min(maxPoints, Math.max(0, val)),
-                            });
+                            const txt = e.target.value;
+                            setScoreTexts((prev) => ({ ...prev, [criterion.name]: txt }));
+                            const val = parseFloat(txt);
+                            if (!Number.isNaN(val)) {
+                              setCriterionScores({
+                                ...criterionScores,
+                                [criterion.name]: Math.min(maxPoints, Math.max(0, val)),
+                              });
+                            }
                           }}
+                          onBlur={() =>
+                            setScoreTexts((prev) => {
+                              const next = { ...prev };
+                              delete next[criterion.name];
+                              return next;
+                            })
+                          }
                           className="w-12 text-center font-black text-sm text-[#4F46E5] focus:outline-hidden"
                         />
                         <span className="text-xs font-semibold text-slate-400">/ {maxPoints}</span>
@@ -574,7 +602,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                     }
                     className="text-[11px] font-semibold px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 rounded-lg transition-colors border border-slate-200"
                   >
-                    + {chip}
+                    {chip}
                   </button>
                 ))}
               </div>
@@ -600,7 +628,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
               {/* So sánh với điểm AI */}
               <div className="text-xs text-slate-600">
                 <div>
-                  AI gợi ý: <strong className="text-purple-700">{aiTotalScore}đ</strong>
+                  AI gợi ý: <strong className="text-purple-700">{formatScore(aiTotalScore)}đ</strong>
                 </div>
                 <div className="text-[11px] text-slate-400">
                   Chênh lệch: {aiDiff === 0 ? 'Trùng khớp 100%' : `±${aiDiff} điểm`}

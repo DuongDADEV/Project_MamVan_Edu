@@ -8,12 +8,16 @@ import {
 import { StudentState } from '../types.ts';
 import { StudentAccount } from '../services/types.ts';
 import { filterStudents, filterStudentStates, getFilterDateRange } from './filterUtils.ts';
+import { countLearningSteps } from '../logic/studentStateUtils.ts';
 
 const ONE_DAY = 86400000;
 const ONE_WEEK = 7 * ONE_DAY;
 
 /**
- * Thời gian học tích cực (ALT) theo ngày (LineChart)
+ * Hoạt động học theo ngày (LineChart): số học sinh có điểm danh trong ngày.
+ * State chỉ ghi attendanceHistory theo ngày + giây học của NGÀY HIỆN TẠI —
+ * không có phút học theo từng ngày trong quá khứ, nên không suy diễn phút
+ * từ số học sinh có mặt (trước đây cộng cứng 32 phút/HS là số bịa).
  */
 export function computeDailyALT(
   allStates: Record<string, StudentState>,
@@ -34,22 +38,17 @@ export function computeDailyALT(
     const dateLabel = `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}`;
     const ymd = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
 
-    let activeMinutes = 0;
     let studentActiveCount = 0;
 
     Object.values(states).forEach((st) => {
-      const hasAttended = st.attendanceHistory?.includes(ymd);
-      if (hasAttended) {
+      if (st.attendanceHistory?.includes(ymd)) {
         studentActiveCount++;
-        // 25-45 phút mỗi học sinh có mặt
-        activeMinutes += 32;
       }
     });
 
     points.push({
       dateLabel,
       timestamp: dayTimestamp,
-      activeMinutes: Math.round(activeMinutes),
       studentActiveCount,
     });
   }
@@ -58,51 +57,108 @@ export function computeDailyALT(
 }
 
 /**
- * Điểm danh theo tuần và số học sinh chạm trần XP
+ * Chuỗi ngày điểm danh liên tục dài nhất từ attendanceHistory thật
+ * (danh sách ngày 'YYYY-MM-DD'). Không có ngày nào -> 0.
+ */
+export function computeLongestAttendanceStreak(attendanceHistory?: string[]): number {
+  const days = Array.from(new Set(attendanceHistory || [])).sort();
+  let longest = 0;
+  let run = 0;
+  let prevMs: number | null = null;
+  days.forEach((d) => {
+    const t = new Date(d + 'T00:00:00').getTime();
+    if (Number.isNaN(t)) return;
+    run = prevMs !== null && t - prevMs === ONE_DAY ? run + 1 : 1;
+    if (run > longest) longest = run;
+    prevMs = t;
+  });
+  return longest;
+}
+
+/**
+ * Tỉ lệ điểm danh theo tuần
  */
 export function computeWeeklyAttendance(
   allStates: Record<string, StudentState>,
   filter: AnalyticsFilter
 ): WeeklyAttendancePoint[] {
-  return [
-    { weekLabel: 'Tuần 1', attendanceRate: 78, xpCeilingReachCount: 4 },
-    { weekLabel: 'Tuần 2', attendanceRate: 82, xpCeilingReachCount: 7 },
-    { weekLabel: 'Tuần 3', attendanceRate: 85, xpCeilingReachCount: 11 },
-    { weekLabel: 'Tuần 4', attendanceRate: 88, xpCeilingReachCount: 14 },
-    { weekLabel: 'Tuần 5', attendanceRate: 86, xpCeilingReachCount: 12 },
-    { weekLabel: 'Tuần 6', attendanceRate: 91, xpCeilingReachCount: 16 },
-  ];
+  // Tính từ attendanceHistory THẬT của học sinh cho 6 tuần gần nhất (thứ Hai -> Chủ nhật):
+  // tỉ lệ = số học sinh có ít nhất 1 ngày điểm danh trong tuần / tổng số học sinh.
+  // (Khái niệm "chạm trần XP tuần 900" đã bị bãi bỏ cùng mô hình trần XP —
+  // không còn đếm ở đây nữa.)
+  const states = Object.values(allStates || {});
+  const totalStudents = Math.max(1, states.length);
+  const points: WeeklyAttendancePoint[] = [];
+  const now = new Date();
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+
+  for (let w = 5; w >= 0; w--) {
+    const weekStart = new Date(monday);
+    weekStart.setDate(weekStart.getDate() - w * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const startMs = weekStart.getTime();
+    const endMs = weekEnd.getTime();
+
+    let attended = 0;
+    states.forEach((st) => {
+      const days = (st.attendanceHistory || []).filter((d) => {
+        const t = new Date(d + 'T00:00:00').getTime();
+        return t >= startMs && t < endMs;
+      });
+      if (days.length > 0) attended++;
+    });
+
+    points.push({
+      weekLabel: `Tuần ${6 - w}`,
+      attendanceRate: Math.round((attended / totalStudents) * 100),
+    });
+  }
+  return points;
 }
 
 /**
- * Phễu học tập (Learning Funnel) đo độ rơi rụng qua 5 bước
+ * Phễu học tập (Learning Funnel) đo độ rơi rụng qua các bước — đếm từ
+ * completedSteps THẬT của học sinh, không dùng tỉ lệ mẫu.
  */
 export function computeLearningFunnel(
   allStates: Record<string, StudentState>,
   studentsCount: number
 ): FunnelStepItem[] {
+  const states = Object.values(allStates || {});
   const base = Math.max(1, studentsCount);
-  return [
-    { stepKey: 'video', stepName: '1. Xem bài giảng Video', studentCount: base, percentage: 100, dropOffPercentage: 0 },
-    { stepKey: 'summary', stepName: '2. Đọc Kiến thức trọng tâm', studentCount: Math.round(base * 0.88), percentage: 88, dropOffPercentage: 12 },
-    { stepKey: 'practice', stepName: '3. Luyện tập tương tác', studentCount: Math.round(base * 0.76), percentage: 76, dropOffPercentage: 12 },
-    { stepKey: 'quick_test', stepName: '4. Kiểm tra nhanh 7 phút', studentCount: Math.round(base * 0.65), percentage: 65, dropOffPercentage: 11 },
-    { stepKey: 'mastery_check', stepName: '5. Đánh giá năng lực Mastery', studentCount: Math.round(base * 0.54), percentage: 54, dropOffPercentage: 11 },
+  const countWithPrefix = (prefixes: string[]) =>
+    states.filter((st) => (st.completedSteps || []).some((step) => prefixes.some((p) => step.startsWith(p)))).length;
+
+  const defs: { stepKey: string; stepName: string; prefixes: string[] }[] = [
+    { stepKey: 'video', stepName: '1. Xem bài giảng Video', prefixes: ['video_watch:'] },
+    { stepKey: 'summary', stepName: '2. Đọc Kiến thức trọng tâm', prefixes: ['summary_read:'] },
+    { stepKey: 'theory', stepName: '3. Đọc lý thuyết', prefixes: ['theory_understood:'] },
+    { stepKey: 'quiz', stepName: '4. Làm bài luyện tập / kiểm tra', prefixes: ['quiz_completed:'] },
+    { stepKey: 'mastery_check', stepName: '5. Hoàn thành trọn luồng học', prefixes: ['video_flow_completed:', 'theory_flow_completed:'] },
   ];
+
+  let prevCount: number | null = null;
+  return defs.map((d) => {
+    const studentCount = countWithPrefix(d.prefixes);
+    const percentage = Math.round((studentCount / base) * 100);
+    const dropOffPercentage = prevCount === null || prevCount === 0 ? 0 : Math.max(0, Math.round(((prevCount - studentCount) / prevCount) * 100));
+    prevCount = studentCount;
+    return { stepKey: d.stepKey, stepName: d.stepName, studentCount, percentage, dropOffPercentage };
+  });
 }
 
 /**
  * Thống kê Video: Tỉ lệ xem >= 80% và đoạn xem lại nhiều
  */
 export function computeVideoAnalytics(): VideoAnalyticsSummary {
+  // Hệ thống chưa thu thập telemetry xem video theo đoạn — trả 0/danh sách rỗng
+  // thay vì số liệu mẫu, để giáo viên không quyết định trên dữ liệu không tồn tại.
   return {
-    completionRateOver80: 84.5,
-    averageWatchSeconds: 460,
-    rewatchHotspots: [
-      { rangeLabel: '02:15 – 03:30', count: 48, note: 'Đoạn giảng về mô hình 4 yếu tố phép so sánh tu từ' },
-      { rangeLabel: '05:40 – 06:50', count: 36, note: 'Đoạn phân tích cách hiệp vần lưng và vần chân' },
-      { rangeLabel: '07:10 – 08:00', count: 29, note: 'Đoạn hướng dẫn viết câu văn có biện pháp nhân hóa' },
-    ],
+    completionRateOver80: 0,
+    averageWatchSeconds: 0,
+    rewatchHotspots: [],
   };
 }
 
@@ -133,7 +189,7 @@ export function computeTopicProgressList(
     if (total > 0) {
       students.forEach((s) => {
         const st = states[s.id];
-        if (st && st.completedSteps && st.completedSteps.length > 2) {
+        if (st && st.completedSteps && countLearningSteps(st.completedSteps) > 2) {
           completedCount++;
         }
       });

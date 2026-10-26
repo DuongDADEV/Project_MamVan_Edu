@@ -19,11 +19,11 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   if (hasUnpublishedEdits && status === 'published') {
     return (
       <span
-        className={`inline-flex items-center gap-1 rounded-full font-bold bg-indigo-50 border border-indigo-200 text-[#4F46E5] shadow-2xs ${sizeClasses}`}
+        className={`inline-flex items-center gap-1 rounded-full font-bold whitespace-nowrap bg-indigo-50 border border-indigo-200 text-[#4F46E5] shadow-2xs ${sizeClasses}`}
         title="Nội dung đã xuất bản nhưng đang có bản nháp chỉnh sửa mới chưa cập nhật lên web học sinh"
       >
         <FileEdit className={iconSize} />
-        <span>Có chỉnh sửa chưa xuất bản</span>
+        <span>Có sửa chưa đăng</span>
       </span>
     );
   }
@@ -31,7 +31,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   if (status === 'published') {
     return (
       <span
-        className={`inline-flex items-center gap-1 rounded-full font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 shadow-2xs ${sizeClasses}`}
+        className={`inline-flex items-center gap-1 rounded-full font-bold whitespace-nowrap bg-emerald-50 border border-emerald-200 text-emerald-700 shadow-2xs ${sizeClasses}`}
       >
         <CheckCircle2 className={iconSize} />
         <span>Đã xuất bản</span>
@@ -42,7 +42,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   if (status === 'archived') {
     return (
       <span
-        className={`inline-flex items-center gap-1 rounded-full font-bold bg-slate-100 border border-slate-200 text-slate-600 shadow-2xs ${sizeClasses}`}
+        className={`inline-flex items-center gap-1 rounded-full font-bold whitespace-nowrap bg-slate-100 border border-slate-200 text-slate-600 shadow-2xs ${sizeClasses}`}
       >
         <Archive className={iconSize} />
         <span>Lưu trữ</span>
@@ -53,7 +53,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   // Draft (Bản nháp)
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full font-bold bg-amber-50 border border-amber-200 text-amber-700 shadow-2xs ${sizeClasses}`}
+      className={`inline-flex items-center gap-1 rounded-full font-bold whitespace-nowrap bg-amber-50 border border-amber-200 text-amber-700 shadow-2xs ${sizeClasses}`}
     >
       <Clock className={iconSize} />
       <span>Bản nháp</span>

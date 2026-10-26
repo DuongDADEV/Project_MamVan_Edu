@@ -59,7 +59,9 @@ export interface TeacherProfile {
   id: string;
   name: string;
   username: string;
-  role: 'teacher';
+  // Khớp schema DB: teachers.role IN ('teacher','admin') — tài khoản Admin
+  // thật cũng là một dòng trong bảng teachers (migration_006).
+  role: 'teacher' | 'admin';
   email?: string;
   subject: string;
   school: string;
@@ -222,6 +224,8 @@ export interface ContentMetadata {
   version: number;
   has_unpublished_edits?: boolean;
   published_at?: string;
+  /** Chủ sở hữu: id giáo viên tạo nội dung này (tách dữ liệu riêng theo giáo viên). */
+  teacher_id?: string;
 }
 
 export type TopicWithMeta = Topic & ContentMetadata;
@@ -303,8 +307,16 @@ export interface EssayRepository {
     status?: 'PENDING_TEACHER' | 'AI_SUGGESTED' | 'GRADED' | 'ALL';
     studentId?: string;
     quizId?: string;
+    // Tải 2 giai đoạn (26/10): false → chỉ bài nộp essay, không gộp phiếu review.
+    includeReviews?: boolean;
+    // Đợt sửa 3 (26/10): false → đường gộp phiếu review KHÔNG tải response_json
+    // (bảng chỉ cần đếm/tiêu đề), full bài văn tải riêng khi mở chi tiết.
+    // Mặc định true để các nơi gọi khác giữ nguyên hành vi.
+    includeReviewText?: boolean;
   }): Promise<EssaySubmission[]>;
   getSubmissionById(id: string): Promise<EssaySubmission | null>;
+  // Lấy full bài văn của 1 phiếu review khi mở chi tiết chấm.
+  getReviewAnswerContent(answerId: string): Promise<string>;
   createSubmission(submission: Omit<EssaySubmission, 'id' | 'submittedAt'>): Promise<EssaySubmission>;
   saveSubmissionDraft(
     id: string,
@@ -333,12 +345,20 @@ export interface EssayRepository {
   deleteGradedSample(id: string): Promise<void>;
   getGradingConfig(): Promise<AIGradingConfig>;
   saveGradingConfig(config: Partial<AIGradingConfig>): Promise<AIGradingConfig>;
-  getAIAccuracyMetrics(): Promise<{
-    averageDiff: number;
-    highDiffRatio: number;
-    weeklyTrends: { week: string; diff: number; total: number }[];
-    diffByCriterion: { name: string; diff: number }[];
-  }>;
+  getAIAccuracyMetrics(): Promise<AIAccuracyMetrics | null>;
+}
+
+/**
+ * Chỉ số độ tin cậy AI chấm bài — TẤT CẢ đều tính từ bài đã có gợi ý AI và
+ * điểm chốt của giáo viên. Chưa có bài nào như vậy -> null (chưa đủ dữ liệu),
+ * tuyệt đối không trả số mẫu.
+ */
+export interface AIAccuracyMetrics {
+  averageDiff: number; // Độ chênh |điểm GV chốt - điểm AI gợi ý| trung bình
+  highDiffRatio: number; // % bài có độ chênh > 1.5 điểm
+  gradedCount: number; // Số bài dùng để tính (có cả gợi ý AI lẫn điểm chốt)
+  weeklyTrends: { week: string; diff: number; total: number }[]; // Theo tuần chốt điểm thật
+  diffByCriterion: { name: string; diff: number }[]; // Ghép cặp rubricScores GV vs aiSuggestion theo tên tiêu chí
 }
 
 // ========================
@@ -394,9 +414,8 @@ export interface SystemSettings {
     weightDecayFactor: number;
   };
   xp: {
-    dailyCapUnder45Min: number;
-    dailyCapTotal: number;
-    weeklyCap: number;
+    // Không còn trường trần XP ngày/tuần: mô hình XP hiện hành đã bãi bỏ
+    // toàn bộ trần (chỉ còn điểm danh ngày + quỹ XP chủ đề + XP từng bài).
     attendanceDailyXp: number;
     videoWatchXp: number;
     videoSummaryReadXp: number;

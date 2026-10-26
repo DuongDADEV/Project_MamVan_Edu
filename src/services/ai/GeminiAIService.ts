@@ -4,8 +4,10 @@
  * Gọi trực tiếp REST API của Google Generative Language:
  * https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}
  * 
- * Tự động thử nghiệm các model (gemini-2.5-flash -> gemini-1.5-flash -> gemini-1.5-pro)
- * RAG Grounding 100% bám sát ngữ liệu nguồn theo chuẩn NotebookLM
+ * Tự động thử nghiệm các model (thế hệ mới 3.x -> flash-latest -> pro-preview
+ * cuối chuỗi cho project có thanh toán; các model 2.x/1.x đã khai tử đã cắt
+ * khỏi mọi chuỗi từ 25/10 vì luôn 404 với key mới)
+ * RAG Grounding 100% bám sát ngữ liệu nguồn theo chuẩn Mầm AI Studio
  */
 
 import {
@@ -21,121 +23,37 @@ import {
   AIExtractedSource,
 } from './AIService.ts';
 import { Question, KeyPoint, TheoryBlock } from '../../types.ts';
+import { callAiProxyText } from './proxyClient.ts';
+
+/**
+ * Các tên model Google đã khai tử với key/project mới (luôn 404 — đã xác
+ * nhận bằng Network thật 25/10). Mọi chuỗi gọi đều lọc bỏ các tên này để
+ * khỏi tốn call lãng phí; giá trị model đã lưu của người dùng KHÔNG bị đổi,
+ * chỉ bị bỏ qua trong chuỗi nếu nó là tên chết.
+ */
+export const DEAD_GEMINI_MODELS: ReadonlySet<string> = new Set([
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-pro',
+]);
 
 export class GeminiAIService implements AIService {
-  private apiKey: string;
-  private model: string;
-
-  constructor(apiKey: string, model: string = 'gemini-2.5-flash') {
-    this.apiKey = apiKey.trim();
-    this.model = model.trim();
-  }
+  // Đợt 25/10: service chạy qua proxy admin — không còn key/model riêng.
+  // Constructor giữ tham số cũ (không dùng) để không vỡ code khởi tạo cũ.
+  constructor(_apiKey?: string, _model?: string) {}
 
   /**
-   * Gọi API Google Gemini với fallback model thông minh
+   * Gọi AI qua proxy của admin (/api/ai/chat): trình duyệt không giữ key,
+   * không gọi thẳng Google nữa — failover Gemini → Groq → OpenRouter nằm
+   * ở proxy, key nằm trong Vercel env của admin.
    */
   private async callGemini(prompt: string, systemInstruction?: string): Promise<string> {
-    const candidateModels = [
-      this.model,
-      'gemini-flash-latest',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash',
-      'gemini-2.5-pro',
-      'gemini-1.5-pro',
-    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
-
-    let lastError: Error | null = null;
-
-    for (const modelToTry of candidateModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent`;
-
-        const generationConfig: any = {
-          temperature: 0.3,
-          maxOutputTokens: 8192,
-        };
-
-        // Tắt thinking budget trên các model thế hệ mới để sinh câu hỏi siêu tốc (5s thay vì hơn 60s)
-        if (modelToTry.includes('flash-latest') || modelToTry.includes('gemini-3') || modelToTry.includes('flash')) {
-          generationConfig.thinkingConfig = { thinkingBudget: 0 };
-        }
-
-        const body: any = {
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig,
-        };
-
-        if (systemInstruction) {
-          body.systemInstruction = {
-            parts: [{ text: systemInstruction }],
-          };
-        }
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': this.apiKey,
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!response.ok) {
-          let errDetails = '';
-          try {
-            const errJson = await response.json();
-            errDetails = errJson?.error?.message || response.statusText;
-          } catch {
-            errDetails = `HTTP ${response.status}: ${response.statusText}`;
-          }
-
-          // Nếu lỗi 404 (model không tìm thấy), 429 (hết token / rate limit), 503 (quá tải), tiếp tục thử model tiếp theo
-          if (
-            response.status === 404 ||
-            response.status === 429 ||
-            response.status === 503 ||
-            errDetails.includes('not found') ||
-            errDetails.includes('RESOURCE_EXHAUSTED') ||
-            errDetails.includes('quota') ||
-            errDetails.includes('overloaded')
-          ) {
-            console.warn(`Model ${modelToTry} (${response.status}): ${errDetails}. Thử model tiếp theo...`);
-            lastError = new Error(`Model ${modelToTry} (${response.status}): ${errDetails}`);
-            continue;
-          }
-
-          throw new Error(`Google AI Studio (${modelToTry}): ${errDetails}`);
-        }
-
-        const data = await response.json();
-        const candidate = data?.candidates?.[0];
-        const text = candidate?.content?.parts?.[0]?.text;
-
-        if (text) {
-          return text;
-        }
-      } catch (err: any) {
-        lastError = err;
-        if (
-          err.message &&
-          (err.message.includes('API_KEY_INVALID') ||
-            err.message.includes('API key not valid') ||
-            err.message.includes('400') ||
-            err.message.includes('403'))
-        ) {
-          throw err;
-        }
-      }
-    }
-
-    throw lastError || new Error('Google AI Studio không trả về nội dung.');
+    return callAiProxyText(prompt, systemInstruction);
   }
 
   /**
@@ -167,7 +85,7 @@ export class GeminiAIService implements AIService {
    */
   static async testConnection(
     apiKey: string,
-    preferredModel: string = 'gemini-2.5-flash'
+    preferredModel: string = 'gemini-3.8-flash'
   ): Promise<{ success: boolean; message: string; latencyMs: number; workingModel?: string }> {
     const startTime = Date.now();
     const cleanKey = apiKey.trim();
@@ -181,16 +99,19 @@ export class GeminiAIService implements AIService {
 
     const modelsToTry = [
       preferredModel,
+      'gemini-3.8-flash',
+      'gemini-3.5-flash-lite',
       'gemini-flash-latest',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash',
-      'gemini-2.5-pro',
-      'gemini-1.5-pro',
-    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx);
+      'gemini-3.1-pro-preview',
+    ].filter((m, idx, arr) => !!m && arr.indexOf(m) === idx && !DEAD_GEMINI_MODELS.has(m));
 
     let lastError = '';
+    // Ghi nhận kết quả từng model để thông báo thất bại tự chẩn đoán được
+    // (dạng "model: status + mảnh message", vd "gemini-3.8-flash: HTTP 429 ...").
+    const attempts: string[] = [];
+    const recordAttempt = (model: string, detail: string) => {
+      attempts.push(`${model}: ${detail.slice(0, 80)}`);
+    };
 
     for (const model of modelsToTry) {
       try {
@@ -212,9 +133,6 @@ export class GeminiAIService implements AIService {
                 ],
               },
             ],
-            generationConfig: {
-              thinkingConfig: { thinkingBudget: 0 },
-            },
           }),
         });
 
@@ -232,13 +150,16 @@ export class GeminiAIService implements AIService {
         } else {
           const errJson = await res.json().catch(() => null);
           lastError = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+          recordAttempt(model, `HTTP ${res.status} ${lastError}`);
 
-          // Nếu lỗi xác thực API Key (401, 403, 400 hoặc API_KEY_INVALID), dừng ngay không thử model khác
+          // Chỉ dừng ngay khi lỗi xác thực thật (401/403 hoặc message mang dấu
+          // hiệu xác thực). Mọi status khác — 400 vì lý do riêng của model,
+          // 404, 429, 500, 503 — đều thử model tiếp theo, vì một model lỗi
+          // không có nghĩa key sai hay các model còn lại cũng lỗi.
           if (
             res.status === 401 ||
             res.status === 403 ||
-            res.status === 400 ||
-            lastError.includes('API_KEY') ||
+            lastError.includes('API_KEY_INVALID') ||
             lastError.includes('UNAUTHENTICATED') ||
             lastError.includes('invalid authentication credentials')
           ) {
@@ -251,18 +172,22 @@ export class GeminiAIService implements AIService {
         }
       } catch (err: any) {
         lastError = err.message || 'Lỗi mạng';
+        recordAttempt(model, lastError);
       }
     }
 
     return {
       success: false,
-      message: `Không thể kết nối Google AI Studio: ${lastError}`,
+      message:
+        attempts.length > 0
+          ? `Không thể kết nối Google AI Studio. Kết quả từng model: ${attempts.join('; ')}`
+          : `Không thể kết nối Google AI Studio: ${lastError}`,
       latencyMs: Date.now() - startTime,
     };
   }
 
   /**
-   * Hỏi đáp và trò chuyện với tài liệu nguồn (NotebookLM Style)
+   * Hỏi đáp và trò chuyện với tài liệu nguồn (Mầm AI Studio)
    */
   async chatWithSources(
     sources: AISource[],
@@ -285,7 +210,7 @@ export class GeminiAIService implements AIService {
       .map((h) => `${h.role === 'user' ? 'Thầy/Cô' : 'AI'}: ${h.text}`)
       .join('\n');
 
-    const prompt = `Bạn là trợ lý AI sư phạm Mầm Văn theo chuẩn NotebookLM của Google.
+    const prompt = `Bạn là trợ lý AI sư phạm Mầm Văn theo chuẩn Mầm AI Studio.
 Nhiệm vụ của bạn là đọc và phân tích sâu các tài liệu nguồn dưới đây để trả lời câu hỏi của thầy/cô giáo dạy Ngữ văn 7.
 
 TÀI LIỆU NGUỒN ĐÃ BẬT:
@@ -356,11 +281,19 @@ QUY TẮC RAG GROUNDING BẮT BUỘC:
       .map((s, idx) => `[Tài liệu ${idx + 1}: ${s.title}]\n${s.content}`)
       .join('\n\n');
 
-    const count = options?.totalQuestions || options?.count || 5;
+    const tc = options?.typeCounts;
+    const typeTotal = tc
+      ? (tc.single || 0) + (tc.multi || 0) + (tc.fill || 0) + (tc.essay || 0)
+      : 0;
+    const count = typeTotal > 0 ? typeTotal : options?.totalQuestions || options?.count || 5;
     const difficulty = options?.difficulty || 'TB';
     const topic = options?.topicTitle || activeSources[0]?.title || 'Ngữ văn 7';
+    const typeBreakdown =
+      typeTotal > 0
+        ? `\nCƠ CẤU LOẠI CÂU HỎI (BẮT BUỘC ĐÚNG SỐ LƯỢNG TỪNG LOẠI):\n- "single" (Chọn 1 đáp án): ĐÚNG ${tc?.single || 0} câu\n- "multi" (Chọn nhiều đáp án): ĐÚNG ${tc?.multi || 0} câu\n- "fill" (Điền vào chỗ trống): ĐÚNG ${tc?.fill || 0} câu\n- "essay" (Tự luận): ĐÚNG ${tc?.essay || 0} câu\nTrường "type" của mỗi câu phải khớp cơ cấu trên; loại nào số lượng 0 thì TUYỆT ĐỐI không sinh câu thuộc loại đó.\n`
+        : '';
 
-    const prompt = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Google NotebookLM.
+    const prompt = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Mầm AI Studio.
 Dựa vào ngữ liệu sau:
 ${sourcesText}
 
@@ -370,7 +303,7 @@ YÊU CẦU ĐẶC BIỆT QUAN TRỌNG VỀ SỐ LƯỢNG (BẮT BUỘC):
 - Bạn PHẢI tạo CHÍNH XÁC đúng ${count} câu hỏi riêng biệt trong mảng JSON (BẮT BUỘC có đủ ${count} phần tử).
 - TUYỆT ĐỐI KHÔNG ĐƯỢC sinh ít hơn ${count} câu (ví dụ người dùng chọn ${count} câu thì phải đủ ${count} câu, không được chỉ trả về 5 câu).
 - Khai thác phong phú mọi chi tiết, từ ngữ, câu văn/thơ trong ngữ liệu để mỗi câu hỏi là một khía cạnh riêng biệt.
-
+${typeBreakdown}
 Phân bổ theo ma trận 4 mức độ năng lực:
 - NHAN_BIET: Nhận biết dấu hiệu thể loại, chi tiết, từ ngữ trong văn bản
 - THONG_HIEU: Hiểu ý nghĩa hình ảnh, biện pháp tu từ, tâm trạng nhân vật
@@ -542,7 +475,7 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
 
   /**
    * Trích xuất lời thoại, phụ đề, nội dung bài giảng từ YouTube hoặc bất kỳ trang web nào
-   * Lọc sạch rác giao diện và tối ưu hóa nội dung sư phạm chuẩn NotebookLM
+   * Lọc sạch rác giao diện và tối ưu hóa nội dung sư phạm chuẩn Mầm AI Studio
    */
   async extractContentFromUrl(url: string): Promise<AIExtractedSource> {
     const cleanUrl = url.trim();
@@ -622,7 +555,7 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
     combinedContent = this.cleanScrapedText(combinedContent, isYouTube);
 
     // 3. Phân tích và chuẩn hóa bằng Gemini AI
-    const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Google NotebookLM môn Ngữ văn và Khoa học Xã hội.
+    const prompt = `Bạn là trợ lý AI sư phạm cao cấp của Mầm AI Studio môn Ngữ văn và Khoa học Xã hội.
 Nhiệm vụ: Phân tích tư liệu bài giảng/video sau đây và biên soạn thành một bài giảng/tài liệu tri thức hoàn chỉnh, sâu sắc, có cấu trúc sư phạm rõ ràng:
 - URL nguồn: ${cleanUrl}
 - Loại nguồn: ${isYouTube ? 'Video YouTube' : 'Bài viết Web'}
@@ -682,28 +615,14 @@ ${cleanedFallback}`;
       };
     }
 
-    // Fallback bài giảng chuẩn mực sư phạm (tuyệt đối không bao giờ trả về rác mạng)
-    const fallbackText = `[Tài liệu trích xuất từ ${isYouTube ? 'video' : 'liên kết'}: ${title}]
-${authorName ? `- Kênh/Tác giả: ${authorName}\n` : ''}- Đường dẫn nguồn: ${cleanUrl}
-
-1. Tổng quan bối cảnh & Chủ đề:
-Tư liệu cung cấp góc nhìn chuyên sâu và phân tích toàn diện về chủ đề: "${title}". Toàn bộ nội dung hướng tới việc làm rõ các cơ sở thực tiễn, quy luật phát triển và bài học nhận thức.
-
-2. Các luận điểm trọng tâm:
-- Phân tích cơ sở địa chính trị, hoàn cảnh lịch sử và tư duy chiến lược thực tiễn.
-- Phân tích cơ chế tổ chức lực lượng, tính liên kết hiệp đồng và vai trò điều hành tập trung thống nhất.
-- Đánh giá hiệu quả thực tế và các bài học kinh nghiệm trong xây dựng và bảo vệ đất nước.
-
-3. Định hướng ôn tập & Vận dụng:
-Vận dụng các luận điểm trên để phục vụ việc tự học, liên hệ thực tế đời sống và giải quyết các câu hỏi đọc hiểu 4 mức độ (Nhận biết, Thông hiểu, Phân tích, Vận dụng).`;
-
-    return {
-      title,
-      content: fallbackText,
-      wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
-      type: isYouTube ? 'video' : 'website',
-      url: cleanUrl,
-    };
+    // Đợt QA 26/10, blocker 5: KHÔNG còn đoạn văn mẫu bịa sẵn. Trước đây khi
+    // không lấy được nội dung thật, hàm vẫn trả một "bài giảng chuẩn mực"
+    // viết sẵn (kể cả luận điểm địa chính trị không liên quan) như thể đó là
+    // nội dung của liên kết — giáo viên không thể phân biệt thật/giả. Nay:
+    // không có nội dung thật thì ném lỗi rõ ràng để caller báo người dùng.
+    throw new Error(
+      'Không trích xuất được nội dung thật từ liên kết này (trang chặn bóc tách hoặc không có nội dung đọc được). Hãy thử liên kết khác hoặc dán nội dung trực tiếp.'
+    );
   }
 
   /**

@@ -1,18 +1,25 @@
 import React, { useState } from 'react';
 import { StudentState, EssaySubmission, RewardRequest, ThemeId } from '../types.ts';
-import { REWARDS_CATALOG, QUESTIONS_BANK } from '../data/mockData.ts';
+import { REWARDS_CATALOG } from '../data/rewards.ts';
+
+// Câu hỏi chỉ tra từ kho THẬT lưu trên máy (đã gỡ ngân hàng mẫu).
+function readLocalQuestion(id: string): any {
+  try {
+    const raw = localStorage.getItem('mam_van_questions');
+    if (raw) return JSON.parse(raw)[id];
+  } catch {}
+  return undefined;
+}
 import { THEMES_LIST } from '../data/themes.ts';
-import { getCurrentDailyXpCap } from '../logic/xpEngine.ts';
 import { getChestTierConfig } from '../config.ts';
 import { Wrench, X, Play, FastForward, Calendar, CheckSquare, Gift, RotateCcw, ListFilter, Palette, Sparkles, AlertCircle } from 'lucide-react';
 
 interface DevPanelProps {
   state: StudentState;
   onUpdateState: (updater: (prev: StudentState) => StudentState) => void;
-  onResetData: (studentId: 'hs001' | 'hs002') => void;
 }
 
-export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onResetData }) => {
+export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'time' | 'essay' | 'reward' | 'xplog'>('time');
   const [rejectingReqId, setRejectingReqId] = useState<string | null>(null);
@@ -44,7 +51,7 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
       const sub = prev.essaySubmissions.find((s) => s.id === subId);
       if (!sub) return prev;
 
-      const q = QUESTIONS_BANK[sub.questionId];
+      const q = readLocalQuestion(sub.questionId);
 
       const rubricScores = [
         { criterionName: 'Nội dung ý', score: 3.5, maxScore: 4 },
@@ -135,7 +142,6 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
   };
 
   const activeMinutes = Math.floor(state.activeSecondsToday / 60);
-  const currentDailyCap = getCurrentDailyXpCap(activeMinutes);
 
   return (
     <>
@@ -186,7 +192,7 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
               <div>
                 <span className="text-slate-500 block text-[10px] font-medium">XP / Trần ngày</span>
                 <span className="font-extrabold text-[#4F46E5] font-mono">
-                  {state.xpToday}/{currentDailyCap}
+                  {state.xpToday}
                 </span>
               </div>
               <div>
@@ -315,29 +321,8 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
                       }
                       className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold hover:bg-emerald-100 transition-colors"
                     >
-                      +40 XP hôm nay (Thử chạm trần {currentDailyCap} XP)
+                      +40 XP hôm nay
                     </button>
-                  </div>
-
-                  {/* Đặt lại dữ liệu mẫu */}
-                  <div className="pt-3 border-t border-slate-100">
-                    <label className="font-bold text-slate-700 block mb-2">
-                      Đặt lại dữ liệu demo:
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => onResetData('hs001')}
-                        className="py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold hover:bg-slate-100"
-                      >
-                        Đặt lại hs001 (Đã học)
-                      </button>
-                      <button
-                        onClick={() => onResetData('hs002')}
-                        className="py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold hover:bg-slate-100"
-                      >
-                        Đặt lại hs002 (Mới bắt đầu)
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}
@@ -355,7 +340,7 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState, onRese
                     </p>
                   ) : (
                     state.essaySubmissions.map((sub) => {
-                      const q = QUESTIONS_BANK[sub.questionId];
+                      const q = readLocalQuestion(sub.questionId);
 
                       return (
                         <div

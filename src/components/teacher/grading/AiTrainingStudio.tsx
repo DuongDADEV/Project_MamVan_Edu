@@ -5,6 +5,7 @@ import {
   AIGradingConfig,
   RubricCriterion,
 } from '../../../types.ts';
+import { AIAccuracyMetrics } from '../../../services/types.ts';
 import {
   BookOpen,
   Sparkles,
@@ -35,12 +36,9 @@ interface AiTrainingStudioProps {
   onDeleteGradedSample: (id: string) => Promise<void>;
   aiConfig: AIGradingConfig;
   onSaveAIConfig: (config: Partial<AIGradingConfig>) => Promise<void>;
-  accuracyMetrics?: {
-    averageDiff: number;
-    highDiffRatio: number;
-    weeklyTrends: { week: string; diff: number; total: number }[];
-    diffByCriterion: { name: string; diff: number }[];
-  };
+  // null/undefined = chưa đủ dữ liệu (chưa có bài nào có cả gợi ý AI lẫn
+  // điểm chốt của giáo viên) -> tab chỉ số hiện trạng thái rỗng trung thực.
+  accuracyMetrics?: AIAccuracyMetrics | null;
 }
 
 export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
@@ -70,6 +68,9 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
   const [sandboxRubricId, setSandboxRubricId] = useState(rubricTemplates[0]?.id || '');
   const [sandboxResult, setSandboxResult] = useState<any | null>(null);
   const [isSandboxRunning, setIsSandboxRunning] = useState(false);
+  // Đợt QA 26/10, blocker 5: lỗi chấm sandbox phải hiện rõ cho giáo viên,
+  // không được chỉ console.error rồi để khung kết quả trống như "chưa chạy".
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
 
   // State Modal chỉnh sửa Rubric
   const [editingRubric, setEditingRubric] = useState<RubricTemplate | null>(null);
@@ -97,6 +98,7 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
     if (!sandboxText.trim()) return;
     setIsSandboxRunning(true);
     setSandboxResult(null);
+    setSandboxError(null);
     try {
       const selectedRubric =
         rubricTemplates.find((t) => t.id === sandboxRubricId) || rubricTemplates[0];
@@ -115,7 +117,10 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
         feedbackLength: configDraft.feedbackLength,
       });
       setSandboxResult(res);
-    } catch (e) {
+    } catch (e: any) {
+      // Đường chấm nay ném lỗi thay vì trả điểm mock im lặng (blocker 5) —
+      // hiện lỗi để giáo viên biết mà thử lại, không dùng điểm ước lượng.
+      setSandboxError(e?.message || 'AI chấm lỗi, vui lòng thử lại sau.');
       console.error('Lỗi chạy Sandbox AI:', e);
     } finally {
       setIsSandboxRunning(false);
@@ -651,12 +656,20 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
               <Sparkles className="w-4 h-4 text-purple-600" /> Kết quả AI gợi ý
             </h3>
 
-            {!sandboxResult && !isSandboxRunning && (
+            {!sandboxResult && !isSandboxRunning && !sandboxError && (
               <div className="h-64 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-200 rounded-2xl">
                 <Play className="w-8 h-8 text-slate-300 mb-2" />
                 <p className="text-xs text-slate-400 font-semibold">
                   Bấm "Thử AI chấm ngay" ở cột bên trái để xem phân tích chi tiết.
                 </p>
+              </div>
+            )}
+
+            {sandboxError && !isSandboxRunning && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+                <p className="text-sm font-bold text-red-700">AI chấm lỗi — chưa có điểm gợi ý.</p>
+                <p className="text-xs text-red-600 mt-1">{sandboxError}</p>
+                <p className="text-xs text-red-600 mt-1">Hãy thử lại sau ít phút. Hệ thống không dùng điểm ước lượng thay cho điểm AI.</p>
               </div>
             )}
 
@@ -721,7 +734,17 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
       )}
 
       {/* ================= 5. TAB CHỈ SỐ ĐỘ TIN CẬY ================= */}
-      {activeTab === 'metrics' && (
+      {activeTab === 'metrics' && !accuracyMetrics && (
+        <div className="bg-white p-8 rounded-2xl border border-[#E8DFD1] shadow-xs text-center space-y-2">
+          <p className="font-extrabold text-sm text-[#1E1B4B]">Chưa đủ dữ liệu để tính độ tin cậy AI</p>
+          <p className="text-xs text-slate-500 max-w-xl mx-auto leading-relaxed">
+            Các chỉ số ở mục này chỉ tính từ những bài tự luận đã có điểm AI gợi ý và được
+            thầy/cô chốt điểm. Hiện chưa có bài nào như vậy nên hệ thống không hiển thị số —
+            khi đã chấm những bài đầu tiên, số liệu thật sẽ tự xuất hiện tại đây.
+          </p>
+        </div>
+      )}
+      {activeTab === 'metrics' && accuracyMetrics && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-[#E8DFD1] shadow-xs">
@@ -730,9 +753,15 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-black text-[#4F46E5]">
-                  ± {accuracyMetrics?.averageDiff ?? 0.35}
+                  ± {accuracyMetrics.averageDiff}
                 </span>
-                <span className="text-xs text-emerald-600 font-bold">Rất sát điểm chuẩn</span>
+                <span className="text-xs text-emerald-600 font-bold">
+                  {accuracyMetrics.averageDiff < 0.5
+                    ? 'Rất sát điểm chuẩn'
+                    : accuracyMetrics.averageDiff < 1
+                      ? 'Khá sát điểm chuẩn'
+                      : 'Chênh lệch đáng kể'}
+                </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-2">
                 Mức lệch dưới 0.5 điểm cho thấy AI đã hiểu đúng cách chấm của thầy cô.
@@ -745,12 +774,12 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-black text-slate-800">
-                  {accuracyMetrics?.highDiffRatio ?? 8.5}%
+                  {accuracyMetrics.highDiffRatio}%
                 </span>
                 <span className="text-xs text-slate-500">trên tổng bài chấm</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-2">
-                Chủ yếu rơi vào các bài viết có biểu hiện sáng tạo phá cách hoặc lạc đề.
+                Tỉ lệ bài mà giáo viên điều chỉnh hơn 1,5 điểm so với điểm AI gợi ý.
               </p>
             </div>
 
@@ -759,11 +788,11 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
                 Tổng bài đã hoàn tất thẩm định
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-emerald-700">36</span>
+                <span className="text-3xl font-black text-emerald-700">{accuracyMetrics.gradedCount}</span>
                 <span className="text-xs text-slate-400">bài viết</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-2">
-                Dữ liệu mẫu giúp tinh chỉnh AI sau mỗi lần thầy/cô bấm "Chốt".
+                Số bài đã có cả điểm AI gợi ý lẫn điểm chốt của giáo viên — toàn bộ chỉ số trên trang này tính từ chính các bài đó.
               </p>
             </div>
           </div>
@@ -776,23 +805,16 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
                 Xu hướng độ chênh lệch điểm qua các tuần (Càng thấp càng chuẩn)
               </h4>
               <div className="space-y-3">
-                {(
-                  accuracyMetrics?.weeklyTrends || [
-                    { week: 'Tuần 1', diff: 0.65, total: 6 },
-                    { week: 'Tuần 2', diff: 0.48, total: 10 },
-                    { week: 'Tuần 3', diff: 0.35, total: 12 },
-                    { week: 'Tuần 4', diff: 0.22, total: 8 },
-                  ]
-                ).map((w, idx) => (
+                {accuracyMetrics.weeklyTrends.map((w, idx) => (
                   <div key={idx} className="space-y-1">
                     <div className="flex justify-between text-xs font-bold">
-                      <span className="text-slate-700">{w.week}</span>
+                      <span className="text-slate-700">{w.week} <span className="text-slate-400 font-semibold">({w.total} bài)</span></span>
                       <span className="text-[#4F46E5]">± {w.diff} điểm</span>
                     </div>
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-[#4F46E5] rounded-full transition-all"
-                        style={{ width: `${Math.max(15, (1 - w.diff) * 100)}%` }}
+                        style={{ width: `${Math.max(5, Math.min(100, (1 - w.diff) * 100))}%` }}
                       />
                     </div>
                   </div>
@@ -806,12 +828,13 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
                 Độ chênh lệch trung bình theo từng tiêu chí Rubric
               </h4>
               <div className="space-y-3">
-                {[
-                  { name: 'Nội dung ý & Cảm thụ', diff: 0.35 },
-                  { name: 'Bố cục & Liên kết', diff: 0.18 },
-                  { name: 'Dùng từ & Chính tả', diff: 0.12 },
-                  { name: 'Sáng tạo & Cảm xúc', diff: 0.42 },
-                ].map((item, idx) => (
+                {accuracyMetrics.diffByCriterion.length === 0 && (
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Chưa có dữ liệu đối chiếu theo tiêu chí — các bài đã chấm chưa lưu
+                    điểm gợi ý chi tiết từng tiêu chí của AI.
+                  </p>
+                )}
+                {accuracyMetrics.diffByCriterion.map((item, idx) => (
                   <div key={idx} className="space-y-1">
                     <div className="flex justify-between text-xs font-bold">
                       <span className="text-slate-700">{item.name}</span>
@@ -820,7 +843,7 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-amber-500 rounded-full"
-                        style={{ width: `${item.diff * 120}%` }}
+                        style={{ width: `${Math.min(100, item.diff * 120)}%` }}
                       />
                     </div>
                   </div>
@@ -896,24 +919,43 @@ export const AiTrainingStudio: React.FC<AiTrainingStudioProps> = ({
               ))}
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-              <button
-                onClick={() => setIsRubricModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={async () => {
-                  await onSaveRubricTemplate(editingRubric);
-                  setIsRubricModalOpen(false);
-                }}
-                disabled={!editingRubric.title.trim()}
-                className="px-4 py-2 bg-[#E2704A] text-white text-xs font-bold rounded-xl"
-              >
-                Lưu Rubric
-              </button>
-            </div>
+            {(() => {
+              const totalWeight = editingRubric.criteria.reduce(
+                (acc, c) => acc + (Number(c.weight) || 0),
+                0
+              );
+              const weightOk = totalWeight === 100;
+              return (
+                <>
+                  <p
+                    className={`text-xs font-bold text-right ${
+                      weightOk ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
+                  >
+                    Tổng trọng số: {totalWeight}%{' '}
+                    {weightOk ? '✓' : '(phải đúng 100% mới lưu được — vì điểm từng tiêu chí được tính theo tỉ lệ này)'}
+                  </p>
+                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <button
+                      onClick={() => setIsRubricModalOpen(false)}
+                      className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await onSaveRubricTemplate(editingRubric);
+                        setIsRubricModalOpen(false);
+                      }}
+                      disabled={!editingRubric.title.trim() || !weightOk}
+                      className="px-4 py-2 bg-[#E2704A] text-white text-xs font-bold rounded-xl disabled:opacity-50"
+                    >
+                      Lưu Rubric
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

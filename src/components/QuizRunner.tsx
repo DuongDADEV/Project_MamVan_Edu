@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Question, Quiz, QuestionResult, EssaySubmission } from '../types.ts';
-import { QUESTIONS_BANK } from '../data/mockData.ts';
 import { SKILL_METADATA } from '../logic/mastery.ts';
 import { MamMuc } from './MamMuc.tsx';
 import { Clock, CheckCircle2, XCircle, AlertCircle, Send, ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react';
@@ -8,6 +7,7 @@ import { Clock, CheckCircle2, XCircle, AlertCircle, Send, ArrowRight, ArrowLeft,
 interface QuizRunnerProps {
   quiz: Quiz;
   questions?: Question[];
+  studentId?: string;
   onComplete: (
     results: QuestionResult[],
     essaySubmissions: EssaySubmission[],
@@ -20,6 +20,7 @@ interface QuizRunnerProps {
 export const QuizRunner: React.FC<QuizRunnerProps> = ({
   quiz,
   questions: customQuestions,
+  studentId,
   onComplete,
   onExit,
 }) => {
@@ -33,7 +34,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     customQuestions && customQuestions.length > 0
       ? customQuestions
       : (quiz.questionIds || [])
-          .map((id) => localStoredQuestions[id] || QUESTIONS_BANK[id])
+          .map((id) => localStoredQuestions[id])
           .filter(Boolean);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -41,6 +42,9 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
   const [practiceChecked, setPracticeChecked] = useState<Record<string, boolean>>({});
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const submittedRef = useRef(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitLatestRef = useRef<() => void>(() => {});
 
   // Đồng hồ đếm ngược nếu là bài test có time limit
   const isPractice = quiz.kind === 'practice';
@@ -55,6 +59,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     setEssayDrafts({});
     setPracticeChecked({});
     setIsSubmitModalOpen(false);
+    submittedRef.current = false;
     setTimeLeft(quiz.timeLimitMinutes ? quiz.timeLimitMinutes * 60 : 0);
   }, [quiz.id]);
 
@@ -65,24 +70,38 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   useEffect(() => {
     if (!isPractice && initialSeconds > 0) {
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            // Hết giờ tự nộp
-            handleSubmitFinal();
-            return 0;
-          }
-          return prev - 1;
-        });
+        setTimeLeft((prev) => Math.max(0, prev - 1));
       }, 1000);
 
       return () => clearInterval(timerRef.current);
     }
   }, [isPractice, initialSeconds]);
 
-  // Xử lý nộp bài chung
+  // Hết giờ -> tự nộp bằng bản handler MỚI NHẤT (đủ đáp án đã làm),
+  // không dùng closure cũ của lần render đầu như trước đây
+  useEffect(() => {
+    if (!isPractice && initialSeconds > 0 && timeLeft === 0) {
+      submitLatestRef.current();
+    }
+  }, [timeLeft, isPractice, initialSeconds]);
+
+  // Xử lý nộp bài chung — chốt chống nộp 2 lần (bấm đúp / hết giờ trùng bấm tay)
   const handleSubmitFinal = () => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setIsSubmitModalOpen(false);
+    setSubmitError(null);
+    try {
+      handleSubmitScoring();
+    } catch (err) {
+      // Không để bài nộp chết im lặng: mở lại nút nộp và báo lỗi cho học sinh
+      console.error('Lỗi khi nộp bài:', err);
+      submittedRef.current = false;
+      setSubmitError('Đã xảy ra lỗi khi nộp bài. Em kiểm tra lại đáp án rồi bấm "Nộp bài thi" để nộp lại nhé!');
+    }
+  };
+
+  const handleSubmitScoring = () => {
 
     const results: QuestionResult[] = [];
     const essaySubs: EssaySubmission[] = [];
@@ -105,8 +124,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'multi') {
-        const correctArray = (q.answer as string[]) || [];
-        const chosenArray = (ans as string[]) || [];
+        const correctArray = Array.isArray(q.answer)
+          ? (q.answer as string[])
+          : q.answer != null && q.answer !== ''
+            ? [String(q.answer)]
+            : [];
+        const chosenArray = Array.isArray(ans)
+          ? (ans as string[])
+          : ans != null && ans !== ''
+            ? [String(ans)]
+            : [];
         const matches = chosenArray.filter((c) => correctArray.includes(c)).length;
         const extraWrong = chosenArray.filter((c) => !correctArray.includes(c)).length;
         const ratio = Math.max(0, (matches - extraWrong * 0.5) / Math.max(1, correctArray.length));
@@ -121,8 +148,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'fill') {
-        const correctArray = (q.answer as string[]) || [];
-        const fillAns = (ans as string[]) || [];
+        const correctArray = Array.isArray(q.answer)
+          ? (q.answer as string[])
+          : q.answer != null && q.answer !== ''
+            ? [String(q.answer)]
+            : [];
+        const fillAns = Array.isArray(ans)
+          ? (ans as string[])
+          : ans != null && ans !== ''
+            ? [String(ans)]
+            : [];
         let matchCount = 0;
         correctArray.forEach((cWord, i) => {
           if (fillAns[i] && fillAns[i].trim().toLowerCase() === cWord.trim().toLowerCase()) {
@@ -156,7 +191,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           essaySubs.push({
             id: 'sub_' + Date.now() + '_' + q.id,
             questionId: q.id,
-            studentId: 'hs001',
+            studentId: studentId || 'hs001',
             promptTitle: q.prompt || 'Viết đoạn văn theo yêu cầu',
             quizTitle: quiz.title,
             content: text,
@@ -180,6 +215,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
 
     onComplete(results, essaySubs, Math.round(totalScore * 10) / 10, maxScore);
   };
+  submitLatestRef.current = handleSubmitFinal;
 
   if (!currentQ) {
     return (
@@ -211,8 +247,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
         correctArr.length === userArr.length &&
         correctArr.every((c) => userArr.includes(c));
     } else if (currentQ.type === 'fill') {
-      const correctArr = (currentQ.answer as string[]) || [];
-      const userArr = (userAnswers[currentQ.id] as string[]) || [];
+      const correctArr = Array.isArray(currentQ.answer)
+        ? (currentQ.answer as string[])
+        : currentQ.answer != null && currentQ.answer !== ''
+          ? [String(currentQ.answer)]
+          : [];
+      const userArr = Array.isArray(userAnswers[currentQ.id])
+        ? (userAnswers[currentQ.id] as string[])
+        : userAnswers[currentQ.id] != null && userAnswers[currentQ.id] !== ''
+          ? [String(userAnswers[currentQ.id])]
+          : [];
       isAnswerCorrectInPractice = correctArr.every(
         (c, idx) => userArr[idx] && userArr[idx].trim().toLowerCase() === c.trim().toLowerCase()
       );
@@ -230,6 +274,11 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
 
   return (
     <div className="w-full max-w-2xl mx-auto py-6 px-4 text-[#1E1B4B]">
+      {submitError && (
+        <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+          <span>⚠️ {submitError}</span>
+        </div>
+      )}
       {/* HEADER BÀI QUIZ: Tên + Bộ đếm + Tiến độ */}
       <div className="flex items-center justify-between gap-4 mb-4">
         <div>
@@ -530,7 +579,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               Xác nhận nộp bài?
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed mb-6">
-              Em đã hoàn thành phần làm bài của mình. Em có muốn kiểm tra lại trước khi gửi kết quả không?
+              {(() => {
+                const unanswered = questions.filter((q) =>
+                  q.type === 'essay'
+                    ? !(essayDrafts[q.id] || '').trim()
+                    : userAnswers[q.id] === undefined
+                ).length;
+                return unanswered > 0
+                  ? `Em còn ${unanswered} câu chưa trả lời. Nộp bây giờ thì các câu đó sẽ tính là chưa làm — em có muốn kiểm tra lại trước không?`
+                  : 'Em đã hoàn thành phần làm bài của mình. Em có muốn kiểm tra lại trước khi gửi kết quả không?';
+              })()}
             </p>
 
             <div className="flex gap-2.5">

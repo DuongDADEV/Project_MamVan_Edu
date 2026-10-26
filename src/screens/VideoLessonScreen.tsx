@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
-import { VIDEOS, QUIZZES, QUESTIONS_BANK } from '../data/mockData.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
-import { awardXP } from '../logic/xpEngine.ts';
+import { recordStepCompletion } from '../logic/xpEngine.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
+import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import {
   Clock,
@@ -56,14 +56,14 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     () => contentService.getVideoLessons(undefined, true),
     ['content']
   );
+  // CHỈ hiện đúng video được yêu cầu từ dữ liệu thật. Không thấy = không
+  // hiện gì (màn hình báo không tìm thấy) — TUYỆT ĐỐI không thay bằng video
+  // mẫu hay video khác (đã gỡ mockData + fallback thay thế).
   const video = useMemo(() => {
     if (liveVideo && !liveVideo.deleted_at) return liveVideo;
-    if (VIDEOS[videoId]) return VIDEOS[videoId];
     if (allVideos && allVideos.length > 0) {
       const match = allVideos.find((v) => v.id === videoId && !v.deleted_at);
       if (match) return match;
-      const fallback = allVideos.find((v) => v.status === 'published' && !v.deleted_at);
-      if (fallback) return fallback;
     }
     return null;
   }, [liveVideo, videoId, allVideos]);
@@ -88,23 +88,42 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   const [mediaDuration, setMediaDuration] = useState<number>(video?.durationSec || 0);
   const [summarySecondsLeft, setSummarySecondsLeft] = useState(TIME_CONFIG.MIN_SUMMARY_READ_SECONDS);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+  const [quizOutcome, setQuizOutcome] = useState<{
+    quiz: Quiz;
+    results: QuestionResult[];
+    essays: EssaySubmission[];
+    earned: number;
+    max: number;
+    xpAwarded: number;
+    cappedNotice?: string;
+  } | null>(null);
 
-  const quizzesMap: Record<string, Quiz> = useMemo(() => ({
-    ...QUIZZES,
-    ...(liveQuizzes ? Object.fromEntries(liveQuizzes.map((q) => [q.id, q])) : {}),
-  }), [liveQuizzes]);
+  // Đợt QA 26/10, blocker 8: bài tự luận gửi lên máy chủ lỗi thì giữ lại để
+  // gửi lại — trước đây chỉ .catch(console.error) rồi im, học sinh tưởng đã
+  // nộp trong khi giáo viên không thấy bài (hàng đợi chấm nay chỉ đọc DB).
+  const [failedEssays, setFailedEssays] = useState<Array<{
+    payload: Omit<EssaySubmission, 'id' | 'submittedAt'>;
+    error: string;
+  }>>([]);
+  const retryFailedEssays = async () => {
+    const pending = failedEssays;
+    setFailedEssays([]);
+    const results = await Promise.allSettled(pending.map((f) => essayRepository.createSubmission(f.payload)));
+    const stillFailed = pending.filter((_, i) => results[i].status === 'rejected');
+    if (stillFailed.length > 0) setFailedEssays(stillFailed);
+  };
+
+  const quizzesMap: Record<string, Quiz> = useMemo(
+    () => (liveQuizzes ? Object.fromEntries(liveQuizzes.map((q) => [q.id, q])) : {}),
+    [liveQuizzes]
+  );
 
   const questionsMap: Record<string, Question> = useMemo(() => {
-    let localStored: Record<string, Question> = {};
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('mam_van_questions') : null;
-      if (raw) localStored = JSON.parse(raw);
-    } catch {}
-    return {
-      ...QUESTIONS_BANK,
-      ...localStored,
-      ...(liveQuestions || {}),
-    };
+    // Luật DB-thắng (đợt 3 26/10): chỉ dùng câu hỏi từ máy chủ — không lót
+    // thêm bộ đệm local bên dưới, nếu không câu ma (đã xóa khỏi DB nhưng còn
+    // trong localStorage) sẽ hiện lại trong bài luyện/kiểm tra của bài học.
+    // Chỉ câu hỏi thật: dữ liệu máy chủ (đã gỡ ngân hàng mẫu).
+    return liveQuestions || {};
   }, [liveQuestions]);
 
   // Tìm tất cả các bài tập đã xuất bản thuộc cùng chủ đề
@@ -188,20 +207,29 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   }, [video?.durationSec]);
 
   // Độ dài hiệu dụng thật của bài giảng
-  const effectiveDuration = mediaDuration > 0 ? mediaDuration : (video?.durationSec > 0 ? video.durationSec : 60);
+  const fallbackDuration = video?.durationSec && video.durationSec > 0 ? video.durationSec : 60;
+  const effectiveDuration = mediaDuration > 0 ? mediaDuration : fallbackDuration;
 
   // Theo dõi tỷ lệ đã xem thật (≥ 80%)
   const watchedRatio = watchedSecondsSet.size / Math.max(1, effectiveDuration);
   const isWatchedEligible = watchedRatio >= 0.8 || state.completedSteps.includes(`video_watch:${videoId}`);
 
-  // Tự động khôi phục bước đang dở nếu có
+  // Tự động khôi phục bước đang dở nếu có (ưu tiên theo stepKey —
+  // stepIndex có thể lệch khi GV thêm/bớt bài tập liên kết)
   useEffect(() => {
     if (state.currentProgress && state.currentProgress.itemId === videoId) {
-      setCurrentStepIndex(state.currentProgress.stepIndex || 0);
+      const savedKey = state.currentProgress.stepKey;
+      const byKey = savedKey ? dynamicSteps.findIndex((st) => st.key === savedKey) : -1;
+      const restored =
+        byKey >= 0
+          ? byKey
+          : Math.min(state.currentProgress.stepIndex || 0, dynamicSteps.length - 1);
+      setCurrentStepIndex(Math.max(0, restored));
       if (state.currentProgress.videoSeconds && videoRef.current) {
         videoRef.current.currentTime = state.currentProgress.videoSeconds;
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, state.currentProgress]);
 
   // Bộ đếm thời gian khi phát video (theo dõi các giây đã xem thật sự)
@@ -249,12 +277,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   // 1. Chuyển sang bước tiếp theo sau khi xem video
   const handleProceedFromVideo = () => {
     onUpdateState((prev) => {
-      const xpRes = awardXP(
-        prev,
-        `video_watch:${videoId}`,
-        XP_CONFIG.VIDEO_WATCH_80_PERCENT_XP,
-        `Xem >= 80% bài giảng: ${video.title}`
-      );
+      const xpRes = { updatedState: recordStepCompletion(prev, `video_watch:${videoId}`) };
       return {
         ...prev,
         ...xpRes.updatedState,
@@ -263,6 +286,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
           topicId: video.topicId,
           itemId: videoId,
           stepIndex: currentStepIndex + 1,
+          stepKey: dynamicSteps[currentStepIndex + 1]?.key,
           videoSeconds: currentTime,
         },
       };
@@ -273,12 +297,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   // 2. Chuyển sang bước tiếp theo sau khi đọc tóm tắt
   const handleProceedFromSummary = () => {
     onUpdateState((prev) => {
-      const xpRes = awardXP(
-        prev,
-        `summary_read:${videoId}`,
-        XP_CONFIG.VIDEO_SUMMARY_READ_XP,
-        `Đọc tóm tắt kiến thức trọng tâm: ${video.title}`
-      );
+      const xpRes = { updatedState: recordStepCompletion(prev, `summary_read:${videoId}`) };
       return {
         ...prev,
         ...xpRes.updatedState,
@@ -287,6 +306,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
           topicId: video.topicId,
           itemId: videoId,
           stepIndex: currentStepIndex + 1,
+          stepKey: dynamicSteps[currentStepIndex + 1]?.key,
         },
       };
     });
@@ -297,77 +317,112 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   const handleCompleteQuizStep = (
     step: FlowStep,
     results: QuestionResult[],
-    essays: EssaySubmission[]
+    essays: EssaySubmission[],
+    earned: number,
+    max: number
   ) => {
     if (!step.quiz) return;
     const qId = step.quiz.id;
 
     if (essays && essays.length > 0) {
-      essays.forEach((e) => {
-        essayRepository.createSubmission({
-          studentId: state.profile?.id || 'hs001',
-          studentName: state.profile?.name || 'Học sinh',
-          classId: (state.profile as any)?.classId,
-          className: state.profile?.grade || '7A1',
-          questionId: e.questionId,
-          quizId: qId,
-          content: e.content,
-          wordCount: e.wordCount,
-          status: 'PENDING_TEACHER',
-          promptTitle: e.promptTitle || 'Viết đoạn văn',
-          quizTitle: `${step.label}: ${video.title}`,
-          skillLevel: 'VAN_DUNG',
-        }).catch((err: any) => console.error('Lỗi lưu bài essay:', err));
+      // Đợt QA 26/10, blocker 8: không nuốt lỗi gửi bài — bài nào lỗi thì
+      // vào failedEssays để hiện banner gửi lại (nội dung vẫn còn trong
+      // bài làm của học sinh qua nextState bên dưới).
+      const payloads: Array<Omit<EssaySubmission, 'id' | 'submittedAt'>> = essays.map((e) => ({
+        studentId: state.profile?.id || 'hs001',
+        studentName: state.profile?.name || 'Học sinh',
+        classId: (state.profile as any)?.classId,
+        className: state.profile?.grade || '7A1',
+        questionId: e.questionId,
+        quizId: qId,
+        content: e.content,
+        wordCount: e.wordCount,
+        status: 'PENDING_TEACHER' as const,
+        promptTitle: e.promptTitle || 'Viết đoạn văn',
+        quizTitle: `${step.label}: ${video.title}`,
+        skillLevel: 'VAN_DUNG' as const,
+      }));
+      Promise.allSettled(payloads.map((p) => essayRepository.createSubmission(p))).then((results) => {
+        const failed = payloads.filter((_, i) => results[i].status === 'rejected');
+        if (failed.length > 0) {
+          setFailedEssays((prev) => [
+            ...prev,
+            ...failed.map((payload) => ({ payload, error: 'Không gửi được lên máy chủ' })),
+          ]);
+        }
       });
     }
 
     const isNextComplete = currentStepIndex + 2 >= dynamicSteps.length;
 
-    onUpdateState((prev) => {
-      const res1 = awardXP(
-        prev,
-        `quiz_completed:${qId}`,
-        step.xpBonus,
-        `${step.label}: ${video.title}`
-      );
+    // Mô hình XP mới: các bước trong luồng video KHÔNG cộng XP lẻ nữa —
+    // chỉ ghi nhận hoàn thành (XP nằm ở quỹ chủ đề + XP của từng bài tập).
+    const rec1 = recordStepCompletion(state, `quiz_completed:${qId}`);
 
-      let nextState = {
-        ...prev,
-        ...res1.updatedState,
-        questionResults: [...results, ...prev.questionResults],
-        essaySubmissions: [...essays, ...(prev.essaySubmissions || [])],
+    let nextState: StudentState = {
+      ...state,
+      ...rec1,
+      questionResults: [...results, ...state.questionResults],
+      essaySubmissions: [...essays, ...(state.essaySubmissions || [])],
+    };
+
+    const xpAwarded = 0;
+    const cappedNotice = undefined;
+
+    if (isNextComplete) {
+      const recBonus = recordStepCompletion(nextState, `video_flow_completed:${videoId}`);
+      nextState = {
+        ...nextState,
+        ...recBonus,
+        currentProgress: undefined,
       };
+    } else {
+      nextState.currentProgress = {
+        type: 'video',
+        topicId: video.topicId,
+        itemId: videoId,
+        stepIndex: currentStepIndex + 1,
+          stepKey: dynamicSteps[currentStepIndex + 1]?.key,
+      };
+    }
 
-      if (isNextComplete) {
-        const resBonus = awardXP(
-          nextState,
-          `video_flow_completed:${videoId}`,
-          XP_CONFIG.VIDEO_FULL_COMPLETION_XP,
-          `🎉 Thưởng hoàn thành trọn vẹn luồng học video: ${video.title}`
-        );
-        nextState = {
-          ...nextState,
-          ...resBonus.updatedState,
-          currentProgress: undefined,
-        };
-      } else {
-        nextState.currentProgress = {
-          type: 'video',
-          topicId: video.topicId,
-          itemId: videoId,
-          stepIndex: currentStepIndex + 1,
-        };
-      }
+    onUpdateState(() => nextState);
 
-      return nextState;
+    // Hiện màn Kết quả (điểm, XP, xem lại từng câu) trước khi sang bước tiếp
+    setQuizOutcome({
+      quiz: step.quiz,
+      results,
+      essays,
+      earned,
+      max,
+      xpAwarded,
+      cappedNotice,
     });
-
-    setCurrentStepIndex((prev) => Math.min(prev + 1, dynamicSteps.length - 1));
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto py-6 px-4 sm:px-8 space-y-6 text-[#1E1B4B]">
       {/* HEADER: Nút quay lại + Tên chủ đề */}
+      {failedEssays.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100%-2rem)] px-4 py-3 rounded-2xl bg-red-600 text-white shadow-xl">
+          <p className="text-sm font-bold">Có {failedEssays.length} bài tự luận chưa gửi được lên máy chủ.</p>
+          <p className="text-xs mt-1 opacity-90">Nội dung vẫn còn trong bài làm của em — bấm Gửi lại để gửi lên cho thầy/cô chấm.</p>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={retryFailedEssays}
+              className="px-3 py-1.5 rounded-xl bg-white text-red-700 text-xs font-bold"
+            >
+              Gửi lại
+            </button>
+            <button
+              onClick={() => setFailedEssays([])}
+              className="px-3 py-1.5 rounded-xl bg-red-700 text-white text-xs font-bold border border-red-400"
+            >
+              Để sau
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <button
           onClick={onBackToList}
@@ -617,8 +672,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               >
                 <span>
                   {dynamicSteps[currentStepIndex + 1]?.label
-                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label} (+${dynamicSteps[currentStepIndex + 1].xpBonus} XP)`
-                    : 'Hoàn thành bài giảng (+20 XP)'}
+                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label}`
+                    : 'Hoàn thành bài giảng'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -687,8 +742,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                   {summarySecondsLeft > 0
                     ? `Đọc kĩ thêm (${summarySecondsLeft}s)`
                     : dynamicSteps[currentStepIndex + 1]?.label
-                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label} (+${dynamicSteps[currentStepIndex + 1].xpBonus} XP)`
-                    : 'Hoàn thành bài giảng (+20 XP)'}
+                    ? `Sang ${dynamicSteps[currentStepIndex + 1].label}`
+                    : 'Hoàn thành bài giảng'}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -748,12 +803,32 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
             );
           }
 
+          if (quizOutcome && quizOutcome.quiz.id === q.id) {
+            return (
+              <QuizResult
+                quiz={quizOutcome.quiz}
+                questions={qList}
+                results={quizOutcome.results}
+                essaySubmissions={quizOutcome.essays}
+                earnedScore={quizOutcome.earned}
+                maxScore={quizOutcome.max}
+                xpAwarded={quizOutcome.xpAwarded}
+                cappedNotice={quizOutcome.cappedNotice}
+                onContinue={() => {
+                  setQuizOutcome(null);
+                  setCurrentStepIndex((p) => Math.min(p + 1, dynamicSteps.length - 1));
+                }}
+              />
+            );
+          }
+
           return (
             <QuizRunner
               key={q.id}
               quiz={q}
+              studentId={state.profile?.id}
               questions={qList}
-              onComplete={(results, essays) => handleCompleteQuizStep(currentStep, results, essays)}
+              onComplete={(results, essays, earned, max) => handleCompleteQuizStep(currentStep, results, essays, earned, max)}
               onExit={() => setCurrentStepIndex((p) => Math.max(0, p - 1))}
             />
           );
@@ -784,10 +859,10 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               {/* Bảng tổng kết XP nhận được */}
               <div className="p-5 rounded-3xl gradient-soft-indigo border border-indigo-100 max-w-sm mx-auto mb-8 text-center shadow-xs">
                 <span className="text-xs font-bold text-slate-500 block mb-1">
-                  Tổng điểm thưởng nhận được
+                  Bạn đã hoàn thành trọn vẹn luồng học này
                 </span>
                 <span className="text-4xl font-black text-[#4F46E5] font-mono tabular-nums">
-                  +{dynamicSteps.reduce((acc: number, s: FlowStep) => acc + (s.xpBonus || 0), 0)} XP
+                  🎉
                 </span>
                 <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
                   Hoàn thành {dynamicSteps.length - 1} chặng học tập xuất sắc!

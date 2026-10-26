@@ -51,7 +51,7 @@ export function computeClassRadarMastery(
     return {
       level: lvl,
       levelName: meta.displayName,
-      classAverage: classMastery.percentage || 70,
+      classAverage: classMastery.percentage ?? 0,
       targetGoal: 80, // Mục tiêu chuẩn sư phạm 80%
       selectedStudentScore,
     };
@@ -65,7 +65,8 @@ export function computeStudentTopicHeatmap(
   allStates: Record<string, StudentState>,
   allStudents: StudentAccount[],
   topics: TopicWithMeta[],
-  filter: AnalyticsFilter
+  filter: AnalyticsFilter,
+  allClasses?: { id: string; name: string }[]
 ): HeatmapCell[] {
   const students = filterStudents(allStudents, filter);
   const cells: HeatmapCell[] = [];
@@ -73,7 +74,7 @@ export function computeStudentTopicHeatmap(
   students.forEach((s) => {
     const state = allStates[s.id];
     const qList = state?.questionResults || [];
-    const className = s.class_id === 'class_7a2' ? '7A2' : '7A3';
+    const className = allClasses?.find((c) => c.id === s.class_id)?.name || '—';
 
     topics.forEach((top) => {
       // Bỏ qua nếu lọc riêng 1 topic khác
@@ -158,8 +159,19 @@ export function computeWeakestSkillsByTopic(
       topicTitle: top.title,
       weakestLevel: weakest.level,
       levelName: weakest.displayName,
-      averagePercentage: weakest.percentage || 48,
-      studentWeakCount: 8,
+      averagePercentage: weakest.percentage ?? 0,
+      studentWeakCount: (() => {
+        // Đếm học sinh có làm bài ở chủ đề này nhưng điểm TB < 50% (dữ liệu thật)
+        let weak = 0;
+        Object.values(allStates).forEach((st) => {
+          const rs = (st.questionResults || []).filter((q) => q.topicId === top.id);
+          if (rs.length > 0) {
+            const avg = rs.reduce((sum, r) => sum + (r.scoreRatio || 0), 0) / rs.length;
+            if (avg < 0.5) weak++;
+          }
+        });
+        return weak;
+      })(),
       pedagogicalAdvice: advice,
     });
   });

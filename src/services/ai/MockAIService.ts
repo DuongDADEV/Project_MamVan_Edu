@@ -173,7 +173,11 @@ export class MockAIService implements AIService {
     const sampleSnippet2 = sentences[1] || 'Tác giả khéo léo sử dụng các biện pháp tu từ độc đáo.';
     const sampleSnippet3 = sentences[2] || 'Tâm trạng nhân vật trải qua nhiều cung bậc cảm xúc mãnh liệt.';
 
-    const total = options?.totalQuestions || 5;
+    const tc = options?.typeCounts;
+    const typeTotal = tc
+      ? (tc.single || 0) + (tc.multi || 0) + (tc.fill || 0) + (tc.essay || 0)
+      : 0;
+    const total = typeTotal > 0 ? typeTotal : options?.totalQuestions || 5;
     const questions: Question[] = [];
 
     // 1. Câu Trắc nghiệm 1 đáp án - Nhận biết
@@ -391,6 +395,30 @@ export class MockAIService implements AIService {
       extraIndex++;
     }
 
+    if (tc && typeTotal > 0) {
+      // Chọn đúng cơ cấu loại câu hỏi đã cấu hình (thiếu mẫu thì nhân bản mẫu cùng loại)
+      const pool = questions.slice(0, total);
+      const byType: Record<string, Question[]> = { single: [], multi: [], fill: [], essay: [] };
+      pool.forEach((q) => {
+        if (byType[q.type]) byType[q.type].push(q);
+      });
+      const result: Question[] = [];
+      (['single', 'multi', 'fill', 'essay'] as const).forEach((type) => {
+        const want = tc[type] || 0;
+        const avail = byType[type];
+        for (let i = 0; i < want; i++) {
+          if (avail.length === 0) break;
+          const src = avail[i % avail.length];
+          result.push(
+            i < avail.length
+              ? src
+              : { ...src, id: generateId('q_ai'), prompt: `${src.prompt} (Câu bổ sung ${i + 1})` }
+          );
+        }
+      });
+      return result;
+    }
+
     return questions.slice(0, total);
   }
 
@@ -496,7 +524,7 @@ export class MockAIService implements AIService {
   }
 
   /**
-   * Hỏi đáp với tài liệu nguồn (NotebookLM chat)
+   * Hỏi đáp với tài liệu nguồn (Mầm AI Studio chat)
    */
   async chatWithSources(
     sources: AISource[],

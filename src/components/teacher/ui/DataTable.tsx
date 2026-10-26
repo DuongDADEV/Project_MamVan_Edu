@@ -96,10 +96,11 @@ export function DataTable<T extends Record<string, any>>({
 
   // Phân trang
   const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
   const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
+    const start = (safePage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
-  }, [sortedData, currentPage, pageSize]);
+  }, [sortedData, safePage, pageSize]);
 
   // Xử lý đổi sắp xếp
   const handleSort = (key: string) => {
@@ -227,7 +228,7 @@ export function DataTable<T extends Record<string, any>>({
                   <th
                     key={col.key}
                     onClick={() => col.sortable && handleSort(col.key)}
-                    className={`py-3.5 px-4 font-semibold tracking-wide ${
+                    className={`py-3.5 px-4 font-semibold tracking-wide whitespace-nowrap ${
                       col.sortable ? 'cursor-pointer select-none hover:text-[#E2704A]' : ''
                     } ${col.className || ''}`}
                   >
@@ -277,7 +278,7 @@ export function DataTable<T extends Record<string, any>>({
                     {columns.map((col) => (
                       <td key={col.key} className={`py-3.5 px-4 text-[#2F3E6B] ${col.className || ''}`}>
                         {col.render
-                          ? col.render(item, (currentPage - 1) * pageSize + index)
+                          ? col.render(item, (safePage - 1) * pageSize + index)
                           : item[col.key]}
                       </td>
                     ))}
@@ -295,8 +296,8 @@ export function DataTable<T extends Record<string, any>>({
           <div>
             Hiển thị{' '}
             <span className="font-semibold text-[#2F3E6B]">
-              {Math.min(sortedData.length, (currentPage - 1) * pageSize + 1)}-
-              {Math.min(sortedData.length, currentPage * pageSize)}
+              {Math.min(sortedData.length, (safePage - 1) * pageSize + 1)}-
+              {Math.min(sortedData.length, safePage * pageSize)}
             </span>{' '}
             trong tổng số{' '}
             <span className="font-semibold text-[#2F3E6B]">{sortedData.length}</span> kết quả
@@ -305,18 +306,18 @@ export function DataTable<T extends Record<string, any>>({
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              disabled={safePage === 1}
               className="p-1.5 rounded-lg border border-[#E6DCC8] text-[#2F3E6B] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FAF5EB] transition-colors"
               aria-label="Trang trước"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="px-3 py-1 font-semibold text-[#2F3E6B] bg-[#FAF5EB] rounded-lg border border-[#E6DCC8]">
-              {currentPage} / {totalPages}
+              {safePage} / {totalPages}
             </span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              disabled={safePage === totalPages}
               className="p-1.5 rounded-lg border border-[#E6DCC8] text-[#2F3E6B] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FAF5EB] transition-colors"
               aria-label="Trang sau"
             >

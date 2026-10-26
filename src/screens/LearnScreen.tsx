@@ -1,30 +1,48 @@
-import React, { useState, useMemo } from 'react';
-import { StudentState, Topic, VideoLesson, TheoryLesson, Quiz } from '../types.ts';
+import React, { useState } from 'react';
+import { StudentState, Topic } from '../types.ts';
 import { calculateAllMastery, isTopicSolid } from '../logic/mastery.ts';
-import { VideoCard, VideoCardSkeleton } from '../components/VideoCard.tsx';
-import { MamMuc } from '../components/MamMuc.tsx';
-import { Video, BookOpen, CheckCircle, Clock, ArrowRight, Filter, Sparkles, Layers } from 'lucide-react';
-import { useLiveQuery, contentService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
-import { QUIZZES } from '../data/mockData.ts';
+import { BookOpen, ArrowRight, Filter, Layers, PenLine, Play, ChevronDown, ChevronUp } from 'lucide-react';
+import { deriveFlowItems } from '../logic/flowOrder.ts';
+import { useLiveQuery, contentService, quizService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
 
 interface LearnScreenProps {
   state: StudentState;
   topics?: Topic[];
+  focusTopicId?: string | null;
   onSelectVideo: (videoId: string) => void;
   onSelectTheory: (theoryId: string) => void;
-  isLoading?: boolean;
+  onSelectQuiz?: (quizId: string) => void;
 }
 
 export const LearnScreen: React.FC<LearnScreenProps> = ({
   state,
   topics,
+  focusTopicId,
   onSelectVideo,
   onSelectTheory,
-  isLoading = false,
+  onSelectQuiz,
 }) => {
-  const [activeTab, setActiveTab] = useState<'video' | 'theory'>('video');
+  // Đợt sửa 24/10: bỏ 3 nút Luồng học / Xem video / Lý thuyết chung, thay bằng
+  // MỘT nút "Học bài" trên mỗi thẻ chủ đề. Bấm nút thì mở danh sách luồng học
+  // (chỉ những mục cô đã đẩy, đúng thứ tự cô đã xếp); nháp không bao giờ hiện
+  // vì các truy vấn dưới đây đều dùng onlyPublished = true.
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<'all' | 'unlearned' | 'needs_review'>('all');
   const activeTopics = topics ?? [];
+
+  // Điều hướng từ Trang chủ / Cây / Kết quả: cuộn tới đúng thẻ chủ đề được chọn
+  // và tự mở danh sách Học bài của chủ đề đó.
+  React.useEffect(() => {
+    if (!focusTopicId) return;
+    setFilter('all');
+    setExpandedTopics((prev) => ({ ...prev, [focusTopicId]: true }));
+    const t = setTimeout(() => {
+      document
+        .getElementById('learn-topic-' + focusTopicId)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [focusTopicId]);
 
   // Lắng nghe video, lý thuyết và bài tập đã xuất bản từ kho chung
   const { data: liveVideos } = useLiveQuery<VideoLessonWithMeta[]>(
@@ -36,22 +54,9 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
     ['content']
   );
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
-    () => contentService.getQuizzes(undefined, true),
+    () => quizService.getQuizzes(undefined, true),
     ['content']
   );
-
-  const allQuizzes: Quiz[] = useMemo(() => [
-    ...Object.values(QUIZZES),
-    ...(liveQuizzes || []),
-  ], [liveQuizzes]);
-
-  const videosMap: Record<string, VideoLesson> = liveVideos
-    ? Object.fromEntries(liveVideos.map((v) => [v.id, v]))
-    : {};
-
-  const theoriesMap: Record<string, TheoryLesson> = liveTheories
-    ? Object.fromEntries(liveTheories.map((t) => [t.id, t]))
-    : {};
 
   // Tính trạng thái của từng topic
   const getTopicProgress = (topic: Topic) => {
@@ -94,7 +99,7 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto py-6 px-4 sm:px-8 space-y-6 text-[#1E1B4B]">
-      {/* HEADER: Tiêu đề + 2 Tab chính */}
+      {/* HEADER: Tiêu đề */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-[#4F46E5] mb-2">
@@ -105,35 +110,8 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
             Bài học & Rèn luyện
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Chọn luồng học theo bài giảng video thầy/cô hoặc đọc lý thuyết chi tiết
+            Bấm nút Học bài ở từng chủ đề để học đúng thứ tự cô đã xếp — chỉ những bài cô đã đẩy mới hiện ở đây.
           </p>
-        </div>
-
-        {/* 2 Tabs chuyển đổi luồng học */}
-        <div className="flex items-center p-1 bg-slate-100/80 rounded-2xl border border-slate-200/80 self-start sm:self-auto shadow-inner">
-          <button
-            onClick={() => setActiveTab('video')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'video'
-                ? 'bg-white text-[#4F46E5] shadow-sm'
-                : 'text-slate-600 hover:text-[#1E1B4B]'
-            }`}
-          >
-            <Video className="w-4 h-4 text-[#4F46E5]" />
-            <span>Xem video</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('theory')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'theory'
-                ? 'bg-white text-[#8B5CF6] shadow-sm'
-                : 'text-slate-600 hover:text-[#1E1B4B]'
-            }`}
-          >
-            <BookOpen className="w-4 h-4 text-[#8B5CF6]" />
-            <span>Lý thuyết chung</span>
-          </button>
         </div>
       </div>
 
@@ -170,11 +148,17 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
         ) : (
           filteredTopics.map((topic) => {
             const prog = getTopicProgress(topic);
+            const isExpanded = !!expandedTopics[topic.id];
 
             return (
               <div
                 key={topic.id}
-                className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all"
+                id={'learn-topic-' + topic.id}
+                className={`bg-white rounded-3xl p-6 border shadow-sm hover:shadow-md transition-all ${
+                  focusTopicId === topic.id
+                    ? 'border-indigo-300 ring-2 ring-indigo-200'
+                    : 'border-slate-100 hover:border-indigo-100'
+                }`}
               >
                 {/* Header thẻ chủ đề */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
@@ -215,105 +199,108 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                   </div>
                 </div>
 
-                {/* DANH SÁCH BÀI THEO TAB HIỆN TẠI */}
-                {activeTab === 'video' ? (
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Bài giảng video ({topic.videoIds.length} bài)
-                    </p>
+                {/* NÚT HỌC BÀI — mở/đóng danh sách luồng học của chủ đề */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedTopics((prev) => ({ ...prev, [topic.id]: !prev[topic.id] }))
+                  }
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-[#2F3E6B] text-white text-sm font-bold hover:opacity-90 active:scale-[0.99] transition"
+                >
+                  <Play className="w-4 h-4" />
+                  {isExpanded ? 'Thu gọn' : 'Học bài'}
+                  {isExpanded ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
 
-                    {isLoading ? (
-                      /* Trạng thái đang tải: Lưới Skeleton card cùng kích thước */
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
-                        <VideoCardSkeleton />
-                        <VideoCardSkeleton />
-                        <VideoCardSkeleton />
-                      </div>
-                    ) : topic.videoIds.length === 0 ? (
-                      /* Trạng thái rỗng: Chủ đề chưa có video */
-                      <div className="p-8 rounded-2xl bg-[#FFFDF8] border border-[#E6DCC8] border-dashed text-center flex flex-col items-center justify-center gap-3">
-                        <MamMuc mood="waiting" size="sm" animate={false} />
-                        <div>
-                          <p className="font-bold text-[#2F3E6B] text-sm">
-                            Thầy/cô chưa đăng video cho phần này
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Bài giảng video sẽ sớm được cập nhật vào kho học liệu!
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Lưới thẻ video: 1 cột mobile (<640px), 2 cột tablet (640-1024px), 3 cột desktop (>=1024px), gap 16-20px */
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
-                        {topic.videoIds.map((vId, idx) => {
-                          const v = videosMap[vId];
-                          if (!v) return null;
-                          return (
-                            <VideoCard
-                              key={vId}
-                              video={v}
-                              topic={topic}
-                              index={idx}
-                              state={state}
-                              quizzes={allQuizzes}
-                              onClick={() => onSelectVideo(vId)}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                      Lý thuyết chi tiết
+                {/* DANH SÁCH LUỒNG HỌC: chỉ mục cô đã đẩy, đúng thứ tự cô đã xếp */}
+                {isExpanded && (
+                  <div className="space-y-2 mt-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Luồng học của chủ đề — học theo thứ tự từ trên xuống
                     </p>
                     {(() => {
-                      const th =
-                        theoriesMap[topic.theoryId] ||
-                        Object.values(theoriesMap).find((item) => item.topicId === topic.id);
-                      if (!th) {
+                      const vids = (liveVideos || []).filter((v) => topic.videoIds.includes(v.id));
+                      const ths = (liveTheories || []).filter((t) => t.topicId === topic.id);
+                      const qzs = (liveQuizzes || []).filter((q) => q.topicId === topic.id);
+                      const items = deriveFlowItems(
+                        topic.flowOrder,
+                        topic.videoIds.filter((id) => vids.some((v) => v.id === id)),
+                        ths.map((t) => t.id),
+                        qzs.map((q) => q.id)
+                      );
+                      if (items.length === 0) {
                         return (
-                          <div className="p-4 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs text-center font-medium bg-slate-50/50">
-                            Chủ đề này chưa có bài lý thuyết đọc. Em hãy học qua tab <strong>Xem video</strong> nhé!
+                          <div className="p-6 rounded-2xl bg-[#FFFDF8] border border-[#E6DCC8] border-dashed text-center">
+                            <p className="font-bold text-[#2F3E6B] text-sm">
+                              Thầy/cô chưa đăng bài cho chủ đề này
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              Các bài học sẽ sớm được cập nhật vào kho học liệu!
+                            </p>
                           </div>
                         );
                       }
-                      const isUnderstood = state.completedSteps.includes(
-                        `theory_understood:${th.id}`
-                      );
-
-                      return (
-                        <div
-                          onClick={() => onSelectTheory(th.id)}
-                          className="p-3.5 rounded-2xl border border-slate-200/80 bg-white hover:border-purple-300 hover:bg-purple-50/20 cursor-pointer flex items-center justify-between gap-3 transition-all group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-purple-50 group-hover:bg-gradient-to-tr group-hover:from-[#8B5CF6] group-hover:to-[#22D3EE] group-hover:text-white text-[#8B5CF6] flex items-center justify-center shrink-0 transition-all shadow-xs">
-                              <BookOpen className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-[#1E1B4B] group-hover:text-[#8B5CF6] transition-colors">
-                                {th.title}
-                              </h4>
-                              <p className="text-[11px] text-slate-500 mt-0.5">
-                                Gồm {th.sections.length} phần chi tiết kèm sơ đồ mô hình và ví dụ minh họa
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            {isUnderstood && (
-                              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 hidden sm:inline">
-                                Đã hiểu
+                      return items.map((item, idx) => {
+                        const src: any =
+                          item.type === 'video'
+                            ? vids.find((v) => v.id === item.id)
+                            : item.type === 'theory'
+                              ? ths.find((t) => t.id === item.id)
+                              : qzs.find((q) => q.id === item.id);
+                        if (!src) return null;
+                        const meta =
+                          item.type === 'video'
+                            ? `Video • ${Math.max(1, Math.round((src.durationSec || 0) / 60))} phút`
+                            : item.type === 'theory'
+                              ? 'Lý thuyết • Đọc và ghi nhớ'
+                              : `Bài tập • ${src.questionIds?.length || 0} câu`;
+                        return (
+                          <button
+                            key={item.type + ':' + item.id}
+                            type="button"
+                            onClick={() =>
+                              item.type === 'video'
+                                ? onSelectVideo(item.id)
+                                : item.type === 'theory'
+                                  ? onSelectTheory(item.id)
+                                  : onSelectQuiz?.(item.id)
+                            }
+                            className="w-full flex items-center gap-3 bg-white border border-slate-200 hover:border-[#E2704A]/60 hover:shadow-sm rounded-2xl px-3.5 py-3 text-left transition-all"
+                          >
+                            <span className="w-7 h-7 rounded-full bg-[#2F3E6B] text-white text-xs font-black flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span
+                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                                item.type === 'video'
+                                  ? 'bg-orange-50 text-[#E2704A]'
+                                  : item.type === 'theory'
+                                    ? 'bg-purple-50 text-[#7C3AED]'
+                                    : 'bg-indigo-50 text-[#4F46E5]'
+                              }`}
+                            >
+                              {item.type === 'video' ? (
+                                <Play className="w-4 h-4" />
+                              ) : item.type === 'theory' ? (
+                                <BookOpen className="w-4 h-4" />
+                              ) : (
+                                <PenLine className="w-4 h-4" />
+                              )}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className="block font-bold text-sm text-[#1E1B4B] truncate">
+                                {src.title}
                               </span>
-                            )}
-                            <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 group-hover:border-[#8B5CF6] group-hover:text-[#8B5CF6] group-hover:translate-x-0.5 transition-all">
-                              <ArrowRight className="w-4 h-4" />
-                            </div>
-                          </div>
-                        </div>
-                      );
+                              <span className="block text-[11px] text-slate-500">{meta}</span>
+                            </span>
+                            <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
+                          </button>
+                        );
+                      });
                     })()}
                   </div>
                 )}

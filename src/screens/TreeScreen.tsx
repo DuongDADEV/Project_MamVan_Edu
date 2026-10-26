@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { StudentState, Topic } from '../types.ts';
-import { BADGES_CATALOG, TOPICS } from '../data/mockData.ts';
+import { BADGES_CATALOG } from '../data/badges.ts';
 import { TREE_STAGES_CONFIG } from '../config.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
+import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import { GrowthTree, TopicLeafData } from '../components/GrowthTree.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { Award, Sprout, BarChart3, ArrowRight, CheckCircle2, Lock, Sparkles, Layers, Droplets } from 'lucide-react';
@@ -20,12 +21,12 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
   const [isWatering, setIsWatering] = useState(false);
   const [wateringFeedback, setWateringFeedback] = useState<string | null>(null);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalTodayStr();
   const [hasWateredThisSession, setHasWateredThisSession] = useState<boolean>(() => {
     try {
       const studentKey = state.profile?.id || 'hs001';
       return (
-        sessionStorage.getItem('mam_van_watered_session_' + studentKey) === 'true' ||
+        sessionStorage.getItem('mam_van_watered_session_' + studentKey) === todayStr ||
         state.lastAttendanceDate === todayStr
       );
     } catch {
@@ -41,7 +42,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
     setHasWateredThisSession(true);
     try {
       const studentKey = state.profile?.id || 'hs001';
-      sessionStorage.setItem('mam_van_watered_session_' + studentKey, 'true');
+      sessionStorage.setItem('mam_van_watered_session_' + studentKey, todayStr);
     } catch {}
 
     if (onCheckIn) {
@@ -207,20 +208,40 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
               <div className="text-right">
                 <span className="text-xs text-slate-500 font-medium block">Đã tích lũy:</span>
                 <span className="font-extrabold text-[#4F46E5] font-mono text-sm sm:text-base">
-                  {state.completedSteps.length} hoạt động học
+                  {countLearningSteps(state.completedSteps)} hoạt động học
                 </span>
               </div>
             </div>
 
             {/* VẼ CÂY LỚN BẰNG SVG */}
             <GrowthTree
-              completedStepsCount={state.completedSteps.length}
+              completedStepsCount={countLearningSteps(state.completedSteps)}
               topicLeaves={topicLeavesData}
               isWatering={isWatering}
               onWaterComplete={() => setIsWatering(false)}
               onLeafClick={(tId) => setSelectedLeafTopicId(tId)}
               className="my-4"
             />
+
+            {/* CHÚ THÍCH MÀU LÁ THEO MỨC THÀNH THẠO */}
+            <div className="w-full flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 my-2 text-[11px] font-semibold text-slate-600">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#16A34A', borderColor: '#14532D' }} />
+                ≥80% • Đã hoàn thành
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#38BDF8', borderColor: '#0369A1' }} />
+                50–79% • Đang học
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#FBBF24', borderColor: '#D97706' }} />
+                &lt;50% • Cần ôn lại
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: '#E2E8F0', borderColor: '#94A3B8' }} />
+                Chưa học
+              </span>
+            </div>
 
             {/* Thông báo nếu giáo viên chưa xuất bản chủ đề nào */}
             {activeTopics.length === 0 && (
@@ -311,7 +332,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {TREE_STAGES_CONFIG.map((stage, idx) => {
-                const isReached = state.completedSteps.length >= stage.minSteps;
+                const isReached = countLearningSteps(state.completedSteps) >= stage.minSteps;
 
                 return (
                   <div
