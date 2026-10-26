@@ -26,10 +26,13 @@ import {
   TheoryLessonWithMeta,
   QuizWithMeta,
   QuestionWithMeta,
+  TopicWithMeta,
 } from '../services/index.ts';
+import { selectTheoryPracticeQuizzes } from '../logic/theoryFlow.ts';
 
 interface FlowStep {
-  key: 'theory' | 'practice' | 'test' | 'complete';
+  key: string;
+  kind: 'theory' | 'practice' | 'test' | 'complete';
   label: string;
   quiz?: Quiz;
   xpBonus: number;
@@ -63,6 +66,16 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   const { data: liveQuestions } = useLiveQuery<Record<string, QuestionWithMeta>>(
     () => quizService.getQuestions(),
     ['quiz']
+  );
+  // Chủ đề + các lý thuyết cùng chủ đề: để xếp bước Luyện tập theo đúng
+  // thứ tự luồng và loại bài của lý thuyết khác (xem logic/theoryFlow.ts).
+  const { data: liveTopics } = useLiveQuery<TopicWithMeta[]>(
+    () => contentService.getTopics(undefined, false),
+    ['content']
+  );
+  const { data: liveTopicTheories } = useLiveQuery<TheoryLessonWithMeta[]>(
+    () => contentService.getTheoryLessons(undefined, false),
+    ['content']
   );
 
   // Đếm ngược thời gian đọc tối thiểu (25s) trước khi nút "Đã hiểu" bật
@@ -123,44 +136,73 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     );
   }, [quizzesMap, theory]);
 
-  // 1. Bài Luyện tập lý thuyết
-  const practiceQuiz: Quiz | undefined = useMemo(() => {
-    return (theory?.practiceQuizId && quizzesMap[theory.practiceQuizId]) ||
-      topicQuizzes.find((q: Quiz) => q.kind === 'practice');
-  }, [theory?.practiceQuizId, quizzesMap, topicQuizzes]);
+  // 1. Các bài Luyện tập lý thuyết (26/10: NHIỀU bài — trước đây chỉ hiện
+  // đúng 1 bài, bài thứ 2 trở đi vô hình dù đã xuất bản).
+  const topicFlowOrder: string[] = useMemo(() => {
+    if (!theory) return [];
+    return liveTopics?.find((t) => t.id === theory.topicId)?.flowOrder || [];
+  }, [liveTopics, theory]);
+  const otherTheoryLinkIds: string[] = useMemo(() => {
+    if (!theory) return [];
+    const ids: string[] = [];
+    (liveTopicTheories || [])
+      .filter((t) => t.topicId === theory.topicId && t.id !== theoryId)
+      .forEach((t) => {
+        if (t.practiceQuizId) ids.push(t.practiceQuizId);
+        if (t.testQuizId) ids.push(t.testQuizId);
+        if (t.test2QuizId) ids.push(t.test2QuizId);
+      });
+    return ids;
+  }, [liveTopicTheories, theory, theoryId]);
+  const practiceQuizzes: Quiz[] = useMemo(() => {
+    if (!theory) return [];
+    return selectTheoryPracticeQuizzes({
+      linkedPracticeId: theory.practiceQuizId,
+      explicitTestQuizId: theory.testQuizId,
+      topicQuizzes,
+      flowOrder: topicFlowOrder,
+      excludedQuizIds: otherTheoryLinkIds,
+    });
+  }, [theory, topicQuizzes, topicFlowOrder, otherTheoryLinkIds]);
+  const practiceQuizIds = useMemo(
+    () => new Set(practiceQuizzes.map((q) => q.id)),
+    [practiceQuizzes]
+  );
 
-  // 2. Bài Kiểm tra lý thuyết
+  // 2. Bài Kiểm tra lý thuyết (không đổi logic, chỉ loại mọi bài Luyện tập)
   const testQuiz: Quiz | undefined = useMemo(() => {
     return (theory?.testQuizId && quizzesMap[theory.testQuizId]) ||
-      topicQuizzes.find((q: Quiz) => (q.kind === 'quick' || q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') && q.id !== practiceQuiz?.id);
-  }, [theory?.testQuizId, quizzesMap, topicQuizzes, practiceQuiz]);
+      topicQuizzes.find((q: Quiz) => (q.kind === 'quick' || q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') && !practiceQuizIds.has(q.id));
+  }, [theory?.testQuizId, quizzesMap, topicQuizzes, practiceQuizIds]);
 
   const dynamicSteps = useMemo<FlowStep[]>(() => {
     const steps: FlowStep[] = [
-      { key: 'theory', label: 'Đọc lý thuyết', xpBonus: XP_CONFIG.THEORY_READ_UNDERSTOOD_XP },
+      { key: 'theory', kind: 'theory', label: 'Đọc lý thuyết', xpBonus: XP_CONFIG.THEORY_READ_UNDERSTOOD_XP },
     ];
 
-    if (practiceQuiz) {
+    practiceQuizzes.forEach((pq) => {
       steps.push({
-        key: 'practice',
+        key: `practice:${pq.id}`,
+        kind: 'practice',
         label: 'Luyện tập',
-        quiz: practiceQuiz,
+        quiz: pq,
         xpBonus: XP_CONFIG.THEORY_PRACTICE_COMPLETED_XP,
       });
-    }
+    });
 
     if (testQuiz) {
       steps.push({
         key: 'test',
+        kind: 'test',
         label: 'Kiểm tra',
         quiz: testQuiz,
         xpBonus: XP_CONFIG.THEORY_TEST_XP,
       });
     }
 
-    steps.push({ key: 'complete', label: 'Hoàn thành', xpBonus: XP_CONFIG.THEORY_FULL_COMPLETION_XP });
+    steps.push({ key: 'complete', kind: 'complete', label: 'Hoàn thành', xpBonus: XP_CONFIG.THEORY_FULL_COMPLETION_XP });
     return steps;
-  }, [practiceQuiz, testQuiz]);
+  }, [practiceQuizzes, testQuiz]);
 
   // Khôi phục bước đang học dở (trước đây màn lý thuyết luôn bắt đầu lại từ bước 0).
   // Ưu tiên stepKey vì stepIndex có thể lệch khi GV thêm/bớt bài tập liên kết.
@@ -525,7 +567,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       </div>
 
       {/* ================= BƯỚC: ĐỌC LÝ THUYẾT ================= */}
-      {currentStep.key === 'theory' && (
+      {currentStep.kind === 'theory' && (
         <div className="space-y-6 animate-[fadeIn_0.3s_ease]">
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -697,7 +739,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       )}
 
       {/* ================= CÁC BƯỚC BÀI TẬP LÝ THUYẾT (LUYỆN TẬP / KIỂM TRA) ================= */}
-      {(currentStep.key === 'practice' || currentStep.key === 'test') && (
+      {(currentStep.kind === 'practice' || currentStep.kind === 'test') && (
         (() => {
           const q = currentStep.quiz;
           if (!q) {
@@ -780,7 +822,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       )}
 
       {/* ================= BƯỚC CUỐI: TỔNG KẾT HOÀN THÀNH ================= */}
-      {currentStep.key === 'complete' && (
+      {currentStep.kind === 'complete' && (
         <div className="space-y-6 animate-[fadeIn_0.4s_ease]">
           <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-xl shadow-indigo-950/5 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-60 h-60 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
