@@ -1,3 +1,12 @@
+## 2026-10-28 (SỬA GỐC VỤ RELOAD VĂNG ĐĂNG NHẬP — bootstrapStorage reset mỗi lần load)
+
+- Triệu chứng: đăng nhập xong reload trang là văng ra màn đăng nhập, lặp lại 100% (tái hiện 3/3 trên hồ sơ trình duyệt sạch, cả giáo viên mới tinh lẫn gv_toan).
+- Gốc (đã chứng minh bằng log server + đọc code, không phải đoán): `bootstrapStorage()` so version bằng `getItem` thô nhưng ghi version qua `writeStorage` (JSON.stringify nên giá trị lưu có ngoặc kép). Chuỗi có ngoặc kép không bao giờ bằng chuỗi gốc → điều kiện "đổi version" luôn đúng → reset chạy MỖI lần load trang, xóa mọi key `mam_van_*` không được bảo vệ — trong đó có đúng 2 key token GĐ3 (`mam_van_access_token`, `mam_van_refresh_token`). Phiên (`mam_van_auth_session`) được bảo vệ nên sống sót: cổng vẫn mở từ phiên cũ, gọi API không token → toàn 401 → văng về đăng nhập. Lỗi chỉ lộ từ GĐ3 vì trước đó phiên Supabase dùng key khác, không bị reset xóa.
+- Sửa (client): so version bằng `readStorage` (parse JSON rồi mới so) — giá trị đã lưu parse ra đúng version nên reset không chạy bậy nữa; đồng thời thêm 2 key token vào `protectedKeys` để kể cả khi đổi version thật thì reset cũng không mồ côi phiên. Gỡ luôn middleware log chẩn đoán tạm thời (đã hoàn thành nhiệm vụ).
+- Sơ đồ không đổi: sửa này không thay luồng/node/quan hệ nào (luồng đăng nhập, dọn khi đăng xuất, tách theo giáo viên giữ nguyên) nên không sinh lại sơ đồ.
+- LƯU Ý CHO USER: token trong trình duyệt hiện tại đã bị các lần reset trước xóa nên phải ĐĂNG NHẬP LẠI 1 LẦN sau deploy này; từ lần đó trở đi reload giữ nguyên đăng nhập.
+- Kiểm chứng: tsc 0 lỗi; suite localstorage_audit 21/21; kiểm chứng trình duyệt sau deploy (đăng nhập → reload → vẫn ở cổng) mới coi là xong.
+
 ## 2026-10-28 (LOG CHẨN ĐOÁN TẠM THỜI VỤ RELOAD VĂNG ĐĂNG NHẬP)
 
 - Thêm middleware log TẠM trong createApp: chỉ ghi request /api/auth/* và mọi response 401 (method + path + status + có/không có header Authorization). KHÔNG ghi token, mật khẩu hay body. Mục đích: thấy trình duyệt sau reload có gọi /me không và server trả gì — điểm mù cuối cùng sau khi đã loại trừ refresh, client timeout, bootstrap reset và bộ nhớ trình duyệt. XÓA middleware này ngay sau khi chẩn đoán xong.

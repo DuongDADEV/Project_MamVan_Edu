@@ -41,6 +41,7 @@ import {
   createFreshStudentState,
   SEED_AI_GRADING_CONFIG,
 } from './seedData.ts';
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '../api/http.ts';
 import {
   generateUsername,
   generateFriendlyPassword,
@@ -234,7 +235,11 @@ export function initSeedDataIfEmpty(): void {
 export function bootstrapStorage(): { reset: boolean } {
   if (typeof window === 'undefined') return { reset: false };
 
-  const currentVersion = localStorage.getItem(STORAGE_KEYS.SCHEMA_VERSION);
+  // Version được ghi qua writeStorage (JSON.stringify) nên giá trị lưu có
+  // ngoặc kép — phải parse mới so được. So raw getItem luôn lệch nên reset
+  // chạy mỗi lần load trang, xóa cả token đăng nhập: đó là gốc lỗi reload
+  // là văng ra (phiên thì được bảo vệ nên sống sót, token thì mất).
+  const currentVersion = readStorage<string>(STORAGE_KEYS.SCHEMA_VERSION, '');
   if (currentVersion !== STORAGE_SCHEMA_VERSION) {
     console.log('[Storage] Chuyển đổi sang schema dữ liệu thật v4, dọn sạch toàn bộ mẫu cũ...');
 
@@ -244,6 +249,11 @@ export function bootstrapStorage(): { reset: boolean } {
     try {
       const protectedKeys = new Set<string>([
         STORAGE_KEYS.SESSION,
+        // Token đăng nhập GĐ3: phải sống cùng phiên — kể cả khi đổi version
+        // thật thì reset cũng không được xóa token khi phiên còn giữ, nếu
+        // không phiên mồ côi và lần load sau văng ra màn hình đăng nhập.
+        ACCESS_TOKEN_KEY,
+        REFRESH_TOKEN_KEY,
         STORAGE_KEYS.TOPICS,
         STORAGE_KEYS.VIDEOS,
         STORAGE_KEYS.THEORIES,
