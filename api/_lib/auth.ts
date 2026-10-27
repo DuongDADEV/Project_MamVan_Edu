@@ -240,32 +240,35 @@ export async function createRefreshToken(userId: string): Promise<string> {
 }
 
 /**
- * Đổi refresh token: hash + tra cứu (chưa revoke, chưa hết hạn) → xóa
- * token cũ, tạo token mới, trả { userId, newRefresh }. Token lạ/hết
- * hạn/đã revoke → null. Xoay trong cùng 1 transaction nên token cũ
- * không thể dùng 2 lần (dùng lại sau khi xoay → null).
+ * Kiểm tra refresh token: hash + tra cứu (chưa revoke, chưa hết hạn) →
+ * trả { userId, refreshToken } với CHÍNH token đã gửi (không xoay).
+ *
+ * ĐỔI TỪ XOAY 1 LẦN (28/10): bản xoay cũ xóa token ngay khi dùng — nếu
+ * response xoay bị mất (server restart đúng lúc, mạng chập chờn, tắt tab
+ * giữa chừng) thì client kẹt vĩnh viễn với token đã bị tiêu thụ, server
+ * giữ token mới mà client không bao giờ nhận được; lần reload sau khi
+ * access hết hạn (1 giờ) là văng ra màn đăng nhập dù refresh vẫn còn
+ * hạn. Token dùng lại được trong 7 ngày thì mất response cũng vô hại,
+ * 2 tab cùng refresh cũng không giết nhau. Đổi mật khẩu/khóa/đăng xuất
+ * vẫn thu hồi (revoked=1) như cũ.
  */
-export async function consumeRefreshToken(
+export async function validateRefreshToken(
   token: string
-): Promise<{ userId: string; newRefresh: string } | null> {
+): Promise<{ userId: string; refreshToken: string } | null> {
   if (!token) return null;
-  return withTransaction(async (tx) => {
-    const rows = await tx.query<any[]>(
-      `SELECT user_id FROM refresh_tokens
-        WHERE token_hash = ? AND revoked = 0 AND expires_at > UTC_TIMESTAMP() LIMIT 1`,
-      [hashRefreshToken(token)]
-    );
-    const row = rows[0];
-    if (!row) return null;
-    await tx.execute('DELETE FROM refresh_tokens WHERE token_hash = ?', [hashRefreshToken(token)]);
-    const newRefresh = await insertRefreshToken(tx, row.user_id);
-    return { userId: row.user_id, newRefresh };
-  });
+  const rows = await db.query<any[]>(
+    `SELECT user_id FROM refresh_tokens
+      WHERE token_hash = ? AND revoked = 0 AND expires_at > UTC_TIMESTAMP() LIMIT 1`,
+    [hashRefreshToken(token)]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return { userId: row.user_id, refreshToken: token };
 }
 
 /** Thu hồi toàn bộ refresh token của 1 user (đổi mật khẩu / khóa tài
  *  khoản / đăng xuất mọi thiết bị): đánh revoked=1, giữ hàng để đối
- *  chiếu — consumeRefreshToken đã loại hàng revoked. */
+ *  chiếu — validateRefreshToken đã loại hàng revoked. */
 export async function revokeRefreshTokens(userId: string): Promise<void> {
   await db.execute('UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?', [userId]);
 }

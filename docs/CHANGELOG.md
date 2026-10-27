@@ -1,3 +1,11 @@
+## 2026-10-28 (RELOAD KHÔNG ĐƯỢC VĂNG ĐĂNG NHẬP — SỬA REFRESH TOKEN)
+
+- Triệu chứng: reload trang sau khi access token hết hạn (1 giờ) là văng ra màn đăng nhập, dù refresh token còn hạn 7 ngày.
+- Chẩn đoán bằng dữ liệu thật: luồng refresh chạy đúng (test giáo viên mới: refresh → 200 + xoay, /me → 200, token cũ → 401 đúng thiết kế); tài khoản gv_toan còn 10 refresh row đều sống. Vậy token trong trình duyệt của user đã chết trước đó — cơ chế xoay 1 lần gây ra: response xoay bị mất (server restart đúng lúc, mạng chập, tắt tab giữa chừng) là client kẹt vĩnh viễn với token đã bị tiêu thụ, server giữ token mới mà client không bao giờ nhận được; 2 tab cùng refresh cũng giết nhau (tab thua xóa token của tab thắng khỏi localStorage chung).
+- Sửa (server-only): bỏ xoay — POST /auth/refresh giờ kiểm tra token còn sống (chưa revoke, chưa hết hạn) và TRẢ LẠI CHÍNH token đó (validateRefreshToken thay consumeRefreshToken). Mất response hay 2 tab cùng refresh đều vô hại. Đổi mật khẩu/khóa/đăng xuất vẫn thu hồi như cũ. Access token vẫn 1 giờ.
+- LƯU Ý CHO USER: token cũ trong trình duyệt đã chết nên phải ĐĂNG NHẬP LẠI 1 LẦN sau deploy này; từ lần đó trở đi reload thoải mái, restart server cũng không văng nữa.
+- Kiểm chứng: tsc 0 lỗi; test live sau deploy: cùng 1 refresh token gọi 2 lần đều 200 (trước sửa lần 2 là 401), sign-out rồi refresh → 401 (thu hồi vẫn chạy).
+
 ## 2026-10-28 (CHỌN SỐ HỌC SINH MỖI TRANG Ở BẢNG)
 
 - Theo yêu cầu: footer bảng (cạnh dòng "Hiển thị X–Y trong tổng số Z kết quả") thêm ô chọn "Mỗi trang" với đúng các mức 5, 10, 15, 20, 25, 30, 35, 40, 45, 50. Đổi mức là về trang 1 (tránh rơi vào trang trống).

@@ -11,7 +11,7 @@ import {
   readBearer,
   loadCaller,
   createRefreshToken,
-  consumeRefreshToken,
+  validateRefreshToken,
   revokeRefreshTokens,
 } from '../_lib/auth';
 
@@ -298,14 +298,15 @@ authRouter.post('/auth/refresh', async (req: Request, res: Response) => {
     if (!refreshToken) {
       return httpErr(res, 400, 'BAD_INPUT');
     }
-    // Lib auth: consumeRefreshToken(token) xoay trong 1 transaction —
-    // token cũ bị xóa, trả { userId, newRefresh }; token lạ/hết hạn/
-    // đã revoke → null.
-    const consumed = await consumeRefreshToken(refreshToken);
-    if (!consumed) {
+    // Lib auth: validateRefreshToken kiểm tra token còn sống (chưa
+    // revoke, chưa hết hạn) và TRẢ LẠI CHÍNH token đó — không xoay, để
+    // mất response hay 2 tab cùng refresh cũng không kẹt (xem ghi chú
+    // ở validateRefreshToken). Token lạ/hết hạn/đã revoke → null.
+    const validated = await validateRefreshToken(refreshToken);
+    if (!validated) {
       return httpErr(res, 401, 'UNAUTHORIZED');
     }
-    const userId = consumed.userId;
+    const userId = validated.userId;
     const users = await query<any>('SELECT * FROM `users` WHERE `id` = ? LIMIT 1', [userId]);
     const userRow = users[0];
     if (!userRow) {
@@ -320,12 +321,12 @@ authRouter.post('/auth/refresh', async (req: Request, res: Response) => {
     if (!accessToken) {
       return httpErr(res, 500, 'SERVER_NOT_CONFIGURED');
     }
-    const newRefresh = consumed.newRefresh;
-    const session = await buildSession(userRow, accessToken, newRefresh);
+    const sameRefresh = validated.refreshToken;
+    const session = await buildSession(userRow, accessToken, sameRefresh);
     if (!session) {
       return httpErr(res, 401, 'UNAUTHORIZED');
     }
-    return res.status(200).json({ session, accessToken, refreshToken: newRefresh });
+    return res.status(200).json({ session, accessToken, refreshToken: sameRefresh });
   } catch {
     return httpErr(res, 500, 'SERVER_ERROR');
   }
