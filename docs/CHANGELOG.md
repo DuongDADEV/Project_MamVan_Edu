@@ -1,3 +1,11 @@
+## 2026-10-27 (THÊM XÓA HỌC SINH HÀNG LOẠT + DỌN TÀI KHOẢN MỒ CÔI KHI XÓA HS)
+
+- Mới: thanh công cụ chọn nhiều ở màn Lớp & Học sinh có thêm nút "Xóa đã chọn" (cạnh Chuyển lớp / Khóa / Mở khóa). Bấm → dialog xác nhận liệt kê tên các em + cảnh báo xóa vĩnh viễn → xóa từng em qua DELETE /students/:id có sẵn (không thêm endpoint mới), xóa xong bỏ chọn + tải lại danh sách; em nào xóa lỗi sẽ báo tên riêng, các em còn lại vẫn xóa bình thường.
+- Sửa server đi kèm (api/routes/students.ts, DELETE /students/:id): trước đây chỉ xóa dòng students nên dòng users liên kết còn lại thành users mồ côi (email tổng hợp vẫn bị chiếm, tạo lại cùng username sẽ đụng UNIQUE) — nay xóa luôn dòng users qua auth_user_id; refresh_tokens của user đó tự xóa theo ON DELETE CASCADE. Các bảng con (states, sessions, attempts + answers, essays, targets, reward_requests) vốn đã xóa theo CASCADE của FK.
+- Sửa chữ ở dialog xóa đơn (cùng màn hình): trước đây ghi "ẩn khỏi danh sách" và "XP/kết quả vẫn lưu trong nhật ký kiểm toán" là sai — server xóa vĩnh viễn thật, nay ghi đúng: xóa vĩnh viễn kèm tài khoản đăng nhập, XP/bài nộp/kết quả xóa theo, không khôi phục được.
+- Kiểm chứng: tsc 0 lỗi. Chưa deploy — deploy cùng đợt với verify trình duyệt (tạo HS test, chọn nhiều, xóa hàng loạt, danh sách sạch + tài khoản đã xóa đăng nhập lại báo sai).
+- Sơ đồ: không đổi luồng nghiệp vụ (xóa hàng loạt tái sử dụng luồng xóa đơn từng em) → không regen, chỉ ghi CHANGELOG.
+
 ## 2026-10-27 (SỬA LỖI MÀN HÌNH GIÁO VIÊN SẬP VỚI CLASS_REQUIRED)
 
 - Triệu chứng thật từ người dùng (ảnh chụp màn hình): mở https://mamvan.pro.vn/teacher → màn hình "Không thể tải dữ liệu giáo viên — Đã xảy ra lỗi: CLASS_REQUIRED".

@@ -234,7 +234,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
     });
   };
 
-  // Xóa mềm học sinh
+  // Xóa học sinh (xóa vĩnh viễn, kèm tài khoản đăng nhập)
   const handleDeleteStudent = async (studentId: string) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
@@ -247,7 +247,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
           Bạn có chắc chắn muốn xóa học sinh{' '}
           <strong className="text-[#2F3E6B]">{student.name}</strong>?
           <p className="mt-2 text-xs text-rose-800 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-            Học sinh sẽ bị ẩn khỏi danh sách lớp. Toàn bộ điểm số XP và kết quả học tập vẫn được lưu trữ trong nhật ký kiểm toán.
+            Xóa vĩnh viễn: học sinh biến mất khỏi danh sách lớp, tài khoản đăng nhập bị thu hồi, toàn bộ điểm XP, bài nộp và kết quả học tập của em cũng bị xóa theo và không khôi phục được.
           </p>
         </div>
       ),
@@ -287,6 +287,46 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
     } catch (err: any) {
       alert('Không cập nhật được trạng thái khóa: ' + (err?.message || 'đã xảy ra lỗi'));
     }
+  };
+
+  // Xóa hàng loạt học sinh đã chọn (xác nhận trước vì xóa vĩnh viễn)
+  const handleBulkDelete = () => {
+    const idsToDelete = [...selectedStudentIds];
+    const selected = students.filter((s) => idsToDelete.includes(s.id));
+    if (selected.length === 0) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: `Xóa ${selected.length} học sinh đã chọn`,
+      message: (
+        <div>
+          Bạn có chắc chắn muốn xóa {selected.length} học sinh đã chọn (
+          {selected.map((s) => s.name).join(', ')})?
+          <p className="mt-2 text-xs text-rose-800 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+            Xóa vĩnh viễn: các em biến mất khỏi danh sách lớp, tài khoản đăng nhập bị thu hồi, toàn bộ điểm XP, bài nộp và kết quả học tập cũng bị xóa theo và không khôi phục được.
+          </p>
+        </div>
+      ),
+      confirmLabel: 'Xóa vĩnh viễn',
+      variant: 'danger',
+      action: async () => {
+        const failed: string[] = [];
+        const succeeded: string[] = [];
+        for (const sId of idsToDelete) {
+          try {
+            await studentService.deleteStudent(sId, teacherId);
+            succeeded.push(sId);
+          } catch {
+            failed.push(students.find((s) => s.id === sId)?.name || sId);
+          }
+        }
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        setSelectedStudentIds((prev) => prev.filter((id) => !succeeded.includes(id)));
+        onRefreshData();
+        if (failed.length > 0) {
+          alert(`Không xóa được ${failed.length} học sinh: ${failed.join(', ')}`);
+        }
+      },
+    });
   };
 
   // Tạo lớp mới
@@ -708,6 +748,15 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                   >
                     <Unlock className="w-3.5 h-3.5" />
                     <span>Mở khóa</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    className="px-2.5 py-1 rounded-lg border border-rose-300 bg-rose-50 hover:bg-rose-100 text-xs font-semibold text-rose-800 flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xóa đã chọn</span>
                   </button>
                 </div>
               )}

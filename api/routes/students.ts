@@ -21,9 +21,11 @@ import { isSentinelId, teacherClassIds, studentClassId } from '../_lib/scope';
  * - resetPassword (dùng trong PATCH khi đổi mật khẩu) = gọi route users
  *   action 'reset-password' (table students, profileId) — ở đây viết trực
  *   tiếp: bcrypt.hash → UPDATE users.encrypted_password + thu hồi refresh.
- * - deleteStudent gốc = hard DELETE khỏi bảng students (KHÔNG xóa dòng
- *   users tương ứng, KHÔNG xóa student_states) — giữ nguyên hành vi đó,
- *   ghi rõ để tích hợp quyết có dọn users mồ côi hay không.
+ * - deleteStudent = hard DELETE khỏi bảng students, kéo theo ON DELETE
+ *   CASCADE (student_states, sessions, attempts + answers, essays,
+ *   targets, reward_requests) và xóa luôn dòng users liên kết (qua
+ *   auth_user_id; refresh_tokens tự xóa theo CASCADE) để không còn
+ *   users mồ côi chiếm email tổng hợp.
  *
  * Phân quyền: teacher bắt buộc lọc class_id thuộc lớp mình, KHÔNG cho
  * list toàn cục; admin tất cả (+ lọc lớp); student chỉ chính mình.
@@ -486,8 +488,17 @@ studentsRouter.delete('/students/:id', async (req: Request, res: Response) => {
     const rows = await query<any>('SELECT * FROM `students` WHERE `id` = ? LIMIT 1', [id]);
     if (!rows[0]) return httpErr(res, 404, 'NOT_FOUND');
     if (!(await scopeCheckStudent(req, res, rows[0]))) return;
-    // Hard delete như code gốc (xem ghi chú đầu file về users mồ côi).
+    // Hard delete: xóa students kéo theo ON DELETE CASCADE (states,
+    // sessions, attempts + answers, essays, targets, reward_requests).
+    // Đồng thời xóa dòng users liên kết (qua auth_user_id) để không còn
+    // users mồ côi chiếm email tổng hợp (trước đây chỉ xóa students nên
+    // tạo lại cùng username sẽ đụng UNIQUE email). refresh_tokens của
+    // user đó tự xóa theo ON DELETE CASCADE.
+    const authUserId = rows[0].auth_user_id;
     await execute('DELETE FROM `students` WHERE `id` = ?', [id]);
+    if (authUserId) {
+      await execute('DELETE FROM `users` WHERE `id` = ?', [authUserId]);
+    }
     return res.status(200).json({ ok: true });
   } catch {
     return httpErr(res, 500, 'SERVER_ERROR');
