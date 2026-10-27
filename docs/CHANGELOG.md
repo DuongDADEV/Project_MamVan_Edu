@@ -1,3 +1,9 @@
+## 2026-10-27 (FIX MODAL TẠO HS KẸT ALERT "LỚP KHÔNG THUỘC TÀI KHOẢN NÀY")
+
+- Nguyên nhân đã xác minh bằng dữ liệu thật: lớp 7A1 cũ (id 0f066813...) cùng 5 HS đã bị xóa, lớp 7A1 hiện tại là lớp MỚI tạo 22:56:40 (id 892ea0ef, 0 HS) — modal tạo HS đang mở giữ class_id của lớp cũ nên check submit báo "không thuộc tài khoản này" dù dropdown vẫn hiện tên lớp cũ.
+- Fix (AddStudentModal): memoize selectableClasses + useEffect tự chữa — khi danh sách lớp đổi, các dòng còn giữ class_id không còn thuộc tài khoản sẽ tự chuyển về lớp đang chọn (không đổi gì khi đã đúng); hết lớp thì giữ nguyên để alert "chưa có lớp" xử lý. Trường hợp danh sách lớp của tab đã lỗi thời hoàn toàn (xóa/tạo lớp ở tab khác) thì vẫn cần tải lại trang như alert dặn.
+- Kiểm chứng: tsc 0 lỗi. Deploy dist-only (server không đổi) + verify bundle mới.
+
 ## 2026-10-27 (FIX PHIẾU UUID LỚP + TẠO LÔ BÁO LỖI TỪNG DÒNG + THÊM XÓA LỚP)
 
 - FIX phiếu hiện UUID lớp: phiếu tài khoản (tạo HS + đặt lại mật khẩu) hiện "Lớp: 0f0668..." vì voucher của bản API GĐ3 không có className (bản mock cũ có, lấy từ danh sách lớp) nên phiếu rơi về class_id. Nay màn Lớp & Học sinh gắn tên lớp từ danh sách lớp đã tải vào voucher trước khi mở phiếu (khôi phục đúng hành vi bản mock cũ, không thêm request) — phiếu sẽ in "Lớp: 7A1".

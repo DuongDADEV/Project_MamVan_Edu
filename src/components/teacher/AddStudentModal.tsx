@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   UserPlus,
@@ -60,8 +60,9 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
   // 26/10: chỉ cho lớp CỦA GIÁO VIÊN NÀY — trước đây danh sách có thể
   // lẫn lớp của giáo viên khác (lỗi thời/lẫn), chọn nhầm là máy chủ
   // từ chối CLASS_NOT_OWNED. Chế độ mock/legacy giữ nguyên.
-  const selectableClasses = ownedClasses(classes, teacherId).filter(
-    (c) => c.status !== 'archived'
+  const selectableClasses = useMemo(
+    () => ownedClasses(classes, teacherId).filter((c) => c.status !== 'archived'),
+    [classes, teacherId]
   );
   const activeClassId =
     selectableClasses.length === 0
@@ -100,6 +101,22 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     if (manualRows.length <= 1) return;
     setManualRows((prev) => prev.filter((r) => r.id !== id));
   };
+
+  // Lớp có thể bị xóa/tạo lại trong lúc modal đang mở (lớp cũ mất khỏi
+  // danh sách nhưng dòng vẫn giữ class_id cũ) → kẹt ở alert "không thuộc
+  // tài khoản này" dù dropdown vẫn hiện tên lớp cũ. Tự chuyển các dòng
+  // sai về lớp đang chọn khi danh sách lớp đổi; không đổi gì khi đã đúng.
+  useEffect(() => {
+    if (!activeClassId) return;
+    setManualRows((prev) => {
+      const fixed = prev.map((r) =>
+        selectableClasses.some((c) => c.id === r.class_id)
+          ? r
+          : { ...r, class_id: activeClassId }
+      );
+      return fixed.some((r, i) => r.class_id !== prev[i].class_id) ? fixed : prev;
+    });
+  }, [selectableClasses, activeClassId]);
 
   const handleUpdateManualRow = (id: string, field: keyof ManualRow, value: string) => {
     setManualRows((prev) => {
