@@ -32,7 +32,7 @@ import { query, parseJson } from '../_lib/mysql';
 import { requireAuth, requireRole } from '../_lib/auth';
 import type { AuthedRequest } from '../_lib/auth';
 import { teacherClassIds } from '../_lib/scope';
-import { db, shiftDate, renderResponse, isTeacher } from './_shared';
+import { db, shiftDate, renderResponse, isTeacher, ah, toDateKey } from './_shared';
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth, requireRole('teacher', 'admin'));
@@ -75,7 +75,10 @@ async function sessionsSummary(studentIds: string[] | null): Promise<any> {
     studentName: s.student_name || 'Học sinh',
     loginAt: s.login_at,
     logoutAt: s.logout_at,
-    loginDate: s.login_date,
+    // login_date là DATE → mysql2 trả Date object: chuẩn hóa về
+    // 'YYYY-MM-DD' ngay đây, không để Date lọt xuống shiftDate/so
+    // sánh chuỗi (đã crash process ở GĐ4).
+    loginDate: toDateKey(s.login_date) || null,
     durationMinutes: s.session_duration_minutes,
     deviceType: s.device_type,
     status: s.session_status,
@@ -244,7 +247,7 @@ async function attemptsWithAnswers(studentIds: string[] | null): Promise<any[]> 
   }));
 }
 
-dashboardRouter.get('/dashboard/overview', async (req: AuthedRequest, res) => {
+dashboardRouter.get('/dashboard/overview', ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const classFilter = typeof req.query.class_id === 'string' ? req.query.class_id : undefined;
   const studentIds = await scopedStudents(caller, classFilter);
@@ -322,9 +325,9 @@ dashboardRouter.get('/dashboard/overview', async (req: AuthedRequest, res) => {
     passRate,
     perDay: summary.perDay,
   });
-});
+}));
 
-dashboardRouter.get('/dashboard/sessions', async (req: AuthedRequest, res) => {
+dashboardRouter.get('/dashboard/sessions', ah(async (req: AuthedRequest, res) => {
   const classFilter = typeof req.query.class_id === 'string' ? req.query.class_id : undefined;
   const studentIds = await scopedStudents(req.caller!, classFilter);
   if (studentIds && studentIds.length === 0) {
@@ -332,9 +335,9 @@ dashboardRouter.get('/dashboard/sessions', async (req: AuthedRequest, res) => {
     return;
   }
   res.json(await sessionsSummary(studentIds));
-});
+}));
 
-dashboardRouter.get('/dashboard/assignments-progress', async (req: AuthedRequest, res) => {
+dashboardRouter.get('/dashboard/assignments-progress', ah(async (req: AuthedRequest, res) => {
   const classFilter = typeof req.query.class_id === 'string' ? req.query.class_id : undefined;
   const studentIds = await scopedStudents(req.caller!, classFilter);
   if (studentIds && studentIds.length === 0) {
@@ -342,9 +345,9 @@ dashboardRouter.get('/dashboard/assignments-progress', async (req: AuthedRequest
     return;
   }
   res.json(await assignmentsProgress(req.caller!, studentIds));
-});
+}));
 
-dashboardRouter.get('/dashboard/attempts', async (req: AuthedRequest, res) => {
+dashboardRouter.get('/dashboard/attempts', ah(async (req: AuthedRequest, res) => {
   const classFilter = typeof req.query.class_id === 'string' ? req.query.class_id : undefined;
   const studentIds = await scopedStudents(req.caller!, classFilter);
   if (studentIds && studentIds.length === 0) {
@@ -352,4 +355,4 @@ dashboardRouter.get('/dashboard/attempts', async (req: AuthedRequest, res) => {
     return;
   }
   res.json(await attemptsWithAnswers(studentIds));
-});
+}));

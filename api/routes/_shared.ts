@@ -57,17 +57,33 @@ export function vnToday(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Chuẩn hóa giá trị ngày từ mysql2 về khóa 'YYYY-MM-DD'.
+ *  mysql2 trả cột DATE/TIMESTAMP dạng Date object (pool timezone
+ *  '+00:00' nên DATE nửa đêm UTC = đúng ngày đã lưu); chuỗi thì
+ *  cắt 10 ký tự đầu. Dùng ở mọi chỗ so sánh/ngày-tháng bằng chuỗi
+ *  (bug GĐ4 2026-10-27: sessionsSummary nhận Date, shiftDate nối
+ *  thêm 'T00:00:00Z' → Invalid Date → toISOString() throw →
+ *  crash process, Caddy 502). */
+export function toDateKey(v: unknown): string {
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return '';
+    return v.toISOString().slice(0, 10);
+  }
+  if (v == null) return '';
+  return String(v).slice(0, 10);
+}
+
 /** Ngày thứ Hai (YYYY-MM-DD) của tuần chứa `dateStr` (tuần bắt đầu thứ 2). */
-export function vnWeekMonday(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00Z');
+export function vnWeekMonday(dateStr: string | Date): string {
+  const d = new Date(toDateKey(dateStr) + 'T00:00:00Z');
   const dow = (d.getUTCDay() + 6) % 7; // 0 = thứ Hai
   d.setUTCDate(d.getUTCDate() - dow);
   return d.toISOString().slice(0, 10);
 }
 
-/** Cộng/trừ ngày trên chuỗi YYYY-MM-DD. */
-export function shiftDate(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00Z');
+/** Cộng/trừ ngày trên chuỗi YYYY-MM-DD (hoặc Date từ mysql2). */
+export function shiftDate(dateStr: string | Date, days: number): string {
+  const d = new Date(toDateKey(dateStr) + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
