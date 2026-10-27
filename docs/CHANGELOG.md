@@ -1,3 +1,10 @@
+## 2026-10-27 (MODAL THÊM HỌC SINH HIỆN LẠI DÒNG CŨ SAU KHI ĐÃ XÓA)
+
+- Nguyên nhân đã xác minh: modal thêm học sinh luôn được mount sẵn trong trang (đóng chỉ ẩn đi, không hủy component), và không có chỗ nào reset dòng sau khi tạo xong hay khi đóng. Lần tạo 23:06 gõ 6 dòng → tạo xong đóng modal → 6 dòng vẫn nằm trong state của component. Xóa hết học sinh (DB đã về 0, đã kiểm chứng) rồi mở lại modal → cùng component hiện lại 6 dòng cũ, nhìn như "học sinh cũ hiện ra". Không phải dữ liệu từ máy chủ, không phải nháp localStorage (modal không dùng localStorage).
+- Nguy hiểm đi kèm: bấm "Tạo tài khoản & Cấp phiếu" lúc này là tạo LẠI 6 em đó (username đang trống sau khi xóa) — tức là hoàn tác việc xóa.
+- Fix (AddStudentModal): mỗi lần mở modal (isOpen chuyển true) là reset về trạng thái trống — 1 dòng trống, tab về nhập tay, xóa hết state Excel/file đã chọn. Lần mở nào cũng bắt đầu sạch, kể cả đóng giữa chừng không tạo. Effect chữa lớp cũ vẫn giữ (lớp tải chậm sau khi mở vẫn map đúng).
+- Kiểm chứng: tsc 0 lỗi. Deploy dist-only (server không đổi, script viết mới + assert tên file trước khi chạy) + verify file trên VPS.
+
 ## 2026-10-27 (TỰ SINH USERNAME DỰA TRÊN DANH SÁCH TƯƠI TỪ MÁY CHỦ)
 
 - Theo yêu cầu: lúc tự sinh username phải lấy cái chưa trùng — không được dựa vào danh sách cũ. Trước đây modal sinh tên + kiểm tra trùng dựa vào prop existingStudents của cổng, prop này có thể lỗi thời (mở modal từ lâu, tạo/xóa ở tab khác) nên có thể sinh ra tên đã bị trùng thật.

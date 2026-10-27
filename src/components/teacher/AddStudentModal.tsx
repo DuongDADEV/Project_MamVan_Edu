@@ -105,6 +105,29 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     },
   ]);
 
+  // Mở modal là reset về trạng thái trống: modal này luôn được mount sẵn
+  // (đóng chỉ ẩn đi, không hủy), nên không reset thì các dòng đã gõ/tạo
+  // xong từ lần trước vẫn còn nguyên lần mở sau — nhìn như "học sinh cũ
+  // hiện lại" dù DB đã xóa sạch. Reset lúc mở (không phải lúc đóng) để
+  // lần mở nào cũng bắt đầu sạch, kể cả đóng giữa chừng không tạo.
+  useEffect(() => {
+    if (!isOpen) return;
+    setManualRows([
+      {
+        id: '1',
+        name: '',
+        class_id: activeClassId,
+        student_code: '',
+        dob: '',
+        auto_username: '',
+      },
+    ]);
+    setExcelRows([]);
+    setExcelSummary(null);
+    setUploadedFile(null);
+    setActiveTab('manual');
+  }, [isOpen]);
+
   const handleAddManualRow = () => {
     setManualRows((prev) => [
       ...prev,
