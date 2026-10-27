@@ -23,7 +23,7 @@
  */
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { query, withTransaction, parseJson } from '../_lib/mysql';
+import { query, withTransaction, parseJson, toMySQLDatetime } from '../_lib/mysql';
 import type { Db } from '../_lib/mysql';
 import { requireAuth, requireRole, httpErr } from '../_lib/auth';
 import type { AuthedRequest } from '../_lib/auth';
@@ -40,6 +40,7 @@ import {
   isStudent,
   canAccessStudent,
   findStudent,
+  ah,
 } from './_shared';
 
 export const rewardsRouter = Router();
@@ -408,7 +409,7 @@ async function applyRequestStatus(
   const prev = row.status;
   await tx.execute(
     'UPDATE `reward_requests` SET `status` = ?, `approved_at` = ? WHERE `id` = ?',
-    [dbStatus, dbStatus === 'APPROVED' ? new Date().toISOString() : null, requestId]
+    [dbStatus, dbStatus === 'APPROVED' ? toMySQLDatetime(new Date()) : null, requestId]
   );
   if (dbStatus === 'REJECTED' && prev !== 'REJECTED') {
     // HOÀN 100% — số hoàn = xp_cost hiện tại của tier khớp chest_type
@@ -424,7 +425,7 @@ async function applyRequestStatus(
   return { prev };
 }
 
-rewardsRouter.patch('/reward-requests/:id', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+rewardsRouter.patch('/reward-requests/:id', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const id = req.params.id;
   if (!checkKeyLen(res, id)) return;
@@ -452,7 +453,7 @@ rewardsRouter.patch('/reward-requests/:id', requireRole('teacher', 'admin'), asy
   const rows = await query<any>('SELECT * FROM `reward_requests` WHERE `id` = ? LIMIT 1', [id]);
   const enriched = await enrichRequests(db, rows);
   res.json({ ...enriched[0], rejectReason: body.reason });
-});
+}));
 
 rewardsRouter.post('/reward-requests/batch', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
   const caller = req.caller!;

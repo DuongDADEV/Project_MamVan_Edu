@@ -19,7 +19,7 @@
  * giữ đúng App cũ (QuizRunner chấm local, trả totalScore, 1 lần/quiz).
  */
 import { Router } from 'express';
-import { query, execute, withTransaction, parseJson } from '../_lib/mysql';
+import { query, execute, withTransaction, parseJson, toMySQLDatetime } from '../_lib/mysql';
 import type { Db } from '../_lib/mysql';
 import { requireAuth, requireRole, httpErr } from '../_lib/auth';
 import type { AuthedRequest } from '../_lib/auth';
@@ -49,6 +49,7 @@ import {
   normalizeQType,
   normText,
   AUTO_Q_TYPES,
+  ah,
 } from './_shared';
 
 export const attemptsRouter = Router();
@@ -211,7 +212,16 @@ attemptsRouter.post(
         'SELECT `last_attendance_date` FROM `student_states` WHERE `student_id` = ? LIMIT 1',
         [studentId]
       );
-      const already = rows[0] && rows[0].last_attendance_date === today;
+      const rawLast = rows[0]?.last_attendance_date;
+      // mysql2 trả TIMESTAMP/DATE dạng Date (hoặc chuỗi DATETIME):
+      // so sánh thô với 'YYYY-MM-DD' luôn sai → alreadyCheckedIn
+      // không bao giờ true (bug GĐ4 2026-10-27: XP thì không cộng
+      // trùng nhờ khóa xp_logs, nhưng cờ already thì sai).
+      const lastStr =
+        rawLast instanceof Date
+          ? rawLast.toISOString().slice(0, 10)
+          : String(rawLast || '').slice(0, 10);
+      const already = !!rawLast && lastStr === today;
       // awardCheckIn tự chống cộng trùng theo ngày (khóa xp_logs
       // `checkin:<ngày>`) và tự cập nhật last_attendance_date,
       // attendance_days_this_week (reset khi sang tuần rồi +1),
@@ -260,7 +270,7 @@ attemptsRouter.post(
 );
 
 // ---------------------------------------------------------------- attempts
-attemptsRouter.post('/attempts', requireRole('student'), async (req: AuthedRequest, res) => {
+attemptsRouter.post('/attempts', requireRole('student'), ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const body = bodyOf(req);
   // student_id ÉP từ JWT, bỏ qua giá trị client gửi.
@@ -430,7 +440,7 @@ attemptsRouter.post('/attempts', requireRole('student'), async (req: AuthedReque
         activityId || null,
         toNum(countRows[0]?.c, 0) + 1,
         'SUBMITTED',
-        startedAt || null,
+        toMySQLDatetime(startedAt),
         vnToday(),
         totalSeconds,
         gradedCount > 0 ? autoScore : null,
@@ -460,7 +470,7 @@ attemptsRouter.post('/attempts', requireRole('student'), async (req: AuthedReque
       if (tgt[0]) {
         await tx.execute(
           'UPDATE `assignment_targets` SET `submission_status` = ?, `first_submitted_at` = ? WHERE `target_id` = ?',
-          ['SUBMITTED', tgt[0].first_submitted_at || nowIso, tgt[0].target_id]
+          ['SUBMITTED', tgt[0].first_submitted_at || toMySQLDatetime(nowIso), tgt[0].target_id]
         );
       }
     }
@@ -505,7 +515,7 @@ attemptsRouter.post('/attempts', requireRole('student'), async (req: AuthedReque
     xpWeek: (result.totals as any)?.xpWeek,
     xpToday: (result.totals as any)?.xpToday,
   });
-});
+}));
 
 /**
  * XP bài quiz nội dung (GĐ3 tích hợp — khôi phục hành vi App cũ mà
@@ -668,7 +678,7 @@ async function assignmentEditShape(conn: Db, id: string): Promise<any | null> {
   };
 }
 
-attemptsRouter.post('/assignments', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+attemptsRouter.post('/assignments', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const body = bodyOf(req);
   const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : 'Bài kiểm tra mới';
@@ -703,7 +713,7 @@ attemptsRouter.post('/assignments', requireRole('teacher', 'admin'), async (req:
   }
   const id = typeof body.id === 'string' && body.id ? body.id : genId('asg_');
   if (!checkKeyLen(res, id)) return;
-  const dueAt = body.dueAt || body.due_at || null;
+  const dueAt = toMySQLDatetime(body.dueAt || body.due_at || null);
   const isTimed = !!body.isTimed;
   const publish = body.publish === true;
   await withTransaction(async (tx: Db) => {
@@ -717,7 +727,7 @@ attemptsRouter.post('/assignments', requireRole('teacher', 'admin'), async (req:
         body.displayLocation || body.display_location || 'HOMEWORK',
         classId,
         teacherId,
-        publish ? new Date().toISOString() : null,
+        publish ? toMySQLDatetime(new Date()) : null,
         dueAt,
         isTimed ? 1 : 0,
         isTimed ? toNum(body.timeLimitMinutes ?? body.time_limit_minutes, null as any) || null : null,
@@ -739,7 +749,7 @@ attemptsRouter.post('/assignments', requireRole('teacher', 'admin'), async (req:
   });
   const created = await assignmentEditShape(db, id);
   res.status(201).json(created);
-});
+}));
 
 attemptsRouter.get('/assignments', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
   const caller = req.caller!;
@@ -909,7 +919,7 @@ attemptsRouter.get('/assignments/:id', async (req: AuthedRequest, res) => {
   res.json(await assignmentEditShape(db, id));
 });
 
-attemptsRouter.patch('/assignments/:id', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+attemptsRouter.patch('/assignments/:id', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const id = req.params.id;
   if (!checkKeyLen(res, id)) return;
@@ -934,11 +944,11 @@ attemptsRouter.patch('/assignments/:id', requireRole('teacher', 'admin'), async 
   }
   const nowIso = new Date().toISOString();
   await withTransaction(async (tx: Db) => {
-    const dueAt = body.dueAt ?? body.due_at ?? a.due_at;
+    const dueAt = toMySQLDatetime(body.dueAt ?? body.due_at ?? a.due_at);
     const isTimed = body.isTimed ?? !!a.is_timed;
     // Giữ đúng updateAssignment: publish thì giữ published_at cũ hoặc đặt
     // mới; không publish thì published_at giữ nguyên (không unpublish ở đây).
-    const publishedAt = body.publish === true ? a.published_at || nowIso : a.published_at;
+    const publishedAt = body.publish === true ? a.published_at || toMySQLDatetime(nowIso) : a.published_at;
     await tx.execute(
       'UPDATE `assignments` SET `title` = ?, `target_class_id` = ?, `due_at` = ?, `is_timed` = ?, `time_limit_minutes` = ?, `xp_reward` = ?, `published_at` = ?, `updated_at` = UTC_TIMESTAMP() WHERE `id` = ?',
       [
@@ -1004,7 +1014,7 @@ attemptsRouter.patch('/assignments/:id', requireRole('teacher', 'admin'), async 
     }
   });
   res.json(await assignmentEditShape(db, id));
-});
+}));
 
 attemptsRouter.delete('/assignments/:id', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
   const caller = req.caller!;

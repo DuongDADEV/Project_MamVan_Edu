@@ -116,6 +116,16 @@ export function genId(prefix: string): string {
   );
 }
 
+/** Bọc handler async: Express 4 không bắt rejection của handler async —
+ *  không bọc thì lỗi DB làm crash cả process (Caddy 502 cho mọi người
+ *  tới khi NSSM khởi động lại). Bọc rồi thì lỗi đi qua error handler
+ *  cuối của createApp → 500 SERVER_ERROR sạch, process sống. */
+export function ah(fn: (req: any, res: any) => Promise<any>) {
+  return (req: any, res: any, next: any) => {
+    Promise.resolve(fn(req, res)).catch(next);
+  };
+}
+
 export function isAdmin(c: Caller): boolean {
   return c.role === 'admin';
 }

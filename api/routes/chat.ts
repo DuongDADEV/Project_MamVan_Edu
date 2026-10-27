@@ -19,10 +19,10 @@
  * không ghi đè nhau).
  */
 import { Router } from 'express';
-import { query, execute, parseJson } from '../_lib/mysql';
+import { query, execute, parseJson, toMySQLDatetime } from '../_lib/mysql';
 import { requireAuth, requireRole, httpErr } from '../_lib/auth';
 import type { AuthedRequest } from '../_lib/auth';
-import { bodyOf, checkKeyLen, isAdmin, isTeacher } from './_shared';
+import { bodyOf, checkKeyLen, isAdmin, isTeacher, ah } from './_shared';
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
@@ -67,7 +67,7 @@ chatRouter.get('/chat/history', requireRole('teacher', 'admin'), async (req: Aut
   res.json(rows.map(mapChatRow));
 });
 
-chatRouter.post('/chat/messages', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+chatRouter.post('/chat/messages', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   // Giáo viên: ép teacher_id từ JWT, bỏ qua giá trị client gửi.
   const teacherId = isTeacher(caller)
@@ -107,12 +107,12 @@ chatRouter.post('/chat/messages', requireRole('teacher', 'admin'), async (req: A
         m.chart != null ? JSON.stringify(m.chart) : null,
         JSON.stringify(m.followups ?? []),
         m.isError ? 1 : 0,
-        m.createdAt ? new Date(m.createdAt).toISOString() : null,
+        toMySQLDatetime(m.createdAt),
       ]
     );
   }
   res.json({ ok: true, upserted: rows.length });
-});
+}));
 
 chatRouter.delete('/chat/history', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
   const caller = req.caller!;

@@ -144,6 +144,36 @@ export function toJson(value: unknown): string | null {
 }
 
 /**
+ * Chuẩn hóa giá trị ghi vào cột TIMESTAMP/DATETIME MySQL (pool timezone
+ * '+00:00' nên chuỗi naive được hiểu là UTC).
+ * Bối cảnh (bug phát hiện ở GĐ4, 2026-10-27): chuỗi ISO-8601 kèm 'Z'
+ * ('2026-10-27T21:07:30.721Z') bị MySQL strict mode từ chối
+ * (Incorrect datetime value) → handler không có try/catch → rejection
+ * không được bắt → Node crash → Caddy 502. Các điểm ghi đã dính:
+ * assignments.published_at (create/patch publish), reward_requests
+ * .approved_at (approve), assignment_targets.first_submitted_at,
+ * attempts.started_at, assistant_chat_messages.created_at, và mọi
+ * due_at do client gửi dạng ISO.
+ */
+export function toMySQLDatetime(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toISOString().slice(0, 19).replace('T', ' ');
+  }
+  if (typeof value !== 'string') return null;
+  const s = value.trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(s)) {
+    return s.length === 16 ? s + ':00' : s;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + ' 00:00:00';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
  * Parse 1 giá trị cột JSON từ mysql2 — KHÁC parseJson ở chỗ KHÔNG
  * bao giờ parse lại một chuỗi đã là giá trị thật.
  *
