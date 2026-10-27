@@ -659,6 +659,17 @@ export class MockClassRepository implements ClassRepository {
   async archiveClass(id: string): Promise<void> {
     await this.updateClass(id, { status: 'archived' });
   }
+
+  async deleteClass(id: string): Promise<{ deletedStudents: number }> {
+    const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
+    const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
+    const doomed = students.filter((s) => s.class_id === id);
+    writeStorage(STORAGE_KEYS.CLASSES, classes.filter((c) => c.id !== id));
+    writeStorage(STORAGE_KEYS.STUDENTS, students.filter((s) => s.class_id !== id));
+    syncEventBus.emit('class');
+    syncEventBus.emit('student');
+    return { deletedStudents: doomed.length };
+  }
 }
 
 export const classRepo = new MockClassRepository();
@@ -716,7 +727,7 @@ export class MockStudentRepository implements StudentRepository {
   async createStudentsBatch(
     dataList: CreateStudentInput[],
     teacherActorId: string
-  ): Promise<{ students: StudentAccount[]; credentials: StudentCredentialVoucher[] }> {
+  ): Promise<{ students: StudentAccount[]; credentials: StudentCredentialVoucher[]; errors: { name: string; message: string }[] }> {
     const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
     const classes = readStorage<ClassItem[]>(STORAGE_KEYS.CLASSES, SEED_CLASSES);
     const states = readStorage<Record<string, StudentState>>(STORAGE_KEYS.STATES, {});
@@ -802,6 +813,7 @@ export class MockStudentRepository implements StudentRepository {
     return {
       students: createdStudents,
       credentials,
+      errors: [],
     };
   }
 

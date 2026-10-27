@@ -199,7 +199,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
         setVoucherModalData({
           isOpen: true,
-          vouchers: [res.credential],
+          vouchers: withClassNames([res.credential]),
           title: 'Mật khẩu mới đã được đặt lại',
         });
         onRefreshData();
@@ -328,6 +328,14 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
       },
     });
   };
+
+  // Phiếu chỉ mang class_id; tên lớp lấy từ danh sách lớp đã tải (bản mock
+  // cũ làm vậy, bản API GĐ3 đánh rơi className nên phiếu in ra UUID lớp).
+  const withClassNames = (vouchers: StudentCredentialVoucher[]) =>
+    vouchers.map((v) => ({
+      ...v,
+      className: classes.find((c) => c.id === v.class_id)?.name || v.className,
+    }));
 
   // Tạo lớp mới
   const handleCreateClass = async (e: React.FormEvent) => {
@@ -922,6 +930,41 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
                         >
                           <Archive className="w-3.5 h-3.5" />
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: 'Xóa vĩnh viễn lớp học',
+                              message: (
+                                <span>
+                                  Bạn muốn xóa vĩnh viễn lớp{' '}
+                                  <strong className="text-[#2F3E6B]">{cls.name}</strong>?
+                                  {cls.studentCount > 0 && (
+                                    <>
+                                      {' '}Lớp đang có <strong>{cls.studentCount} học sinh</strong> — toàn bộ học sinh, tài khoản đăng nhập, điểm XP và bài nộp của lớp cũng bị xóa theo.
+                                    </>
+                                  )}
+                                  <p className="mt-2 text-xs text-rose-800 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                                    Xóa lớp không khôi phục được. Nếu chỉ muốn ẩn lớp khỏi danh sách đang mở mà vẫn giữ dữ liệu, hãy dùng Lưu trữ lớp thay vì Xóa.
+                                  </p>
+                                </span>
+                              ),
+                              confirmLabel: 'Xóa vĩnh viễn',
+                              variant: 'danger',
+                              action: async () => {
+                                await classService.deleteClass(cls.id);
+                                setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+                                onRefreshData();
+                              },
+                            });
+                          }}
+                          className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#DC2626] hover:bg-rose-50 transition-colors"
+                          title="Xóa vĩnh viễn lớp"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -948,7 +991,7 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
         onStudentsCreated={(vouchers) => {
           setVoucherModalData({
             isOpen: true,
-            vouchers,
+            vouchers: withClassNames(vouchers),
             title: 'Phiếu tài khoản học sinh vừa tạo',
           });
           onRefreshData();

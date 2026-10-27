@@ -153,6 +153,7 @@ export interface ClassRepository {
   createClass(data: Omit<ClassItem, 'id' | 'created_at' | 'updated_at' | 'studentCount' | 'active7DaysCount'>): Promise<ClassItem>;
   updateClass(id: string, data: Partial<ClassItem>): Promise<ClassItem>;
   archiveClass(id: string): Promise<void>;
+  deleteClass(id: string): Promise<{ deletedStudents: number }>;
 }
 
 // ========================
@@ -203,7 +204,7 @@ export interface StudentRepository {
   createStudentsBatch(
     data: CreateStudentInput[],
     teacherActorId: string
-  ): Promise<{ students: StudentAccount[]; credentials: StudentCredentialVoucher[] }>;
+  ): Promise<{ students: StudentAccount[]; credentials: StudentCredentialVoucher[]; errors: { name: string; message: string }[] }>;
   updateStudent(id: string, data: Partial<StudentAccount>, teacherActorId: string): Promise<StudentAccount>;
   deleteStudent(id: string, teacherActorId: string): Promise<void>; // Xóa mềm
   resetPassword(id: string, teacherActorId: string, customNewPassword?: string): Promise<{ credential: StudentCredentialVoucher }>;

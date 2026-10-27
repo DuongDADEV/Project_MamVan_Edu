@@ -224,6 +224,32 @@ classesRouter.patch('/classes/:id', async (req: Request, res: Response) => {
   }
 });
 
+classesRouter.delete('/classes/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    if (isSentinelId(id) || id === 'gv001') return httpErr(res, 400, 'BAD_INPUT');
+    const row = await loadOwnedClass(req, res, id);
+    if (!row) return;
+    // Xóa lớp kéo theo học sinh của lớp (FK students.class_id CASCADE xóa
+    // states/sessions/attempts/essays/targets/reward_requests) + dọn dòng
+    // users liên kết của từng em (kẻo thành users mồ côi như lỗi xóa HS
+    // đơn trước đây). assignments/essays trỏ lớp thì SET NULL theo FK.
+    // topics.class_ids (JSON) giữ id lớp cũ — chủ đề đó không còn hiện
+    // dưới lớp nào, cần gán lại lớp khác hoặc xóa riêng.
+    const stus = await query<any>('SELECT `id`, `auth_user_id` FROM `students` WHERE `class_id` = ?', [id]);
+    for (const s of stus) {
+      await execute('DELETE FROM `students` WHERE `id` = ?', [s.id]);
+      if (s.auth_user_id) {
+        await execute('DELETE FROM `users` WHERE `id` = ?', [s.auth_user_id]);
+      }
+    }
+    await execute('DELETE FROM `classes` WHERE `id` = ?', [id]);
+    return res.status(200).json({ ok: true, deletedStudents: stus.length });
+  } catch {
+    return httpErr(res, 500, 'SERVER_ERROR');
+  }
+});
+
 classesRouter.post('/classes/:id/archive', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);

@@ -261,8 +261,16 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     setIsSubmitting(true);
     try {
       const res = await studentService.createStudentsBatch(validInputs, teacherId);
-      onStudentsCreated(res.credentials);
-      onClose();
+      if (res.credentials.length > 0) {
+        onStudentsCreated(res.credentials);
+        onClose();
+      }
+      if (res.errors.length > 0) {
+        alert(
+          `Không tạo được ${res.errors.length} học sinh:\n` +
+            res.errors.map((e) => `- ${e.name}: ${e.message}`).join('\n')
+        );
+      }
     } catch (e: any) {
       alert('Đã xảy ra lỗi khi tạo tài khoản: ' + e.message);
     } finally {
@@ -303,8 +311,16 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
       }
 
       const res = await studentService.createStudentsBatch(inputs, teacherId);
-      onStudentsCreated(res.credentials);
-      onClose();
+      if (res.credentials.length > 0) {
+        onStudentsCreated(res.credentials);
+        onClose();
+      }
+      if (res.errors.length > 0) {
+        alert(
+          `Không tạo được ${res.errors.length} học sinh từ Excel:\n` +
+            res.errors.map((e) => `- ${e.name}: ${e.message}`).join('\n')
+        );
+      }
     } catch (e: any) {
       alert('Đã xảy ra lỗi khi tạo tài khoản từ Excel: ' + e.message);
     } finally {

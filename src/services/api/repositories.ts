@@ -455,6 +455,13 @@ export class ApiClassRepository implements ClassRepository {
     await apiPost(`/api/classes/${encodeURIComponent(id)}/archive`, {});
     syncEventBus.emit('class');
   }
+
+  async deleteClass(id: string): Promise<{ deletedStudents: number }> {
+    const json: any = await apiFetch(`/api/classes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    syncEventBus.emit('class');
+    syncEventBus.emit('student');
+    return { deletedStudents: Number(json?.deletedStudents || 0) };
+  }
 }
 
 export const apiClassRepo = new ApiClassRepository();
@@ -645,17 +652,24 @@ export class ApiStudentRepository implements StudentRepository {
   async createStudentsBatch(
     data: CreateStudentInput[],
     teacherActorId: string
-  ): Promise<{ students: StudentAccount[]; credentials: StudentCredentialVoucher[] }> {
-    // Giữ đúng hành vi cũ: từng học sinh một, KHÔNG atomic — học sinh tạo
-    // trước lỗi giữa chừng vẫn tồn tại, caller báo rõ từng dòng lỗi.
+  ): Promise<{ students: StudentAccount[]; credentials: StudentCredentialVoucher[]; errors: { name: string; message: string }[] }> {
+    // Từng học sinh một, KHÔNG atomic — học sinh tạo trước lỗi giữa chừng
+    // vẫn tồn tại. Lỗi từng dòng được thu lại vào errors (không ném giữa
+    // chừng làm mất phiếu của các em đã tạo xong) để caller báo rõ: phiếu
+    // cho em tạo được + danh sách em lỗi kèm lý do.
     const students: StudentAccount[] = [];
     const credentials: StudentCredentialVoucher[] = [];
+    const errors: { name: string; message: string }[] = [];
     for (const item of data) {
-      const res = await this.createStudent(item, teacherActorId);
-      students.push(res.student);
-      credentials.push(res.credential);
+      try {
+        const res = await this.createStudent(item, teacherActorId);
+        students.push(res.student);
+        credentials.push(res.credential);
+      } catch (e: any) {
+        errors.push({ name: item.name.trim(), message: e?.message || 'đã xảy ra lỗi' });
+      }
     }
-    return { students, credentials };
+    return { students, credentials, errors };
   }
 
   async updateStudent(

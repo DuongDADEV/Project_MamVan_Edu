@@ -1,3 +1,12 @@
+## 2026-10-27 (FIX PHIẾU UUID LỚP + TẠO LÔ BÁO LỖI TỪNG DÒNG + THÊM XÓA LỚP)
+
+- FIX phiếu hiện UUID lớp: phiếu tài khoản (tạo HS + đặt lại mật khẩu) hiện "Lớp: 0f0668..." vì voucher của bản API GĐ3 không có className (bản mock cũ có, lấy từ danh sách lớp) nên phiếu rơi về class_id. Nay màn Lớp & Học sinh gắn tên lớp từ danh sách lớp đã tải vào voucher trước khi mở phiếu (khôi phục đúng hành vi bản mock cũ, không thêm request) — phiếu sẽ in "Lớp: 7A1".
+- FIX tạo HS "báo trùng nhưng vẫn tạo được": tạo theo lô trước đây ném lỗi ở dòng lỗi đầu tiên, làm mất phiếu của các em đã tạo xong (hoặc gây cảm giác lỗi rồi vẫn tạo). Nay createStudentsBatch thu lỗi từng dòng vào errors: em tạo được vẫn ra phiếu, em lỗi được nêu tên + lý do trong alert (cả nhập tay lẫn Excel). Lưu ý: cảnh báo inline "Trùng tên đăng nhập" lúc gõ là cảnh báo trực tiếp (2 dòng trùng nhau hoặc trùng HS đã có) — lúc bấm tạo mà không còn trùng thật thì vẫn tạo bình thường.
+- KHÔNG PHẢI BUG — username toàn đuôi 10: chuẩn sinh username là tên + chữ đầu họ đệm + hậu tố 2 chữ số, lấy số nhỏ nhất chưa dùng từ 10 trở lên (danh sách trống thì em nào cũng bắt đầu ở 10; ví dụ anhnm27 trong ghi chú là khi 27 mới là số trống). Giữ nguyên, không đổi.
+- MỚI: xóa lớp thật. Card lớp có thêm nút thùng rác đỏ (cạnh Sửa / Lưu trữ): bấm → dialog xác nhận ghi rõ lớp có bao nhiêu HS và hậu quả (xóa luôn HS, tài khoản đăng nhập, XP, bài nộp của lớp; không khôi phục được; khác Lưu trữ là chỉ ẩn lớp). Server DELETE /classes/:id (phân quyền lớp của mình/admin): xóa HS của lớp (FK CASCADE xóa states/sessions/attempts/essays/targets/reward_requests) + dọn dòng users liên kết từng em; assignments/essays trỏ lớp SET NULL theo FK. Giới hạn đã biết: topics.class_ids (JSON) giữ id lớp cũ — chủ đề đó không còn hiện dưới lớp nào, cần gán lại lớp khác hoặc xóa riêng.
+- Kiểm chứng: tsc 0 lỗi. Deploy + verify API xóa lớp (lớp test + HS + tài khoản) sau commit.
+- Sơ đồ: không đổi luồng nghiệp vụ (xóa lớp tái sử dụng luồng xóa HS; phiếu chỉ sửa hiển thị) → không regen, chỉ ghi CHANGELOG.
+
 ## 2026-10-27 (THÊM XÓA HỌC SINH HÀNG LOẠT + DỌN TÀI KHOẢN MỒ CÔI KHI XÓA HS)
 
 - Mới: thanh công cụ chọn nhiều ở màn Lớp & Học sinh có thêm nút "Xóa đã chọn" (cạnh Chuyển lớp / Khóa / Mở khóa). Bấm → dialog xác nhận liệt kê tên các em + cảnh báo xóa vĩnh viễn → xóa từng em qua DELETE /students/:id có sẵn (không thêm endpoint mới), xóa xong bỏ chọn + tải lại danh sách; em nào xóa lỗi sẽ báo tên riêng, các em còn lại vẫn xóa bình thường.
