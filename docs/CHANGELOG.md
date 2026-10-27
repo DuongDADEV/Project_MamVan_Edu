@@ -1,3 +1,7 @@
+## 2026-10-27 (DEPLOY: ENTRY VPS CHO BUNDLE GĐ3)
+
+- Thêm `api/vps-entry.ts`: gộp app API (createApp) + phục vụ dist/ tĩnh + SPA fallback, chạy trên VPS thay cho `tsx api/server.ts` (VPS không có node_modules/devDeps). Bundle bằng esbuild thành server.cjs duy nhất; run.cjs nạp .env rồi require server.cjs (giữ đúng mẫu deploy cũ). 404 của /api nằm trong createApp nên fallback chỉ chạm đường không phải /api. Kiểm chứng local: bundle chạy được, / và /teacher trả 200, /api không token trả UNAUTHORIZED (fail-closed, đúng thiết kế).
+
 ## 2026-10-27 (GĐ3: API + AUTH CHUYỂN VỀ VPS-ONLY MYSQL — NHÁNH DEV, CHƯA CUTOVER)
 
 - Phạm vi: toàn bộ tầng dữ liệu/auth chuyển từ Supabase client sang API Express + MySQL trên VPS (kế hoạch KE-HOACH-CHUYEN-VE-VPS-MYSQL, khảo sát KHAO-SAT-GD3-API-AUTH). Supabase + Vercel VẪN là production tới GĐ5 — đợt này chỉ code trên nhánh dev, chưa cutover, chưa merge main, chưa động vào VPS hay Supabase.
