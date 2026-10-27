@@ -868,6 +868,14 @@ export class MockStudentRepository implements StudentRepository {
     syncEventBus.emit('class');
   }
 
+  async getStudentPassword(id: string): Promise<{ password: string | null; stored: boolean }> {
+    // Mock chỉ chạy local: mật khẩu mock vốn đã nằm ở password_hash.
+    const students = readStorage<StudentAccount[]>(STORAGE_KEYS.STUDENTS, SEED_STUDENTS);
+    const target = students.find((s) => s.id === id);
+    const pw = (target as any)?.password_hash ? String((target as any).password_hash) : null;
+    return { password: pw, stored: Boolean(pw) };
+  }
+
   async resetPassword(
     id: string,
     teacherActorId: string,

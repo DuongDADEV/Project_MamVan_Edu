@@ -721,6 +721,11 @@ export class ApiStudentRepository implements StudentRepository {
     syncEventBus.emit('class');
   }
 
+  async getStudentPassword(id: string): Promise<{ password: string | null; stored: boolean }> {
+    const json = await apiFetch(`/api/students/${encodeURIComponent(id)}/password`);
+    return { password: (json?.password ?? null) as string | null, stored: Boolean(json?.stored) };
+  }
+
   async resetPassword(
     id: string,
     teacherActorId: string,

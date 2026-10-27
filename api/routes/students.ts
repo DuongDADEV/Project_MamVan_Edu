@@ -9,6 +9,7 @@ import {
   revokeRefreshTokens,
 } from '../_lib/auth';
 import { isSentinelId, teacherClassIds, studentClassId } from '../_lib/scope';
+import { encryptPassword, decryptPassword } from '../_lib/passwordVault';
 
 /**
  * GET /students, GET /students/:id, POST /students, POST /students/batch,
@@ -131,6 +132,7 @@ function stripStudent(row: any): any {
   const out = { ...row };
   delete out.password_hash;
   delete out.encrypted_password;
+  delete out.password_enc;
   if (out.last_active_at instanceof Date) out.last_active_at = out.last_active_at.getTime();
   else if (typeof out.last_active_at === 'string') out.last_active_at = new Date(out.last_active_at).getTime();
   return out;
@@ -205,6 +207,12 @@ async function createOne(
     const rows = await db.query<any>('SELECT * FROM `students` WHERE `id` = ? LIMIT 1', [profileId]);
     return rows[0];
   });
+  // Két mật khẩu xem được (best-effort, sau transaction chính): chưa có
+  // khóa/cột thì bỏ qua, tài khoản vẫn dùng được, mắt sẽ báo "chưa lưu".
+  try {
+    const enc = encryptPassword(initialPassword);
+    if (enc) await execute('UPDATE `students` SET `password_enc` = ? WHERE `id` = ?', [enc, profileId]);
+  } catch { /* két chưa sẵn sàng */ }
   if (!profile) throw Object.assign(new Error('CREATE_PROFILE_FAILED'), { code: 'CREATE_PROFILE_FAILED', status: 400 });
   const student = stripStudent(profile);
   return {
@@ -336,6 +344,27 @@ studentsRouter.get('/students/:id', async (req: Request, res: Response) => {
   }
 });
 
+studentsRouter.get('/students/:id/password', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    if (isSentinelId(id) || id === 'gv001') return httpErr(res, 400, 'BAD_INPUT');
+    const rows = await query<any>('SELECT * FROM `students` WHERE `id` = ? LIMIT 1', [id]);
+    if (!rows[0]) return httpErr(res, 404, 'NOT_FOUND');
+    if (!(await scopeCheckStudent(req, res, rows[0]))) return;
+    // Chỉ giáo viên/admin được xem — học sinh không tự xem mật khẩu mình
+    // qua endpoint này (mật khẩu chỉ cấp qua phiếu/giáo viên).
+    const { role } = callerInfo(req);
+    if (role !== 'teacher' && role !== 'admin') return httpErr(res, 403, 'FORBIDDEN');
+    const enc = rows[0].password_enc ? String(rows[0].password_enc) : '';
+    if (!enc) return res.status(200).json({ stored: false, password: null });
+    const plain = decryptPassword(enc);
+    if (plain === null) return res.status(200).json({ stored: false, password: null });
+    return res.status(200).json({ stored: true, password: plain });
+  } catch {
+    return httpErr(res, 500, 'SERVER_ERROR');
+  }
+});
+
 studentsRouter.post('/students', async (req: Request, res: Response) => {
   try {
     const { role } = callerInfo(req);
@@ -458,6 +487,13 @@ studentsRouter.patch('/students/:id', async (req: Request, res: Response) => {
         const r = await db.query<any>('SELECT * FROM `students` WHERE `id` = ? LIMIT 1', [id]);
         return r[0];
       });
+      // Đồng bộ két xem được khi đổi mật khẩu qua PATCH (best-effort).
+      if (newPassword) {
+        try {
+          const enc = encryptPassword(newPassword);
+          if (enc) await execute('UPDATE `students` SET `password_enc` = ? WHERE `id` = ?', [enc, id]);
+        } catch { /* két chưa sẵn sàng */ }
+      }
       if (newPassword && current.auth_user_id) {
         try {
           await revokeRefreshTokens(String(current.auth_user_id));

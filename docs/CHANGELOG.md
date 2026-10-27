@@ -1,3 +1,14 @@
+## 2026-10-27 (MẮT XEM MẬT KHẨU THẬT — KÉT MÃ HÓA, THEO QUYẾT ĐỊNH CỦA CHỦ HỆ THỐNG)
+
+- Quyết định: lưu mật khẩu dạng mã hóa giải được để giáo viên bấm mắt là xem được mật khẩu hiện tại của học sinh lớp mình. Đánh đổi đã nói rõ với chủ hệ thống: lộ DB + khóa két là lộ mật khẩu.
+- Server (api/_lib/passwordVault.ts mới): AES-256-GCM, khóa PASSWORD_VIEW_KEY (64 hex = 32 byte) chỉ nằm trong env máy chủ, sinh trên VPS, không commit, không in. IV ngẫu nhiên mỗi lần mã hóa; sai khóa/hỏng dữ liệu thì giải trả null, không ném lỗi.
+- Ghi két (best-effort, sau transaction chính — DB chưa có cột/khóa thì bỏ qua, tạo/reset/đăng nhập không bao giờ vì két mà hỏng): tạo học sinh qua cả 2 route (POST /students, POST /admin/users), reset qua /admin/users, đổi mật khẩu qua PATCH /students/:id. stripStudent/stripProfile đã xóa thêm password_enc để két không rò qua list/detail.
+- Endpoint mới GET /students/:id/password: scopeCheckStudent như các route học sinh khác, rồi CHỈ giáo viên/admin được xem (học sinh không tự xem mật khẩu mình qua endpoint này). Trả {stored, password}; em tạo trước tính năng (password_enc NULL) thì stored:false.
+- Client: mắt ở cột Mật khẩu giờ gọi endpoint và hiện mật khẩu thật tại chỗ, bấm lại là ẩn; em chưa có dữ liệu két thì báo đặt lại 1 lần để nạp két (không tự đặt lại im lặng). Nút đặt lại ở tác vụ dòng vẫn giữ nguyên. Mock implement từ password_hash mock (local only).
+- VPS: cột students.password_enc (TEXT NULL) + khóa trong C:\mamvan\app\.env. CHƯA CÓ Ở SUPABASE/VERCEL: khi cắt sang prod (GĐ5) phải thêm cột này vào schema đích và cấp khóa cho máy chủ prod, nếu không mắt chỉ báo "chưa lưu".
+- Chưa làm (ghi nợ): ghi audit log cho lượt xem mật khẩu (server hiện chưa có pattern audit insert) — nên thêm trước GĐ5.
+- Kiểm chứng: tsc 0 lỗi. Deploy server.cjs + dist, verify file VPS + kiểm thử live (tạo HS test → xem đúng mật khẩu, giáo viên khác 403, HS cũ stored:false, xóa HS test).
+
 ## 2026-10-27 (MẮT ẨN/HIỆN MẬT KHẨU HỌC SINH)
 
 - Nói rõ trước: cột Mật khẩu ở bảng học sinh trước giờ chỉ là dấu chấm TĨNH, không phải mật khẩu thật bị che — mật khẩu thật lưu dạng mã hóa một chiều (bcrypt) nên không có cách nào mở ra xem lại mật khẩu cũ. Mắt giả mở chấm thành chấm là làm cảnh nên không làm.

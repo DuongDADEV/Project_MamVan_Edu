@@ -9,6 +9,7 @@ import {
   revokeRefreshTokens,
 } from '../_lib/auth';
 import { teacherClassIds } from '../_lib/scope';
+import { encryptPassword } from '../_lib/passwordVault';
 
 /**
  * POST /admin/users — viết lại ruột api/admin/users.ts sang MySQL + bcrypt,
@@ -91,6 +92,7 @@ function stripProfile(row: any): any {
   const out = { ...row };
   delete out.password_hash;
   delete out.encrypted_password;
+  delete out.password_enc;
   return out;
 }
 
@@ -216,6 +218,13 @@ adminUsersRouter.post('/admin/users', async (req: Request, res: Response) => {
           const rows = await db.query<any>(`SELECT * FROM \`${table}\` WHERE \`id\` = ? LIMIT 1`, [profileId]);
           return rows[0];
         });
+        // Két mật khẩu xem được cho học sinh (best-effort, sau transaction).
+        if (role === 'student') {
+          try {
+            const enc = encryptPassword(password);
+            if (enc) await query('UPDATE `students` SET `password_enc` = ? WHERE `id` = ?', [enc, profileId]);
+          } catch { /* két chưa sẵn sàng */ }
+        }
         if (!profile) {
           return httpErr(res, 400, 'CREATE_PROFILE_FAILED');
         }
@@ -289,6 +298,13 @@ adminUsersRouter.post('/admin/users', async (req: Request, res: Response) => {
       }
       if (!result) {
         return httpErr(res, 400, 'RESET_FAILED');
+      }
+      // Đồng bộ két xem được khi reset mật khẩu học sinh (best-effort).
+      if (targetTable === 'students' && targetProfileId) {
+        try {
+          const enc = encryptPassword(newPassword);
+          if (enc) await query('UPDATE `students` SET `password_enc` = ? WHERE `id` = ?', [enc, targetProfileId]);
+        } catch { /* két chưa sẵn sàng */ }
       }
       // Thu hồi refresh token của user đó (khảo sát §3.5.2).
       try {

@@ -13,6 +13,7 @@ import {
   MoreVertical,
   Edit2,
   Eye,
+  EyeOff,
   ArrowRightLeft,
   Search,
   CheckCircle2,
@@ -150,6 +151,36 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
 
   // Đặt lại mật khẩu: Thầy/Cô TỰ ĐẶT theo ý mình, hoặc để trống để hệ thống
   // sinh ngẫu nhiên — phiếu tài khoản hiện 1 lần sau khi đặt
+  // Mật khẩu thật đã lưu mã hóa, bấm mắt là xem (chỉ giáo viên lớp mình/
+  // admin — server kiểm tra scope). Em chưa có dữ liệu két (tạo trước khi
+  // bật tính năng) thì báo đặt lại 1 lần để nạp két.
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
+  const [revealingId, setRevealingId] = useState<string | null>(null);
+  const handleToggleRevealPassword = async (studentId: string) => {
+    if (revealedPasswords[studentId]) {
+      setRevealedPasswords((prev) => {
+        const next = { ...prev };
+        delete next[studentId];
+        return next;
+      });
+      return;
+    }
+    if (revealingId) return;
+    setRevealingId(studentId);
+    try {
+      const res = await studentService.getStudentPassword(studentId);
+      if (!res.stored || !res.password) {
+        alert('Chưa lưu mật khẩu xem được cho em này (em tạo trước khi bật tính năng). Đặt lại mật khẩu 1 lần là xem được.');
+        return;
+      }
+      setRevealedPasswords((prev) => ({ ...prev, [studentId]: res.password as string }));
+    } catch (e: any) {
+      alert('Không xem được mật khẩu: ' + (e?.message || 'đã xảy ra lỗi'));
+    } finally {
+      setRevealingId(null);
+    }
+  };
+
   const handleResetPassword = async (studentId: string) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
@@ -460,27 +491,30 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
     {
       key: 'password',
       header: 'Mật khẩu',
-      // Mật khẩu thật đã mã hóa một chiều nên không mở ra xem lại được:
-      // dấu chấm chỉ là chỗ giữ. Bấm mắt là mở hộp đặt lại mật khẩu cho
-      // em đó, xác nhận xong phiếu sẽ hiện mật khẩu mới 1 lần.
-      render: (item) => (
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className="font-mono text-xs text-[#9CA3AF]"
-            title="Mật khẩu đã mã hóa, không xem lại được"
-          >
-            ••••••••
+      // Mắt xem mật khẩu thật đã lưu mã hóa. Em chưa có dữ liệu két thì
+      // báo đặt lại 1 lần để nạp két (không tự đặt lại im lặng).
+      render: (item) => {
+        const revealed = revealedPasswords[item.id];
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className={`font-mono text-xs ${revealed ? 'font-semibold text-[#2F3E6B]' : 'text-[#9CA3AF]'}`}
+              title={revealed ? 'Mật khẩu thật (đã lưu mã hóa)' : 'Bấm mắt để xem mật khẩu thật'}
+            >
+              {revealed ?? '••••••••'}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleToggleRevealPassword(item.id)}
+              disabled={revealingId === item.id}
+              className="p-1 rounded-md text-[#9CA3AF] hover:text-[#2F3E6B] hover:bg-[#FAF5EB] transition-colors disabled:opacity-50"
+              title={revealed ? 'Ẩn mật khẩu' : 'Hiện mật khẩu thật'}
+            >
+              {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
           </span>
-          <button
-            type="button"
-            onClick={() => handleResetPassword(item.id)}
-            className="p-1 rounded-md text-[#9CA3AF] hover:text-[#2F3E6B] hover:bg-[#FAF5EB] transition-colors"
-            title="Mật khẩu đã mã hóa, không xem lại được — bấm để đặt lại và xem mật khẩu mới trên phiếu"
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
-        </span>
-      ),
+        );
+      },
     },
     {
       key: 'status',

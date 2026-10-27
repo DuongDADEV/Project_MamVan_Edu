@@ -208,6 +208,7 @@ export interface StudentRepository {
   updateStudent(id: string, data: Partial<StudentAccount>, teacherActorId: string): Promise<StudentAccount>;
   deleteStudent(id: string, teacherActorId: string): Promise<void>; // Xóa mềm
   resetPassword(id: string, teacherActorId: string, customNewPassword?: string): Promise<{ credential: StudentCredentialVoucher }>;
+  getStudentPassword(id: string): Promise<{ password: string | null; stored: boolean }>;
   toggleLock(id: string, isLocked: boolean, teacherActorId: string): Promise<StudentAccount>;
   changeClass(id: string, newClassId: string, teacherActorId: string): Promise<StudentAccount>;
 }
