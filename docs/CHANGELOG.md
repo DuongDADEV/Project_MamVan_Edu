@@ -1,3 +1,9 @@
+## 2026-10-28 (CHỌN SỐ HỌC SINH MỖI TRANG Ở BẢNG)
+
+- Theo yêu cầu: footer bảng (cạnh dòng "Hiển thị X–Y trong tổng số Z kết quả") thêm ô chọn "Mỗi trang" với đúng các mức 5, 10, 15, 20, 25, 30, 35, 40, 45, 50. Đổi mức là về trang 1 (tránh rơi vào trang trống).
+- Làm ở DataTable dùng chung nên mọi bảng dùng component này đều có ô chọn (mặc định ban đầu vẫn 10 như cũ, không caller nào truyền pageSize riêng nên không xung đột prop).
+- Kiểm chứng: tsc 0 lỗi. Deploy dist-only (server không đổi, script viết mới + assert tên file trước khi chạy) + verify file trên VPS.
+
 ## 2026-10-27 (MẮT XEM MẬT KHẨU THẬT — KÉT MÃ HÓA, THEO QUYẾT ĐỊNH CỦA CHỦ HỆ THỐNG)
 
 - Quyết định: lưu mật khẩu dạng mã hóa giải được để giáo viên bấm mắt là xem được mật khẩu hiện tại của học sinh lớp mình. Đánh đổi đã nói rõ với chủ hệ thống: lộ DB + khóa két là lộ mật khẩu.

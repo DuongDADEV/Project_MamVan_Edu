@@ -38,8 +38,11 @@ interface DataTableProps<T> {
   headerActions?: React.ReactNode;
   initialSortKey?: string;
   initialSortDir?: 'asc' | 'desc';
+  // pageSize chỉ là giá trị khởi đầu; người dùng đổi bằng ô chọn ở footer.
   pageSize?: number;
 }
+
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 
 export function DataTable<T extends Record<string, any>>({
   data,
@@ -59,12 +62,19 @@ export function DataTable<T extends Record<string, any>>({
   headerActions,
   initialSortKey,
   initialSortDir = 'asc',
-  pageSize = 10,
+  pageSize: initialPageSize = 10,
 }: DataTableProps<T>) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<string | undefined>(initialSortKey);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialSortDir);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
+
+  // Đổi số dòng/trang là về trang 1 (tránh rơi vào trang trống).
+  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPageSize(Number(e.target.value));
+    setCurrentPage(1);
+  };
 
   // Lọc tìm kiếm
   const filteredData = useMemo(() => {
@@ -293,14 +303,31 @@ export function DataTable<T extends Record<string, any>>({
       {/* Phân trang */}
       {sortedData.length > 0 && (
         <div className="p-4 border-t border-[#E6DCC8]/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B7280]">
-          <div>
-            Hiển thị{' '}
-            <span className="font-semibold text-[#2F3E6B]">
-              {Math.min(sortedData.length, (safePage - 1) * pageSize + 1)}-
-              {Math.min(sortedData.length, safePage * pageSize)}
-            </span>{' '}
-            trong tổng số{' '}
-            <span className="font-semibold text-[#2F3E6B]">{sortedData.length}</span> kết quả
+          <div className="flex items-center gap-3 flex-wrap">
+            <span>
+              Hiển thị{' '}
+              <span className="font-semibold text-[#2F3E6B]">
+                {Math.min(sortedData.length, (safePage - 1) * pageSize + 1)}-
+                {Math.min(sortedData.length, safePage * pageSize)}
+              </span>{' '}
+              trong tổng số{' '}
+              <span className="font-semibold text-[#2F3E6B]">{sortedData.length}</span> kết quả
+            </span>
+            <label className="inline-flex items-center gap-1.5">
+              <span>Mỗi trang</span>
+              <select
+                value={pageSize}
+                onChange={handlePageSizeChange}
+                aria-label="Số dòng mỗi trang"
+                className="px-2 py-1 rounded-lg border border-[#E6DCC8] bg-white text-[#2F3E6B] font-semibold outline-none cursor-pointer focus:border-[#2F3E6B]"
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="flex items-center gap-1.5">
