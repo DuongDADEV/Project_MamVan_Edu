@@ -1,3 +1,12 @@
+## 2026-10-27 (SỬA LỖI MÀN HÌNH GIÁO VIÊN SẬP VỚI CLASS_REQUIRED)
+
+- Triệu chứng thật từ người dùng (ảnh chụp màn hình): mở https://mamvan.pro.vn/teacher → màn hình "Không thể tải dữ liệu giáo viên — Đã xảy ra lỗi: CLASS_REQUIRED".
+- Nguyên nhân gốc: TeacherPortal nạp dữ liệu bằng Promise.all, trong đó có `studentService.getStudents()` KHÔNG kèm class_id (cổng nạp toàn bộ học sinh của giáo viên rồi lọc theo lớp ở client, mặc định 'all'). Route GET /students nhánh teacher bắt buộc class_id → 400 CLASS_REQUIRED → cả Promise.all reject → màn hình lỗi. Cùng một cuộc gọi trần còn có ở AssignmentEditor (chọn học sinh khi tạo bài tập) nên cũng sẽ sập tương tự.
+- Sửa (chỉ API, không đụng client): nhánh teacher của GET /students khi không kèm class_id sẽ trả học sinh của TẤT CẢ lớp mình (union qua teacherClassIds, cùng kiểu route /student-states đã làm từ trước), kèm lọc status như cũ; kèm class_id thì giữ nguyên luật cũ (lớp lạ → 403 CLASS_NOT_OWNED). Tính chất phạm vi không đổi: giáo viên vẫn chỉ thấy học sinh lớp mình, không thấy lớp người khác — chỉ bỏ yêu cầu "phải nêu tên một lớp" vì màn hình giáo viên cần toàn bộ học sinh của mình.
+- Hệ quả với ghi nhận GĐ4: kết quả scope "teacher list KHÔNG class_id → 400 CLASS_REQUIRED (by design)" nay được nới lỏng có chủ đích vì lý do trên; các kiểm chứng còn lại của ma trận scope (lớp lạ 403, HS chỉ thấy mình, sentinel 400) không đổi.
+- Kiểm chứng: tsc 0 lỗi. Chưa deploy — deploy cùng đợt với verify API (gv001 không class_id → 200 đúng 10 HS 7A4; toangv → 200 đúng 4 HS 7A1; gv001 kèm 7A1 → 403; admin → 19) + verify trình duyệt /teacher load được với gv001.
+- Sơ đồ: không đổi luồng nghiệp vụ (phạm vi giáo viên vẫn "chỉ dữ liệu lớp mình") → không regen, chỉ ghi CHANGELOG.
+
 ## 2026-10-27 (GĐ4 SMOKE: SỬA CRASH 502 Ở DASHBOARD DO mysql2 TRẢ DATE OBJECT CHO shiftDate)
 
 - Triệu chứng smoke trên VPS staging: GET /api/dashboard/overview và /api/dashboard/sessions → 502 xác định (3 lần thử đều 502); /api/dashboard/assignments-progress 502 một lần rồi 200 ở các lần sau (502 đầu là hiệu ứng dây chuyền: node crash vì sessions, NSSM đang khởi động lại đúng lúc gọi tới); /api/dashboard/attempts luôn 200.

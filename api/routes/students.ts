@@ -271,17 +271,33 @@ studentsRouter.get('/students', async (req: Request, res: Response) => {
         params
       );
     } else if (role === 'teacher') {
-      // Bắt buộc class_id thuộc lớp mình — không cho list toàn cục.
-      if (!qClassId) return httpErr(res, 400, 'CLASS_REQUIRED');
+      // Không kèm class_id: trả học sinh của TẤT CẢ lớp mình (vẫn
+      // chặn tuyệt đối lớp của giáo viên khác — xem CLASS_NOT_OWNED
+      // bên dưới). Màn hình giáo viên (TeacherPortal, AssignmentEditor)
+      // nạp toàn bộ học sinh của mình không kèm lớp nên bắt buộc
+      // class_id ở đây làm cả màn hình sập với CLASS_REQUIRED; route
+      // /student-states đã làm đúng kiểu union này từ trước.
       const own = await teacherOwnClassIds(req);
-      if (!own.includes(qClassId)) return httpErr(res, 403, 'CLASS_NOT_OWNED');
-      const where: string[] = ['`class_id` = ?'];
-      const params: any[] = [qClassId];
-      if (status && status !== 'all') {
-        where.push('`status` = ?');
-        params.push(status);
+      if (qClassId) {
+        if (!own.includes(qClassId)) return httpErr(res, 403, 'CLASS_NOT_OWNED');
+        const where: string[] = ['`class_id` = ?'];
+        const params: any[] = [qClassId];
+        if (status && status !== 'all') {
+          where.push('`status` = ?');
+          params.push(status);
+        }
+        rows = await query<any>(`SELECT * FROM \`students\` WHERE ${where.join(' AND ')} ORDER BY \`name\` ASC`, params);
+      } else if (!own.length) {
+        rows = [];
+      } else {
+        const where: string[] = [`\`class_id\` IN (${own.map(() => '?').join(',')})`];
+        const params: any[] = [...own];
+        if (status && status !== 'all') {
+          where.push('`status` = ?');
+          params.push(status);
+        }
+        rows = await query<any>(`SELECT * FROM \`students\` WHERE ${where.join(' AND ')} ORDER BY \`name\` ASC`, params);
       }
-      rows = await query<any>(`SELECT * FROM \`students\` WHERE ${where.join(' AND ')} ORDER BY \`name\` ASC`, params);
     } else if (role === 'student') {
       const me = await callerStudentProfile(req);
       rows = me ? [me] : [];
