@@ -72,6 +72,28 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
         ? defaultClassId
         : selectableClasses[0].id;
 
+  // Danh sách học sinh TƯƠI lấy từ máy chủ lúc mở modal — prop
+  // existingStudents của cổng có thể lỗi thời (mở modal từ lâu, tạo/xóa ở
+  // tab khác) nên tự sinh username mà chỉ dựa vào prop sẽ sinh ra tên đã
+  // bị trùng thật. Lấy tươi thì lúc tự sinh luôn tránh được tên đã có.
+  const [liveStudents, setLiveStudents] = useState<StudentAccount[] | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    studentService
+      .getStudents()
+      .then((list) => {
+        if (!cancelled) setLiveStudents(list);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveStudents(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+  const baselineStudents = liveStudents ?? existingStudents;
+
   const [manualRows, setManualRows] = useState<ManualRow[]>([
     {
       id: '1',
@@ -128,7 +150,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
         if (field === 'name') {
           if (value.trim()) {
             const allOtherUsernames = [
-              ...existingStudents.map((s) => s.username.toLowerCase()),
+              ...baselineStudents.map((s) => s.username.toLowerCase()),
               ...prev
                 .filter((o) => o.id !== id)
                 .map((o) => (o.custom_username !== undefined ? o.custom_username : (o.auto_username || '')).toLowerCase())
@@ -157,7 +179,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     if (!username) return false;
     const u = username.toLowerCase().trim();
     const baseline =
-      frozenUsernamesRef.current ?? existingStudents.map((s) => s.username.toLowerCase());
+      frozenUsernamesRef.current ?? baselineStudents.map((s) => s.username.toLowerCase());
     const inDb = baseline.some((b) => b === u);
     const inOtherRows = manualRows.some((r) => {
       if (r.id === rowId) return false;
@@ -182,7 +204,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     try {
       const classNames = selectableClasses.map((c) => c.name);
       const defaultClsName = selectableClasses.find((c) => c.id === activeClassId)?.name || '';
-      const result = await parseUploadedExcel(file, existingStudents, classNames, defaultClsName);
+      const result = await parseUploadedExcel(file, baselineStudents, classNames, defaultClsName);
       setExcelRows(result.rows);
       setExcelSummary({ validCount: result.validCount, errorCount: result.errorCount });
     } catch (e: any) {
@@ -221,7 +243,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     if (!row.className.trim()) errors.push('Thiếu lớp học');
     const code = row.studentCode?.trim().toLowerCase();
     if (code) {
-      const dupExisting = existingStudents.some(
+      const dupExisting = baselineStudents.some(
         (st) => st.student_code?.trim().toLowerCase() === code
       );
       const dupInBatch = updated.some(
@@ -288,7 +310,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     // chạy, danh sách học sinh sẽ tự tải lại sau mỗi em tạo xong — không
     // đóng băng thì các em vừa tạo xong sẽ tự bị gắn cờ trùng (cảnh báo
     // giả). Hết lô thì mở lại để lần tạo sau vẫn kiểm tra trên dữ liệu mới.
-    frozenUsernamesRef.current = existingStudents.map((s) => s.username.toLowerCase());
+    frozenUsernamesRef.current = baselineStudents.map((s) => s.username.toLowerCase());
     setIsSubmitting(true);
     try {
       const res = await studentService.createStudentsBatch(validInputs, teacherId);

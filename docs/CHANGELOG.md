@@ -1,3 +1,10 @@
+## 2026-10-27 (TỰ SINH USERNAME DỰA TRÊN DANH SÁCH TƯƠI TỪ MÁY CHỦ)
+
+- Theo yêu cầu: lúc tự sinh username phải lấy cái chưa trùng — không được dựa vào danh sách cũ. Trước đây modal sinh tên + kiểm tra trùng dựa vào prop existingStudents của cổng, prop này có thể lỗi thời (mở modal từ lâu, tạo/xóa ở tab khác) nên có thể sinh ra tên đã bị trùng thật.
+- Fix (AddStudentModal): lúc mở modal, tự gọi studentService.getStudents() lấy danh sách tươi từ máy chủ làm baseline cho mọi chỗ: sinh auto_username lúc gõ tên, cảnh báo trùng inline, kiểm tra lúc bấm tạo, validate file Excel, kiểm tra trùng mã HS. Lấy tươi lỗi thì rơi về prop cũ (không chặn modal). Cùng với fix đóng băng baseline lúc tạo lô ở đợt trước, giờ: sinh tránh tên đã có (dữ liệu tươi) + đang tạo không tự gắn cờ trùng nữa.
+- Giới hạn còn lại, nói rõ: máy chủ chặn trùng username TOÀN CỤC (cả giáo viên khác) nhưng tài khoản giáo viên không liệt kê được học sinh của giáo viên khác, nên trùng khác-giáo-viên vẫn chỉ được máy chủ đổi tên lúc tạo (retry) và phiếu in tên cuối cùng — client không kiểm tra trước được trường hợp này.
+- Kiểm chứng: tsc 0 lỗi. Deploy dist-only (server không đổi, script viết mới + assert tên file trước khi chạy theo bài học đợt fix4) + verify file trên VPS.
+
 ## 2026-10-27 (FIX CẢNH BÁO "TRÙNG TÊN ĐĂNG NHẬP" GIẢ GIỮA LÚC TẠO LÔ)
 
 - Nguyên nhân đã xác minh đúng chuỗi sự kiện: tạo theo lô chạy tuần tự, mỗi em tạo xong service phát event 'student' → cổng tự tải lại danh sách học sinh nền → modal đang mở thấy em vừa tạo xong nằm trong danh sách → gắn cờ đỏ "Trùng tên đăng nhập" cho chính em đó. Ảnh 23:06 là bằng chứng: 3 dòng đầu (đã tạo xong, nút còn "Đang tạo tài khoản...") đỏ, 3 dòng chưa tạo chưa đỏ. Cảnh báo này không chặn lô đang chạy nên phiếu vẫn ra đủ — đúng hiện tượng "báo trùng xong vẫn tạo được" từ đầu.
