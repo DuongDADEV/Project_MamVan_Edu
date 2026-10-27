@@ -1,3 +1,10 @@
+## 2026-10-27 (GĐ4 SMOKE: SỬA LỖI PARSE LẠI JSON ĐÃ ĐƯỢC MYSQL2 PARSE — HEALTH BÁO DB LỖI)
+
+- Triệu chứng smoke trên VPS staging: đăng nhập gv001 OK, nhưng GET /api/health trả db.ok=false với lỗi "Unexpected token f in JSON at position 2" và aiSettingsLoaded=false, dù SELECT 1 và đăng nhập đều chạy được.
+- Nguyên nhân: cột ai_settings.value là JSON nên mysql2 đã tự parse — chuỗi JSON "..." về dạng chuỗi TRẦN (mất ngoặc kép). Code cũ ở 5 chỗ làm `typeof v === 'string' ? JSON.parse(v) : v` nên parse lại chuỗi trần '54f4...' (workersai_account_id) và throw. Ở health.ts lỗi lộ ra ngoài (db.ok=false); ở /api/ai/chat loadSettings() và ai-test.ts try/catch nuốt lỗi nên toàn bộ cấu hình đã lưu (thứ tự chuỗi, models) bị mất lặng, rơi về mặc định (gemini mặc định là gemini-3.8-flash); ở aiKeys.ts/ai-settings.ts loadSetting* thì workersai_account_id rơi về null và phải dựa vào env CLOUDFLARE_ACCOUNT_ID.
+- Sửa: thêm helper `parseDbJson` vào api/_lib/mysql.ts (chuỗi bắt đầu bằng {, [ hoặc " thì thử parse, lỗi trả nguyên chuỗi; chuỗi khác trả nguyên; object/number/boolean trả nguyên; Buffer thử parse UTF-8; null trả null — xử lý được cả cột JSON lẫn cột TEXT) và dùng ở cả 5 chỗ: health.ts, ai/chat.ts, ai-test.ts, aiKeys.ts, ai-settings.ts. Không đụng parseJson cũ (đang dùng cho các cột mảng/object ở xp/_shared, vẫn đúng).
+- Kiểm chứng: tsc 0 lỗi; test parseDbJson 7/7 (object driver, chuỗi trần account id, chuỗi có ngoặc kép TEXT, text object, null, number, text hỏng bắt đầu bằng {). Chưa deploy lại lên VPS (WinRM kẹt lúc áp) — deploy kèm đợt sau, chỉ cần thay server.cjs + restart service (dist/ không đổi).
+
 ## 2026-10-27 (DEPLOY: ENTRY VPS CHO BUNDLE GĐ3)
 
 - Thêm `api/vps-entry.ts`: gộp app API (createApp) + phục vụ dist/ tĩnh + SPA fallback, chạy trên VPS thay cho `tsx api/server.ts` (VPS không có node_modules/devDeps). Bundle bằng esbuild thành server.cjs duy nhất; run.cjs nạp .env rồi require server.cjs (giữ đúng mẫu deploy cũ). 404 của /api nằm trong createApp nên fallback chỉ chạm đường không phải /api. Kiểm chứng local: bundle chạy được, / và /teacher trả 200, /api không token trả UNAUTHORIZED (fail-closed, đúng thiết kế).

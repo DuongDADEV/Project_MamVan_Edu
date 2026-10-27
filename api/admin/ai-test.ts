@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../_lib/mysql';
+import { query, parseDbJson } from '../_lib/mysql';
 import { requireAuth, requireRole } from '../_lib/auth';
 import { testLeg, DEFAULT_MODELS } from '../_lib/ai';
 import { resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys';
@@ -32,7 +32,7 @@ router.post('/', async (_req, res) => {
   try {
     const rows = await query<any>('SELECT `key`, `value` FROM `ai_settings`');
     for (const row of rows) {
-      const v = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+      const v = parseDbJson(row.value);
       if (row.key === 'models' && v && typeof v === 'object') {
         for (const leg of LEGS) {
           if (typeof (v as any)[leg] === 'string' && (v as any)[leg]) {

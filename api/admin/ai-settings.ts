@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query, execute } from '../_lib/mysql';
+import { query, execute, parseDbJson } from '../_lib/mysql';
 import { requireAuth, requireRole } from '../_lib/auth';
 import { DEFAULT_MODELS } from '../_lib/ai';
 import { keysStatus, loadStoredKeys, resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys';
@@ -85,7 +85,7 @@ async function loadSettingValue(key: string): Promise<any | null> {
     const rows = await query<any>('SELECT `value` FROM `ai_settings` WHERE `key` = ? LIMIT 1', [key]);
     if (!rows[0]) return null;
     const v = rows[0].value;
-    return typeof v === 'string' ? JSON.parse(v) : v;
+    return parseDbJson(v);
   } catch {
     return null;
   }

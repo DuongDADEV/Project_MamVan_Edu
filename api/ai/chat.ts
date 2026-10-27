@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query, execute } from '../_lib/mysql';
+import { query, execute, parseDbJson } from '../_lib/mysql';
 import { requireAuth, requireRole } from '../_lib/auth';
 import type { AuthedRequest } from '../_lib/auth';
 import { tryChain, allLegsBadRequest, DEFAULT_MODELS } from '../_lib/ai';
@@ -43,7 +43,7 @@ async function loadSettings(): Promise<AiSettings> {
     const rows = await query<any>('SELECT `key`, `value` FROM `ai_settings`');
     const out: AiSettings = {};
     for (const row of rows) {
-      const v = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+      const v = parseDbJson(row.value);
       if (row.key === 'ai_chain') out.order = (v as any)?.order;
       if (row.key === 'ai_enabled') out.enabled = v as any;
       if (row.key === 'models') out.models = v as any;

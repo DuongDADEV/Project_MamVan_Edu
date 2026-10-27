@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from './_lib/mysql';
+import { query, parseDbJson } from './_lib/mysql';
 import { DEFAULT_MODELS } from './_lib/ai';
 import { keysStatus } from './_lib/aiKeys';
 
@@ -39,7 +39,7 @@ router.get('/', async (_req, res) => {
       const rows = await query<any>('SELECT `key`, `value` FROM `ai_settings`');
       aiSettingsLoaded = true;
       for (const row of rows) {
-        const v = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+        const v = parseDbJson(row.value);
         if (row.key === 'models' && v && typeof v === 'object') {
           for (const leg of Object.keys(ai)) {
             if (typeof (v as any)[leg] === 'string' && (v as any)[leg]) ai[leg].model = (v as any)[leg];

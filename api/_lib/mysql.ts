@@ -142,3 +142,45 @@ export function toJson(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   return JSON.stringify(value);
 }
+
+/**
+ * Parse 1 giá trị cột JSON từ mysql2 — KHÁC parseJson ở chỗ KHÔNG
+ * bao giờ parse lại một chuỗi đã là giá trị thật.
+ *
+ * Bối cảnh (bug phát hiện ở smoke GĐ4, 2026-10-27): cột
+ * ai_settings.value là JSON nên mysql2 đã tự parse: object về dạng
+ * object, chuỗi JSON "..." về dạng chuỗi TRẦN (mất dấu ngoặc kép).
+ * Code cũ `typeof v === 'string' ? JSON.parse(v) : v` parse lại
+ * chuỗi trần '54f4...' (workersai_account_id) → throw "Unexpected
+ * token f in JSON at position 2": /api/health báo db.ok=false, còn
+ * loadSettings() của /api/ai/chat mất toàn bộ cấu hình đã lưu (rơi
+ * về mặc định) vì try/catch nuốt lỗi. Ngược lại, chuỗi JSON trong
+ * cột TEXT thì driver trả nguyên văn bản (kèm ngoặc kép) nên CẦN
+ * parse. Hàm này xử lý cả hai: chuỗi bắt đầu bằng {, [ hoặc "
+ * thì thử parse (lỗi → trả nguyên chuỗi); chuỗi khác trả nguyên;
+ * object/number/boolean trả nguyên; Buffer thử parse UTF-8 (lỗi →
+ * null); null → null.
+ */
+export function parseDbJson(value: unknown): any {
+  if (value === null || value === undefined) return null;
+  if (Buffer.isBuffer(value)) {
+    try {
+      return JSON.parse(value.toString('utf8'));
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === 'object') return value;
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (t.startsWith('{') || t.startsWith('[') || t.startsWith('"')) {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  return value;
+}

@@ -1,4 +1,4 @@
-import { query } from './mysql';
+import { query, parseDbJson } from './mysql';
 
 /**
  * Nguồn key cho chuỗi AI (GĐ3 — viết lại từ Supabase sang MySQL).
@@ -30,7 +30,7 @@ async function loadSetting(key: string): Promise<any | null> {
     );
     if (!rows[0]) return null;
     const v = rows[0].value;
-    return typeof v === 'string' ? JSON.parse(v) : v;
+    return parseDbJson(v);
   } catch {
     return null;
   }
