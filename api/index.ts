@@ -38,6 +38,26 @@ export function createApp(): express.Express {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  // LOG CHẨN ĐOÁN TẠM THỜI (28/10, vụ reload văng đăng nhập): chỉ ghi
+  // các request /api/auth/* và mọi response 401 — KHÔNG ghi token, mật
+  // khẩu hay nội dung body. Đủ để thấy trình duyệt sau reload có gọi
+  // /me không, có gửi Authorization không, và server trả gì. XÓA sau
+  // khi chẩn đoán xong.
+  app.use((req, res, next) => {
+    res.on('finish', () => {
+      try {
+        const p = req.path || '';
+        if (p.startsWith('/api/auth/') || res.statusCode === 401) {
+          const hasAuth = req.headers.authorization ? 'auth-present' : 'auth-absent';
+          console.log(`[authlog] ${req.method} ${p} -> ${res.statusCode} ${hasAuth}`);
+        }
+      } catch {
+        /* bỏ qua lỗi log */
+      }
+    });
+    next();
+  });
+
   // Thư mục file tĩnh (video đã dời về VPS ở GĐ2: /files/videos/...).
   mountFiles(app);
 

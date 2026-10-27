@@ -1,3 +1,7 @@
+## 2026-10-28 (LOG CHẨN ĐOÁN TẠM THỜI VỤ RELOAD VĂNG ĐĂNG NHẬP)
+
+- Thêm middleware log TẠM trong createApp: chỉ ghi request /api/auth/* và mọi response 401 (method + path + status + có/không có header Authorization). KHÔNG ghi token, mật khẩu hay body. Mục đích: thấy trình duyệt sau reload có gọi /me không và server trả gì — điểm mù cuối cùng sau khi đã loại trừ refresh, client timeout, bootstrap reset và bộ nhớ trình duyệt. XÓA middleware này ngay sau khi chẩn đoán xong.
+
 ## 2026-10-28 (RELOAD KHÔNG ĐƯỢC VĂNG ĐĂNG NHẬP — SỬA REFRESH TOKEN)
 
 - Triệu chứng: reload trang sau khi access token hết hạn (1 giờ) là văng ra màn đăng nhập, dù refresh token còn hạn 7 ngày.
