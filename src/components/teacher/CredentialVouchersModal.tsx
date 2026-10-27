@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Printer,
   Download,
   Copy,
   Check,
+  Eye,
+  EyeOff,
   AlertTriangle,
   Lock,
   FileSpreadsheet,
@@ -30,6 +32,20 @@ export const CredentialVouchersModal: React.FC<CredentialVouchersModalProps> = (
   subtitle = 'Tài khoản đã được tạo thành công!',
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Ẩn/hiện mật khẩu từng dòng trên màn hình (phần in phiếu vẫn hiện đủ
+  // để cắt phát cho học sinh). Mở phiếu mới là reset về hiện hết.
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    if (isOpen) setHiddenIds(new Set());
+  }, [isOpen]);
+  const toggleHidden = (id: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   if (!isOpen || vouchers.length === 0) return null;
 
@@ -154,8 +170,22 @@ export const CredentialVouchersModal: React.FC<CredentialVouchersModalProps> = (
                         {v.username}
                       </td>
                       <td className="py-2.5 px-3">
-                        <span className="font-mono font-bold px-2 py-1 rounded bg-[#FAF5EB] border border-[#E6DCC8] text-[#E2704A]">
-                          {v.initialPassword}
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="font-mono font-bold px-2 py-1 rounded bg-[#FAF5EB] border border-[#E6DCC8] text-[#E2704A]">
+                            {hiddenIds.has(v.id) ? '••••••••' : v.initialPassword}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleHidden(v.id)}
+                            className="p-1.5 rounded-lg border border-[#E6DCC8] bg-white text-[#4B5563] hover:text-[#2F3E6B] hover:border-[#2F3E6B] transition-all"
+                            title={hiddenIds.has(v.id) ? 'Hiện mật khẩu' : 'Ẩn mật khẩu'}
+                          >
+                            {hiddenIds.has(v.id) ? (
+                              <EyeOff className="w-3.5 h-3.5" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-right">

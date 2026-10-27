@@ -12,6 +12,7 @@ import {
   PlusCircle,
   MoreVertical,
   Edit2,
+  Eye,
   ArrowRightLeft,
   Search,
   CheckCircle2,
@@ -459,9 +460,25 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
     {
       key: 'password',
       header: 'Mật khẩu',
-      render: () => (
-        <span className="font-mono text-xs text-[#9CA3AF]" title="Mật khẩu được mã hóa an toàn">
-          ••••••••
+      // Mật khẩu thật đã mã hóa một chiều nên không mở ra xem lại được:
+      // dấu chấm chỉ là chỗ giữ. Bấm mắt là mở hộp đặt lại mật khẩu cho
+      // em đó, xác nhận xong phiếu sẽ hiện mật khẩu mới 1 lần.
+      render: (item) => (
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="font-mono text-xs text-[#9CA3AF]"
+            title="Mật khẩu đã mã hóa, không xem lại được"
+          >
+            ••••••••
+          </span>
+          <button
+            type="button"
+            onClick={() => handleResetPassword(item.id)}
+            className="p-1 rounded-md text-[#9CA3AF] hover:text-[#2F3E6B] hover:bg-[#FAF5EB] transition-colors"
+            title="Mật khẩu đã mã hóa, không xem lại được — bấm để đặt lại và xem mật khẩu mới trên phiếu"
+          >
+            <Eye className="w-3.5 h-3.5" />
+          </button>
         </span>
       ),
     },

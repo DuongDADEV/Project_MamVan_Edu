@@ -1,3 +1,11 @@
+## 2026-10-27 (MẮT ẨN/HIỆN MẬT KHẨU HỌC SINH)
+
+- Nói rõ trước: cột Mật khẩu ở bảng học sinh trước giờ chỉ là dấu chấm TĨNH, không phải mật khẩu thật bị che — mật khẩu thật lưu dạng mã hóa một chiều (bcrypt) nên không có cách nào mở ra xem lại mật khẩu cũ. Mắt giả mở chấm thành chấm là làm cảnh nên không làm.
+- Làm thật 2 chỗ:
+  1. Cột Mật khẩu ở bảng học sinh: thêm nút mắt từng dòng. Bấm mắt là mở hộp đặt lại mật khẩu cho em đó (hộp vốn đã nói rõ "sau khi đặt, hệ thống sẽ hiển thị phiếu tài khoản 1 lần"); xác nhận xong phiếu hiện mật khẩu mới — đó là cách duy nhất để "hiển thị" được mật khẩu của 1 em.
+  2. Trên phiếu tài khoản (nơi mật khẩu thật đang hiện): thêm mắt ẩn/hiện từng dòng — mặc định vẫn hiện như cũ để đọc/chép, bấm mắt là ẩn thành chấm khi cần che màn hình, bấm lại là hiện. Mở phiếu mới là reset về hiện hết. Phần in phiếu cắt phát vẫn in đủ để phát cho học sinh.
+- Kiểm chứng: tsc 0 lỗi. Deploy dist-only (server không đổi, script viết mới + assert tên file trước khi chạy) + verify file trên VPS.
+
 ## 2026-10-27 (MODAL THÊM HỌC SINH HIỆN LẠI DÒNG CŨ SAU KHI ĐÃ XÓA)
 
 - Nguyên nhân đã xác minh: modal thêm học sinh luôn được mount sẵn trong trang (đóng chỉ ẩn đi, không hủy component), và không có chỗ nào reset dòng sau khi tạo xong hay khi đóng. Lần tạo 23:06 gõ 6 dòng → tạo xong đóng modal → 6 dòng vẫn nằm trong state của component. Xóa hết học sinh (DB đã về 0, đã kiểm chứng) rồi mở lại modal → cùng component hiện lại 6 dòng cũ, nhìn như "học sinh cũ hiện ra". Không phải dữ liệu từ máy chủ, không phải nháp localStorage (modal không dùng localStorage).
