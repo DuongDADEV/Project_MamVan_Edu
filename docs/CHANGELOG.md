@@ -1,3 +1,9 @@
+## 2026-10-27 (FIX CẢNH BÁO "TRÙNG TÊN ĐĂNG NHẬP" GIẢ GIỮA LÚC TẠO LÔ)
+
+- Nguyên nhân đã xác minh đúng chuỗi sự kiện: tạo theo lô chạy tuần tự, mỗi em tạo xong service phát event 'student' → cổng tự tải lại danh sách học sinh nền → modal đang mở thấy em vừa tạo xong nằm trong danh sách → gắn cờ đỏ "Trùng tên đăng nhập" cho chính em đó. Ảnh 23:06 là bằng chứng: 3 dòng đầu (đã tạo xong, nút còn "Đang tạo tài khoản...") đỏ, 3 dòng chưa tạo chưa đỏ. Cảnh báo này không chặn lô đang chạy nên phiếu vẫn ra đủ — đúng hiện tượng "báo trùng xong vẫn tạo được" từ đầu.
+- Fix (AddStudentModal): đóng băng baseline kiểm tra trùng lúc bắt đầu tạo (danh sách trước lô), mở lại khi lô kết thúc. Trong lúc tạo, các em vừa tạo xong không tự bị gắn cờ nữa; lần tạo sau vẫn kiểm tra trên dữ liệu mới nhất. Check lúc bấm tạo vẫn dùng dữ liệu trực tiếp, không đổi.
+- Kiểm chứng: tsc 0 lỗi. Deploy dist-only (server không đổi) + verify bundle mới.
+
 ## 2026-10-27 (FIX MODAL TẠO HS KẸT ALERT "LỚP KHÔNG THUỘC TÀI KHOẢN NÀY")
 
 - Nguyên nhân đã xác minh bằng dữ liệu thật: lớp 7A1 cũ (id 0f066813...) cùng 5 HS đã bị xóa, lớp 7A1 hiện tại là lớp MỚI tạo 22:56:40 (id 892ea0ef, 0 HS) — modal tạo HS đang mở giữ class_id của lớp cũ nên check submit báo "không thuộc tài khoản này" dù dropdown vẫn hiện tên lớp cũ.

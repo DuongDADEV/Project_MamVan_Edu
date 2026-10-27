@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   UserPlus,
@@ -145,11 +145,20 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     });
   };
 
+  // Baseline kiểm tra trùng, ĐÓNG BĂNG lúc bắt đầu tạo (xem dưới): trong
+  // lúc tạo theo lô, mỗi em tạo xong lại phát event khiến cổng tải lại
+  // danh sách học sinh — nếu check theo danh sách trực tiếp thì chính các
+  // em vừa tạo xong sẽ tự bị gắn cờ "Trùng tên đăng nhập" ngay giữa lúc
+  // đang tạo (cảnh báo giả, không chặn lô đang chạy nhưng gây hiểu lầm).
+  const frozenUsernamesRef = useRef<string[] | null>(null);
+
   // Kiểm tra trùng username theo thời gian thực
   const isUsernameDuplicated = (rowId: string, username: string) => {
     if (!username) return false;
     const u = username.toLowerCase().trim();
-    const inDb = existingStudents.some((s) => s.username.toLowerCase() === u);
+    const baseline =
+      frozenUsernamesRef.current ?? existingStudents.map((s) => s.username.toLowerCase());
+    const inDb = baseline.some((b) => b === u);
     const inOtherRows = manualRows.some((r) => {
       if (r.id === rowId) return false;
       const otherU = (r.custom_username !== undefined ? r.custom_username : (r.auto_username || '')).toLowerCase().trim();
@@ -275,6 +284,11 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
       }
     }
 
+    // Đóng băng baseline kiểm tra trùng trước khi tạo: trong lúc lô đang
+    // chạy, danh sách học sinh sẽ tự tải lại sau mỗi em tạo xong — không
+    // đóng băng thì các em vừa tạo xong sẽ tự bị gắn cờ trùng (cảnh báo
+    // giả). Hết lô thì mở lại để lần tạo sau vẫn kiểm tra trên dữ liệu mới.
+    frozenUsernamesRef.current = existingStudents.map((s) => s.username.toLowerCase());
     setIsSubmitting(true);
     try {
       const res = await studentService.createStudentsBatch(validInputs, teacherId);
@@ -291,6 +305,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     } catch (e: any) {
       alert('Đã xảy ra lỗi khi tạo tài khoản: ' + e.message);
     } finally {
+      frozenUsernamesRef.current = null;
       setIsSubmitting(false);
     }
   };
