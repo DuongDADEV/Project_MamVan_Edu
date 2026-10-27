@@ -5,14 +5,14 @@ import {
   SubmitResult,
   getAssignmentDetail,
   submitAssignmentAttempt,
-} from '../services/supabase/biRepository.ts';
+} from '../services/api/biClient.ts';
 
 interface AssignmentAttemptScreenProps {
   assignmentId: string;
   studentId: string;
   onBack: () => void;
   /** Báo về App sau khi nộp thành công để trao XP của bài (nếu có cấu hình). */
-  onSubmitted?: (info: { assignmentId: string; title: string; xpReward: number }) => void;
+  onSubmitted?: (info: { assignmentId: string; title: string; xpReward: number; totalXp?: number }) => void;
 }
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -60,7 +60,7 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
       });
       setResult(r);
       if (detail && onSubmitted) {
-        onSubmitted({ assignmentId, title: detail.title, xpReward: detail.xpReward || 0 });
+        onSubmitted({ assignmentId, title: detail.title, xpReward: detail.xpReward || 0, totalXp: r.totalXp });
       }
     } catch (e: any) {
       submittedRef.current = false;

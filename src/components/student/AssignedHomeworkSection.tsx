@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BookOpenCheck, CheckCircle2, Clock, Hourglass, Timer } from 'lucide-react';
-import { getStudentAssignments } from '../../services/supabase/biRepository.ts';
+import { getStudentAssignments } from '../../services/api/biClient.ts';
 
 interface AssignedHomeworkSectionProps {
   studentId: string;

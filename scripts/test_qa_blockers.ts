@@ -20,7 +20,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf-8');
 const contentSrc = read('src/screens/teacher/TeacherContentScreen.tsx');
 const bankSrc = read('src/screens/teacher/TeacherQuestionBankScreen.tsx');
-const supaSrc = read('src/services/supabase/supabaseRepositories.ts');
+const studentsSrv = read('api/routes/students.ts');
+const attemptsSrv = read('api/routes/attempts.ts');
+const essaysSrv = read('api/routes/essays.ts');
+const apiEssay = read('src/services/api/repositories.ts');
+const apiAttempt = read('src/services/api/repositories.ts');
+const contentClientSrc = read('src/services/api/contentClient.ts');
+const httpSrc = read('src/services/api/http.ts');
 const aiIndexSrc = read('src/services/ai/index.ts');
 const geminiSrc = read('src/services/ai/GeminiAIService.ts');
 const trainingSrc = read('src/components/teacher/grading/AiTrainingStudio.tsx');
@@ -67,18 +73,20 @@ check('GeminiAIService không còn đoạn văn mẫu bịa', !geminiSrc.include
 check('GeminiAIService ném lỗi khi không có nội dung thật', geminiSrc.includes('Không trích xuất được nội dung thật từ liên kết này'));
 check('AiTrainingStudio có state sandboxError + banner lỗi', trainingSrc.includes('sandboxError') && trainingSrc.includes('AI chấm lỗi — chưa có điểm gợi ý'));
 
-console.log('=== Blocker 6: DB thành công thì chỉ dùng DB ===');
-check('getStudents không còn gộp extras từ local', !supaSrc.includes('const extras = mockList.filter'));
-check('getStudentState không còn Math.max với local', !supaSrc.includes('Math.max(data.xp_today') && !supaSrc.includes('Math.max(data.total_xp'));
-check('getStudentState lấy xpToday/totalXp đúng từ DB', supaSrc.includes('xpToday: data.xp_today ?? 0,') && supaSrc.includes('totalXp: data.total_xp ?? 0,'));
-check('getAllStates bắt đầu từ map rỗng (không seed local)', supaSrc.includes('const map: Record<string, StudentState> = {};'));
-check('getAllStates không còn seed scopedFallback vào map', !supaSrc.includes('const map: Record<string, StudentState> = await scopedFallback()'));
-check('getSubmissions không còn gộp cleanLocalList vào merged', !supaSrc.includes('cleanLocalList.forEach((item) => map.set(item.id, item))'));
-check('getSubmissions scope rỗng trả [] (không rơi về local)', supaSrc.includes('if (scopeClassIds.size === 0) return [];'));
-check('getSubmissions vẫn giữ fallback local khi query lỗi', supaSrc.includes("dùng fallback local:") && supaSrc.includes('return cleanLocalList;'));
+console.log('=== Blocker 6 (GĐ3): server là nguồn thật duy nhất, không gộp local ===');
+// GĐ3: Supabase client đã xóa; phạm vi + server-thắng nằm ở route server
+// và client API. Luật mới (quyết đã duyệt): API lỗi thì NÉM, không fallback
+// lặng sang mock/local — nên check fallback-local cũ được ĐẢO NGƯỢC.
+check('getStudents phạm vi GV ở server (teacherClassIds)', studentsSrv.includes('teacherClassIds'));
+check('getStudentState lấy XP từ server qua getTotals (không Math.max với local)', attemptsSrv.includes('getTotals') && !apiAttempt.includes('Math.max(data.xp_today') && !apiAttempt.includes('Math.max(data.total_xp'));
+check('getAllStates bắt đầu từ map rỗng (không seed local)', apiAttempt.includes('const map: Record<string, StudentState> = {};'));
+check('getAllStates không còn seed scopedFallback vào map', !apiAttempt.includes('scopedFallback'));
+check('getSubmissions không còn gộp cleanLocalList vào merged', !apiEssay.includes('cleanLocalList'));
+check('getSubmissions scope rỗng trả [] (không rơi về local)', essaysSrv.includes('if (!classIds.length) return { studentIds: [], classIds: [] };'));
+check('getSubmissions lỗi thì NÉM (luật GĐ3 mới: không fallback local lặng)', httpSrc.includes('throw new ApiError') && !apiEssay.includes('cleanLocalList'));
 
 console.log('=== Blocker 7: /api/ai/chat role gate + giới hạn đầu vào ===');
-check('chat.ts chặn role khác teacher/admin bằng 403', chatSrc.includes("user.role !== 'teacher' && user.role !== 'admin'") && chatSrc.includes("FORBIDDEN_ROLE"));
+check('chat.ts chặn role khác teacher/admin bằng 403 (middleware requireRole)', chatSrc.includes("requireRole('teacher', 'admin')"));
 check('chat.ts giới hạn contents ≤ 50', chatSrc.includes('contents.length > 50'));
 check('chat.ts giới hạn systemInstruction ≤ 20000 ký tự', chatSrc.includes('systemInstruction.length > 20000'));
 check('chat.ts giới hạn tools JSON ≤ 50000 ký tự', chatSrc.includes('JSON.stringify(body.tools).length > 50000'));
@@ -87,19 +95,19 @@ console.log('=== Blocker 8: lỗi im lặng → toast/banner + service ném lỗ
 check('ContentScreen có toastMessage + showToast', contentSrc.includes('toastMessage') && contentSrc.includes('const showToast'));
 check('handleSaveTopic ném lại để TopicModal giữ modal mở', contentSrc.includes('Lưu chủ đề lỗi:') && contentSrc.includes('throw err;'));
 check('confirmDeleteTopic chỉ đóng dialog khi xóa thành công', contentSrc.includes('Xóa chủ đề lỗi:'));
-check('saveTopic ném lỗi thay vì trả savedMock', supaSrc.includes('Không lưu được chủ đề lên máy chủ:'));
-check('deleteTopic ném lỗi thay vì warn', supaSrc.includes('Không xóa được chủ đề trên máy chủ:'));
-check('reorderTopics kiểm tra error từng update', supaSrc.includes('const failed = results.find((r) => r.error)'));
-check('createSubmission ném lỗi khi insert lỗi', supaSrc.includes('Không gửi được bài tự luận lên máy chủ:'));
+check('saveTopic ném lỗi thay vì trả savedMock (saveItem qua apiFetch, không mock)', contentClientSrc.includes('async function saveItem') && contentClientSrc.includes('await apiFetch') && !contentClientSrc.includes('savedMock'));
+check('deleteTopic ném lỗi thay vì warn (deleteItem qua apiFetch)', contentClientSrc.includes('async function deleteItem') && contentClientSrc.includes('await apiFetch'));
+check('reorderTopics 1 request duy nhất, lỗi thì ném (apiFetch)', contentClientSrc.includes("'/api/topics/reorder'") && contentClientSrc.includes('await apiFetch'));
+check('createSubmission ném lỗi khi API lỗi (apiFetch, không fallback local)', apiEssay.includes('async createSubmission(') && apiEssay.includes('apiFetch') && !apiEssay.includes('cleanLocalList'));
 check('VideoLessonScreen có failedEssays + banner Gửi lại', videoSrc.includes('failedEssays') && videoSrc.includes('Gửi lại'));
 check('TheoryLessonScreen có failedEssays + banner Gửi lại', theorySrc.includes('failedEssays') && theorySrc.includes('Gửi lại'));
 check('VideoLessonScreen không còn .catch(console.error) nuốt lỗi essay', !videoSrc.includes("console.error('Lỗi lưu bài essay:'"));
 check('TheoryLessonScreen không còn .catch(console.error) nuốt lỗi essay', !theorySrc.includes("console.error('Lỗi gửi bài tự luận:'"));
 
 console.log('=== Điều tra publish topic (QA E2E TEST-QA-26-10) ===');
-check('publishQuiz ném lỗi khi push quiz thất bại', supaSrc.includes('Không đẩy được bài kiểm tra lên máy chủ'));
-check('publishQuiz tự xuất bản chủ đề cha nếu chưa published', supaSrc.includes("await mockContentRepo.publishContent('topic', parentId, { classIds: options.classIds }, teacherActorId);"));
-check('pushContentById mở public để publishQuiz dùng chung', supaSrc.includes('async pushContentById(type:'));
+check('publishQuiz ném lỗi khi push quiz thất bại (apiFetch)', contentClientSrc.includes('async publishQuiz(') && contentClientSrc.includes('await apiFetch'));
+check('publishQuiz tự xuất bản chủ đề cha nếu chưa published', contentClientSrc.includes('Quiz publish TỰ publish topic cha') && contentClientSrc.includes('/publish'));
+check('publishContent mở public để dùng chung', contentClientSrc.includes('async publishContent('));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

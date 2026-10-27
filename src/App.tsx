@@ -10,9 +10,12 @@ import {
 } from './types.ts';
 import { createFreshStudentState } from './services/mock/seedData.ts';
 import { REWARDS_CATALOG } from './data/rewards.ts';
-import { XP_CONFIG, ATTENDANCE_CONFIG, TIME_CONFIG, getEffectiveXpConfig } from './config.ts';
-import { awardXP, XP_KEYS } from './logic/xpEngine.ts';
-import { tryAwardTopicCompletion } from './logic/topicCompletion.ts';
+import { isTopicFullyComplete } from './logic/topicCompletion.ts';
+import {
+  checkInStudent,
+  completeTopicOnServer,
+  completeQuizOnServer,
+} from './services/api/xpClient.ts';
 import { getLocalTodayStr, rolloverStudentState } from './logic/studentStateUtils.ts';
 import { useActiveLearningTimer } from './logic/useActiveLearningTimer.ts';
 import { Navbar, NavTab } from './components/Navbar.tsx';
@@ -383,29 +386,58 @@ export default function App() {
   );
   const publishedTopics = rawTopics ?? [];
 
-  // MÔ HÌNH XP MỚI — QUỸ XP CHỦ ĐỀ: mỗi khi tiến độ học thay đổi (xem xong
-  // video, xong lý thuyết, nộp bài…), rà soát các chủ đề đã xuất bản: chủ đề
-  // nào vừa hoàn thành TOÀN BỘ và chưa trao quỹ XP thì trao ngay + chúc mừng.
-  const topicXpToastRef = useRef<Set<string>>(new Set());
+  // MÔ HÌNH XP MỚI — QUỸ XP CHỦ ĐỀ (GĐ3): mỗi khi tiến độ học thay đổi,
+  // rà soát các chủ đề đã xuất bản: chủ đề nào vừa hoàn thành TOÀN BỘ
+  // (vị ngữ thuần isTopicFullyComplete) thì gọi server
+  // POST /api/topics/:id/complete — server tự kiểm tra đã trao quỹ hay
+  // chưa (gọi lặp idempotent, awarded = 0) và trả tổng XP mới. Client
+  // KHÔNG tự tính/tự cộng XP nữa; chỉ hiển thị tổng XP server trả.
+  const topicXpAttemptedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!studentState?.profile?.id) return;
     for (const topic of publishedTopics || []) {
-      const out = tryAwardTopicCompletion(
-        studentStateRef.current,
+      if (topicXpAttemptedRef.current.has(topic.id)) continue;
+      const done = isTopicFullyComplete(
         topic as any,
         (rawQuizzes || []) as any,
-        (rawQuestions || {}) as any
+        (rawQuestions || {}) as any,
+        studentStateRef.current.completedSteps || [],
+        studentStateRef.current.questionResults || []
       );
-      if (out) {
-        setStudentState(out.state);
-        if (!topicXpToastRef.current.has(topic.id)) {
-          topicXpToastRef.current.add(topic.id);
-          showToast(
-            `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — nhận +${out.awardedXp} XP!`
-          );
-        }
-        break;
-      }
+      if (!done) continue;
+      topicXpAttemptedRef.current.add(topic.id);
+      completeTopicOnServer(topic.id)
+        .then((res) => {
+          setStudentState((prev) => ({ ...prev, totalXp: res.totalXp }));
+          if (res.awarded) {
+            showToast(
+              `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — đã nhận quỹ XP!`
+            );
+          }
+          if (!res.complete) {
+            // State server chưa kịp nhận bước mới nhất (lưu state local
+            // chưa xong) → thử lại 1 lần sau 2s, vẫn giữ ref để effect
+            // không gọi lặp vô hạn.
+            setTimeout(() => {
+              completeTopicOnServer(topic.id)
+                .then((r2) => {
+                  setStudentState((prev) => ({ ...prev, totalXp: r2.totalXp }));
+                  if (r2.awarded) {
+                    showToast(
+                      `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — đã nhận quỹ XP!`
+                    );
+                  }
+                })
+                .catch(() => {});
+            }, 2000);
+          }
+        })
+        .catch((err: any) => {
+          // Gọi lỗi thì lần tiến độ đổi sau thử lại (không kẹt ref).
+          topicXpAttemptedRef.current.delete(topic.id);
+          console.error('Lỗi gọi API hoàn thành chủ đề:', err);
+        });
+      break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentState.completedSteps, studentState.questionResults, publishedTopics]);
@@ -658,7 +690,10 @@ export default function App() {
     }
   };
 
-  // 9. Điểm danh hôm nay (+2 XP và tưới cây)
+  // 9. Điểm danh hôm nay (GĐ3: XP do server tính qua
+  // POST /api/student-states/:id/check-in — client không tự cộng XP nữa;
+  // chỉ hiển thị tổng XP server trả. Huy hiệu/ngày điểm danh vẫn cập nhật
+  // local như cũ vì đó là trạng thái hiển thị, không phải XP.)
   const handleAttendanceCheckIn = () => {
     const todayStr = getLocalTodayStr();
     const baseState = rolloverStudentState(studentState);
@@ -667,53 +702,53 @@ export default function App() {
       return;
     }
 
-    const xpRes = awardXP(
-      baseState,
-      `attendance:${todayStr}`,
-      getEffectiveXpConfig().ATTENDANCE_DAILY_XP,
-      'Điểm danh hằng ngày',
-      true
-    );
+    checkInStudent(currentStudentId)
+      .then((res) => {
+        const base = rolloverStudentState(studentStateRef.current);
+        const nextDays = (base.attendanceDaysThisWeek || 0) + 1;
+        let newBadges = [...(base.unlockedBadgeIds || [])];
+        if (nextDays >= 3 && !newBadges.includes('badge_streak_3')) {
+          newBadges.push('badge_streak_3');
+          showToast('🎉 Nhận được huy hiệu: Chăm chỉ 3 ngày!');
+        }
+        if (nextDays >= 5 && !newBadges.includes('badge_streak_full')) {
+          newBadges.push('badge_streak_full');
+          showToast('🌟 Nhận được huy hiệu: Tuần trọn vẹn!');
+        }
 
-    const nextDays = (baseState.attendanceDaysThisWeek || 0) + 1;
-    let newBadges = [...(baseState.unlockedBadgeIds || [])];
-    if (nextDays >= 3 && !newBadges.includes('badge_streak_3')) {
-      newBadges.push('badge_streak_3');
-      showToast('🎉 Nhận được huy hiệu: Chăm chỉ 3 ngày!');
-    }
-    if (nextDays >= 5 && !newBadges.includes('badge_streak_full')) {
-      newBadges.push('badge_streak_full');
-      showToast('🌟 Nhận được huy hiệu: Tuần trọn vẹn!');
-    }
+        const updatedState: StudentState = {
+          ...base,
+          totalXp: res.totalXp,
+          lastAttendanceDate: todayStr,
+          attendanceDaysThisWeek: nextDays,
+          attendanceHistory: [todayStr, ...(base.attendanceHistory || [])],
+          unlockedBadgeIds: newBadges,
+        };
 
-    const updatedState: StudentState = {
-      ...baseState,
-      ...xpRes.updatedState,
-      lastAttendanceDate: todayStr,
-      attendanceDaysThisWeek: nextDays,
-      attendanceHistory: [todayStr, ...(baseState.attendanceHistory || [])],
-      unlockedBadgeIds: newBadges,
-    };
+        lastSavedStateJsonRef.current = JSON.stringify(updatedState);
+        setStudentState(updatedState);
 
-    lastSavedStateJsonRef.current = JSON.stringify(updatedState);
-    setStudentState(updatedState);
+        // Lưu bền vững tức thời vào Repository & LocalStorage (không sợ reload trang)
+        try {
+          attemptService.saveStudentState(currentStudentId, updatedState, appSourceId);
+          localStorage.setItem(STATE_STORAGE_PREFIX + currentStudentId, JSON.stringify(updatedState));
+          const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
+          allStates[currentStudentId] = updatedState;
+          localStorage.setItem('mam_van_student_states', JSON.stringify(allStates));
+        } catch (e) {
+          console.error('Lỗi lưu điểm danh vào storage:', e);
+        }
 
-    // Lưu bền vững tức thời vào Repository & LocalStorage (không sợ reload trang)
-    try {
-      attemptService.saveStudentState(currentStudentId, updatedState, appSourceId);
-      localStorage.setItem(STATE_STORAGE_PREFIX + currentStudentId, JSON.stringify(updatedState));
-      const allStates = JSON.parse(localStorage.getItem('mam_van_student_states') || '{}');
-      allStates[currentStudentId] = updatedState;
-      localStorage.setItem('mam_van_student_states', JSON.stringify(allStates));
-    } catch (e) {
-      console.error('Lỗi lưu điểm danh vào storage:', e);
-    }
-
-    if (xpRes.actualXp > 0) {
-      showToast(`🌱 Điểm danh thành công: +${xpRes.actualXp} XP & Tưới cây!`);
-    } else {
-      showToast('🌱 Điểm danh thành công & đã tưới cây! (XP hôm nay đã đạt trần nên lần này không cộng thêm)');
-    }
+        if (res.checkedIn) {
+          showToast('🌱 Điểm danh thành công & Tưới cây!');
+        } else {
+          showToast('🌱 Điểm danh thành công & đã tưới cây!');
+        }
+      })
+      .catch((err: any) => {
+        console.error('Lỗi điểm danh qua API:', err);
+        showToast('Điểm danh chưa thành công — kiểm tra mạng rồi thử lại nhé.');
+      });
   };
 
   // 10. Tiếp tục học dở (Nút Học tiếp)
@@ -774,28 +809,41 @@ export default function App() {
       return;
     }
 
-    setStudentState((prev) => {
-      const rolled = rolloverStudentState(prev);
-      return {
-        ...rolled,
-        totalXp: Math.max(0, (rolled.totalXp || 0) - requiredXp),
-        rewardRequests: [
-          {
-            id: 'req_' + Date.now(),
-            rewardId,
-            requestedAt: Date.now(),
-            status: 'PENDING_APPROVAL' as const,
-            deductedXp: requiredXp,
-          },
-          ...rolled.rewardRequests,
-        ],
-      };
-    });
-    showToast(
-      requiredXp > 0
-        ? `Đã gửi yêu cầu mở rương tới thầy/cô! (Trừ ${requiredXp} XP — nếu bị từ chối sẽ hoàn lại)`
-        : 'Đã gửi yêu cầu mở rương tới thầy/cô!'
-    );
+    // GĐ3 tích hợp: yêu cầu đổi quà tạo TRÊN SERVER (POST
+    // /api/reward-requests) — server kiểm tra số dư + trừ tổng XP ngay
+    // lúc tạo + tạo dòng cho thầy/cô duyệt (trước đây App chỉ ghi local,
+    // thầy/cô không bao giờ thấy yêu cầu). Client KHÔNG tự trừ XP nữa;
+    // tổng XP lấy từ số server đã trừ (deductedXp).
+    try {
+      const created = await rewardService.createRequest(currentStudentId, rewardId);
+      const deducted = created.deductedXp ?? requiredXp;
+      setStudentState((prev) => {
+        const rolled = rolloverStudentState(prev);
+        return {
+          ...rolled,
+          totalXp: Math.max(0, (rolled.totalXp || 0) - deducted),
+          rewardRequests: [
+            {
+              id: created.id,
+              rewardId,
+              requestedAt: created.requestedAt || Date.now(),
+              status: 'PENDING_APPROVAL' as const,
+              deductedXp: deducted,
+            },
+            ...rolled.rewardRequests,
+          ],
+        };
+      });
+      showToast(
+        deducted > 0
+          ? `Đã gửi yêu cầu mở rương tới thầy/cô! (Trừ ${deducted} XP — nếu bị từ chối sẽ hoàn lại)`
+          : 'Đã gửi yêu cầu mở rương tới thầy/cô!'
+      );
+    } catch (err: any) {
+      showToast(
+        `Không gửi được yêu cầu đổi quà: ${err?.message || 'lỗi không rõ'}`
+      );
+    }
   };
 
   // 11b. Mở rương và thu thập vào bộ sưu tập
@@ -993,8 +1041,6 @@ export default function App() {
               .map((id) => (rawQuestions ? rawQuestions[id] : null))
               .filter((q): q is NonNullable<typeof q> => !!q);
 
-            const xpEarned = Math.max(0, Math.floor(targetQuiz.xp || 0));
-
             // Quy tắc kiểm tra 1 lần (đợt sửa 24/10): bài kiểm tra (quick/mastery/
             // final) đã hoàn thành thì chỉ cho xem lại — không mở QuizRunner mới,
             // không ghi thêm questionResults, không cộng XP. BTVN không giới hạn.
@@ -1038,7 +1084,7 @@ export default function App() {
                   quiz={targetQuiz}
                   studentId={currentStudentId}
                   questions={qList.length > 0 ? qList : undefined}
-                  onComplete={(results, essays, earned, max) => {
+                  onComplete={async (results, essays, earned, max) => {
                     if (essays && essays.length > 0) {
                       essays.forEach((e) => {
                         essayRepository.createSubmission({
@@ -1058,33 +1104,36 @@ export default function App() {
                       });
                     }
 
-                    // Mô hình XP mới: nộp bài là nhận đúng số XP đã cấu hình
-                    // trên bài (không mặc định, không trần). XP = 0 thì chỉ
-                    // ghi nhận hoàn thành — vẫn tính cho quỹ XP của chủ đề.
-                    const base = studentStateRef.current;
-                    const xpRes =
-                      xpEarned > 0
-                        ? awardXP(base, XP_KEYS.quizCompleted(targetQuiz.id), xpEarned, `Hoàn thành bài: ${targetQuiz.title}`)
-                        : null;
+                    // GĐ3 tích hợp: XP bài quiz nội dung do server trao qua
+                    // POST /api/quiz-completions (1 lần/quiz, điểm = totalScore
+                    // của QuizRunner, chặn trên bằng tổng max_score câu hỏi).
+                    // Client chỉ ghi nhận bước + kết quả local; tổng XP lấy
+                    // từ server trả về. API lỗi thì vẫn cho đi tiếp (bước đã
+                    // ghi local, làm lại quiz sẽ gọi lại server).
+                    let quizToast = '🎉 Em đã hoàn thành bài!';
+                    try {
+                      const qr = await completeQuizOnServer(targetQuiz.id, earned);
+                      setStudentState((prev) => ({ ...prev, totalXp: qr.totalXp }));
+                      if (qr.awarded && qr.awardedXp > 0) {
+                        quizToast = `🎉 Xuất sắc! Em đã hoàn thành bài và nhận +${qr.awardedXp} XP!`;
+                      } else if (earned > 0) {
+                        quizToast = '🎉 Em đã hoàn thành bài! (XP của bài này em đã nhận ở lần làm trước)';
+                      }
+                    } catch (err: any) {
+                      console.error('Lỗi trao XP quiz nội dung:', err?.message);
+                    }
                     setStudentState((prev) => {
-                      const withXp = xpRes ? { ...prev, ...xpRes.updatedState } : prev;
-                      const steps = withXp.completedSteps.includes(`quiz_completed:${targetQuiz.id}`)
-                        ? withXp.completedSteps
-                        : [...withXp.completedSteps, `quiz_completed:${targetQuiz.id}`];
+                      const steps = prev.completedSteps.includes(`quiz_completed:${targetQuiz.id}`)
+                        ? prev.completedSteps
+                        : [...prev.completedSteps, `quiz_completed:${targetQuiz.id}`];
                       return {
-                        ...withXp,
+                        ...prev,
                         completedSteps: steps,
                         questionResults: [...results, ...(prev.questionResults || [])],
                         essaySubmissions: [...(essays || []), ...(prev.essaySubmissions || [])],
                       };
                     });
-                    if (xpRes && xpRes.actualXp > 0) {
-                      showToast(`🎉 Xuất sắc! Em đã hoàn thành bài và nhận +${xpRes.actualXp} XP!`);
-                    } else if (xpEarned > 0) {
-                      showToast('🎉 Em đã hoàn thành bài! (XP của bài này em đã nhận ở lần làm trước)');
-                    } else {
-                      showToast('🎉 Em đã hoàn thành bài!');
-                    }
+                    showToast(quizToast);
                     goHomeworkNext();
                   }}
                   onExit={() => setActiveFlow(null)}
@@ -1099,17 +1148,13 @@ export default function App() {
             studentId={currentStudentId}
             onBack={() => setActiveFlow(null)}
             onSubmitted={(info) => {
-              if (info.xpReward > 0) {
-                const res = awardXP(
-                  studentStateRef.current,
-                  XP_KEYS.assignmentSubmitted(info.assignmentId),
-                  info.xpReward,
-                  `Nộp bài: ${info.title}`
-                );
-                if (res.actualXp > 0) {
-                  setStudentState((prev) => ({ ...prev, ...res.updatedState }));
-                  showToast(`🎉 Đã nộp bài "${info.title}" — nhận +${res.actualXp} XP!`);
-                }
+              // GĐ3: XP nộp bài độc lập đã do server tính trong lúc
+              // AssignmentAttemptScreen gọi POST /api/attempts (biClient
+              // trả totalXp trong SubmitResult). Client chỉ nhận tổng XP
+              // server trả về để hiển thị, không tự cộng xpReward nữa.
+              if (info.totalXp !== undefined) {
+                setStudentState((prev) => ({ ...prev, totalXp: info.totalXp! }));
+                showToast(`🎉 Đã nộp bài "${info.title}"!`);
               }
             }}
           />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
-import { recordStepCompletion } from '../logic/xpEngine.ts';
+import { markStepCompleted } from '../logic/studentStateUtils.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
@@ -313,7 +313,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   // 1. Chuyển sang bước tiếp theo sau khi xem video
   const handleProceedFromVideo = () => {
     onUpdateState((prev) => {
-      const xpRes = { updatedState: recordStepCompletion(prev, `video_watch:${videoId}`) };
+      const xpRes = { updatedState: markStepCompleted(prev, `video_watch:${videoId}`) };
       return {
         ...prev,
         ...xpRes.updatedState,
@@ -333,7 +333,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   // 2. Chuyển sang bước tiếp theo sau khi đọc tóm tắt
   const handleProceedFromSummary = () => {
     onUpdateState((prev) => {
-      const xpRes = { updatedState: recordStepCompletion(prev, `summary_read:${videoId}`) };
+      const xpRes = { updatedState: markStepCompleted(prev, `summary_read:${videoId}`) };
       return {
         ...prev,
         ...xpRes.updatedState,
@@ -393,7 +393,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
 
     // Mô hình XP mới: các bước trong luồng video KHÔNG cộng XP lẻ nữa —
     // chỉ ghi nhận hoàn thành (XP nằm ở quỹ chủ đề + XP của từng bài tập).
-    const rec1 = recordStepCompletion(state, `quiz_completed:${qId}`);
+    const rec1 = markStepCompleted(state, `quiz_completed:${qId}`);
 
     let nextState: StudentState = {
       ...state,
@@ -406,7 +406,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     const cappedNotice = undefined;
 
     if (isNextComplete) {
-      const recBonus = recordStepCompletion(nextState, `video_flow_completed:${videoId}`);
+      const recBonus = markStepCompleted(nextState, `video_flow_completed:${videoId}`);
       nextState = {
         ...nextState,
         ...recBonus,

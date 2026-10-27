@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, FileCheck, Home, Clock, CheckCircle2, Circle, ChevronRight, Eye } from 'lucide-react';
 import { Topic, Quiz, TEST_QUIZ_KINDS } from '../types.ts';
-import { getStudentAssignments } from '../services/supabase/biRepository.ts';
+import { getStudentAssignments } from '../services/api/biClient.ts';
 
 type Tab = 'test' | 'homework';
 

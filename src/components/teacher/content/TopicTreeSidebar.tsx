@@ -8,7 +8,7 @@ import {
 import { StatusBadge } from './StatusBadge.tsx';
 import { ConfirmDialog } from '../ui/ConfirmDialog.tsx';
 import { deriveFlowItems } from '../../../logic/flowOrder.ts';
-import { TeacherAssignmentSummary } from '../../../services/supabase/biRepository.ts';
+import { TeacherAssignmentSummary } from '../../../services/api/biClient.ts';
 import {
   ChevronRight,
   ChevronDown,

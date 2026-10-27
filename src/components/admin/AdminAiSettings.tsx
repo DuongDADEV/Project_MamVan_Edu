@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../services/supabase/client.ts';
+import { getAccessToken } from '../../services/api/http.ts';
 
 /**
  * Cấu hình Mầm AI cho admin (đợt 25/10 — kiến trúc key-admin).
@@ -61,8 +61,7 @@ const fmtDate = (s: string | null) => {
 const legLabel = (id: string) => LEGS.find((l) => l.id === id)?.label || id;
 
 async function adminToken(): Promise<string> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = getAccessToken();
   if (!token) throw new Error('Chưa có phiên admin.');
   return token;
 }

@@ -1,12 +1,14 @@
-import { getAdminClient } from './supabase.ts';
+import { query } from './mysql';
 
 /**
- * Nguồn key cho chuỗi AI (đợt 25/10 — ô nhập key ở màn admin).
+ * Nguồn key cho chuỗi AI (GĐ3 — viết lại từ Supabase sang MySQL).
  * Thứ tự ưu tiên: key admin nhập trong màn "Cấu hình Mầm AI" (lưu
- * vào ai_settings key 'ai_keys', chỉ service role đọc được) rồi mới
- * tới biến môi trường Vercel (GEMINI_API_KEY / GROQ_API_KEY /
- * OPENROUTER_API_KEY / WORKERS_AI_API_KEY). Route admin KHÔNG BAO GIỜ trả giá trị key
+ * vào ai_settings key 'ai_keys') rồi mới tới biến môi trường VPS
+ * (GEMINI_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY /
+ * WORKERS_AI_API_KEY). Route admin KHÔNG BAO GIỜ trả giá trị key
  * về trình duyệt — chỉ trả "đã cấu hình" + nguồn ('db' | 'env').
+ * Lỗi DB -> coi như không có key DB (fallback env), như hành vi cũ
+ * khi bảng chưa có.
  */
 
 export type LegId = 'gemini' | 'groq' | 'openrouter' | 'workersai';
@@ -19,25 +21,30 @@ const ENV_KEY: Record<LegId, string> = {
   workersai: 'WORKERS_AI_API_KEY',
 };
 
+/** Đọc 1 key ai_settings (value JSON) hoặc null khi lỗi/không có. */
+async function loadSetting(key: string): Promise<any | null> {
+  try {
+    const rows = await query<any>(
+      'SELECT `value` FROM `ai_settings` WHERE `key` = ? LIMIT 1',
+      [key]
+    );
+    if (!rows[0]) return null;
+    const v = rows[0].value;
+    return typeof v === 'string' ? JSON.parse(v) : v;
+  } catch {
+    return null;
+  }
+}
+
 /** Key đã lưu trong ai_settings (không có thì {}). */
 export async function loadStoredKeys(): Promise<Partial<Record<LegId, string>>> {
-  try {
-    const admin = getAdminClient();
-    const { data } = await admin
-      .from('ai_settings')
-      .select('value')
-      .eq('key', 'ai_keys')
-      .maybeSingle();
-    const v = (data as any)?.value;
-    if (v && typeof v === 'object') {
-      const out: Partial<Record<LegId, string>> = {};
-      for (const leg of LEG_IDS) {
-        if (typeof v[leg] === 'string' && v[leg]) out[leg] = v[leg];
-      }
-      return out;
+  const v = await loadSetting('ai_keys');
+  if (v && typeof v === 'object') {
+    const out: Partial<Record<LegId, string>> = {};
+    for (const leg of LEG_IDS) {
+      if (typeof v[leg] === 'string' && v[leg]) out[leg] = v[leg];
     }
-  } catch {
-    // Bảng chưa có hoặc chưa lưu key — coi như không có.
+    return out;
   }
   return {};
 }
@@ -52,10 +59,9 @@ export async function resolveKeys(): Promise<Record<LegId, string>> {
   return out;
 }
 
-/** Account ID Cloudflare cho nấc Workers AI (không phải secret — chỉ là
- * định danh tài khoản, hiện trong URL dashboard). Nguồn: ai_settings key
- * 'workersai_account_id' (chuỗi, hoặc object { accountId }) rồi mới tới
- * biến môi trường CLOUDFLARE_ACCOUNT_ID. */
+/** Account ID Cloudflare cho nấc Workers AI (không phải secret).
+ * Nguồn: ai_settings key 'workersai_account_id' (chuỗi, hoặc object
+ * { accountId }) rồi mới tới biến môi trường CLOUDFLARE_ACCOUNT_ID. */
 export async function loadWorkersAiAccountId(): Promise<string> {
   const s = await workersAiAccountIdStatus();
   return s.value;
@@ -65,20 +71,10 @@ export async function workersAiAccountIdStatus(): Promise<{
   value: string;
   source: 'db' | 'env' | null;
 }> {
-  try {
-    const admin = getAdminClient();
-    const { data } = await admin
-      .from('ai_settings')
-      .select('value')
-      .eq('key', 'workersai_account_id')
-      .maybeSingle();
-    const v = (data as any)?.value;
-    if (typeof v === 'string' && v.trim()) return { value: v.trim(), source: 'db' };
-    if (v && typeof v === 'object' && typeof v.accountId === 'string' && v.accountId.trim()) {
-      return { value: v.accountId.trim(), source: 'db' };
-    }
-  } catch {
-    // Bảng chưa có hoặc chưa lưu — rơi xuống env.
+  const v = await loadSetting('workersai_account_id');
+  if (typeof v === 'string' && v.trim()) return { value: v.trim(), source: 'db' };
+  if (v && typeof v === 'object' && typeof v.accountId === 'string' && v.accountId.trim()) {
+    return { value: v.accountId.trim(), source: 'db' };
   }
   const env = process.env.CLOUDFLARE_ACCOUNT_ID || '';
   return env ? { value: env, source: 'env' } : { value: '', source: null };

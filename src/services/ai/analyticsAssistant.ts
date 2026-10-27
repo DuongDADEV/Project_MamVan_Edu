@@ -49,13 +49,13 @@ import {
   getPendingReviews,
   getGradedReviews,
   gradePendingAnswer,
-} from '../supabase/biRepository.ts';
-import {
-  supabaseContentRepo as contentRepo,
-  supabaseQuizRepo as quizRepo,
-  supabaseEssayRepo as essayRepo,
-  supabaseRewardRepo as rewardRepo,
-} from '../supabase/supabaseRepositories.ts';
+} from '../api/biClient.ts';
+import { ApiContentRepository, ApiQuizRepository } from '../api/contentClient.ts';
+import { apiEssayRepo, apiRewardRepo } from '../api/repositories.ts';
+const contentRepo = new ApiContentRepository();
+const quizRepo = new ApiQuizRepository();
+const essayRepo = apiEssayRepo;
+const rewardRepo = apiRewardRepo;
 import { REWARDS_CATALOG } from '../../data/rewards.ts';
 
 export interface AssistantContext {

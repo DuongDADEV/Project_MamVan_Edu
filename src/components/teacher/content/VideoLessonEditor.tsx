@@ -26,7 +26,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
-import { uploadLessonMedia } from '../../../services/supabase/storage.ts';
+import { uploadLessonMedia } from '../../../services/api/storageClient.ts';
 
 interface VideoLessonEditorProps {
   video: VideoLessonWithMeta;

@@ -56,3 +56,21 @@ export function rolloverStudentState(state: StudentState): StudentState {
 export function countLearningSteps(completedSteps: string[]): number {
   return completedSteps.filter((s) => !s.startsWith('attendance:')).length;
 }
+
+/**
+ * Ghi nhận một bước học đã hoàn thành (tiến độ học, tính hoàn thành chủ
+ * đề…) mà KHÔNG chạm tới bất kỳ trường XP nào (xpToday/xpWeek/totalXp/
+ * xpLogs/xpAwardedSteps) — GĐ3: XP chỉ do server tính và trả về, client
+ * không tự cộng, không tự lật bộ đếm XP. Trả về đúng phần state cần hợp
+ * nhất (chỉ completedSteps).
+ */
+export function markStepCompleted(
+  state: StudentState,
+  stepKey: string
+): { completedSteps: string[] } {
+  return {
+    completedSteps: (state.completedSteps || []).includes(stepKey)
+      ? state.completedSteps
+      : [...(state.completedSteps || []), stepKey],
+  };
+}

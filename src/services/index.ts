@@ -1,8 +1,12 @@
 /**
  * Điểm tập kết Services của ứng dụng Mầm Văn.
  * Đóng gói và xuất ra các Repository Interface chuẩn.
- * Hiện tại mặc định sử dụng Mock Repository (localStorage + multi-tab BroadcastChannel).
- * Sau này chuyển sang Supabase chỉ cần thay đổi implementation tại file này.
+ *
+ * GĐ3 (VPS-only, MySQL): toàn bộ repository nghiệp vụ đi qua API server
+ * (src/services/api/*) — không còn Supabase client. Chỉ audit/setting
+ * vẫn là mock local (chưa có endpoint server tương ứng, theo khảo sát
+ * §6.3); essay rubric/sample/config/accuracy cũng giữ local qua
+ * mockEssayRepo bên trong ApiEssayRepository (dữ liệu chỉ ở local).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -36,38 +40,37 @@ import {
   STORAGE_SCHEMA_VERSION,
   DEFAULT_SYSTEM_SETTINGS,
 } from './mock/mockRepositories.ts';
+import { apiAuthRepo } from './api/authRepository.ts';
 import {
-  supabaseAuthRepo,
-  supabaseClassRepo,
-  supabaseStudentRepo,
-  supabaseAttemptRepo,
-  supabaseEssayRepo,
-  supabaseRewardRepo,
-  supabaseTeacherRepo,
-  supabaseQuizRepo,
-  supabaseContentRepo,
-} from './supabase/supabaseRepositories.ts';
+  apiClassRepo,
+  apiStudentRepo,
+  apiAttemptRepo,
+  apiEssayRepo,
+  apiRewardRepo,
+  apiTeacherRepo,
+} from './api/repositories.ts';
+import { ApiContentRepository, ApiQuizRepository } from './api/contentClient.ts';
 import { syncEventBus } from './mock/eventBus.ts';
 
-// Xuất các repository instances (Kết nối Supabase trực tiếp)
-export const authService: AuthRepository = supabaseAuthRepo;
-export const authRepository: AuthRepository = supabaseAuthRepo;
-export const teacherService: TeacherRepository = supabaseTeacherRepo;
-export const teacherRepository: TeacherRepository = supabaseTeacherRepo;
-export const classService: ClassRepository = supabaseClassRepo;
-export const classRepository: ClassRepository = supabaseClassRepo;
-export const studentService: StudentRepository = supabaseStudentRepo;
-export const studentRepository: StudentRepository = supabaseStudentRepo;
-export const contentService: ContentRepository = supabaseContentRepo;
-export const contentRepository: ContentRepository = supabaseContentRepo;
-export const quizService: QuizRepository = supabaseQuizRepo;
-export const quizRepository: QuizRepository = supabaseQuizRepo;
-export const attemptService: AttemptRepository = supabaseAttemptRepo;
-export const attemptRepository: AttemptRepository = supabaseAttemptRepo;
-export const essayService: EssayRepository = supabaseEssayRepo;
-export const essayRepository: EssayRepository = supabaseEssayRepo;
-export const rewardService: RewardRepository = supabaseRewardRepo;
-export const rewardRepository: RewardRepository = supabaseRewardRepo;
+// Xuất các repository instances (API server MySQL trên VPS)
+export const authService: AuthRepository = apiAuthRepo;
+export const authRepository: AuthRepository = apiAuthRepo;
+export const teacherService: TeacherRepository = apiTeacherRepo;
+export const teacherRepository: TeacherRepository = apiTeacherRepo;
+export const classService: ClassRepository = apiClassRepo;
+export const classRepository: ClassRepository = apiClassRepo;
+export const studentService: StudentRepository = apiStudentRepo;
+export const studentRepository: StudentRepository = apiStudentRepo;
+export const contentService: ContentRepository = new ApiContentRepository();
+export const contentRepository: ContentRepository = contentService;
+export const quizService: QuizRepository = new ApiQuizRepository();
+export const quizRepository: QuizRepository = quizService;
+export const attemptService: AttemptRepository = apiAttemptRepo;
+export const attemptRepository: AttemptRepository = apiAttemptRepo;
+export const essayService: EssayRepository = apiEssayRepo;
+export const essayRepository: EssayRepository = apiEssayRepo;
+export const rewardService: RewardRepository = apiRewardRepo;
+export const rewardRepository: RewardRepository = apiRewardRepo;
 export const auditService: AuditRepository = auditRepo;
 export const auditRepository: AuditRepository = auditRepo;
 export const settingService: SettingRepository = settingRepo;

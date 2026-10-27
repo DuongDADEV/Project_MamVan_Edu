@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { StudentState, QuestionResult, EssaySubmission, Quiz, Question } from '../types.ts';
 import { XP_CONFIG, TIME_CONFIG } from '../config.ts';
-import { recordStepCompletion } from '../logic/xpEngine.ts';
+import { markStepCompleted } from '../logic/studentStateUtils.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
@@ -268,9 +268,9 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     const landsOnComplete = currentStepIndex + 2 >= dynamicSteps.length;
     onUpdateState((prev) => {
       // Mô hình XP mới: không cộng XP lẻ — chỉ ghi nhận hoàn thành bước.
-      let finalUpdated = recordStepCompletion(prev, `theory_understood:${theoryId}`);
+      let finalUpdated = markStepCompleted(prev, `theory_understood:${theoryId}`);
       if (landsOnComplete) {
-        finalUpdated = recordStepCompletion(
+        finalUpdated = markStepCompleted(
           { ...prev, ...finalUpdated },
           `theory_flow_completed:${theoryId}`
         );
@@ -358,11 +358,11 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
 
     // Mô hình XP mới: không cộng XP lẻ — chỉ ghi nhận hoàn thành bước;
     // XP nằm ở quỹ chủ đề + XP của từng bài tập.
-    let finalUpdated = recordStepCompletion(state, `quiz_completed:${qId}`);
+    let finalUpdated = markStepCompleted(state, `quiz_completed:${qId}`);
     const xpAwarded = 0;
     const cappedNotice = undefined;
     if (isNextComplete) {
-      finalUpdated = recordStepCompletion(
+      finalUpdated = markStepCompleted(
         { ...state, ...finalUpdated },
         `theory_flow_completed:${theoryId}`
       );

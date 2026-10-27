@@ -1,13 +1,13 @@
 /**
  * Client gọi AI qua proxy của admin (đợt 25/10).
  * Trình duyệt KHÔNG giữ key, KHÔNG gọi thẳng Google/Groq/OpenRouter nữa:
- * mọi call đi qua /api/ai/chat cùng origin, kèm JWT Supabase Auth để
- * proxy verify (Auth API getUser). Failover Gemini → Groq → OpenRouter
+ * mọi call đi qua /api/ai/chat cùng origin, kèm JWT auth mới (api/http.ts)
+ * để proxy verify (Auth API getUser). Failover Gemini → Groq → OpenRouter
  * và key đều nằm phía server (Vercel env của admin).
  * Response giữ đúng shape Gemini generateContent để vòng lặp tool của
  * trợ lý không phải sửa: { candidates: [{ content: { parts } }] }.
  */
-import { supabase } from '../supabase/client.ts';
+import { getAccessToken } from '../api/http.ts';
 
 export interface ProxyChatError extends Error {
   status?: number;
@@ -20,8 +20,7 @@ export async function callAiProxy(body: {
   systemInstruction?: string;
   tools?: any[];
 }): Promise<any> {
-  const { data: sb } = await supabase.auth.getSession();
-  const token = sb?.session?.access_token;
+  const token = getAccessToken();
   if (!token) {
     const err: ProxyChatError = new Error(
       'Chưa đăng nhập nên không gọi được AI. Thầy/cô đăng nhập lại giúp em.'

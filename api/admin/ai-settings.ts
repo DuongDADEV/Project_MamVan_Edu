@@ -1,39 +1,38 @@
-import {
-  getAdminClient,
-  verifyUserToken,
-  readBearer,
-  isAdminUser,
-} from '../_lib/supabase.ts';
-import { DEFAULT_MODELS } from '../_lib/ai.ts';
-import { keysStatus, loadStoredKeys, resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys.ts';
+import { Router } from 'express';
+import { query, execute } from '../_lib/mysql';
+import { requireAuth, requireRole } from '../_lib/auth';
+import { DEFAULT_MODELS } from '../_lib/ai';
+import { keysStatus, loadStoredKeys, resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys';
 
 /**
- * GET / POST /api/admin/ai-settings — cấu hình AI của admin.
- * Chỉ JWT có app_metadata.role = 'admin' mới được gọi. Đọc/ghi qua
- * service role vào bảng ai_settings (RLS chặn đọc trực tiếp từ
- * trình duyệt — xem migration 014/015).
- * GET trả về { models, order, enabled, keysConfigured, keySource,
- * workersaiAccountId, workersaiAccountIdSource, usage, openrouter }
- * (merge với mặc định; KHÔNG trả giá trị key).
- * POST nhận { models?, order?, enabled?, keys? } — chỉ ghi những gì
- * gửi lên. Model trống = giữ nguyên; key trống = giữ nguyên key đã lưu.
- * Usage: tổng hợp từ bảng ai_usage (migration 017). OpenRouter limit:
- * gọi https://openrouter.ai/api/v1/auth/key bằng key hiệu lực (DB
- * trước, env sau); Gemini/Groq không có API xem giới hạn còn lại nên
- * chỉ thống kê đã dùng.
+ * GET / POST /api/admin/ai-settings — cấu hình AI của admin (GĐ3:
+ * MySQL + JWT mới, KHÔNG còn Supabase). Mount router tại
+ * /api/admin/ai-settings, route GET '/' + POST '/'.
+ * Chỉ role admin. GET trả { models, order, enabled, keysConfigured,
+ * keySource, workersaiAccountId, workersaiAccountIdSource, usage,
+ * openrouter } (merge với mặc định; KHÔNG trả giá trị key).
+ * POST nhận { models?, order?, enabled?, keys? } — chỉ upsert phần
+ * gửi lên; khác bản gốc ở 1 điểm an toàn: models/enabled được
+ * MERGE với giá trị đã lưu phía server (bản gốc thay cả object
+ * models bằng đúng các nấc gửi lên, nên POST thiếu nấc sẽ xóa nấc
+ * đó nếu client chưa merge — xem báo cáo). Model trống = giữ nguyên;
+ * key trống = giữ nguyên key đã lưu.
+ * Usage: tổng hợp từ bảng ai_usage. OpenRouter limit: gọi
+ * https://openrouter.ai/api/v1/auth/key bằng key hiệu lực (DB trước,
+ * env sau).
  */
+const router = Router();
+router.use(requireAuth, requireRole('admin'));
+
 const LEGS = ['gemini', 'groq', 'openrouter', 'workersai'];
 
-async function loadUsage(admin: any): Promise<any[]> {
+async function loadUsage(): Promise<any[]> {
   try {
-    const { data, error } = await admin
-      .from('ai_usage')
-      .select('leg,model,total_tokens,created_at')
-      .order('created_at', { ascending: false })
-      .limit(5000);
-    if (error || !data) return [];
+    const rows = await query<any>(
+      'SELECT `leg`, `model`, `total_tokens`, `created_at` FROM `ai_usage` ORDER BY `created_at` DESC LIMIT 5000'
+    );
     const agg = new Map<string, any>();
-    for (const row of data) {
+    for (const row of rows) {
       const k = `${row.leg}|||${row.model}`;
       const cur = agg.get(k) || {
         leg: row.leg,
@@ -81,127 +80,132 @@ async function loadOpenRouterLimit(): Promise<{ used: number; limit: number | nu
   }
 }
 
-export default async function handler(req: any, res: any) {
-  const user = await verifyUserToken(readBearer(req));
-  if (!isAdminUser(user)) {
-    res.status(403).json({ error: 'FORBIDDEN' });
-    return;
+async function loadSettingValue(key: string): Promise<any | null> {
+  try {
+    const rows = await query<any>('SELECT `value` FROM `ai_settings` WHERE `key` = ? LIMIT 1', [key]);
+    if (!rows[0]) return null;
+    const v = rows[0].value;
+    return typeof v === 'string' ? JSON.parse(v) : v;
+  } catch {
+    return null;
   }
-  const admin = getAdminClient();
-
-  if (req.method === 'GET') {
-    const out: any = {
-      models: { ...DEFAULT_MODELS },
-      order: [...LEGS],
-      enabled: { gemini: true, groq: true, openrouter: true, workersai: true } as Record<string, boolean>,
-      keysConfigured: { gemini: false, groq: false, openrouter: false, workersai: false },
-      keySource: { gemini: null, groq: null, openrouter: null, workersai: null },
-      usage: [] as any[],
-      openrouter: null as any,
-    };
-    try {
-      const { data } = await admin.from('ai_settings').select('key,value');
-      for (const row of data || []) {
-        if (row.key === 'models' && row.value && typeof row.value === 'object') {
-          for (const leg of LEGS) {
-            if (typeof (row.value as any)[leg] === 'string' && (row.value as any)[leg]) {
-              out.models[leg] = (row.value as any)[leg];
-            }
-          }
-        }
-        if (row.key === 'ai_chain' && Array.isArray((row.value as any)?.order)) {
-          const o = (row.value as any).order.filter((l: string) => LEGS.includes(l));
-          if (o.length) out.order = o;
-        }
-        if (row.key === 'ai_enabled' && row.value && typeof row.value === 'object') {
-          for (const leg of LEGS) {
-            if (typeof (row.value as any)[leg] === 'boolean') {
-              out.enabled[leg] = (row.value as any)[leg];
-            }
-          }
-        }
-      }
-    } catch {
-      // Bảng chưa có — trả mặc định.
-    }
-    try {
-      const acct = await workersAiAccountIdStatus();
-      out.workersaiAccountId = acct.value || null;
-      out.workersaiAccountIdSource = acct.source;
-    } catch {
-      out.workersaiAccountId = null;
-      out.workersaiAccountIdSource = null;
-    }
-    try {
-      const ks = await keysStatus();
-      out.keysConfigured = ks.configured;
-      out.keySource = ks.source;
-    } catch {
-      // Không xác định được key — để mặc định false.
-    }
-    out.usage = await loadUsage(admin);
-    out.openrouter = await loadOpenRouterLimit();
-    res.status(200).json(out);
-    return;
-  }
-
-  if (req.method === 'POST') {
-    let body: any = {};
-    try {
-      body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-    } catch {
-      body = {};
-    }
-    const upserts: { key: string; value: any }[] = [];
-    if (body.models && typeof body.models === 'object') {
-      const models: Record<string, string> = {};
-      for (const leg of LEGS) {
-        const m = body.models[leg];
-        if (typeof m === 'string' && m.trim()) models[leg] = m.trim();
-      }
-      if (Object.keys(models).length) upserts.push({ key: 'models', value: models });
-    }
-    if (Array.isArray(body.order)) {
-      const o = body.order.filter((l: string) => LEGS.includes(l));
-      if (o.length) upserts.push({ key: 'ai_chain', value: { order: o } });
-    }
-    if (body.enabled && typeof body.enabled === 'object') {
-      const enabled: Record<string, boolean> = {};
-      for (const leg of LEGS) {
-        if (typeof body.enabled[leg] === 'boolean') enabled[leg] = body.enabled[leg];
-      }
-      if (Object.keys(enabled).length) {
-        upserts.push({ key: 'ai_enabled', value: enabled });
-      }
-    }
-    if (body.keys && typeof body.keys === 'object') {
-      // Key trống = giữ nguyên key đã lưu (không xóa, không lộ lại).
-      const stored = await loadStoredKeys();
-      let changed = false;
-      for (const leg of LEGS) {
-        const k = body.keys[leg];
-        if (typeof k === 'string' && k.trim()) {
-          (stored as any)[leg] = k.trim();
-          changed = true;
-        }
-      }
-      if (changed) upserts.push({ key: 'ai_keys', value: stored });
-    }
-    if (typeof body.workersaiAccountId === 'string' && body.workersaiAccountId.trim()) {
-      upserts.push({ key: 'workersai_account_id', value: body.workersaiAccountId.trim() });
-    }
-    for (const row of upserts) {
-      const { error } = await admin
-        .from('ai_settings')
-        .upsert(row, { onConflict: 'key' });
-      if (error) {
-        res.status(500).json({ error: 'SAVE_FAILED', detail: error.message });
-        return;
-      }
-    }
-    res.status(200).json({ ok: true, saved: upserts.map((u) => u.key) });
-    return;
-  }
-
-  res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
 }
+
+async function upsertSetting(key: string, value: any): Promise<void> {
+  await execute(
+    'INSERT INTO `ai_settings` (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)',
+    [key, JSON.stringify(value)]
+  );
+}
+
+router.get('/', async (_req, res) => {
+  const out: any = {
+    models: { ...DEFAULT_MODELS },
+    order: [...LEGS],
+    enabled: { gemini: true, groq: true, openrouter: true, workersai: true } as Record<string, boolean>,
+    keysConfigured: { gemini: false, groq: false, openrouter: false, workersai: false },
+    keySource: { gemini: null, groq: null, openrouter: null, workersai: null },
+    usage: [] as any[],
+    openrouter: null as any,
+  };
+  const models = await loadSettingValue('models');
+  if (models && typeof models === 'object') {
+    for (const leg of LEGS) {
+      if (typeof (models as any)[leg] === 'string' && (models as any)[leg]) {
+        out.models[leg] = (models as any)[leg];
+      }
+    }
+  }
+  const chain = await loadSettingValue('ai_chain');
+  if (chain && Array.isArray((chain as any)?.order)) {
+    const o = (chain as any).order.filter((l: string) => LEGS.includes(l));
+    if (o.length) out.order = o;
+  }
+  const enabled = await loadSettingValue('ai_enabled');
+  if (enabled && typeof enabled === 'object') {
+    for (const leg of LEGS) {
+      if (typeof (enabled as any)[leg] === 'boolean') {
+        out.enabled[leg] = (enabled as any)[leg];
+      }
+    }
+  }
+  try {
+    const acct = await workersAiAccountIdStatus();
+    out.workersaiAccountId = acct.value || null;
+    out.workersaiAccountIdSource = acct.source;
+  } catch {
+    out.workersaiAccountId = null;
+    out.workersaiAccountIdSource = null;
+  }
+  try {
+    const ks = await keysStatus();
+    out.keysConfigured = ks.configured;
+    out.keySource = ks.source;
+  } catch {
+    // Không xác định được key — để mặc định false.
+  }
+  out.usage = await loadUsage();
+  out.openrouter = await loadOpenRouterLimit();
+  res.status(200).json(out);
+});
+
+router.post('/', async (req, res) => {
+  let body: any = {};
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+  } catch {
+    body = {};
+  }
+  const upserts: { key: string; value: any }[] = [];
+  if (body.models && typeof body.models === 'object') {
+    // MERGE phía server (khác bản gốc: bản gốc thay cả object).
+    const cur = (await loadSettingValue('models')) || {};
+    const models: Record<string, string> = { ...(typeof cur === 'object' ? cur : {}) };
+    for (const leg of LEGS) {
+      const m = body.models[leg];
+      if (typeof m === 'string' && m.trim()) models[leg] = m.trim();
+    }
+    upserts.push({ key: 'models', value: models });
+  }
+  if (Array.isArray(body.order)) {
+    const o = body.order.filter((l: string) => LEGS.includes(l));
+    if (o.length) upserts.push({ key: 'ai_chain', value: { order: o } });
+  }
+  if (body.enabled && typeof body.enabled === 'object') {
+    const cur = (await loadSettingValue('ai_enabled')) || {};
+    const enabled: Record<string, boolean> = { ...(typeof cur === 'object' ? cur : {}) };
+    for (const leg of LEGS) {
+      if (typeof body.enabled[leg] === 'boolean') enabled[leg] = body.enabled[leg];
+    }
+    if (Object.keys(enabled).length) {
+      upserts.push({ key: 'ai_enabled', value: enabled });
+    }
+  }
+  if (body.keys && typeof body.keys === 'object') {
+    // Key trống = giữ nguyên key đã lưu (không xóa, không lộ lại).
+    const stored = await loadStoredKeys();
+    let changed = false;
+    for (const leg of LEGS) {
+      const k = body.keys[leg];
+      if (typeof k === 'string' && k.trim()) {
+        (stored as any)[leg] = k.trim();
+        changed = true;
+      }
+    }
+    if (changed) upserts.push({ key: 'ai_keys', value: stored });
+  }
+  if (typeof body.workersaiAccountId === 'string' && body.workersaiAccountId.trim()) {
+    upserts.push({ key: 'workersai_account_id', value: body.workersaiAccountId.trim() });
+  }
+  try {
+    for (const row of upserts) {
+      await upsertSetting(row.key, row.value);
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: 'SAVE_FAILED', detail: String(e?.message || e).slice(0, 200) });
+    return;
+  }
+  res.status(200).json({ ok: true, saved: upserts.map((u) => u.key) });
+});
+
+export default router;

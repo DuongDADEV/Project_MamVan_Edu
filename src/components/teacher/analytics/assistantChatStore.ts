@@ -3,13 +3,13 @@ import type {
   AssistantChart,
   AssistantToolRun,
 } from '../../../services/ai/analyticsAssistant.ts';
-import { isSupabaseReady } from '../../../services/supabase/client.ts';
+import { getAccessToken } from '../../../services/api/http.ts';
 import {
   deleteAssistantChatHistory,
   fetchAssistantChatHistory,
   pruneAssistantChatHistory,
   upsertAssistantChatMessages,
-} from './assistantChatRepository.ts';
+} from '../../../services/api/chatClient.ts';
 import {
   CHAT_HISTORY_MAX,
   capChatHistory,
@@ -276,7 +276,7 @@ async function runSync(teacherId: string) {
  * từng hiện lịch sử của giáo viên khác).
  */
 export function initAssistantChatSync(teacherId?: string) {
-  if (!teacherId || !isSupabaseReady()) return;
+  if (!teacherId || !getAccessToken()) return;
   if (syncTeacherId === teacherId) return;
   // Đổi giáo viên trong cùng phiên: XÓA NGAY lịch sử đang hiển thị
   // trước khi đồng bộ mới về — nếu không tab sẽ thoáng thấy lịch sử
@@ -319,7 +319,7 @@ export function appendAssistantMsg(msg: Omit<ChatMsg, 'id'>) {
   emit({ ...state, messages: [...state.messages, full] });
   // Ghi lên server ngay (fire-and-forget, không chặn khung chat);
   // lỗi thì xếp vào outbox để lần đồng bộ sau đẩy lại.
-  if (syncTeacherId && isSupabaseReady()) {
+  if (syncTeacherId && !!getAccessToken()) {
     const tid = syncTeacherId;
     void (async () => {
       try {
@@ -351,7 +351,7 @@ export function clearAssistantChat() {
   // Xóa cả trên server để mọi trình duyệt cùng trống. Lỗi thì
   // server vẫn giữ — lần đồng bộ sau (server thắng) sẽ khôi phục
   // lại lịch sử, người dùng bấm xóa lại là xong.
-  if (syncTeacherId && isSupabaseReady()) {
+  if (syncTeacherId && !!getAccessToken()) {
     const tid = syncTeacherId;
     void deleteAssistantChatHistory(tid).catch(() => {});
   }

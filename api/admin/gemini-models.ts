@@ -1,27 +1,20 @@
-import {
-  verifyUserToken,
-  readBearer,
-  isAdminUser,
-} from '../_lib/supabase.ts';
-import { resolveKeys } from '../_lib/aiKeys.ts';
+import { Router } from 'express';
+import { requireAuth, requireRole } from '../_lib/auth';
+import { resolveKeys } from '../_lib/aiKeys';
 
 /**
  * POST /api/admin/gemini-models — liệt kê model mà key Gemini hiệu dụng
- * (DB trước, env fallback) nhìn thấy qua ListModels. Chỉ JWT admin.
- * Trả về tên model + phương thức hỗ trợ, KHÔNG trả key. Lưu ý: ListModels
- * từng liệt kê cả tên đã bị Google khai tử (gọi thật thì 404) nên con số
- * này là "key nhìn thấy", không phải "model nào cũng gọi được".
+ * (DB trước, env fallback) nhìn thấy qua ListModels (GĐ3: JWT mới,
+ * KHÔNG còn Supabase). Mount router tại /api/admin/gemini-models.
+ * Chỉ role admin. Trả về tên model + phương thức hỗ trợ, KHÔNG trả
+ * key. Lưu ý: ListModels từng liệt kê cả tên đã bị Google khai tử
+ * (gọi thật thì 404) nên con số này là "key nhìn thấy", không phải
+ * "model nào cũng gọi được".
  */
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
-    return;
-  }
-  const user = await verifyUserToken(readBearer(req));
-  if (!isAdminUser(user)) {
-    res.status(403).json({ error: 'FORBIDDEN' });
-    return;
-  }
+const router = Router();
+router.use(requireAuth, requireRole('admin'));
+
+router.post('/', async (_req, res) => {
   const keys = await resolveKeys();
   const apiKey = keys.gemini;
   if (!apiKey) {
@@ -69,4 +62,6 @@ export default async function handler(req: any, res: any) {
   } catch (e: any) {
     res.status(200).json({ ok: false, error: 'NETWORK', message: String(e?.message || e).slice(0, 200) });
   }
-}
+});
+
+export default router;

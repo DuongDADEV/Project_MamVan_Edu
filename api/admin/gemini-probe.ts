@@ -1,19 +1,21 @@
-import {
-  verifyUserToken,
-  readBearer,
-  isAdminUser,
-} from '../_lib/supabase.ts';
-import { resolveKeys } from '../_lib/aiKeys.ts';
+import { Router } from 'express';
+import { requireAuth, requireRole } from '../_lib/auth';
+import { resolveKeys } from '../_lib/aiKeys';
 
 /**
- * POST /api/admin/gemini-probe — gọi thử generateContent thật (prompt "hi",
- * maxOutputTokens=1) cho từng model Gemini để biết model nào DÙNG ĐƯỢC.
- * Chỉ JWT admin. Body: { names?: string[] } — không gửi names thì probe
- * toàn bộ model generateContent từ ListModels. Trả về từng model: ok,
- * http status, latency, usage của chính lượt probe (KHÔNG phải số token
- * còn lại — Gemini không có API xem token còn lại; 429 lúc probe nghĩa
- * là model đó hết lượt tại thời điểm đó). Không trả key.
+ * POST /api/admin/gemini-probe — gọi thử generateContent thật (prompt
+ * "hi", maxOutputTokens=1) cho từng model Gemini để biết model nào
+ * DÙNG ĐƯỢC (GĐ3: JWT mới, KHÔNG còn Supabase). Mount router tại
+ * /api/admin/gemini-probe. Chỉ role admin. Body: { names?: string[] }
+ * — không gửi names thì probe toàn bộ model generateContent từ
+ * ListModels. Trả về từng model: ok, http status, latency, usage của
+ * chính lượt probe (KHÔNG phải số token còn lại — Gemini không có API
+ * xem token còn lại; 429 lúc probe nghĩa là model đó hết lượt tại
+ * thời điểm đó). Không trả key.
  */
+const router = Router();
+router.use(requireAuth, requireRole('admin'));
+
 function scrub(text: string): string {
   return String(text || '')
     .replace(/AIza[A-Za-z0-9_-]+/g, '[key]')
@@ -60,27 +62,24 @@ async function probeOne(apiKey: string, name: string): Promise<any> {
   }
 }
 
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
-    return;
-  }
-  const user = await verifyUserToken(readBearer(req));
-  if (!isAdminUser(user)) {
-    res.status(403).json({ error: 'FORBIDDEN' });
-    return;
-  }
+router.post('/', async (req, res) => {
   const keys = await resolveKeys();
   const apiKey = keys.gemini;
   if (!apiKey) {
     res.status(200).json({ ok: false, error: 'GEMINI_KEY_NOT_CONFIGURED' });
     return;
   }
-  let names: string[] = Array.isArray((req.body as any)?.names)
-    ? (req.body as any).names.filter((n: any) => typeof n === 'string' && n)
+  let body: any = {};
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+  } catch {
+    body = {};
+  }
+  let names: string[] = Array.isArray(body?.names)
+    ? body.names.filter((n: any) => typeof n === 'string' && n)
     : [];
   if (!names.length) {
-    // Không chỉ định → lấy toàn bộ model generateContent từ ListModels.
+    // Không chỉ định -> lấy toàn bộ model generateContent từ ListModels.
     try {
       const r = await fetch(
         'https://generativelanguage.googleapis.com/v1beta/models?pageSize=100',
@@ -105,4 +104,6 @@ export default async function handler(req: any, res: any) {
     results.push(...part);
   }
   res.status(200).json({ ok: true, count: results.length, results });
-}
+});
+
+export default router;

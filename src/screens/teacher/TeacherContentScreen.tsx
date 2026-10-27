@@ -25,7 +25,7 @@ import {
   createEmptyAssignment,
   deleteAssignmentCompletely,
   getTeacherAssignments,
-} from '../../services/supabase/biRepository.ts';
+} from '../../services/api/biClient.ts';
 import { TopicFlowStrip } from '../../components/teacher/content/TopicFlowStrip.tsx';
 import {
   FlowItemType,

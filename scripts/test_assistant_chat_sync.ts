@@ -34,7 +34,8 @@ function check(name: string, cond: boolean, extra?: any) {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf-8');
 const storeSrc = read('src/components/teacher/analytics/assistantChatStore.ts');
-const repoSrc = read('src/components/teacher/analytics/assistantChatRepository.ts');
+const chatClientSrc = read('src/services/api/chatClient.ts');
+const chatRouteSrc = read('api/routes/chat.ts');
 const syncSrc = read('src/components/teacher/analytics/assistantChatSync.ts');
 const tabSrc = read('src/components/teacher/analytics/AnalyticsAssistantTab.tsx');
 const migSrc = read('database/migration_018_assistant_chat_history.sql');
@@ -113,12 +114,14 @@ check('Clear vẫn giữ 2 chạm (không gọi window.confirm)', !storeSrc.incl
 check('Đồng bộ lỗi giữ local + cho mount sau thử lại', storeSrc.includes('syncTeacherId = null'));
 check('Hành vi cũ giữ nguyên: cap 80 + dùng chung store', storeSrc.includes('MAX_STORED = 80') && storeSrc.includes('useSyncExternalStore'));
 
-console.log('=== 6. Repository: upsert chống trùng + prune + RLS ===');
-check('Upsert theo cặp (teacher_id, client_id)', repoSrc.includes("onConflict: 'teacher_id,client_id'"));
-check('Đọc xếp theo created_at rồi seq', repoSrc.includes(".order('created_at'") && repoSrc.includes(".order('seq'"));
-check('Có hàm prune giữ 80 mới nhất', repoSrc.includes('pruneAssistantChatHistory') && repoSrc.includes('slice(keep)'));
-check('Mọi query lọc theo teacher_id', (repoSrc.match(/\.eq\('teacher_id', teacherId\)/g) ?? []).length >= 3);
-check('Lỗi Supabase ném ra để store fallback (không nuốt)', repoSrc.includes("throw new Error(error.message)"));
+console.log('=== 6. Chat API (GĐ3): upsert chống trùng + prune + phạm vi JWT ===');
+// GĐ3: assistantChatRepository (Supabase) đã xóa; upsert/prune nằm ở
+// route server api/routes/chat.ts, client gọi qua chatClient.ts.
+check('Upsert theo cặp (teacher_id, client_id) ở server (ON DUPLICATE KEY UPDATE no-op)', chatRouteSrc.includes('ON DUPLICATE KEY UPDATE') && chatRouteSrc.includes('`teacher_id`, `client_id`'));
+check('Đọc xếp theo created_at rồi seq', chatRouteSrc.includes('ORDER BY `created_at` ASC, `seq` ASC'));
+check('Có hàm prune giữ 80 mới nhất (client + server CHAT_HISTORY_MAX)', chatClientSrc.includes('pruneAssistantChatHistory') && chatRouteSrc.includes('CHAT_HISTORY_MAX'));
+check('Mọi query gắn teacher_id từ JWT (không tin client gửi)', (chatRouteSrc.match(/teacher_id/g) ?? []).length >= 5 && chatRouteSrc.includes('ép teacher_id từ JWT'));
+check('Lỗi API ném ra để store fallback (apiFetch ném ApiError, không nuốt)', chatClientSrc.includes("await apiFetch('/api/chat/messages'") && chatClientSrc.includes("await apiFetch('/api/chat/history'"));
 
 console.log('=== 7. Migration 018: bảng + RLS theo mẫu 015 ===');
 check('Bảng assistant_chat_messages + UNIQUE (teacher_id, client_id)', migSrc.includes('CREATE TABLE IF NOT EXISTS public.assistant_chat_messages') && migSrc.includes('UNIQUE (teacher_id, client_id)'));

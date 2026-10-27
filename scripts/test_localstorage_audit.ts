@@ -20,8 +20,9 @@ function check(name: string, cond: boolean, extra?: any) {
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf-8');
-const supaSrc = read('src/services/supabase/supabaseRepositories.ts');
-const payloadSrc = read('src/services/supabase/payloadStore.ts');
+const contentClientSrc = read('src/services/api/contentClient.ts');
+const apiEssay = read('src/services/api/repositories.ts');
+const httpSrc = read('src/services/api/http.ts');
 const theorySrc = read('src/screens/TheoryLessonScreen.tsx');
 const videoSrc = read('src/screens/VideoLessonScreen.tsx');
 const quizRunnerSrc = read('src/components/QuizRunner.tsx');
@@ -34,40 +35,44 @@ function body(src: string, from: string, to: string): string {
   return b > a ? src.slice(a, b) : src.slice(a);
 }
 
-console.log('=== 1. getQuestions: DB-thắng (vụ ngân hàng 38 vs 22 câu) ===');
-check('DB thành công trả đúng server rows (không còn biến mergedQuestions)', supaSrc.includes('return supabaseMap;') && !supaSrc.includes('mergedQuestions'));
-check('Ghi đè cache bằng server rows để câu ma tự biến mất khi tải lại', supaSrc.includes("localStorage.setItem('mam_van_questions', JSON.stringify(supabaseMap))"));
-check('Fallback local khi query lỗi vẫn còn (error + catch)', supaSrc.split('return ownLocalQuestions()').length >= 3);
-check('Offline vẫn dùng mock (không đổi)', supaSrc.includes('if (!isSupabaseReady())') && supaSrc.includes('mockQuizRepo.getQuestions(topicId)'));
+console.log('=== 1. getQuestions (GĐ3): server-thắng, không gộp local, lỗi thì ném ===');
+// GĐ3: payloadStore/supabaseRepositories đã xóa; getQuestions nằm ở
+// contentClient. Luật mới (quyết đã duyệt): API lỗi thì NÉM, không fallback
+// lặng sang mock/local — các check fallback cũ được ĐẢO NGƯỢC.
+const qBody = body(contentClientSrc, 'async getQuestions', 'async getQuestionById');
+check('getQuestions trả map từ server, không gộp local', qBody.includes('return out') && !qBody.includes('readLocalList'));
+check('getQuestions không còn ghi cache kiểu cũ (không setItem mam_van_questions)', !qBody.includes('mam_van_questions'));
+check('Query lỗi ném (không catch trả cache, không fallback local)', !qBody.includes('catch'));
+check('Không còn đường mock cho dữ liệu server', !contentClientSrc.includes('mockQuizRepo') && !contentClientSrc.includes('mockContentRepo'));
 
-console.log('=== 2. syncPayloadCollection: server-only (quizzes/videos/theories) ===');
-const syncBody = body(payloadSrc, 'export async function syncPayloadCollection', 'export function filterContentItems');
-check('Đường đọc không còn đọc local để gộp (không readLocalList trong sync)', !syncBody.includes('readLocalList'));
-check('Không còn tự đẩy local-only lên server trong đường đọc (không toPush)', !syncBody.includes('toPush'));
-check('Vẫn ghi đè cache bằng server rows + trả list server', syncBody.includes('writeLocalList(storageKey, list)') && syncBody.includes('return list'));
-check('Query lỗi vẫn trả null để caller fallback cache', syncBody.includes('return null'));
-check('Đường đẩy tường minh còn nguyên (save/delete dùng pushLocalById)', payloadSrc.includes('export async function pushLocalById'));
+console.log('=== 2. fetchCollection (GĐ3, thay syncPayloadCollection): server-only ===');
+const syncBody = body(contentClientSrc, 'async function fetchCollection', 'async function fetchOne');
+check('Đường đọc không còn đọc local để gộp (không readLocalList trong fetch)', !syncBody.includes('readLocalList'));
+check('Không còn tự đẩy local-only lên server trong đường đọc (không saveItem/push)', !syncBody.includes('saveItem') && !syncBody.includes('pushLocal'));
+check('Vẫn ghi đè cache bằng server rows + trả list server', syncBody.includes('writeLocalList(cacheKey, list)') && syncBody.includes('return list'));
+check('Query lỗi ném, không trả null để caller fallback cache (luật GĐ3 mới)', !syncBody.includes('catch') && !syncBody.includes('return null'));
+check('Đường đẩy tường minh còn nguyên (saveItem/deleteItem)', contentClientSrc.includes('async function saveItem') && contentClientSrc.includes('async function deleteItem'));
 
-console.log('=== 3. getTopics: server-only ===');
-const topicsBody = body(supaSrc, 'async getTopics(', 'async saveTopic(');
+console.log('=== 3. getTopics (GĐ3): server-only qua fetchCollection ===');
+const topicsBody = body(contentClientSrc, 'async getTopics(', 'async getTopicById(');
 check('Không còn gộp chủ đề chỉ-có-ở-local (không localOnly)', !topicsBody.includes('localOnly'));
 check('Không còn tự đẩy trong đường đọc (không pushTopicRecord trong getTopics)', !topicsBody.includes('pushTopicRecord'));
-check('Trả đúng remoteTopics + ghi đè cache bằng server rows', topicsBody.includes('const topics: TopicWithMeta[] = remoteTopics;') && topicsBody.includes('writeLocalList(TOPIC_CACHE_KEY, topics)'));
-check('Query lỗi vẫn fallback mock', topicsBody.includes('mockContentRepo.getTopics(classId, onlyPublished)'));
-check('Đường lưu tường minh còn nguyên (saveTopic upsert + ném khi lỗi)', supaSrc.includes("from('topics')") && supaSrc.includes('Không lưu được chủ đề lên máy chủ'));
+check('Trả list server qua fetchCollection (ghi đè cache)', topicsBody.includes('fetchCollection'));
+check('Query lỗi ném, không fallback mock (luật GĐ3 mới)', !topicsBody.includes('mockContentRepo'));
+check('Đường lưu tường minh còn nguyên (saveItem qua apiFetch, lỗi thì ném)', contentClientSrc.includes('async function saveItem') && contentClientSrc.includes('await apiFetch'));
 
 console.log('=== 4. Màn bài học: questionsMap không lót cache local ===');
 check('TheoryLessonScreen không còn đọc cache câu hỏi', !theorySrc.includes("localStorage.getItem('mam_van_questions')"));
 check('VideoLessonScreen không còn đọc cache câu hỏi', !videoSrc.includes("localStorage.getItem('mam_van_questions')"));
 check('Cả 2 màn dùng đúng liveQuestions từ máy chủ', theorySrc.includes('return liveQuestions || {};') && videoSrc.includes('return liveQuestions || {};'));
 
-console.log('=== 5. Hồi quy: các luật DB-thắng cũ vẫn giữ ===');
-check('getSubmissions DB thành công chỉ dùng remoteList (không gộp cleanLocalList)', supaSrc.includes('let merged = [...remoteList]') && !supaSrc.includes('[...remoteList, ...cleanLocalList]'));
-check('getSubmissions lỗi vẫn fallback local', supaSrc.includes('[SupabaseEssay] Lỗi getSubmissions Supabase, dùng fallback local:'));
+console.log('=== 5. Hồi quy: các luật server-thắng cũ vẫn giữ (dạng GĐ3) ===');
+check('getSubmissions không gộp local (không cleanLocalList)', !apiEssay.includes('cleanLocalList'));
+check('getSubmissions lỗi thì ném (luật GĐ3 mới: không fallback local lặng)', httpSrc.includes('throw new ApiError'));
 
 console.log('=== 6. localStorage được GIỮ lại có lý do (fallback / local-only) ===');
 check('QuizRunner giữ cache làm fallback khi không có questions qua props (không gộp)', quizRunnerSrc.includes("localStorage.getItem('mam_van_questions')") && quizRunnerSrc.includes('customQuestions && customQuestions.length > 0'));
-check('Nháp chấm (mam_van_review_drafts) vẫn local-only (chưa có cột nháp trên DB)', supaSrc.includes("localStorage.getItem('mam_van_review_drafts')"));
+check('Nháp chấm (mam_van_review_drafts) vẫn local-only (chưa có cột nháp trên DB)', apiEssay.includes("localStorage.getItem('mam_van_review_drafts')"));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

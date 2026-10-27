@@ -20,7 +20,7 @@ import {
   deleteAssignmentCompletely,
   getAssignmentForEdit,
   updateAssignment,
-} from '../../../services/supabase/biRepository.ts';
+} from '../../../services/api/biClient.ts';
 
 interface AssignmentEditorProps {
   assignmentId: string;

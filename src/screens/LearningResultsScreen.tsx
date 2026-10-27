@@ -14,7 +14,7 @@ import {
   getGradedReviews,
   BiAttempt,
   BiPendingReview,
-} from '../services/supabase/biRepository.ts';
+} from '../services/api/biClient.ts';
 
 interface LearningResultsScreenProps {
   state: StudentState;

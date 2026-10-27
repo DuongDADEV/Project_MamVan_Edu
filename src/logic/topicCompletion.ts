@@ -1,7 +1,6 @@
 import { QuestionResult, StudentState } from '../types.ts';
 import { TopicWithMeta, QuizWithMeta, QuestionWithMeta } from '../services/types.ts';
 import { deriveFlowItems } from './flowOrder.ts';
-import { awardXP, XP_KEYS } from './xpEngine.ts';
 
 /**
  * Đánh giá hoàn thành TOÀN BỘ chủ đề theo mô hình XP mới (chủ dự án duyệt
@@ -64,33 +63,10 @@ export function isTopicFullyComplete(
 }
 
 /**
- * Nếu chủ đề đã hoàn thành toàn bộ và học sinh chưa nhận quỹ XP của chủ đề
- * này, trao XP ngay. Trả về state mới + số XP đã trao; chưa đủ điều kiện thì
- * trả về null.
+ * GĐ3: trao quỹ XP chủ đề KHÔNG còn tính ở client (xpEngine.ts đã xóa).
+ * Màn App gọi POST /api/topics/:id/complete khi vị ngữ thuần dưới đây
+ * báo chủ đề đã hoàn thành toàn bộ; server tự kiểm tra đã trao quỹ hay
+ * chưa và trả { awarded, totalXp }. File này chỉ còn giữ các vị ngữ
+ * thuần (đọc completedSteps/questionResults, không ghi XP) — pbixDashboard
+ * cũng dùng isTopicFullyComplete để tính bảng tiến độ chủ đề.
  */
-export function tryAwardTopicCompletion(
-  state: StudentState,
-  topic: TopicWithMeta,
-  quizzes: QuizWithMeta[],
-  questions: Record<string, QuestionWithMeta>
-): { state: StudentState; awardedXp: number } | null {
-  const reward = Math.max(0, Math.floor(topic.xpReward || 0));
-  if (reward <= 0) return null;
-  const key = XP_KEYS.topicComplete(topic.id);
-  const awarded = state.xpAwardedSteps ?? state.completedSteps;
-  if (awarded.includes(key)) return null;
-  if (
-    !isTopicFullyComplete(
-      topic,
-      quizzes,
-      questions,
-      state.completedSteps || [],
-      state.questionResults || []
-    )
-  ) {
-    return null;
-  }
-  const res = awardXP(state, key, reward, `Hoàn thành chủ đề: ${topic.title}`);
-  if (res.actualXp <= 0) return null;
-  return { state: { ...state, ...res.updatedState }, awardedXp: res.actualXp };
-}

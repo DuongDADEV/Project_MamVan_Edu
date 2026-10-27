@@ -1,19 +1,19 @@
-import {
-  getAdminClient,
-  verifyUserToken,
-  readBearer,
-  isAdminUser,
-} from '../_lib/supabase.ts';
-import { testLeg, DEFAULT_MODELS } from '../_lib/ai.ts';
-import { resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys.ts';
+import { Router } from 'express';
+import { query } from '../_lib/mysql';
+import { requireAuth, requireRole } from '../_lib/auth';
+import { testLeg, DEFAULT_MODELS } from '../_lib/ai';
+import { resolveKeys, workersAiAccountIdStatus } from '../_lib/aiKeys';
 
 /**
- * POST /api/admin/ai-test — admin test từng nấc AI.
- * Chỉ JWT admin. Prompt cực ngắn, timeout 12s/nấc (4 nấc xấu nhất 48s, dưới
- * maxDuration 60s của Vercel). Trả về kết quả
+ * POST /api/admin/ai-test — admin test từng nấc AI (GĐ3: MySQL + JWT
+ * mới, KHÔNG còn Supabase). Mount router tại /api/admin/ai-test.
+ * Chỉ role admin. Prompt cực ngắn, timeout 12s/nấc. Trả về kết quả
  * từng nấc (kể cả nấc sau khi 1 nấc đã ok) + latency. Không trả key,
  * thông báo lỗi đã lược bỏ chuỗi giống key.
  */
+const router = Router();
+router.use(requireAuth, requireRole('admin'));
+
 const LEGS = ['gemini', 'groq', 'openrouter', 'workersai'] as const;
 
 function scrub(text: string): string {
@@ -26,31 +26,22 @@ function scrub(text: string): string {
     .slice(0, 200);
 }
 
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
-    return;
-  }
-  const user = await verifyUserToken(readBearer(req));
-  if (!isAdminUser(user)) {
-    res.status(403).json({ error: 'FORBIDDEN' });
-    return;
-  }
+router.post('/', async (_req, res) => {
   let models: Record<string, string> = { ...DEFAULT_MODELS };
   let order: string[] = [...LEGS];
   try {
-    const admin = getAdminClient();
-    const { data } = await admin.from('ai_settings').select('key,value');
-    for (const row of data || []) {
-      if (row.key === 'models' && row.value && typeof row.value === 'object') {
+    const rows = await query<any>('SELECT `key`, `value` FROM `ai_settings`');
+    for (const row of rows) {
+      const v = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+      if (row.key === 'models' && v && typeof v === 'object') {
         for (const leg of LEGS) {
-          if (typeof (row.value as any)[leg] === 'string' && (row.value as any)[leg]) {
-            models[leg] = (row.value as any)[leg];
+          if (typeof (v as any)[leg] === 'string' && (v as any)[leg]) {
+            models[leg] = (v as any)[leg];
           }
         }
       }
-      if (row.key === 'ai_chain' && Array.isArray((row.value as any)?.order)) {
-        const o = (row.value as any).order.filter((l: string) =>
+      if (row.key === 'ai_chain' && Array.isArray((v as any)?.order)) {
+        const o = (v as any).order.filter((l: string) =>
           (LEGS as readonly string[]).includes(l)
         );
         if (o.length) order = o;
@@ -92,4 +83,6 @@ export default async function handler(req: any, res: any) {
     });
   }
   res.status(200).json({ ok: true, legs });
-}
+});
+
+export default router;

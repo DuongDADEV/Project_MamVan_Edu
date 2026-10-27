@@ -32,7 +32,7 @@ import {
   Upload,
   Loader2,
 } from 'lucide-react';
-import { uploadLessonMedia } from '../../../services/supabase/storage.ts';
+import { uploadLessonMedia } from '../../../services/api/storageClient.ts';
 import { initialBlocksFor, theorySectionsFromBlocks } from '../../../logic/theoryDraft.ts';
 
 interface TheoryLessonEditorProps {

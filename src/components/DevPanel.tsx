@@ -305,25 +305,10 @@ export const DevPanel: React.FC<DevPanelProps> = ({ state, onUpdateState }) => {
                     </div>
                   </div>
 
-                  {/* Nút cộng nhanh 40 XP để test trần */}
-                  <div className="pt-3 border-t border-slate-100">
-                    <label className="font-bold text-slate-700 block mb-2">
-                      Thử nghiệm nạp XP:
-                    </label>
-                    <button
-                      onClick={() =>
-                        onUpdateState((prev) => ({
-                          ...prev,
-                          xpToday: prev.xpToday + 40,
-                          xpWeek: prev.xpWeek + 40,
-                          totalXp: prev.totalXp + 40,
-                        }))
-                      }
-                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold hover:bg-emerald-100 transition-colors"
-                    >
-                      +40 XP hôm nay
-                    </button>
-                  </div>
+                  {/* GĐ3: nút cheat +40 XP đã gỡ — XP chỉ server tính,
+                      client tự cộng sẽ bị PUT student-states lọc bỏ và
+                      gây lệch hiển thị. Muốn test XP thì dùng luồng thật
+                      (điểm danh / nộp bài / hoàn thành chủ đề). */}
                 </div>
               )}
 
