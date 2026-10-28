@@ -934,7 +934,15 @@ export default function App() {
   };
 
   // 11b. Mở rương và thu thập vào bộ sưu tập
-  const handleClaimRewardChest = (rewardId: string, requestId: string) => {
+  // (29/10: trước đây chỉ đổi trạng thái ở máy khách nên tải lại là mất —
+  // nay ghi OPENED lên máy chủ trước, chỉ đổi giao diện khi máy chủ nhận.)
+  const handleClaimRewardChest = async (rewardId: string, requestId: string) => {
+    try {
+      await rewardService.updateRequestStatus(requestId, 'OPENED');
+    } catch (err: any) {
+      showToast(`Không mở được rương: ${err?.message || 'lỗi không rõ'}`);
+      return;
+    }
     setStudentState((prev) => ({
       ...prev,
       rewardRequests: prev.rewardRequests.map((r) =>

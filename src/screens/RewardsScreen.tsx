@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { StudentState, RewardTier, RewardRequest } from '../types.ts';
 import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../data/rewards.ts';
+import { mergeRewardRequests } from '../logic/mergeRewardRequests.ts';
 import { rewardService, classService, studentService, useLiveQuery } from '../services/index.ts';
 import { RewardTrack } from '../components/rewards/RewardTrack.tsx';
 import { ChestCard } from '../components/rewards/ChestCard.tsx';
@@ -58,6 +59,18 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
     return mergeRewardTiers(filterDbRewardsForOwner(dbRewards || [], studentTeacherId));
   }, [dbRewards, studentTeacherId]);
 
+  // Yêu cầu đổi quà HỢP NHẤT (29/10): state học sinh không kèm yêu cầu từ
+  // máy chủ nên chỉ đọc state là tải lại mất dấu — lấy thêm từ API của
+  // chính học sinh đó, gộp theo id, bản máy chủ thắng trạng thái.
+  const { data: serverRequests } = useLiveQuery<RewardRequest[]>(
+    () => rewardService.getRequests({ studentId: state.profile.id }),
+    ['reward']
+  );
+  const visibleRequests = useMemo(
+    () => mergeRewardRequests(serverRequests || [], state.rewardRequests),
+    [serverRequests, state.rewardRequests]
+  );
+
   // Quản lý Modal mở rương hoạt ảnh
   const [openingTarget, setOpeningTarget] = useState<{
     reward: RewardTier;
@@ -75,7 +88,7 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
   };
 
   // Lọc danh sách rương đã mở (OPENED) cho mục Bộ sưu tập
-  const openedRequests = state.rewardRequests
+  const openedRequests = visibleRequests
     .filter((req) => req.status === 'OPENED')
     .map((req) => ({
       request: req,
@@ -145,9 +158,9 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
           {sortedRewards.map((reward) => {
             // Lấy request tích cực gần nhất cho rương này (GIVEN, APPROVED, PENDING, REJECTED, hoặc OPENED)
-            const activeRequest = state.rewardRequests.find(
+            const activeRequest = visibleRequests.find(
               (r) => r.rewardId === reward.id && r.status !== 'REJECTED'
-            ) || state.rewardRequests.find((r) => r.rewardId === reward.id);
+            ) || visibleRequests.find((r) => r.rewardId === reward.id);
 
             return (
               <div key={reward.id} className="h-full flex flex-col">
@@ -171,7 +184,7 @@ export const RewardsScreen: React.FC<RewardsScreenProps> = ({
 
       {/* 5. MỤC "LỊCH SỬ ĐỀ XUẤT NHẬN QUÀ" (GHI "QUÀ BÍ MẬT" CHO CÁC YÊU CẦU CHƯA MỞ) */}
       <RequestHistory
-        requests={state.rewardRequests}
+        requests={visibleRequests}
         rewards={sortedRewards}
         onOpenChest={handleOpenChest}
       />

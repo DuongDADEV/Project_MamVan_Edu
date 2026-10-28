@@ -1,3 +1,11 @@
+## [dev] 2026-10-29 — Sửa lỗi học sinh không thấy yêu cầu đổi quà (mở rương gãy nửa sau)
+
+- Gốc lỗi: màn học sinh đọc yêu cầu từ state học sinh, nhưng API trạng thái không kèm yêu cầu (bảng trạng thái không có cột đó) nên tải lại là mất dấu; nút mở rương cũng chỉ đổi trạng thái ở máy khách, không gọi máy chủ. Hệ quả: học sinh không bao giờ thấy Được duyệt/Đã trao, nút "Mở rương ngay" không tới được, bộ sưu tập rỗng vĩnh viễn sau tải lại.
+- Sửa phía học sinh: màn "Rương quà bí mật" nay lấy thêm yêu cầu từ API của chính học sinh đó, gộp với yêu cầu ở máy khách theo id qua helper mới `mergeRewardRequests` (bản máy chủ thắng trạng thái, yêu cầu vừa gửi chưa kịp trả lại vẫn giữ); nút mở rương nay ghi OPENED lên máy chủ trước, chỉ đổi giao diện khi máy chủ nhận.
+- Sửa phía máy chủ để việc trên đúng tuyệt đối: thêm cột `reward_requests.reward_id` (migration chạy trực tiếp trên VPS, viết theo kiểu kiểm tra-có-rồi-mới-thêm nên chạy lại an toàn) — lúc tạo yêu cầu lưu đúng id mốc học sinh đã bấm (trước đây chỉ lưu họ rương chest_type nên mốc mặc định và mốc tự tạo cùng họ rương bị nhận nhầm nhau); API trả reward_id đã lưu trước, khớp họ rương chỉ là dự phòng cho yêu cầu cũ. Mở rương cho học sinh tự gọi: PATCH yêu cầu nay cho phép học sinh, nhưng CHỈ từ ĐÃ TRAO (GIVEN) sang ĐÃ MỞ (OPENED) trên yêu cầu của chính mình — chặn mở sớm lộ quà bí mật và chặn đổi mọi trạng thái khác; đường duyệt/từ chối/tra o của giáo viên không đổi.
+- Chưa làm đợt này (ghi nhận để đợt sau): lời nhắn từ chối chỉ trả về trong phản hồi, chưa lưu cột nên tải lại vẫn mất; số lượng (stock) vẫn chỉ hiển thị, chưa trừ.
+- Không regen sơ đồ đợt này (sửa để thực tế khớp đúng luồng đã vẽ, không đổi nghĩa luồng).
+
 ## [dev] 2026-10-29 — Sửa lỗi đợt sinh câu sau ghi đè câu đợt trước (phát hiện từ kiểm chứng nháp)
 
 - Kiểm chứng lại đợt fix nháp (CHECK B/C đều đạt tiêu chí: sinh 3 câu đều có đề thật, lưu hết thì tab nháp rỗng, ngân hàng đúng chủ đề "Test Draft Fix"; đẩy từ nháp cũng vào đúng chủ đề và nháp rỗng) — nhưng phát hiện bất thường: sau bước đẩy, tổng ngân hàng vẫn 3 thay vì 4 và câu trắc nghiệm đơn của đợt B biến mất khỏi danh sách.

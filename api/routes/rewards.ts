@@ -261,7 +261,10 @@ async function enrichRequests(conn: Db, rows: any[]): Promise<any[]> {
       studentName: st?.name || 'Học sinh',
       classId: st?.class_id,
       className: st?.class_name,
-      rewardId: matched?.id || `tier_${String(row.chest_type || 'hat').toLowerCase()}`,
+      // reward_id đã lưu lúc tạo (29/10) mới là mốc CHÍNH XÁC học sinh đã
+      // bấm — khớp theo tierKey chỉ là dự phòng cho yêu cầu cũ (trước khi
+      // có cột), vì một tierKey có thể có nhiều mốc (mặc định + tự tạo).
+      rewardId: row.reward_id || matched?.id || `tier_${String(row.chest_type || 'hat').toLowerCase()}`,
       giftName: row.gift_name,
       requestedAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
       approvedAt: row.approved_at ? new Date(row.approved_at).getTime() : undefined,
@@ -363,8 +366,8 @@ rewardsRouter.post('/reward-requests', async (req: AuthedRequest, res) => {
     if (requiredXp > 0 && totalBalance < requiredXp) return 'INSUFFICIENT_XP';
     const id = randomUUID();
     await tx.execute(
-      'INSERT INTO `reward_requests` (`id`, `student_id`, `chest_type`, `xp_week_snapshot`, `gift_name`, `status`) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, studentId, chestType, xpWeekSnapshot, reward?.name || 'Phần thưởng Mầm Văn', 'PENDING']
+      'INSERT INTO `reward_requests` (`id`, `student_id`, `chest_type`, `xp_week_snapshot`, `gift_name`, `status`, `reward_id`) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, studentId, chestType, xpWeekSnapshot, reward?.name || 'Phần thưởng Mầm Văn', 'PENDING', reward?.id || null]
     );
     // TRỪ NGAY LÚC TẠO (không đợi duyệt) — hành vi gốc.
     // Chữ ký xp.ts: deductForGift(db, studentId, amount, requestId) —
@@ -425,7 +428,7 @@ async function applyRequestStatus(
   return { prev };
 }
 
-rewardsRouter.patch('/reward-requests/:id', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
+rewardsRouter.patch('/reward-requests/:id', ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const id = req.params.id;
   if (!checkKeyLen(res, id)) return;
@@ -436,12 +439,24 @@ rewardsRouter.patch('/reward-requests/:id', requireRole('teacher', 'admin'), ah(
     return;
   }
   // Kiểm tra phạm vi trước (request của học sinh lớp mình).
-  const row = await query<any>('SELECT `student_id` FROM `reward_requests` WHERE `id` = ? LIMIT 1', [id]);
+  const row = await query<any>('SELECT `student_id`, `status` FROM `reward_requests` WHERE `id` = ? LIMIT 1', [id]);
   if (!row[0]) {
     httpErr(res, 404, 'NOT_FOUND');
     return;
   }
-  if (isTeacher(caller) && !(await canAccessStudent(db, caller, row[0].student_id))) {
+  if (isStudent(caller)) {
+    // Học sinh CHỈ được tự mở rương của chính mình, và chỉ từ trạng thái
+    // ĐÃ TRAO (GIVEN) sang ĐÃ MỞ (OPENED) — chặn mở sớm để lộ quà bí mật
+    // khi chưa được trao, và chặn đổi mọi trạng thái khác.
+    if (
+      status !== 'OPENED' ||
+      row[0].student_id !== caller.studentId ||
+      row[0].status !== 'GIVEN'
+    ) {
+      httpErr(res, 403, 'FORBIDDEN');
+      return;
+    }
+  } else if (isTeacher(caller) && !(await canAccessStudent(db, caller, row[0].student_id))) {
     httpErr(res, 403, 'FORBIDDEN');
     return;
   }
