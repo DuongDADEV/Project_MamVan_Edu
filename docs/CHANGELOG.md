@@ -1,3 +1,9 @@
+## 2026-10-28 — Bài lý thuyết mới không còn câu gợi ý nằm trong nội dung
+
+- Sửa: mẫu đoạn văn mới của bài lý thuyết trước đây gán sẵn câu "Gõ nội dung lý thuyết tại đây..." (và mẫu dùng chung còn gán sẵn câu gợi ý cho khối ví dụ/ghi nhớ) làm NỘI DUNG thật — giáo viên mở bài mới nào cũng phải xóa tay, quên xóa là câu đó bị lưu/xuất bản cho học sinh đọc. Nay các khối mẫu để trống; ô nhập vẫn hiện gợi ý thật bằng thuộc tính placeholder (tự ẩn khi gõ, không bao giờ lưu thành nội dung). Sửa ở cả 3 chỗ tạo mẫu: `TeacherContentScreen` (Thêm bài), `logic/theoryDraft.ts` (mẫu dùng chung của trình soạn), `analyticsAssistant` (AI tạo nháp lý thuyết).
+- Kèm: màn hình học sinh bỏ qua các khối rỗng (đoạn/tiêu đề/ví dụ/ghi nhớ chưa nhập) khi hiển thị, để bài xuất bản mà chưa điền khối mẫu cũng không lộ khoảng trắng thừa.
+- Không đổi luồng/sơ đồ: chỉ đổi giá trị mặc định của mẫu và điều kiện hiển thị.
+
 ## 2026-10-28 — Sửa gốc vụ mất dải luồng học trong trình soạn bài
 
 - NGUYÊN NHÂN THẬT (đính chính bản sửa trước): `normalizeRow` trong `src/services/api/contentClient.ts` xóa `topicId` của mọi bài (video/lý thuyết/quiz) ngay sau khi nạp từ server — điều kiện xóa chỉ kiểm tra `topic_id` (snake_case) và `payload.topicId`, trong khi server trả về `topicId` (camelCase, đã gộp sẵn, không còn `payload`). Vì vậy trình soạn không biết bài thuộc chủ đề nào nên không hiện dải luồng học, và cây chủ đề cũng báo "chưa có bài nào" dù bài đã gắn vào chủ đề. Lỗi này có từ tầng API GĐ3 (trước đó tầng mock giữ nguyên `topicId` nên dải vẫn hiện).

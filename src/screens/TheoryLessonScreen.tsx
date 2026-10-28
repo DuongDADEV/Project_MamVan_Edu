@@ -647,7 +647,15 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
             {/* CÁC PHẦN NỘI DUNG LÝ THUYẾT (BLOCKS HOẶC SECTIONS) */}
             {theory.blocks && theory.blocks.length > 0 ? (
               <div className="space-y-4">
-                {theory.blocks.map((b, bIdx) => (
+                {theory.blocks.map((b, bIdx) => {
+                  // Khối rỗng (mẫu mới chưa nhập) không hiển thị cho học sinh
+                  // — tránh khoảng trắng thừa khi bài được xuất bản mà chưa điền.
+                  const isEmptyBlock =
+                    ((b.type === 'paragraph' || b.type === 'heading') && !(b.content || '').trim()) ||
+                    (b.type === 'example' && !(b.exampleText || '').trim() && !(b.exampleAnalysis || '').trim()) ||
+                    (b.type === 'takeaway' && !(b.takeawayText || '').trim());
+                  if (isEmptyBlock) return null;
+                  return (
                   <div key={b.id || bIdx}>
                     {b.type === 'heading' && (
                       <h3
@@ -702,7 +710,8 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                       </div>
                     )}
                   </div>
-                ))}
+                );
+              })}
               </div>
             ) : (
               <div className="space-y-6">

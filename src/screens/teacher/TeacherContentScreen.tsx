@@ -495,7 +495,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
           sections: [],
           blocks: [
             { id: 'b_1', type: 'heading', level: 2, content: '1. Khái niệm và nhận diện' },
-            { id: 'b_2', type: 'paragraph', content: 'Gõ nội dung lý thuyết tại đây...' },
+            { id: 'b_2', type: 'paragraph', content: '' },
           ],
           practiceQuizId: '',
           testQuizId: '',

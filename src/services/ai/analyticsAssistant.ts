@@ -1061,7 +1061,7 @@ export async function executeTool(
           ? [{ id: 'b_1', type: 'paragraph', content: args.content }]
           : [
               { id: 'b_1', type: 'heading', level: 2, content: '1. Khái niệm và nhận diện' },
-              { id: 'b_2', type: 'paragraph', content: 'Gõ nội dung lý thuyết tại đây...' },
+              { id: 'b_2', type: 'paragraph', content: '' },
             ];
         const saved = await contentRepo.saveTheoryLesson({
           topicId: topic.id,

@@ -9,14 +9,14 @@ import type { TheoryBlock, TheoryLessonWithMeta } from '../services/types.ts';
 export function defaultTheoryBlocks(): TheoryBlock[] {
   return [
     { id: 'b_1', type: 'heading', level: 2, content: '1. Khái niệm và đặc điểm chung' },
-    { id: 'b_2', type: 'paragraph', content: 'Gõ nội dung giải thích lý thuyết chi tiết tại đây...' },
+    { id: 'b_2', type: 'paragraph', content: '' },
     {
       id: 'b_3',
       type: 'example',
-      exampleText: 'Trích dẫn câu thơ hoặc đoạn văn mẫu...',
-      exampleAnalysis: 'Phân tích nét đặc sắc về nghệ thuật hoặc nội dung...',
+      exampleText: '',
+      exampleAnalysis: '',
     },
-    { id: 'b_4', type: 'takeaway', takeawayText: 'Ghi nhớ cốt lõi cần nhớ để làm bài tập.' },
+    { id: 'b_4', type: 'takeaway', takeawayText: '' },
   ];
 }
 
