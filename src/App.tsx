@@ -542,18 +542,27 @@ export default function App() {
   // lấy trực tiếp theo id thay vì báo "không còn tồn tại" ngay — lỗi
   // 28/10: học sinh bấm bài cô vừa xuất bản thì gặp trang "Bài tập này
   // không còn tồn tại" vì rawQuizzes của phiên cũ chưa có bài mới.
+  // Cùng họ lỗi: câu hỏi của bài mới cũng chưa có trong rawQuestions của
+  // phiên cũ → màn làm bài báo "Không tìm thấy câu hỏi trong đề này" —
+  // nên khi lấy bài theo id thì lấy kèm luôn câu hỏi của chủ đề đó.
   const [homeworkQuizFallback, setHomeworkQuizFallback] = useState<QuizWithMeta | null>(null);
   const [homeworkQuizLoading, setHomeworkQuizLoading] = useState(false);
+  const [homeworkQuestionsFallback, setHomeworkQuestionsFallback] = useState<Record<string, QuestionWithMeta> | null>(null);
+  const [homeworkQuestionsLoading, setHomeworkQuestionsLoading] = useState(false);
   useEffect(() => {
     if (activeFlow?.type !== 'homework' || !activeFlow.homeworkQuizId) {
       setHomeworkQuizFallback(null);
       setHomeworkQuizLoading(false);
+      setHomeworkQuestionsFallback(null);
+      setHomeworkQuestionsLoading(false);
       return;
     }
     const found = (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId);
     if (found) {
       setHomeworkQuizFallback(null);
       setHomeworkQuizLoading(false);
+      setHomeworkQuestionsFallback(null);
+      setHomeworkQuestionsLoading(false);
       return;
     }
     let cancelled = false;
@@ -564,11 +573,32 @@ export default function App() {
         if (cancelled) return;
         setHomeworkQuizFallback(q || null);
         setHomeworkQuizLoading(false);
+        if (!q) {
+          setHomeworkQuestionsFallback(null);
+          setHomeworkQuestionsLoading(false);
+          return;
+        }
+        setHomeworkQuestionsLoading(true);
+        quizService
+          .getQuestions(q.topicId)
+          .then((qs) => {
+            if (cancelled) return;
+            setHomeworkQuestionsFallback(qs || null);
+            setHomeworkQuestionsLoading(false);
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setHomeworkQuestionsFallback(null);
+              setHomeworkQuestionsLoading(false);
+            }
+          });
       })
       .catch(() => {
         if (!cancelled) {
           setHomeworkQuizFallback(null);
           setHomeworkQuizLoading(false);
+          setHomeworkQuestionsFallback(null);
+          setHomeworkQuestionsLoading(false);
         }
       });
     return () => {
@@ -1087,11 +1117,21 @@ export default function App() {
             // Dai luong chu de cho bai tap (26/10, mo rong tu man video/ly thuyet):
             // bai tap mo tu danh sach chu de cung hien du luong theo dung thu tu
             // co dang + di tiep bai sau khi nop, thay vi rot ve danh sach.
+            // (Bài lấy theo id khi cache cũ thiếu thì cũng phải có mặt trong
+            // danh sách quizzes của luồng, không là nút "bài tiếp" tính sai.)
+            const homeworkFlowQuizzes = [...(rawQuizzes || [])];
+            if (
+              homeworkQuizFallback &&
+              homeworkQuizFallback.topicId === targetQuiz.topicId &&
+              !homeworkFlowQuizzes.some((q) => q.id === homeworkQuizFallback.id)
+            ) {
+              homeworkFlowQuizzes.push(homeworkQuizFallback);
+            }
             const homeworkFlowPath = buildTopicFlowPath({
               flowOrder: (rawTopics || []).find((t) => t.id === targetQuiz.topicId)?.flowOrder,
               videos: (rawVideos || []).filter((v) => v.topicId === targetQuiz.topicId),
               theories: (rawTheories || []).filter((t) => t.topicId === targetQuiz.topicId),
-              quizzes: (rawQuizzes || []).filter((q) => q.topicId === targetQuiz.topicId),
+              quizzes: homeworkFlowQuizzes.filter((q) => q.topicId === targetQuiz.topicId),
             });
             const homeworkNext = nextFlowItem(homeworkFlowPath, 'quiz', targetQuiz.id);
             const goHomeworkNext = () =>
@@ -1105,9 +1145,20 @@ export default function App() {
                   : null
               );
 
+            const qMap = { ...(rawQuestions || {}), ...(homeworkQuestionsFallback || {}) };
             const qList = (targetQuiz.questionIds || [])
-              .map((id) => (rawQuestions ? rawQuestions[id] : null))
+              .map((id) => qMap[id] || null)
               .filter((q): q is NonNullable<typeof q> => !!q);
+
+            // Câu hỏi của bài lấy theo id đang tải về thì chờ, không vội
+            // báo "Không tìm thấy câu hỏi trong đề này".
+            if (homeworkQuestionsLoading) {
+              return (
+                <div className="w-full max-w-2xl mx-auto py-16 px-4 text-center space-y-4">
+                  <p className="font-bold text-[#2F3E6B]">Đang tải bài tập...</p>
+                </div>
+              );
+            }
 
             // Quy tắc kiểm tra 1 lần (đợt sửa 24/10): bài kiểm tra (quick/mastery/
             // final) đã hoàn thành thì chỉ cho xem lại — không mở QuizRunner mới,

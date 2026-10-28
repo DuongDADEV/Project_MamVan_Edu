@@ -1,3 +1,8 @@
+## [dev] 2026-10-28 — Lấy kèm câu hỏi khi mở bài tập ngoài cache + hiện mô tả video
+
+- Nối tiếp sửa "Bài tập không còn tồn tại": kiểm chứng 17:47 cho thấy cửa bài tập đã qua (không còn báo không tồn tại) nhưng màn làm bài lại báo "Không tìm thấy câu hỏi trong đề này" — vì câu hỏi của bài mới xuất bản cũng chưa có trong `rawQuestions` của phiên cũ. Nay khi lấy bài theo id thì lấy kèm luôn câu hỏi của chủ đề đó (gộp vào danh sách câu hỏi của màn làm bài, và bài đó cũng được tính vào luồng để nút "bài tiếp" không sai); trong lúc lấy thì hiện "Đang tải bài tập..." thay vì báo không có câu hỏi.
+- Màn học video của học sinh nay hiện thêm mô tả của video (dưới dòng thời lượng/chủ đề) — trước đây giáo viên nhập mô tả nhưng bên học sinh không có chỗ nào in ra (vd mô tả "16" của video "15" tàng hình).
+
 ## [dev] 2026-10-28 — Sửa "Bài tập không còn tồn tại" khi cô vừa xuất bản
 
 - Nguyên nhân: màn làm bài tập trong App.tsx chỉ tìm bài trong danh sách cache `rawQuizzes` của phiên học sinh đang mở — cô xuất bản bài mới trong lúc học sinh đang mở app thì danh sách cache chưa có bài đó, bấm vào là gặp ngay trang "Bài tập này không còn tồn tại hoặc đang được tải lại" (không có trạng thái đang tải, không tự lấy lại). Máy chủ kiểm chứng đúng: bài đã xuất bản, học sinh lấy danh sách/câu hỏi đều thấy — lỗi hoàn toàn ở client.

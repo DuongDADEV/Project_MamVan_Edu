@@ -596,6 +596,10 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               <span>Chủ đề: {video.subtopics.join(', ')}</span>
             </div>
 
+            {video.description ? (
+              <p className="text-sm text-slate-600 mb-6">{video.description}</p>
+            ) : null}
+
             {/* KHUNG PHÁT VIDEO HIỆN ĐẠI (Overlay controls, không bị đẩy tràn ra ngoài) */}
             <div className="relative rounded-3xl overflow-hidden bg-slate-950 aspect-video border border-slate-800 shadow-2xl group select-none">
               {!isVideoError && video.sampleUrl ? (
