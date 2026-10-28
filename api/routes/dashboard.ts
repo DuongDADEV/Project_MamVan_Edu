@@ -202,7 +202,7 @@ async function attemptsWithAnswers(studentIds: string[] | null): Promise<any[]> 
     : [];
   const qIds = [...new Set(answers.map((a: any): string => a.question_id))] as string[];
   const qs = qIds.length
-    ? await query<any>(`SELECT \`id\`, \`prompt\`, \`type\` FROM \`questions\` WHERE \`id\` IN (${inList(qIds)})`, qIds)
+    ? await query<any>(`SELECT \`id\`, \`prompt\`, \`type\`, \`level\` FROM \`questions\` WHERE \`id\` IN (${inList(qIds)})`, qIds)
     : [];
   const stRows = await query<any>('SELECT `id`, `name` FROM `students`');
   const names = new Map(stRows.map((s: any) => [s.id, s.name]));
@@ -218,6 +218,7 @@ async function attemptsWithAnswers(studentIds: string[] | null): Promise<any[]> 
       questionId: a.question_id,
       prompt: q?.prompt || a.question_id,
       questionType: q?.type || '',
+      level: q?.level || '',
       responseText: renderResponse(a.response_json, parseJson),
       isCorrect: a.is_correct,
       score: a.score_awarded,

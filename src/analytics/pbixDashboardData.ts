@@ -85,6 +85,17 @@ function unwrapList(data: any): any[] {
   return [];
 }
 
+/** Ép điểm về number: MySQL DECIMAL trả về dạng chuỗi ("10.00") nên cộng
+    trực tiếp sẽ nối chuỗi ("010.00" + "10.00" = "010.0010.00" → NaN khi so
+    sánh) làm KPI Tỷ lệ điểm đạt và biểu đồ mức tư duy trống rỗng dù đã có
+    câu chấm xong. null/NaN giữ nguyên null để compute coi là 0/mất điểm
+    theo đúng nghĩa của nó. */
+export function toPbixNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function fetchPbixDashboardRows(opts: {
   teacherId?: string;
   appStudents: StudentAccount[];
@@ -186,8 +197,8 @@ export async function fetchPbixDashboardRows(opts: {
           answerId: a.answerId ?? a.answer_id ?? a.id ?? '',
           attemptId: a.attemptId ?? a.attempt_id ?? attempt.attemptId,
           questionId: a.questionId ?? a.question_id ?? '',
-          score: a.score ?? a.score_awarded ?? null,
-          maxScore: a.maxScore ?? a.max_score ?? null,
+          score: toPbixNumber(a.score ?? a.score_awarded),
+          maxScore: toPbixNumber(a.maxScore ?? a.max_score),
           gradingStatus: a.gradingStatus ?? a.grading_status ?? '',
         });
         const level = a.level ?? a.questionLevel;

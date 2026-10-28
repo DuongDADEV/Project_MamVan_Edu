@@ -1,3 +1,9 @@
+## [dev] 2026-10-28 — Sửa Tổng quan trống Tỷ lệ điểm đạt dù đã có câu chấm xong
+
+- Nguyên nhân: MySQL DECIMAL trả về dạng chuỗi ("10.00") nên phía client cộng điểm bằng nối chuỗi: 2 câu 0/10 + 10/10 thành tổng "010.0010.00" → NaN khi so sánh → KPI Tỷ lệ điểm đạt, tỉ lệ cá nhân và biểu đồ mức tư duy đều rơi về rỗng. Trước đợt chấm 28/10 chưa có câu nào đã chấm nên lỗi này không lộ ra; khi 2 câu đầu tiên được chấm xong nó mới hiện.
+- Sửa: loader pbix ép score/maxScore về number (`toPbixNumber`, null giữ null) trước khi đưa vào `computePbixDashboard`; máy chủ `/api/dashboard/attempts` kèm thêm `level` của câu hỏi để biểu đồ mức tư duy hiện đúng tên mức (trước đây không có level nên chỉ hiện "Chưa xác định").
+- Kiểm chứng bằng dữ liệu thật từ máy chủ: bản cũ cho passRate null + biểu đồ rỗng (đúng ảnh chụp màn hình), bản sửa cho passRate 0.5, Khánh Chi 0.5, biểu đồ 1 dòng Thông hiểu 0.5 (2 câu).
+
 ## [dev] 2026-10-28 — Điền trống: sửa nốt 2 editor còn lại + chống mất đáp án cũ khi gõ
 
 - Lần kiểm chứng trình duyệt đầu tiên phát hiện: giáo viên còn 2 đường soạn câu điền trống khác ngoài QuizBuilder — màn Bài tập & đánh giá (AssignmentEditor) và modal ngân hàng câu hỏi (TeacherQuestionBankScreen) — vẫn dùng form cũ (1 đáp án rời, không có `___`). Cả 2 nay dùng chung kiểu soạn mới: bôi đen đoạn văn → bấm "Tạo ô trống" (đoạn đó thành đáp án, chỗ đó thành ô trống), sửa/xóa từng ô, nhiều cách chấp nhận cách nhau bằng `|`, nút thêm ô ở cuối câu.
