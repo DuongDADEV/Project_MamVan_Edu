@@ -1,14 +1,13 @@
 /**
- * Đồng bộ nguồn tài liệu FILE của Mầm AI Studio với database (28/10).
+ * Đồng bộ nguồn tài liệu của Mầm AI Studio với database (28/10).
  *
- * Trước đây nguồn chỉ sống ở localStorage trình duyệt: đổi máy, xóa cache
- * hay lệch khóa là mất. Nay nguồn type 'file' (tải pdf/docx/txt lên) còn
- * được lưu ở bảng ai_sources trên máy chủ, theo giáo viên + chủ đề.
- * Nguồn dán văn bản và bản ghi KHÔNG thuộc phạm vi này — vẫn chỉ ở local.
+ * Lúc đầu chỉ nguồn FILE (tải pdf/docx/txt lên) lưu database; theo lệnh
+ * chủ dự án sau đó mở rộng ra TẤT CẢ nguồn: dán văn bản, bản ghi, file.
+ * Bảng ai_sources trên máy chủ, theo giáo viên + chủ đề.
  *
- * Luật hợp nhất khi mở Studio: nguồn file trên máy chủ là chuẩn; nguồn
- * file ở local mà máy chủ chưa có (tải lên lúc mất mạng) thì giữ lại và
- * đẩy bù lên; nguồn file ở local đã có trên máy chủ thì lấy bản máy chủ.
+ * Luật hợp nhất khi mở Studio: nguồn trên máy chủ là chuẩn; nguồn ở local
+ * mà máy chủ chưa có (thêm vào lúc mất mạng) thì giữ lại và đẩy bù; nguồn
+ * đã xóa ở nơi khác không bị đẩy lại (nhờ dấu đã-đồng-bộ).
  * Lỗi mạng không chặn dùng Studio — nguồn vẫn dùng được ở local, lần mở
  * sau sẽ đồng bộ lại.
  */
@@ -19,8 +18,12 @@ function encodeTopic(topicId: string): string {
   return encodeURIComponent(topicId);
 }
 
-/** Lấy toàn bộ nguồn file của chủ đề từ máy chủ (rỗng nếu chưa có/không có quyền). */
-export async function fetchServerFileSources(topicId: string): Promise<AISource[]> {
+function validType(t: any): AISource['type'] {
+  return t === 'text' || t === 'file' || t === 'transcript' ? t : 'file';
+}
+
+/** Lấy toàn bộ nguồn của chủ đề từ máy chủ (rỗng nếu chưa có/không có quyền). */
+export async function fetchServerSources(topicId: string): Promise<AISource[]> {
   const rows = await apiFetch<any[]>(`/api/ai-sources?topicId=${encodeTopic(topicId)}`);
   if (!Array.isArray(rows)) return [];
   return rows
@@ -28,7 +31,7 @@ export async function fetchServerFileSources(topicId: string): Promise<AISource[
     .map((r) => ({
       id: r.id,
       title: typeof r.title === 'string' ? r.title : 'Tài liệu chưa đặt tên',
-      type: 'file' as const,
+      type: validType(r.type),
       content: r.content,
       wordCount: typeof r.wordCount === 'number' ? r.wordCount : 0,
       isEnabled: r.isEnabled !== false,
@@ -37,12 +40,13 @@ export async function fetchServerFileSources(topicId: string): Promise<AISource[
     }));
 }
 
-/** Đẩy (upsert) một nguồn file lên máy chủ. Lỗi thì ném để phía gọi báo rõ. */
-export async function pushFileSource(topicId: string, src: AISource): Promise<void> {
+/** Đẩy (upsert) một nguồn lên máy chủ. Lỗi thì ném để phía gọi báo rõ. */
+export async function pushSource(topicId: string, src: AISource): Promise<void> {
   await apiPost('/api/ai-sources', {
     id: src.id,
     topicId,
     title: src.title,
+    type: src.type,
     content: src.content,
     fileName: src.fileName || null,
     wordCount: src.wordCount,
@@ -50,15 +54,15 @@ export async function pushFileSource(topicId: string, src: AISource): Promise<vo
   });
 }
 
-/** Đổi trạng thái bật/tắt của một nguồn file trên máy chủ (best-effort). */
-export async function patchFileSourceEnabled(id: string, isEnabled: boolean): Promise<void> {
+/** Đổi trạng thái bật/tắt của một nguồn trên máy chủ (best-effort). */
+export async function patchSourceEnabled(id: string, isEnabled: boolean): Promise<void> {
   await apiFetch(`/api/ai-sources/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify({ isEnabled }),
   });
 }
 
-/** Xóa một nguồn file khỏi máy chủ (best-effort). */
-export async function deleteFileSource(id: string): Promise<void> {
+/** Xóa một nguồn khỏi máy chủ (best-effort). */
+export async function deleteSource(id: string): Promise<void> {
   await apiFetch(`/api/ai-sources/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

@@ -20695,7 +20695,7 @@ var require_application = __commonJS({
   "node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router19 = require_router();
+    var Router20 = require_router();
     var methods = require_methods();
     var middleware = require_init();
     var query2 = require_query();
@@ -20760,7 +20760,7 @@ var require_application = __commonJS({
     };
     app3.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router19({
+        this._router = new Router20({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -22624,7 +22624,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router19 = require_router();
+    var Router20 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -22647,7 +22647,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router19;
+    exports2.Router = Router20;
     exports2.json = bodyParser.json;
     exports2.query = require_query();
     exports2.raw = bodyParser.raw;
@@ -51939,10 +51939,10 @@ var require_multer = __commonJS({
 
 // api/vps-entry.ts
 var import_path = __toESM(require("path"), 1);
-var import_express21 = __toESM(require_express2(), 1);
+var import_express22 = __toESM(require_express2(), 1);
 
 // api/index.ts
-var import_express20 = __toESM(require_express2(), 1);
+var import_express21 = __toESM(require_express2(), 1);
 
 // api/_lib/filesStatic.ts
 var import_express = __toESM(require_express2(), 1);
@@ -59342,9 +59342,158 @@ chatRouter.post("/chat/prune", requireRole("teacher", "admin"), async (req, res)
   res.json({ ok: true, kept: rows.length - excess.length, pruned: excess.length });
 });
 
-// api/routes/teachers.ts
+// api/routes/aiSources.ts
 var import_express13 = __toESM(require_express2(), 1);
-var teachersRouter = (0, import_express13.Router)();
+var aiSourcesRouter = (0, import_express13.Router)();
+aiSourcesRouter.use(requireAuth);
+var MAX_SERVER_CONTENT_CHARS = 2e5;
+function resolveTeacherId2(caller, queryTeacherId) {
+  if (isAdmin(caller)) return typeof queryTeacherId === "string" && queryTeacherId ? queryTeacherId : null;
+  if (isTeacher(caller)) return caller.teacherId || null;
+  return null;
+}
+function mapSourceRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    type: "file",
+    content: typeof row.content === "string" ? row.content : "",
+    wordCount: typeof row.word_count === "number" ? row.word_count : Number(row.word_count) || 0,
+    isEnabled: !!row.is_enabled,
+    fileName: row.file_name || void 0,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : void 0,
+    topicId: row.topic_id
+  };
+}
+async function topicOwnerId(topicId) {
+  const rows = await query("SELECT `teacher_id` FROM `topics` WHERE `id` = ? LIMIT 1", [topicId]);
+  const row = rows[0];
+  return row ? String(row.teacher_id) : null;
+}
+aiSourcesRouter.get(
+  "/ai-sources",
+  requireRole("teacher", "admin"),
+  ah(async (req, res) => {
+    const teacherId = resolveTeacherId2(req.caller, req.query.teacher_id);
+    const topicId = req.query.topicId;
+    if (!teacherId || !topicId) {
+      res.json([]);
+      return;
+    }
+    const rows = await query(
+      "SELECT * FROM `ai_sources` WHERE `teacher_id` = ? AND `topic_id` = ? ORDER BY `created_at` ASC",
+      [teacherId, topicId]
+    );
+    res.json(rows.map(mapSourceRow));
+  })
+);
+aiSourcesRouter.post(
+  "/ai-sources",
+  requireRole("teacher", "admin"),
+  ah(async (req, res) => {
+    const caller = req.caller;
+    const teacherId = caller.teacherId || null;
+    if (!teacherId) {
+      httpErr(res, 401, "UNAUTHORIZED");
+      return;
+    }
+    const body = bodyOf(req);
+    const id = body.id;
+    const topicId = body.topicId;
+    const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : null;
+    const content = typeof body.content === "string" ? body.content : null;
+    if (!checkKeyLen(res, id) || !checkKeyLen(res, topicId)) return;
+    if (!id || !topicId || !title || content === null) {
+      httpErr(res, 400, "BAD_INPUT");
+      return;
+    }
+    if (content.length > MAX_SERVER_CONTENT_CHARS) {
+      httpErr(res, 400, "BAD_INPUT");
+      return;
+    }
+    const owner = await topicOwnerId(topicId);
+    if (owner === null) {
+      httpErr(res, 404, "NOT_FOUND");
+      return;
+    }
+    if (!isAdmin(caller) && owner !== teacherId) {
+      httpErr(res, 403, "FORBIDDEN");
+      return;
+    }
+    const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 255) : null;
+    const wordCount = Number(body.wordCount) || 0;
+    const isEnabled = body.isEnabled === void 0 ? 1 : body.isEnabled ? 1 : 0;
+    await execute(
+      "INSERT INTO `ai_sources` (`id`, `teacher_id`, `topic_id`, `title`, `content`, `file_name`, `word_count`, `is_enabled`) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `content` = VALUES(`content`), `file_name` = VALUES(`file_name`), `word_count` = VALUES(`word_count`), `is_enabled` = VALUES(`is_enabled`)",
+      [id, teacherId, topicId, title, content, fileName, wordCount, isEnabled]
+    );
+    res.json({ ok: true, id });
+  })
+);
+aiSourcesRouter.patch(
+  "/ai-sources/:id",
+  requireRole("teacher", "admin"),
+  ah(async (req, res) => {
+    const caller = req.caller;
+    const teacherId = caller.teacherId || null;
+    if (!teacherId) {
+      httpErr(res, 401, "UNAUTHORIZED");
+      return;
+    }
+    const id = req.params.id;
+    if (!checkKeyLen(res, id)) return;
+    const rows = await query("SELECT `teacher_id` FROM `ai_sources` WHERE `id` = ? LIMIT 1", [id]);
+    const row = rows[0];
+    if (!row || !isAdmin(caller) && String(row.teacher_id) !== teacherId) {
+      httpErr(res, 404, "NOT_FOUND");
+      return;
+    }
+    const body = bodyOf(req);
+    const sets = [];
+    const params = [];
+    if (body.isEnabled !== void 0) {
+      sets.push("`is_enabled` = ?");
+      params.push(body.isEnabled ? 1 : 0);
+    }
+    if (typeof body.title === "string" && body.title.trim()) {
+      sets.push("`title` = ?");
+      params.push(body.title.trim());
+    }
+    if (sets.length === 0) {
+      httpErr(res, 400, "BAD_INPUT");
+      return;
+    }
+    params.push(id);
+    await execute(`UPDATE \`ai_sources\` SET ${sets.join(", ")} WHERE \`id\` = ?`, params);
+    res.json({ ok: true, id });
+  })
+);
+aiSourcesRouter.delete(
+  "/ai-sources/:id",
+  requireRole("teacher", "admin"),
+  ah(async (req, res) => {
+    const caller = req.caller;
+    const teacherId = caller.teacherId || null;
+    if (!teacherId) {
+      httpErr(res, 401, "UNAUTHORIZED");
+      return;
+    }
+    const id = req.params.id;
+    if (!checkKeyLen(res, id)) return;
+    const rows = await query("SELECT `teacher_id` FROM `ai_sources` WHERE `id` = ? LIMIT 1", [id]);
+    const row = rows[0];
+    if (!row || !isAdmin(caller) && String(row.teacher_id) !== teacherId) {
+      httpErr(res, 404, "NOT_FOUND");
+      return;
+    }
+    await execute("DELETE FROM `ai_sources` WHERE `id` = ?", [id]);
+    res.json({ ok: true, id });
+  })
+);
+
+// api/routes/teachers.ts
+var import_express14 = __toESM(require_express2(), 1);
+var teachersRouter = (0, import_express14.Router)();
 teachersRouter.use(requireAuth);
 function stripTeacher(row) {
   if (!row) return row;
@@ -59452,7 +59601,7 @@ teachersRouter.delete("/teachers/:id", requireRole("admin"), async (req, res) =>
 });
 
 // api/ai/chat.ts
-var import_express14 = __toESM(require_express2(), 1);
+var import_express15 = __toESM(require_express2(), 1);
 
 // api/_lib/ai.ts
 var DEFAULT_MODELS = {
@@ -59796,7 +59945,7 @@ async function keysStatus() {
 }
 
 // api/ai/chat.ts
-var router = (0, import_express14.Router)();
+var router = (0, import_express15.Router)();
 router.use(requireAuth, requireRole("teacher", "admin"));
 function scrub(text) {
   return String(text || "").replace(/sk-or-v1-[A-Za-z0-9_-]+/g, "[key]").replace(/gsk_[A-Za-z0-9]+/g, "[key]").replace(/AIza[A-Za-z0-9_-]+/g, "[key]").replace(/AQ\.[A-Za-z0-9_-]+/g, "[key]").replace(/cfut_[A-Za-z0-9_-]+/g, "[key]").slice(0, 200);
@@ -59894,8 +60043,8 @@ router.post("/", async (req, res) => {
 var chat_default = router;
 
 // api/admin/ai-settings.ts
-var import_express15 = __toESM(require_express2(), 1);
-var router2 = (0, import_express15.Router)();
+var import_express16 = __toESM(require_express2(), 1);
+var router2 = (0, import_express16.Router)();
 router2.use(requireAuth, requireRole("admin"));
 var LEGS = ["gemini", "groq", "openrouter", "workersai"];
 async function loadUsage() {
@@ -60074,8 +60223,8 @@ router2.post("/", async (req, res) => {
 var ai_settings_default = router2;
 
 // api/admin/ai-test.ts
-var import_express16 = __toESM(require_express2(), 1);
-var router3 = (0, import_express16.Router)();
+var import_express17 = __toESM(require_express2(), 1);
+var router3 = (0, import_express17.Router)();
 router3.use(requireAuth, requireRole("admin"));
 var LEGS2 = ["gemini", "groq", "openrouter", "workersai"];
 function scrub2(text) {
@@ -60139,8 +60288,8 @@ router3.post("/", async (_req, res) => {
 var ai_test_default = router3;
 
 // api/admin/gemini-models.ts
-var import_express17 = __toESM(require_express2(), 1);
-var router4 = (0, import_express17.Router)();
+var import_express18 = __toESM(require_express2(), 1);
+var router4 = (0, import_express18.Router)();
 router4.use(requireAuth, requireRole("admin"));
 router4.post("/", async (_req, res) => {
   const keys = await resolveKeys();
@@ -60192,8 +60341,8 @@ router4.post("/", async (_req, res) => {
 var gemini_models_default = router4;
 
 // api/admin/gemini-probe.ts
-var import_express18 = __toESM(require_express2(), 1);
-var router5 = (0, import_express18.Router)();
+var import_express19 = __toESM(require_express2(), 1);
+var router5 = (0, import_express19.Router)();
 router5.use(requireAuth, requireRole("admin"));
 function scrub3(text) {
   return String(text || "").replace(/AIza[A-Za-z0-9_-]+/g, "[key]").replace(/AQ\.[A-Za-z0-9_-]+/g, "[key]").slice(0, 200);
@@ -60274,8 +60423,8 @@ router5.post("/", async (req, res) => {
 var gemini_probe_default = router5;
 
 // api/health.ts
-var import_express19 = __toESM(require_express2(), 1);
-var router6 = (0, import_express19.Router)();
+var import_express20 = __toESM(require_express2(), 1);
+var router6 = (0, import_express20.Router)();
 router6.get("/", async (_req, res) => {
   let dbOk = false;
   let dbError = null;
@@ -60328,9 +60477,9 @@ var health_default = router6;
 
 // api/index.ts
 function createApp() {
-  const app3 = (0, import_express20.default)();
-  app3.use(import_express20.default.json({ limit: "10mb" }));
-  app3.use(import_express20.default.urlencoded({ extended: true, limit: "10mb" }));
+  const app3 = (0, import_express21.default)();
+  app3.use(import_express21.default.json({ limit: "10mb" }));
+  app3.use(import_express21.default.urlencoded({ extended: true, limit: "10mb" }));
   mountFiles(app3);
   app3.use("/api", authRouter);
   app3.use("/api", adminUsersRouter);
@@ -60343,6 +60492,7 @@ function createApp() {
   app3.use("/api", rewardsRouter);
   app3.use("/api", dashboardRouter);
   app3.use("/api", chatRouter);
+  app3.use("/api", aiSourcesRouter);
   app3.use("/api", teachersRouter);
   app3.use("/api/ai/chat", chat_default);
   app3.use("/api/admin/ai-settings", ai_settings_default);
@@ -60366,7 +60516,7 @@ var app = createApp();
 var distDir = process.env.DIST_DIR || import_path.default.join(__dirname, "dist");
 var port = Number(process.env.PORT || 3e3);
 var app2 = createApp();
-app2.use(import_express21.default.static(distDir, { index: "index.html" }));
+app2.use(import_express22.default.static(distDir, { index: "index.html" }));
 app2.get("*", (_req, res) => {
   res.sendFile(import_path.default.join(distDir, "index.html"));
 });

@@ -1,3 +1,9 @@
+## [dev] 2026-10-28 — TẤT CẢ nguồn Xưởng AI lưu vào database (lệnh chủ dự án 22:50)
+
+- Mở rộng đợt lưu file trước đó: nay nguồn dán văn bản (type 'text') và bản ghi (type 'transcript') cũng lưu database như nguồn file. Bảng `ai_sources` thêm cột `type` (mặc định 'file' cho dòng cũ); API `POST /api/ai-sources` nhận `type` thuộc đúng 3 loại, `GET` trả đúng type từng dòng.
+- Client: thêm nguồn dán văn bản/bản ghi cũng đẩy lên máy chủ ngay khi thêm; bật/tắt và xóa không còn giới hạn ở nguồn file; lúc mở Studio, máy chủ là chuẩn cho MỌI loại nguồn (nguồn local chưa có thì đẩy bù, nguồn đã xóa ở nơi khác không hồi sinh). Dấu đã-đồng-bộ giữ nguyên khóa localStorage cũ nên nguồn file đã đẩy trước đó không bị đẩy trùng.
+- Sơ đồ đã cập nhật mục Mầm AI Studio (Panel 1) và regen + publish cùng đợt.
+
 ## [dev] 2026-10-28 — Nguồn file Xưởng AI lưu vào database (lệnh chủ dự án 22:25)
 
 - Trước đây nguồn tài liệu chỉ sống ở localStorage trình duyệt: đổi máy, xóa cache hay lệch khóa là mất (đợt kiểm chứng 21:45 còn ghi nhận nguồn về 0 sau khi tải lại trang). Nay chữ trích từ file giáo viên tải lên (.txt/.pdf/.docx) còn được lưu vào bảng `ai_sources` trên máy chủ, theo giáo viên + chủ đề: upsert theo id client (`src_file_<ts>`) nên tải lại không trùng; bật/tắt và xóa nguồn cũng đồng bộ lên máy chủ.

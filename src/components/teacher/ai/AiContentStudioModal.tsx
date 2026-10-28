@@ -38,10 +38,10 @@ import { studioKey } from '../../../logic/teacherScope.ts';
 import { extractDocumentText, MAX_EXTRACTED_CHARS } from '../../../logic/extractDocumentText.ts';
 import { isValidGeneratedQuestion } from '../../../logic/validateAiQuestions.ts';
 import {
-  fetchServerFileSources,
-  pushFileSource,
-  patchFileSourceEnabled,
-  deleteFileSource,
+  fetchServerSources,
+  pushSource,
+  patchSourceEnabled,
+  deleteSource,
 } from '../../../services/ai/aiSourcesSync.ts';
 
 interface AiContentStudioModalProps {
@@ -246,43 +246,44 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
     }
   }, [topicId]);
 
-  // 28/10: nguồn FILE còn lưu ở database — báo rõ khi đồng bộ lên/xuống máy
-  // chủ gặp lỗi (nguồn vẫn dùng được ở trình duyệt này, lần mở sau sẽ thử lại).
+  // 28/10: TẤT CẢ nguồn còn lưu ở database — báo rõ khi đồng bộ lên/xuống
+  // máy chủ gặp lỗi (nguồn vẫn dùng được ở trình duyệt này, lần mở sau sẽ thử lại).
   const [dbSyncNotice, setDbSyncNotice] = useState<string | null>(null);
-  // Id nguồn file đã đẩy thành công lên máy chủ — để phân biệt "chưa từng
+  // Id nguồn đã đẩy thành công lên máy chủ — để phân biệt "chưa từng
   // đồng bộ" (giữ lại + đẩy bù) với "đã xóa ở nơi khác" (không đẩy lại,
   // tránh hồi sinh nguồn đã xóa như lỗi sync localStorage cũ).
-  const syncedFileIdsKey = `${sourcesStorageKey}::synced`;
-  const readSyncedFileIds = (): Set<string> => {
+  const syncedSourceIdsKey = `${sourcesStorageKey}::synced`;
+  const readSyncedSourceIds = (): Set<string> => {
     try {
-      const raw = localStorage.getItem(syncedFileIdsKey);
+      const raw = localStorage.getItem(syncedSourceIdsKey);
       const parsed = raw ? JSON.parse(raw) : null;
       return new Set(Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : []);
     } catch {
       return new Set();
     }
   };
-  const markFileSynced = (id: string) => {
+  const markSourceSynced = (id: string) => {
     try {
-      const ids = readSyncedFileIds();
+      const ids = readSyncedSourceIds();
       ids.add(id);
-      localStorage.setItem(syncedFileIdsKey, JSON.stringify([...ids]));
+      localStorage.setItem(syncedSourceIdsKey, JSON.stringify([...ids]));
     } catch {
       // Bỏ qua
     }
   };
-  const unmarkFileSynced = (id: string) => {
+  const unmarkSourceSynced = (id: string) => {
     try {
-      const ids = readSyncedFileIds();
+      const ids = readSyncedSourceIds();
       ids.delete(id);
-      localStorage.setItem(syncedFileIdsKey, JSON.stringify([...ids]));
+      localStorage.setItem(syncedSourceIdsKey, JSON.stringify([...ids]));
     } catch {
       // Bỏ qua
     }
   };
-  // Tải nguồn file từ máy chủ về hợp nhất khi mở Studio/đổi chủ đề. Chỉ chạy
-  // 1 lần cho mỗi (giáo viên, chủ đề); nguồn dán văn bản/bản ghi không thuộc
-  // phạm vi database nên giữ nguyên từ local.
+  // Tải nguồn từ máy chủ về hợp nhất khi mở Studio/đổi chủ đề. Chỉ chạy
+  // 1 lần cho mỗi (giáo viên, chủ đề). Máy chủ là chuẩn cho MỌI loại nguồn
+  // (dán văn bản, bản ghi, file); nguồn local chưa có trên máy chủ thì giữ
+  // lại và đẩy bù.
   const serverSourcesLoadedFor = useRef<string>('');
   useEffect(() => {
     if (!teacherId || !topicId) return;
@@ -291,11 +292,11 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
     serverSourcesLoadedFor.current = key;
     const loadTopicId = topicId;
     const loadKey = sourcesStorageKey;
-    fetchServerFileSources(loadTopicId)
+    fetchServerSources(loadTopicId)
       .then(async (server) => {
         if (serverSourcesLoadedFor.current !== `${teacherId}::${loadTopicId}`) return;
         const serverIds = new Set(server.map((s) => s.id));
-        const synced = readSyncedFileIds();
+        const synced = readSyncedSourceIds();
         let local: AISource[] = [];
         try {
           const saved = localStorage.getItem(loadKey);
@@ -304,27 +305,21 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
         } catch {
           // Giữ local rỗng
         }
-        const pending = local.filter(
-          (s) => s.type === 'file' && !serverIds.has(s.id) && !synced.has(s.id)
-        );
+        const pending = local.filter((s) => !serverIds.has(s.id) && !synced.has(s.id));
         for (const src of pending) {
           try {
-            await pushFileSource(loadTopicId, src);
-            markFileSynced(src.id);
+            await pushSource(loadTopicId, src);
+            markSourceSynced(src.id);
           } catch {
             // Lần mở sau đẩy lại
           }
         }
-        setSources([
-          ...local.filter((s) => s.type !== 'file'),
-          ...server,
-          ...pending,
-        ]);
+        setSources([...server, ...pending]);
       })
       .catch((e) => {
-        console.warn('Không tải được nguồn file từ máy chủ, dùng nguồn ở trình duyệt này:', e);
+        console.warn('Không tải được nguồn từ máy chủ, dùng nguồn ở trình duyệt này:', e);
         setDbSyncNotice(
-          'Không tải được nguồn file từ máy chủ — đang dùng nguồn lưu ở trình duyệt này. Kiểm tra mạng rồi mở lại Studio để đồng bộ.'
+          'Không tải được nguồn từ máy chủ — đang dùng nguồn lưu ở trình duyệt này. Kiểm tra mạng rồi mở lại Studio để đồng bộ.'
         );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -685,6 +680,18 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
     setNewSourceTitle('');
     setNewSourceContent('');
     setShowAddSourceForm(false);
+    // 28/10: TẤT CẢ nguồn đều lưu database — dán văn bản/bản ghi cũng đẩy
+    // lên máy chủ ngay khi thêm (best-effort như nguồn file).
+    if (topicId) {
+      pushSource(topicId, newSrc)
+        .then(() => markSourceSynced(newSrc.id))
+        .catch((err) => {
+          console.warn('Chưa lưu được nguồn lên máy chủ:', err);
+          setDbSyncNotice(
+            'Nguồn vừa thêm đã lưu ở trình duyệt này nhưng chưa lưu được lên máy chủ — mở ở máy khác sẽ chưa thấy. Kiểm tra mạng rồi thêm lại sau.'
+          );
+        });
+    }
   };
 
   // Đọc file tài liệu (.txt / .pdf / .docx) — trích chữ ngay trên trình duyệt,
@@ -714,8 +721,8 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
       // tải lên (best-effort: lỗi thì nguồn vẫn dùng được ở trình duyệt này,
       // lần mở Studio sau sẽ đẩy bù nhờ cơ chế pending).
       if (topicId) {
-        pushFileSource(topicId, newSrc)
-          .then(() => markFileSynced(newSrc.id))
+        pushSource(topicId, newSrc)
+          .then(() => markSourceSynced(newSrc.id))
           .catch((err) => {
             console.warn('Chưa lưu được nguồn file lên máy chủ:', err);
             setDbSyncNotice(
@@ -1581,9 +1588,9 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                             s.id === src.id ? { ...s, isEnabled: e.target.checked } : s
                           )
                         );
-                        // Nguồn file đồng bộ trạng thái bật/tắt lên database.
-                        if (src.type === 'file' && topicId) {
-                          patchFileSourceEnabled(src.id, e.target.checked).catch((err) => {
+                        // Đồng bộ trạng thái bật/tắt lên database (mọi loại nguồn).
+                        if (topicId) {
+                          patchSourceEnabled(src.id, e.target.checked).catch((err) => {
                             console.warn('Chưa đồng bộ được trạng thái nguồn lên máy chủ:', err);
                             setDbSyncNotice(
                               'Chưa đồng bộ được trạng thái bật/tắt của nguồn lên máy chủ — lần mở sau có thể trở lại trạng thái cũ.'
@@ -1615,10 +1622,10 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                       type="button"
                       onClick={() => {
                         setSources(sources.filter((s) => s.id !== src.id));
-                        // Nguồn file xóa khỏi cả database (kèm dọn dấu đã đồng bộ).
-                        if (src.type === 'file' && topicId) {
-                          unmarkFileSynced(src.id);
-                          deleteFileSource(src.id).catch((err) => {
+                        // Xóa khỏi cả database (kèm dọn dấu đã đồng bộ).
+                        if (topicId) {
+                          unmarkSourceSynced(src.id);
+                          deleteSource(src.id).catch((err) => {
                             console.warn('Chưa xóa được nguồn file khỏi máy chủ:', err);
                             setDbSyncNotice(
                               'Chưa xóa được nguồn khỏi máy chủ — lần mở sau nguồn có thể hiện lại. Thử xóa lại sau.'

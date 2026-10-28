@@ -1,16 +1,15 @@
 /**
- * Router nhóm B — nguồn tài liệu file của Mầm AI Studio, lưu ở DATABASE
- * (28/10, theo lệnh chủ dự án: dữ liệu giáo viên up lên — pdf/docx/txt —
- * phải nằm trong database, không chỉ localStorage trình duyệt).
+ * Router nhóm B — nguồn tài liệu của Mầm AI Studio, lưu ở DATABASE
+ * (28/10, theo lệnh chủ dự án: dữ liệu giáo viên đưa lên phải nằm trong
+ * database, không chỉ localStorage trình duyệt — lúc đầu chỉ file
+ * pdf/docx/txt, sau đó mở rộng ra TẤT CẢ nguồn: dán văn bản, bản ghi, file).
  * Mount tại /api.
  * - GET /ai-sources?topicId=... (teacher: chỉ nguồn của mình; admin: ?teacher_id=)
  * - POST /ai-sources (upsert theo id client gửi; teacher_id ÉP từ JWT)
  * - PATCH /ai-sources/:id (đổi isEnabled/title; chỉ sửa nguồn của mình)
  * - DELETE /ai-sources/:id (chỉ xóa nguồn của mình)
  *
- * Phạm vi: CHỈ nguồn type 'file' (tải file lên). Nguồn dán văn bản và bản
- * ghi vẫn chỉ sống ở localStorage như trước — chủ dự án chưa yêu cầu đưa
- * chúng lên database. Chủ đề phải thuộc về giáo viên gọi (admin xem tất).
+ * Chủ đề phải thuộc về giáo viên gọi (admin xem tất).
  * DDL bảng ai_sources: xem hidden_files/ai_sources_ddl.sql (goal Mầm Văn).
  */
 import { Router } from 'express';
@@ -31,11 +30,13 @@ function resolveTeacherId(caller: any, queryTeacherId?: string): string | null {
   return null;
 }
 
+const VALID_SOURCE_TYPES = new Set(['text', 'file', 'transcript']);
+
 function mapSourceRow(row: any): any {
   return {
     id: row.id,
     title: row.title,
-    type: 'file',
+    type: VALID_SOURCE_TYPES.has(row.type) ? row.type : 'file',
     content: typeof row.content === 'string' ? row.content : '',
     wordCount: typeof row.word_count === 'number' ? row.word_count : Number(row.word_count) || 0,
     isEnabled: !!row.is_enabled,
@@ -109,12 +110,13 @@ aiSourcesRouter.post(
     const fileName = typeof body.fileName === 'string' ? body.fileName.slice(0, 255) : null;
     const wordCount = Number(body.wordCount) || 0;
     const isEnabled = body.isEnabled === undefined ? 1 : body.isEnabled ? 1 : 0;
+    const type = VALID_SOURCE_TYPES.has(body.type) ? body.type : 'file';
     await execute(
-      'INSERT INTO `ai_sources` (`id`, `teacher_id`, `topic_id`, `title`, `content`, `file_name`, `word_count`, `is_enabled`) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?) ' +
-        'ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `content` = VALUES(`content`), ' +
+      'INSERT INTO `ai_sources` (`id`, `teacher_id`, `topic_id`, `title`, `type`, `content`, `file_name`, `word_count`, `is_enabled`) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+        'ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `type` = VALUES(`type`), `content` = VALUES(`content`), ' +
         '`file_name` = VALUES(`file_name`), `word_count` = VALUES(`word_count`), `is_enabled` = VALUES(`is_enabled`)',
-      [id, teacherId, topicId, title, content, fileName, wordCount, isEnabled]
+      [id, teacherId, topicId, title, type, content, fileName, wordCount, isEnabled]
     );
     res.json({ ok: true, id });
   })
