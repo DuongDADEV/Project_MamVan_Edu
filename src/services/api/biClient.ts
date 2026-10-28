@@ -631,7 +631,7 @@ export async function submitAssignmentAttempt(input: {
   assignmentId: string;
   studentId: string;
   startedAt: string;
-  responses: Record<string, { selected?: string[]; text?: string }>;
+  responses: Record<string, { selected?: string[]; text?: string; blanks?: string[] }>;
 }): Promise<SubmitResult> {
   const data = unwrap(
     await apiFetch('/api/attempts', { method: 'POST', body: JSON.stringify(input) })

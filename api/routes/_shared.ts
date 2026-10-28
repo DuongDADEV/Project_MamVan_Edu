@@ -323,6 +323,60 @@ export function normText(s: unknown): string {
     .replace(/\s+/g, ' ');
 }
 
+/**
+ * Chuẩn hóa đáp án điền trống để so sánh thoáng (bản sao của
+ * src/logic/fillBlank.ts — hai bên không import lẫn nhau được): không
+ * phân biệt hoa/thường, không phân biệt dấu tiếng Việt, bỏ dấu câu cuối.
+ */
+export function normFillText(s: unknown): string {
+  return String(s ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:!?'"”’)\]]+$/g, '')
+    .trim();
+}
+
+/** Các cách chấp nhận của một ô (tách theo `|`), đã chuẩn hóa, bỏ rỗng. */
+export function fillVariants(keyEntry: unknown): string[] {
+  return String(keyEntry ?? '')
+    .split('|')
+    .map((v) => normFillText(v))
+    .filter(Boolean);
+}
+
+/**
+ * Chấm câu điền trống theo từng ô (bản sao của src/logic/fillBlank.ts).
+ * keys: mảng đáp án; student: mảng bài làm theo đúng thứ tự ô.
+ */
+export function gradeFillBlanks(keys: unknown, student: unknown): {
+  gradeable: number;
+  matched: number;
+  scoreRatio: number;
+  isCorrect: boolean;
+} {
+  const keyArr: unknown[] = Array.isArray(keys) ? keys : keys != null ? [keys] : [];
+  const stuArr: unknown[] = Array.isArray(student) ? student : [];
+  let gradeable = 0;
+  let matched = 0;
+  keyArr.forEach((k, i) => {
+    const variants = fillVariants(k);
+    if (!variants.length) return;
+    gradeable += 1;
+    const mine = normFillText(stuArr[i]);
+    if (mine && variants.includes(mine)) matched += 1;
+  });
+  return {
+    gradeable,
+    matched,
+    scoreRatio: gradeable > 0 ? matched / gradeable : 0,
+    isCorrect: gradeable > 0 && matched === gradeable,
+  };
+}
+
 /** Render response_json thành text hiển thị (biRepository.renderResponse). */
 export function renderResponse(responseJson: any, parseJson: (v: any, fb: any) => any): string {
   if (responseJson == null) return '—';
@@ -330,6 +384,9 @@ export function renderResponse(responseJson: any, parseJson: (v: any, fb: any) =
   if (r && typeof r === 'object') {
     if (Array.isArray(r.selected)) return 'Chọn: ' + r.selected.join(', ');
     if (typeof r.selected === 'string') return 'Chọn: ' + r.selected;
+    if (Array.isArray(r.blanks)) {
+      return r.blanks.map((b: any, i: number) => `Ô ${i + 1}: ${b ?? ''}`).join(' | ');
+    }
     if (typeof r.text === 'string') return r.text;
   }
   return String(r);

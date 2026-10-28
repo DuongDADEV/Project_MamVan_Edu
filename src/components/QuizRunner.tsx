@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Question, Quiz, QuestionResult, EssaySubmission } from '../types.ts';
 import { SKILL_METADATA } from '../logic/mastery.ts';
+import { splitPromptBlanks, countBlanks, gradeFillBlanks } from '../logic/fillBlank.ts';
 import { MamMuc } from './MamMuc.tsx';
 import { Clock, CheckCircle2, XCircle, AlertCircle, Send, ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react';
 
@@ -148,30 +149,15 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'fill') {
-        const correctArray = Array.isArray(q.answer)
-          ? (q.answer as string[])
-          : q.answer != null && q.answer !== ''
-            ? [String(q.answer)]
-            : [];
-        const fillAns = Array.isArray(ans)
-          ? (ans as string[])
-          : ans != null && ans !== ''
-            ? [String(ans)]
-            : [];
-        let matchCount = 0;
-        correctArray.forEach((cWord, i) => {
-          if (fillAns[i] && fillAns[i].trim().toLowerCase() === cWord.trim().toLowerCase()) {
-            matchCount += 1;
-          }
-        });
-        const ratio = matchCount / Math.max(1, correctArray.length);
-        const isCorrect = ratio >= 0.75;
-        totalScore += ratio;
+        // Chấm thống nhất với máy chủ: từng ô, điểm từng phần, so sánh
+        // thoáng (không dấu/dấu câu); "đúng" khi mọi ô chấm được đều đúng.
+        const g = gradeFillBlanks(q.answer, ans);
+        totalScore += g.scoreRatio;
         results.push({
           questionId: q.id,
           level: q.level,
-          isCorrect,
-          scoreRatio: ratio,
+          isCorrect: g.isCorrect,
+          scoreRatio: g.scoreRatio,
           timestamp: Date.now(),
           topicId: q.topicId,
         });
@@ -247,19 +233,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
         correctArr.length === userArr.length &&
         correctArr.every((c) => userArr.includes(c));
     } else if (currentQ.type === 'fill') {
-      const correctArr = Array.isArray(currentQ.answer)
-        ? (currentQ.answer as string[])
-        : currentQ.answer != null && currentQ.answer !== ''
-          ? [String(currentQ.answer)]
-          : [];
-      const userArr = Array.isArray(userAnswers[currentQ.id])
-        ? (userAnswers[currentQ.id] as string[])
-        : userAnswers[currentQ.id] != null && userAnswers[currentQ.id] !== ''
-          ? [String(userAnswers[currentQ.id])]
-          : [];
-      isAnswerCorrectInPractice = correctArr.every(
-        (c, idx) => userArr[idx] && userArr[idx].trim().toLowerCase() === c.trim().toLowerCase()
-      );
+      isAnswerCorrectInPractice = gradeFillBlanks(currentQ.answer, userAnswers[currentQ.id]).isCorrect;
     }
   }
 
@@ -328,7 +302,33 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
       {/* NỘI DUNG CÂU HỎI */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm mb-6">
         <p className="text-base sm:text-lg font-bold text-[#1E1B4B] leading-relaxed whitespace-pre-line mb-6">
-          {currentQ.prompt}
+          {currentQ.type === 'fill' && countBlanks(currentQ.prompt || '') > 0 ? (
+            <span>
+              {splitPromptBlanks(currentQ.prompt || '').map((seg, sIdx, arr) => (
+                <span key={sIdx}>
+                  {seg}
+                  {sIdx < arr.length - 1 && (
+                    <input
+                      type="text"
+                      disabled={isChecked}
+                      value={((userAnswers[currentQ.id] as string[]) || [])[sIdx] || ''}
+                      placeholder={`Ô ${sIdx + 1}`}
+                      onChange={(e) => {
+                        const updated = [...((userAnswers[currentQ.id] as string[]) || [])];
+                        while (updated.length <= sIdx) updated.push('');
+                        updated[sIdx] = e.target.value;
+                        setUserAnswers({ ...userAnswers, [currentQ.id]: updated });
+                      }}
+                      className="inline-block mx-1 min-w-24 border-b-2 border-indigo-500 bg-indigo-50/60 rounded-t-lg px-2 py-0.5 text-sm text-center align-baseline focus:outline-none focus:bg-white"
+                      style={{ width: `${Math.max(6, ((((userAnswers[currentQ.id] as string[]) || [])[sIdx] || '').length + 2))}ch` }}
+                    />
+                  )}
+                </span>
+              ))}
+            </span>
+          ) : (
+            currentQ.prompt
+          )}
         </p>
 
         {/* 1. DẠNG TRẮC NGHIỆM ĐƠN (single) */}
@@ -419,13 +419,15 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           </div>
         )}
 
-        {/* 3. DẠNG ĐIỀN VÀO Ô TRỐNG (fill) */}
-        {currentQ.type === 'fill' && (
+        {/* 3. DẠNG ĐIỀN VÀO Ô TRỐNG (fill) — chỉ dùng cho câu cũ không có
+            ___ trong đề; câu mới có ___ thì ô nhập đã nằm ngay trong đề
+            ở trên. */}
+        {currentQ.type === 'fill' && countBlanks(currentQ.prompt || '') === 0 && (
           <div className="space-y-4">
             <p className="text-xs text-slate-500 italic mb-2">
               Nhập các từ hoặc cụm từ tương ứng vào các ô bên dưới:
             </p>
-            {Array.from({ length: currentQ.fillBlanksCount || 1 }).map((_, fIdx) => {
+            {Array.from({ length: currentQ.fillBlanksCount || (Array.isArray(currentQ.answer) ? currentQ.answer.length : 0) || 1 }).map((_, fIdx) => {
               const currentVals = (userAnswers[currentQ.id] as string[]) || [];
               const val = currentVals[fIdx] || '';
 

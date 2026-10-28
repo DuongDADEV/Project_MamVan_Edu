@@ -1,3 +1,9 @@
+## [dev] 2026-10-28 — Điền vào chỗ trống: bôi đen tạo ô, ô nhập nằm trong câu, chấm từng ô
+
+- Soạn câu (giáo viên): bôi đen một đoạn trong đề bài rồi bấm "Tạo ô trống" — đoạn đó thành đáp án, chỗ đó thành ô trống `___` trong câu; đặt con trỏ rồi bấm nút để tạo ô trống rỗng; nút xóa ô trả lại chữ gốc vào đúng vị trí. Mỗi ô sửa đáp án riêng, nhập nhiều cách chấp nhận cách nhau bằng `|`. Gõ `___` trực tiếp vẫn được (đáp án tự căn theo thứ tự). Đề bài và đáp án luôn khớp nhau khi lưu (thừa/thiếu tự căn).
+- Làm bài (học sinh): ô nhập nằm ngay trong câu ở cả bài giao lẫn luyện tập (câu cũ không có `___` giữ nguyên cách hiển thị cũ: 1 ô nhập ở bài giao, danh sách ô ở luyện tập).
+- Chấm (máy chủ + luyện tập thống nhất): từng ô một, điểm = số ô đúng / tổng số ô × điểm câu; so sánh thoáng — không phân biệt hoa/thường, dấu tiếng Việt, dấu câu cuối câu; mỗi ô chấp nhận nhiều cách viết (`|`). "Đúng" khi mọi ô chấm được đều đúng. Câu không có đáp án nào để chấm thì chờ cô giáo chấm thay vì chấm 0 oan. Bài làm lưu dạng mảng từng ô, màn chấm hiện "Ô 1: … | Ô 2: …".
+
 ## [dev] 2026-10-28 — Ép múi giờ phiên MySQL về UTC (sửa lệch +7 giờ)
 
 - Nguyên nhân lệch giờ hiển thị (bảng chấm hiện 01:02 29-10 cho bài nộp 18:02 28-10): option `timezone: '+00:00'` của mysql2 chỉ để parse phía JS, không tự SET time_zone cho phiên — phiên vẫn chạy SYSTEM (+07) nên máy chủ gửi chuỗi giờ tường +07 mà driver hiểu nhầm thành UTC, khiến mọi TIMESTAMP qua API lệch +7 giờ. Nay pool ép `SET time_zone = '+00:00'` mỗi khi mở kết nối mới (offset số nên không cần bảng múi giờ). Không đổi cách lưu trữ: cột TIMESTAMP vốn lưu UTC, hàm UTC_TIMESTAMP() không phụ thuộc múi giờ phiên — chỉ sửa giờ đọc ra cho đúng.

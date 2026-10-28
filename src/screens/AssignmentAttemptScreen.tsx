@@ -6,6 +6,7 @@ import {
   getAssignmentDetail,
   submitAssignmentAttempt,
 } from '../services/api/biClient.ts';
+import { splitPromptBlanks, countBlanks } from '../logic/fillBlank.ts';
 
 interface AssignmentAttemptScreenProps {
   assignmentId: string;
@@ -25,7 +26,7 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
 }) => {
   const [detail, setDetail] = useState<AssignmentDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [responses, setResponses] = useState<Record<string, { selected: string[]; text: string }>>({});
+  const [responses, setResponses] = useState<Record<string, { selected: string[]; text: string; blanks?: string[] }>>({});
   const [startedAt] = useState(() => new Date().toISOString());
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -86,11 +87,24 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
     return detail.questions.filter((q) => {
       const r = responses[q.id];
       if (!r) return false;
-      return q.type === 'single_choice' || q.type === 'multiple_choice'
-        ? r.selected.length > 0
-        : (r.text || '').trim().length > 0;
+      if (q.type === 'single_choice' || q.type === 'multiple_choice') return r.selected.length > 0;
+      if (q.type === 'fill_in_blank') {
+        if (Array.isArray(r.blanks)) return r.blanks.some((b) => (b || '').trim().length > 0);
+        return (r.text || '').trim().length > 0;
+      }
+      return (r.text || '').trim().length > 0;
     }).length;
   }, [detail, responses]);
+
+  const setBlank = (qid: string, idx: number, value: string) => {
+    setResponses((prev) => {
+      const cur = prev[qid] || { selected: [], text: '' };
+      const blanks = [...(cur.blanks || [])];
+      while (blanks.length <= idx) blanks.push('');
+      blanks[idx] = value;
+      return { ...prev, [qid]: { ...cur, blanks } };
+    });
+  };
 
   if (loadError) {
     return (
@@ -182,7 +196,29 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
                   {q.passage}
                 </p>
               )}
-              <p className="mt-1.5 text-[15px] whitespace-pre-wrap">{q.prompt}</p>
+              {/* Điền trống kiểu mới: ô nhập nằm ngay trong câu, thay cho
+                  dòng đề + 1 ô nhập chung. Câu cũ không có ___ thì giữ
+                  nguyên cách hiển thị cũ. */}
+              {q.type === 'fill_in_blank' && countBlanks(q.prompt || '') > 0 ? (
+                <p className="mt-1.5 text-[15px] leading-loose whitespace-pre-wrap">
+                  {splitPromptBlanks(q.prompt || '').map((seg, sIdx, arr) => (
+                    <span key={sIdx}>
+                      {seg}
+                      {sIdx < arr.length - 1 && (
+                        <input
+                          className="inline-block mx-1 min-w-24 border-b-2 border-[#2F3E6B] bg-[#FAF5EB] rounded-t-lg px-2 py-0.5 text-sm text-center align-baseline focus:outline-none focus:bg-white"
+                          style={{ width: `${Math.max(6, ((r.blanks || [])[sIdx] || '').length + 2)}ch` }}
+                          placeholder={`Ô ${sIdx + 1}`}
+                          value={(r.blanks || [])[sIdx] || ''}
+                          onChange={(e) => setBlank(q.id, sIdx, e.target.value)}
+                        />
+                      )}
+                    </span>
+                  ))}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[15px] whitespace-pre-wrap">{q.prompt}</p>
+              )}
 
               {(q.type === 'single_choice' || q.type === 'multiple_choice') && (
                 <div className="mt-3 space-y-2">
@@ -215,7 +251,7 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
                 </div>
               )}
 
-              {q.type === 'fill_in_blank' && (
+              {q.type === 'fill_in_blank' && countBlanks(q.prompt || '') === 0 && (
                 <input
                   className="mt-3 w-full border border-[#E6DCC8] rounded-xl px-3 py-2.5 text-sm"
                   placeholder="Nhập đáp án của em…"

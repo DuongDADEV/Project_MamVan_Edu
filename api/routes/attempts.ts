@@ -48,6 +48,7 @@ import {
   filterStateInput,
   normalizeQType,
   normText,
+  gradeFillBlanks,
   AUTO_Q_TYPES,
   ah,
 } from './_shared';
@@ -382,7 +383,9 @@ attemptsRouter.post('/attempts', requireRole('student'), ah(async (req: AuthedRe
       const responseJson =
         qtype === 'single_choice' || qtype === 'multiple_choice'
           ? { selected: qtype === 'single_choice' ? (resp.selected || [])[0] || null : resp.selected || [] }
-          : { text: resp.text || '' };
+          : qtype === 'fill_in_blank' && Array.isArray((resp as any).blanks)
+            ? { blanks: (resp as any).blanks }
+            : { text: resp.text || '' };
       const key = q.correct_answer != null ? parseJson(q.correct_answer, q.correct_answer) : payload.answer ?? null;
       // Luật chấm (chủ dự án 28/10): chỉ tự luận mới cần cô giáo chấm; câu
       // có đáp án sẵn thì tự chấm theo đáp án. grading_method NULL (câu tạo
@@ -392,22 +395,49 @@ attemptsRouter.post('/attempts', requireRole('student'), ah(async (req: AuthedRe
       const isAuto = method === 'AUTO' && key != null && qtype !== 'essay';
       let isCorrect: boolean | null = null;
       let score: number | null = null;
+      let ratio = 0;
       let gStatus = 'PENDING_TEACHER_REVIEW';
       if (isAuto) {
+        // Điền trống chấm RIÊNG (28/10): từng ô, điểm từng phần, so sánh
+        // thoáng (không dấu/dấu câu); câu cũ gửi 1 chuỗi text thì coi như
+        // 1 ô. Câu không có đáp án nào để chấm thì chờ cô giáo chấm thay
+        // vì chấm 0 oan.
+        let handled = false;
         if (qtype === 'single_choice') {
           isCorrect = normText((resp.selected || [])[0] || '') === normText(String(key));
         } else if (qtype === 'multiple_choice') {
           const mine = new Set<string>((resp.selected || []).map((s: string) => normText(s)));
           const keys = new Set((Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s))));
           isCorrect = mine.size === keys.size && [...mine].every((s) => keys.has(s));
+        } else if (qtype === 'fill_in_blank') {
+          handled = true;
+          const student = Array.isArray((resp as any).blanks)
+            ? (resp as any).blanks
+            : resp.text != null && resp.text !== ''
+              ? [resp.text]
+              : [];
+          const g = gradeFillBlanks(key, student);
+          if (g.gradeable === 0) {
+            pendingCount += 1;
+          } else {
+            isCorrect = g.isCorrect;
+            ratio = g.scoreRatio;
+            score = g.scoreRatio * max;
+            autoScore += score;
+            gStatus = 'GRADED';
+            gradedCount += 1;
+          }
         } else {
           const accepted = (Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s)));
           isCorrect = accepted.includes(normText(resp.text || ''));
         }
-        score = isCorrect ? max : 0;
-        autoScore += score ?? 0;
-        gStatus = 'GRADED';
-        gradedCount += 1;
+        if (!handled) {
+          score = isCorrect ? max : 0;
+          ratio = isCorrect ? 1 : 0;
+          autoScore += score ?? 0;
+          gStatus = 'GRADED';
+          gradedCount += 1;
+        }
       } else {
         pendingCount += 1;
       }
@@ -428,7 +458,7 @@ attemptsRouter.post('/attempts', requireRole('student'), ah(async (req: AuthedRe
         questionId: qid,
         level: q.level || 'VAN_DUNG',
         isCorrect: gStatus === 'GRADED' ? !!isCorrect : score != null ? score / max >= 1 : false,
-        scoreRatio: gStatus === 'GRADED' ? (isCorrect ? 1 : 0) : 0,
+        scoreRatio: gStatus === 'GRADED' ? ratio : 0,
         timestamp: Date.now(),
         topicId: q.topic_id || null,
       });

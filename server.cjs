@@ -51971,6 +51971,11 @@ var pool = (0, import_promise.createPool)({
   waitForConnections: true,
   connectionLimit: 10
 });
+pool.on("connection", (conn) => {
+  conn.query("SET time_zone = '+00:00'", (err) => {
+    if (err) console.error("[mysql] SET time_zone failed:", err?.message || err);
+  });
+});
 function wrapConnection(conn) {
   return {
     query: async (sql, params) => {

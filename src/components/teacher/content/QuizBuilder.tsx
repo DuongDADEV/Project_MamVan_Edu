@@ -44,6 +44,13 @@ import {
 } from 'lucide-react';
 import { aiService } from '../../../services/index.ts';
 import { XP_CONFIG } from '../../../config.ts';
+import {
+  BLANK_TOKEN,
+  countBlanks,
+  blankContexts,
+  createBlankFromSelection,
+  deleteBlank,
+} from '../../../logic/fillBlank.ts';
 
 interface QuizBuilderProps {
   /** Tab mở đầu: Bài tập MỚI TẠO mở thẳng 'settings' (Cài đặt bài trước, soạn câu sau). */
@@ -243,18 +250,43 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
       if (!ans.some((a) => a && opts.includes(a))) issues.push('chưa chọn đáp án đúng');
     } else if (q.type === 'fill') {
       const ans = Array.isArray(q.answer) ? q.answer : [];
-      if (!ans.some((a) => a?.trim())) issues.push('chưa nhập đáp án điền từ');
+      const blanks = countBlanks(q.prompt || '');
+      if (blanks === 0) issues.push('chưa tạo ô trống nào trong đề bài');
+      else {
+        for (let i = 0; i < blanks; i += 1) {
+          if (!ans[i]?.trim()) issues.push(`ô trống ${i + 1} chưa có đáp án`);
+        }
+      }
+      if (ans.length > blanks) issues.push('thừa đáp án so với số ô trống');
     }
     return issues;
   };
 
-  // Cập nhật câu
+  // Cập nhật câu — riêng câu điền trống: khi đề bài đổi làm số `___`
+  // lệch khỏi số đáp án thì tự căn lại (thêm rỗng / cắt cuối) để dữ liệu
+  // lưu luôn khớp nhau. Tạo/xóa ô bằng nút thì đã tính sẵn đáp án nên
+  // không căn lại (updates có cả answer thì giữ nguyên answer đó).
   const handleUpdateQuestion = (qId: string, updates: Partial<QuestionWithMeta>) => {
     setQuestions((prev) =>
-      prev.map((q) => (q.id === qId ? { ...q, ...updates, updated_at: new Date().toISOString() } : q))
+      prev.map((q) => {
+        if (q.id !== qId) return q;
+        let next = { ...q, ...updates, updated_at: new Date().toISOString() };
+        if (q.type === 'fill' && updates.prompt !== undefined && updates.answer === undefined) {
+          const blanks = countBlanks(next.prompt || '');
+          const ans = Array.isArray(next.answer) ? [...(next.answer as string[])] : [];
+          while (ans.length < blanks) ans.push('');
+          if (ans.length > blanks) ans.length = blanks;
+          next = { ...next, answer: ans };
+        }
+        return next;
+      })
     );
     isDirtyRef.current = true;
   };
+
+  // Ref tới textarea đề bài của từng câu (để nút "Tạo ô trống" đọc đoạn
+  // giáo viên đang bôi đen).
+  const promptRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   // Chuyển dạng câu hỏi (GIỮ LẠI ĐỀ BÀI)
   const handleChangeType = (qId: string, newType: QuestionType) => {
@@ -1082,6 +1114,9 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
 
                       {/* Textarea Đề bài */}
                       <textarea
+                        ref={(el) => {
+                          promptRefs.current[q.id] = el;
+                        }}
                         rows={3}
                         value={q.prompt}
                         onChange={(e) => handleUpdateQuestion(q.id, { prompt: e.target.value })}
@@ -1280,60 +1315,114 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                     {/* 3. ĐIỀN VÀO Ô TRỐNG (fill) */}
                     {q.type === 'fill' && (
                       <div className="space-y-3 p-3.5 rounded-2xl bg-emerald-50/40 border border-emerald-200">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-bold text-emerald-800">
-                            Cấu hình các ô trống cần điền:
+                            Ô trống trong đề bài ({BLANK_TOKEN}):
                           </span>
-                          <span className="text-[10px] text-emerald-700 italic">
-                            Chấm không phân biệt hoa thường, tự bỏ khoảng trắng thừa
+                          <span className="text-[10px] text-emerald-700 italic text-right">
+                            Chấm từng ô, điểm từng phần; không phân biệt hoa thường, dấu tiếng Việt, dấu câu cuối câu
                           </span>
                         </div>
 
-                        {/* Danh sách các ô trống */}
+                        <p className="text-[11px] text-emerald-800 leading-relaxed">
+                          Gõ câu đầy đủ vào ô đề bài, <b>bôi đen</b> đoạn muốn thành ô trống rồi bấm nút dưới
+                          — đoạn đó tự thành đáp án và chỗ đó thành ô trống cho học sinh điền. Đặt con trỏ
+                          rồi bấm nút để tạo ô trống rỗng. Nên tạo/xóa ô bằng nút để đáp án không bị lệch
+                          thứ tự; gõ {BLANK_TOKEN} trực tiếp cũng được nhưng đáp án sẽ tự căn theo thứ tự.
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const ta = promptRefs.current[q.id];
+                              if (!ta) return;
+                              const made = createBlankFromSelection(
+                                q.prompt || '',
+                                Array.isArray(q.answer) ? [...(q.answer as string[])] : [],
+                                ta.selectionStart ?? 0,
+                                ta.selectionEnd ?? 0
+                              );
+                              if (!made) {
+                                alert('Không tạo được ô trống: vùng chọn chạm vào ô trống đã có. Hãy chọn đoạn chữ khác.');
+                                return;
+                              }
+                              handleUpdateQuestion(q.id, { prompt: made.sentence, answer: made.answers });
+                              ta.focus();
+                            }}
+                            className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
+                            ＋ Tạo ô trống từ đoạn bôi đen
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cur = q.prompt || '';
+                              const sep = cur && !cur.endsWith(' ') ? ' ' : '';
+                              handleUpdateQuestion(q.id, {
+                                prompt: cur + sep + BLANK_TOKEN,
+                                answer: [...(Array.isArray(q.answer) ? (q.answer as string[]) : []), ''],
+                              });
+                            }}
+                            className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                          >
+                            ＋ Thêm ô trống ở cuối câu
+                          </button>
+                          <span className="text-[11px] text-emerald-700">
+                            Đang có {countBlanks(q.prompt || '')} ô trống
+                          </span>
+                        </div>
+
+                        {/* Danh sách đáp án theo đúng thứ tự các ô trong câu */}
                         <div className="space-y-2">
-                          {(Array.isArray(q.answer) ? q.answer : ['']).map((ansVal, ansIdx) => (
-                            <div key={ansIdx} className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-emerald-700 shrink-0">
-                                Ô [{ansIdx + 1}]:
-                              </span>
-                              <input
-                                type="text"
-                                value={ansVal}
-                                onChange={(e) => {
-                                  const currentArr = Array.isArray(q.answer) ? [...q.answer] : [''];
-                                  currentArr[ansIdx] = e.target.value;
-                                  handleUpdateQuestion(q.id, { answer: currentArr });
-                                }}
-                                placeholder="Nhập từ hoặc cụm từ đáp án chính xác..."
-                                className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-xs text-[#2F3E6B]"
-                              />
-                              {(Array.isArray(q.answer) ? q.answer.length : 1) > 1 && (
+                          {blankContexts(q.prompt || '').map((ctx, ansIdx) => {
+                            const ansArr = Array.isArray(q.answer) ? (q.answer as string[]) : [];
+                            const ansVal = ansArr[ansIdx] ?? '';
+                            return (
+                              <div key={ansIdx} className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-emerald-700 shrink-0">
+                                  Ô [{ansIdx + 1}] <span className="font-normal italic">({ctx})</span>:
+                                </span>
+                                <input
+                                  type="text"
+                                  value={ansVal}
+                                  onChange={(e) => {
+                                    const currentArr = [...ansArr];
+                                    while (currentArr.length <= ansIdx) currentArr.push('');
+                                    currentArr[ansIdx] = e.target.value;
+                                    handleUpdateQuestion(q.id, { answer: currentArr });
+                                  }}
+                                  placeholder="Đáp án… (nhiều cách chấp nhận thì cách nhau bằng |)"
+                                  className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-xs text-[#2F3E6B]"
+                                />
                                 <button
                                   type="button"
+                                  title="Xóa ô này và trả lại chữ gốc vào câu"
                                   onClick={() => {
-                                    const currentArr = Array.isArray(q.answer) ? [...q.answer] : [];
-                                    const nextArr = currentArr.filter((_, i) => i !== ansIdx);
-                                    handleUpdateQuestion(q.id, { answer: nextArr });
+                                    const made = deleteBlank(q.prompt || '', ansArr, ansIdx);
+                                    handleUpdateQuestion(q.id, { prompt: made.sentence, answer: made.answers });
                                   }}
                                   className="p-1 text-slate-400 hover:text-rose-600"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
+                              </div>
+                            );
+                          })}
+                          {countBlanks(q.prompt || '') === 0 && (
+                            <p className="text-[11px] text-amber-700 italic">
+                              Chưa có ô trống nào — bôi đen một đoạn trong đề bài rồi bấm “Tạo ô trống từ đoạn bôi đen”.
+                              {(Array.isArray(q.answer) ? (q.answer as string[]) : []).some((a) => a?.trim()) && (
+                                <span className="block mt-1 text-emerald-800 not-italic">
+                                  Câu này còn đáp án cũ chưa gắn ô trống:{' '}
+                                  {(Array.isArray(q.answer) ? (q.answer as string[]) : [])
+                                    .filter((a) => a?.trim())
+                                    .join(' | ')}
+                                  {' '}— tạo ô trống mới rồi nhập lại các đáp án này vào từng ô.
+                                </span>
                               )}
-                            </div>
-                          ))}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const currentArr = Array.isArray(q.answer) ? [...q.answer] : [''];
-                              handleUpdateQuestion(q.id, { answer: [...currentArr, ''] });
-                            }}
-                            className="text-[11px] text-emerald-700 hover:underline font-bold flex items-center gap-1 pt-1"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Thêm ô trống tiếp theo</span>
-                          </button>
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
