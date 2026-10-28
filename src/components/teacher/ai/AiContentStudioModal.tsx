@@ -36,6 +36,7 @@ import { MamMuc } from '../../MamMuc.tsx';
 import { SkillLevel, Difficulty, QuestionType, Question, TheoryBlock } from '../../../types.ts';
 import { studioKey } from '../../../logic/teacherScope.ts';
 import { extractDocumentText, MAX_EXTRACTED_CHARS } from '../../../logic/extractDocumentText.ts';
+import { isValidGeneratedQuestion } from '../../../logic/validateAiQuestions.ts';
 
 interface AiContentStudioModalProps {
   isOpen: boolean;
@@ -245,6 +246,9 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   const [showAddSourceForm, setShowAddSourceForm] = useState(false);
   const [unsupportedFileNotice, setUnsupportedFileNotice] = useState<string | null>(null);
   const [isExtractingFile, setIsExtractingFile] = useState(false);
+  // 28/10: AI có lúc trả thiếu câu so với số đã chọn — báo rõ trong màn duyệt
+  // thay vì lặng lẽ trình thiếu như thể đủ.
+  const [generationShortfall, setGenerationShortfall] = useState<string | null>(null);
   const [previewingSource, setPreviewingSource] = useState<AISource | null>(null);
 
   // 3. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA) - LƯU LOCALSTORAGE THEO GIÁO VIÊN + CHỦ ĐỀ (26/10)
@@ -365,6 +369,11 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
             savedAt: nowIso,
             topicTitle: topicTitle || '',
             teacherId: teacherId || undefined,
+            // 28/10: lưu luôn topicId thật — trước đây nháp không có trường
+            // này nên Ngân hàng phải đoán topic từ tên khóa localStorage và
+            // đoán sai (lấy cả teacherId dính vào), khiến câu đẩy từ nháp
+            // vào ngân hàng mang topicId giả.
+            topicId: topicId || undefined,
           })
         );
         setDraftSavedAt(nowIso);
@@ -418,7 +427,12 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
         const nowIso = new Date().toISOString();
         localStorage.setItem(
           theoryDraftStorageKey,
-          JSON.stringify({ data: reviewTheoryDraft, savedAt: nowIso, teacherId: teacherId || undefined })
+          JSON.stringify({
+            data: reviewTheoryDraft,
+            savedAt: nowIso,
+            teacherId: teacherId || undefined,
+            topicId: topicId || undefined,
+          })
         );
         setTheoryDraftSavedAt(nowIso);
       } else {
@@ -466,6 +480,9 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   // Mở thẳng màn duyệt khi thầy/cô bấm "Duyệt" từ mục Bản nháp ở Ngân hàng
   useEffect(() => {
     if (!autoOpenDraftNonce) return;
+    // Nháp mở từ Ngân hàng là nháp đã lưu từ trước, không phải kết quả của
+    // lần sinh vừa rồi nên không hiện cảnh báo thiếu câu của lần sinh đó.
+    setGenerationShortfall(null);
     if (autoOpenDraftKind === 'questions' && reviewDraftQuestions?.length) {
       setIsReviewOpen(true);
     }
@@ -638,11 +655,21 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   // Phê duyệt và lưu bộ câu hỏi vào Ngân hàng
   const handleSaveReviewedQuestions = () => {
     if (!reviewDraftQuestions) return;
-    const questionsToSave = reviewDraftQuestions.filter((q) => selectedDraftIds.includes(q.id));
-    if (questionsToSave.length === 0) {
+    const selected = reviewDraftQuestions.filter((q) => selectedDraftIds.includes(q.id));
+    if (selected.length === 0) {
       alert('Vui lòng tích chọn ít nhất 1 câu hỏi để lưu vào Ngân hàng câu hỏi.');
       return;
     }
+    // 28/10: nháp cũ (tạo trước khi có lớp kiểm chứng) có thể chứa câu thiếu
+    // đề bài/loại — loại khỏi lần lưu này thay vì để máy chủ đắp mặc định
+    // thành câu hỏng trong ngân hàng.
+    const questionsToSave = selected.filter(isValidGeneratedQuestion);
+    if (questionsToSave.length < selected.length) {
+      alert(
+        `Có ${selected.length - questionsToSave.length} câu thiếu đề bài hoặc loại nên không được lưu (câu lỗi do AI trả về trước đây). Chỉ ${questionsToSave.length} câu hợp lệ được lưu vào Ngân hàng.`
+      );
+    }
+    if (questionsToSave.length === 0) return;
 
     onApplyDraft({
       type: 'quiz',
@@ -658,13 +685,26 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
       },
     });
 
-    // Câu chưa tích chọn ở lại BẢN NHÁP để duyệt tiếp lúc khác; chỉ khi lưu
-    // hết mới đóng xưởng như cũ.
-    const remaining = reviewDraftQuestions.filter((q) => !selectedDraftIds.includes(q.id));
+    // Câu chưa tích chọn ở lại BẢN NHÁP để duyệt tiếp lúc khác; câu thiếu
+    // trường đã bị loại ở trên cũng rời khỏi nháp (đã báo rõ); chỉ khi không
+    // còn câu nào mới đóng xưởng.
+    const savedIds = new Set(questionsToSave.map((q) => q.id));
+    const skippedIds = new Set(selected.filter((q) => !savedIds.has(q.id)).map((q) => q.id));
+    const remaining = reviewDraftQuestions.filter((q) => !savedIds.has(q.id) && !skippedIds.has(q.id));
     if (remaining.length > 0) {
       setReviewDraftQuestions(remaining);
       setSelectedDraftIds([]);
     } else {
+      // 28/10: xóa khóa nháp NGAY tại đây như handleApplyTheoryDraft đã làm
+      // — không trông chờ effect autosave chạy khi modal đóng, vì đóng modal
+      // cùng nhịp state (đặc biệt khi xưởng nhúng trong Ngân hàng chuyển tab)
+      // có thể khiến effect xóa khóa không bao giờ chạy, nháp đã lưu vẫn nằm
+      // lại mục Bản nháp.
+      try {
+        localStorage.removeItem(draftStorageKey);
+      } catch {
+        // Bỏ qua
+      }
       setReviewDraftQuestions(null);
       setIsReviewOpen(false);
       onClose();
@@ -808,6 +848,12 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
         }));
 
         setGenerationStep('Hoàn tất! Đang mở bản xem trước...');
+        // 28/10: báo rõ khi AI trả thiếu (kể cả sau 1 lần gọi bù trong service).
+        setGenerationShortfall(
+          processedQuestions.length < totalQuestions
+            ? `AI chỉ tạo được ${processedQuestions.length}/${totalQuestions} câu hợp lệ (câu thiếu trường đã bị loại, không đưa vào nháp). Thầy/cô có thể bấm "Tạo lại" để thử đủ số.`
+            : null
+        );
         setTimeout(() => {
           setIsGenerating(false);
           setReviewDraftQuestions(processedQuestions);
@@ -1059,6 +1105,11 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                   {draftSavedAt &&
                     ` Đã lưu nháp lúc ${new Date(draftSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${new Date(draftSavedAt).toLocaleDateString('vi-VN')}.`}
                 </p>
+                {generationShortfall && (
+                  <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5 mt-1">
+                    ⚠️ {generationShortfall}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1121,7 +1172,9 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                           ? 'Chọn nhiều đáp án'
                           : q.type === 'fill'
                           ? 'Điền từ'
-                          : 'Tự luận'}
+                          : q.type === 'essay'
+                          ? 'Tự luận'
+                          : 'Chưa rõ loại'}
                       </span>
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#0D9488]/10 text-[#0D9488]">
                         {q.level === 'NHAN_BIET'
@@ -1130,10 +1183,12 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                           ? 'Thông hiểu'
                           : q.level === 'PHAN_TICH'
                           ? 'Phân tích'
-                          : 'Vận dụng'}
+                          : q.level === 'VAN_DUNG'
+                          ? 'Vận dụng'
+                          : 'Chưa rõ mức'}
                       </span>
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                        {q.difficulty === 'DE' ? 'Dễ' : q.difficulty === 'TB' ? 'Trung bình' : 'Khó'}
+                        {q.difficulty === 'DE' ? 'Dễ' : q.difficulty === 'TB' ? 'Trung bình' : q.difficulty === 'KHO' ? 'Khó' : 'Chưa rõ độ khó'}
                       </span>
                     </div>
 
@@ -1147,8 +1202,10 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Đề bài */}
-                  <p className="text-xs font-bold text-[#2F3E6B] leading-relaxed mb-2.5">{q.prompt}</p>
+                  {/* Đề bài — 28/10: không để trống lặng lẽ; câu thiếu đề phải hiện rõ là lỗi */}
+                  <p className="text-xs font-bold text-[#2F3E6B] leading-relaxed mb-2.5">
+                    {q.prompt || '— Câu hỏi này thiếu đề bài (do AI trả về lỗi, không nên lưu) —'}
+                  </p>
 
                   {/* Đoạn ngữ liệu trích dẫn */}
                   {(q.passage || q.aiSourceSnippet) && (

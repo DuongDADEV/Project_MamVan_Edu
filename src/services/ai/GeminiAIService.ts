@@ -24,6 +24,11 @@ import {
 } from './AIService.ts';
 import { Question, KeyPoint, TheoryBlock } from '../../types.ts';
 import { callAiProxyText } from './proxyClient.ts';
+import {
+  filterValidQuestions,
+  missingTypeCounts,
+  type TypeCounts,
+} from '../../logic/validateAiQuestions.ts';
 
 /**
  * Các tên model Google đã khai tử với key/project mới (luôn 404 — đã xác
@@ -301,7 +306,7 @@ Chủ đề: "${topic}"
 
 YÊU CẦU ĐẶC BIỆT QUAN TRỌNG VỀ SỐ LƯỢNG (BẮT BUỘC):
 - Bạn PHẢI tạo CHÍNH XÁC đúng ${count} câu hỏi riêng biệt trong mảng JSON (BẮT BUỘC có đủ ${count} phần tử).
-- TUYỆT ĐỐI KHÔNG ĐƯỢC sinh ít hơn ${count} câu (ví dụ người dùng chọn ${count} câu thì phải đủ ${count} câu, không được chỉ trả về 5 câu).
+- TUYỆT ĐỐI KHÔNG ĐƯỢC sinh ít hơn ${count} câu: mảng JSON phải có đủ đúng ${count} phần tử, không được thiếu.
 - Khai thác phong phú mọi chi tiết, từ ngữ, câu văn/thơ trong ngữ liệu để mỗi câu hỏi là một khía cạnh riêng biệt.
 ${typeBreakdown}
 Phân bổ theo ma trận 4 mức độ năng lực:
@@ -335,8 +340,50 @@ Quy tắc dạng câu hỏi (type):
 ]`;
 
     const raw = await this.callGemini(prompt);
-    const parsed = this.parseJsonFromText<Question[]>(raw);
-    return parsed.map((q, idx) => ({
+    const first = this.parseJsonFromText<Question[]>(raw);
+    let valid = filterValidQuestions(first);
+    // 28/10: AI có lúc trả thiếu câu hoặc trả câu thiếu trường (không đề bài,
+    // không loại/mức/độ khó) — trước đây những câu đó vẫn vào nháp rồi lúc
+    // lưu bị máy chủ đắp mặc định thành câu hỏng. Nay: chỉ giữ câu hợp lệ,
+    // và gọi bù ĐÚNG 1 lần cho số còn thiếu (kèm đủ ngữ liệu vì mỗi lần gọi
+    // là độc lập, không có lịch sử hội thoại). Vẫn thiếu thì trả số đã có —
+    // phía gọi (màn duyệt) phải báo rõ số thiếu, không lặng lẽ trình thiếu
+    // như thể đủ.
+    const requestedCounts: TypeCounts | undefined = options?.typeCounts
+      ? {
+          single: options.typeCounts.single || 0,
+          multi: options.typeCounts.multi || 0,
+          fill: options.typeCounts.fill || 0,
+          essay: options.typeCounts.essay || 0,
+        }
+      : undefined;
+    if (valid.length < count) {
+      const missing = requestedCounts
+        ? missingTypeCounts(requestedCounts, valid)
+        : { counts: null as TypeCounts | null, total: count - valid.length };
+      if (missing.total > 0) {
+        const breakdown = requestedCounts
+          ? `\nCƠ CẤU CÒN THIẾU (BẮT BUỘC ĐÚNG TỪNG LOẠI):\n- "single": ${missing.counts!.single} câu\n- "multi": ${missing.counts!.multi} câu\n- "fill": ${missing.counts!.fill} câu\n- "essay": ${missing.counts!.essay} câu\n`
+          : '';
+        const followup = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Mầm AI Studio.\nDựa vào ngữ liệu sau:\n${sourcesText}\n\nChủ đề: "${topic}"\n\nLần trả lời trước của bạn chỉ có ${valid.length}/${count} câu hỏi hợp lệ. Hãy tạo thêm ĐÚNG ${missing.total} câu hỏi riêng biệt nữa (không lặp lại các câu đã có), trả về DUY NHẤT một mảng JSON thuần túy theo đúng cấu trúc Question[] như lần trước (mỗi câu bắt buộc có prompt, type, level, difficulty; trắc nghiệm phải có options và answer; tự luận có rubric).\n${breakdown}Độ khó chung: ${difficulty}.`;
+        try {
+          const raw2 = await this.callGemini(followup);
+          const second = this.parseJsonFromText<Question[]>(raw2);
+          valid = [...valid, ...filterValidQuestions(second)];
+        } catch {
+          // Giữ số câu đã có; phía gọi báo thiếu.
+        }
+      }
+    }
+    // Khử trùng theo đề bài (lần gọi bù có thể lặp câu cũ) rồi cắt đúng số đã chọn.
+    const seen = new Set<string>();
+    const deduped = valid.filter((q) => {
+      const key = q.prompt.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return deduped.slice(0, count).map((q, idx) => ({
       ...q,
       id: q.id || `q_ai_${Date.now()}_${idx}`,
       points: q.points || 10,

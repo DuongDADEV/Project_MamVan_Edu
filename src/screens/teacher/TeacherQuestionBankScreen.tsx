@@ -51,6 +51,7 @@ import { PageHeader } from '../../components/teacher/ui/PageHeader.tsx';
 import { ConfirmDialog } from '../../components/teacher/ui/ConfirmDialog.tsx';
 import { AiContentStudioModal } from '../../components/teacher/ai/AiContentStudioModal.tsx';
 import { scopeItemsToTeacher, scopeQuestionsToTeacher } from '../../logic/teacherScope.ts';
+import { isValidGeneratedQuestion } from '../../logic/validateAiQuestions.ts';
 import { MamMuc } from '../../components/MamMuc.tsx';
 
 interface TeacherQuestionBankScreenProps {
@@ -124,6 +125,22 @@ function blocksToSections(blocks: any[]): any[] {
 // "Chưa có bản nháp nào đang chờ" như thể không có nháp. Nay: đọc từng khóa
 // riêng (khóa hỏng không chôn các khóa còn lại) và báo readError để UI hiện
 // banner lỗi thay vì câu "không có nháp".
+// 28/10: nháp mới (từ đợt này) lưu sẵn topicId thật trong payload nên ưu tiên
+// đọc từ đó. Nháp cũ không có topicId thì đoán từ tên khóa: khóa Studio có
+// dạng mamvan_ai_<loại>_<teacherId>_<topicId> nên phần sau tiền tố là
+// "<teacherId>_<topicId>" — phải cắt bỏ teacherId, không được lấy nguyên
+// cả đoạn làm topicId (lỗi cũ: câu đẩy từ nháp vào ngân hàng mang topicId
+// giả "<teacherId>_<topicId>", lọc theo chủ đề thật không thấy; nút "Duyệt
+// trong Studio" mở nhầm khóa nên không thấy nháp).
+function topicIdFromDraftKey(prefix: string, key: string, parsedTopicId?: string): string {
+  if (parsedTopicId) return parsedTopicId;
+  const rest = key.slice(prefix.length);
+  const topicIdx = rest.indexOf('_topic_');
+  if (topicIdx >= 0) return rest.slice(topicIdx + 1);
+  if (rest.endsWith('_global')) return 'global';
+  return rest;
+}
+
 function readQuestionDraftSets(): { sets: QuestionDraftSet[]; readError: boolean } {
   const out: QuestionDraftSet[] = [];
   let readError = false;
@@ -135,7 +152,7 @@ function readQuestionDraftSets(): { sets: QuestionDraftSet[]; readError: boolean
       if (Array.isArray(parsed?.questions) && parsed.questions.length > 0) {
         out.push({
           key,
-          topicId: key.slice(QUESTION_DRAFT_PREFIX.length),
+          topicId: topicIdFromDraftKey(QUESTION_DRAFT_PREFIX, key, parsed.topicId),
           topicTitle: parsed.topicTitle || '',
           questions: parsed.questions,
           selectedIds: Array.isArray(parsed.selectedIds) ? parsed.selectedIds : [],
@@ -162,7 +179,7 @@ function readTheoryDrafts(): { items: TheoryDraftItem[]; readError: boolean } {
       if (parsed?.data?.blocks?.length > 0) {
         out.push({
           key,
-          topicId: key.slice(THEORY_DRAFT_PREFIX.length),
+          topicId: topicIdFromDraftKey(THEORY_DRAFT_PREFIX, key, parsed.topicId),
           title: parsed.data.title || 'Lý thuyết chưa đặt tên',
           blocksCount: parsed.data.blocks.length,
           savedAt: parsed.savedAt || '',
@@ -271,11 +288,20 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
       return;
     }
     const ids = getDraftSelection(set);
-    const toPush = set.questions.filter((q) => ids.includes(q.id));
-    if (toPush.length === 0) {
+    const selected = set.questions.filter((q) => ids.includes(q.id));
+    if (selected.length === 0) {
       alert('Thầy/cô hãy tích chọn ít nhất 1 câu đã duyệt để đưa vào Ngân hàng.');
       return;
     }
+    // 28/10: nháp cũ có thể chứa câu thiếu đề bài/loại — loại khỏi lần đẩy
+    // này thay vì để máy chủ đắp mặc định thành câu hỏng trong ngân hàng.
+    const toPush = selected.filter(isValidGeneratedQuestion);
+    if (toPush.length < selected.length) {
+      alert(
+        `Có ${selected.length - toPush.length} câu thiếu đề bài hoặc loại nên không được đưa vào Ngân hàng (câu lỗi do AI trả về trước đây). Chỉ ${toPush.length} câu hợp lệ được đưa vào.`
+      );
+    }
+    if (toPush.length === 0) return;
     try {
       for (const q of toPush) {
         await quizService.saveQuestion({
@@ -285,7 +311,9 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
           isTeacherReviewed: true,
         });
       }
-      const remaining = set.questions.filter((q) => !ids.includes(q.id));
+      const pushedIds = new Set(toPush.map((q) => q.id));
+      const skippedIds = new Set(selected.filter((q) => !pushedIds.has(q.id)).map((q) => q.id));
+      const remaining = set.questions.filter((q) => !pushedIds.has(q.id) && !skippedIds.has(q.id));
       if (remaining.length > 0) {
         localStorage.setItem(
           set.key,
@@ -295,6 +323,9 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
             savedAt: new Date().toISOString(),
             topicTitle: set.topicTitle,
             teacherId: set.teacherId || teacherId,
+            // 28/10: giữ topicId thật trong nháp còn lại — trước đây bản ghi
+            // lại này không có topicId nên lần đọc sau lại đoán sai từ tên khóa.
+            topicId: set.topicId,
           })
         );
       } else {
