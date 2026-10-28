@@ -537,6 +537,45 @@ export default function App() {
     | { type: 'assignment'; assignmentId: string }
   >(null);
 
+  // 3b. Bài tập mở từ luồng nhưng chưa có trong danh sách cache (cô vừa
+  // xuất bản trong lúc học sinh đang mở app, hoặc danh sách đang tải):
+  // lấy trực tiếp theo id thay vì báo "không còn tồn tại" ngay — lỗi
+  // 28/10: học sinh bấm bài cô vừa xuất bản thì gặp trang "Bài tập này
+  // không còn tồn tại" vì rawQuizzes của phiên cũ chưa có bài mới.
+  const [homeworkQuizFallback, setHomeworkQuizFallback] = useState<QuizWithMeta | null>(null);
+  const [homeworkQuizLoading, setHomeworkQuizLoading] = useState(false);
+  useEffect(() => {
+    if (activeFlow?.type !== 'homework' || !activeFlow.homeworkQuizId) {
+      setHomeworkQuizFallback(null);
+      setHomeworkQuizLoading(false);
+      return;
+    }
+    const found = (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId);
+    if (found) {
+      setHomeworkQuizFallback(null);
+      setHomeworkQuizLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setHomeworkQuizLoading(true);
+    quizService
+      .getQuizById(activeFlow.homeworkQuizId)
+      .then((q) => {
+        if (cancelled) return;
+        setHomeworkQuizFallback(q || null);
+        setHomeworkQuizLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHomeworkQuizFallback(null);
+          setHomeworkQuizLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFlow, rawQuizzes]);
+
   // 4. Quản lý Popup nhắc nghỉ & Modal chọn Theme
   const [isBreakReminderOpen, setIsBreakReminderOpen] = useState(false);
   const [isThemeSelectorOpen, setIsThemeSelectorOpen] = useState(false);
@@ -1017,10 +1056,21 @@ export default function App() {
           (() => {
             // CHỈ dùng bài tập THẬT từ máy chủ — không còn bài mẫu chết cứng
             // để thay thế khi không tìm thấy (đã gỡ mockData).
-            const targetQuiz = (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId);
+            const targetQuiz =
+              (rawQuizzes || []).find((q) => q.id === activeFlow.homeworkQuizId) ||
+              (homeworkQuizFallback && homeworkQuizFallback.id === activeFlow.homeworkQuizId
+                ? homeworkQuizFallback
+                : undefined);
 
 
             if (!targetQuiz) {
+              if (homeworkQuizLoading) {
+                return (
+                  <div className="w-full max-w-2xl mx-auto py-16 px-4 text-center space-y-4">
+                    <p className="font-bold text-[#2F3E6B]">Đang tải bài tập...</p>
+                  </div>
+                );
+              }
               return (
                 <div className="w-full max-w-2xl mx-auto py-16 px-4 text-center space-y-4">
                   <p className="font-bold text-[#2F3E6B]">Bài tập này không còn tồn tại hoặc đang được tải lại.</p>

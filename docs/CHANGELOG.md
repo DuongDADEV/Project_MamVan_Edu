@@ -1,3 +1,8 @@
+## [dev] 2026-10-28 — Sửa "Bài tập không còn tồn tại" khi cô vừa xuất bản
+
+- Nguyên nhân: màn làm bài tập trong App.tsx chỉ tìm bài trong danh sách cache `rawQuizzes` của phiên học sinh đang mở — cô xuất bản bài mới trong lúc học sinh đang mở app thì danh sách cache chưa có bài đó, bấm vào là gặp ngay trang "Bài tập này không còn tồn tại hoặc đang được tải lại" (không có trạng thái đang tải, không tự lấy lại). Máy chủ kiểm chứng đúng: bài đã xuất bản, học sinh lấy danh sách/câu hỏi đều thấy — lỗi hoàn toàn ở client.
+- Sửa: khi bài tập mở từ luồng mà không có trong cache, App tự lấy trực tiếp bài đó theo id (`getQuizById`) rồi mới mở màn làm bài; trong lúc lấy thì hiện "Đang tải bài tập..." thay vì báo không tồn tại. Chỉ khi lấy theo id cũng 404 mới báo không tồn tại thật.
+
 ## [dev] 2026-10-28 — Luật tiến độ mới: mọi mục trong luồng đều tính, kể cả nháp
 
 - Luật chủ dự án: flowOrder là danh sách chính thức của chủ đề — `countTopicFlowDone` (dùng chung cho % học sinh, bảng hoàn thành giáo viên và quỹ chủ đề) nay đếm MỌI mục trong flowOrder bất kể trạng thái (trước đây video trong videoIds được tính bất kể trạng thái, quiz chỉ tính khi đã xuất bản, lý thuyết chỉ tính khi là theoryId — nên bài nháp "tàng hình" khỏi mẫu số). Bài nháp tính là chưa xong cho tới khi xuất bản + hoàn thành. Chủ đề chưa xếp luồng giữ cách tính cũ (suy ra từ videoIds/theoryId/quiz) để không vỡ chủ đề cũ.
