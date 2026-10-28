@@ -145,6 +145,22 @@ export function extractJsonFromText<T>(text: string): T {
   );
 }
 
+/**
+ * Gán id duy nhất cho mọi câu AI sinh ra (28/10): AI hay trả id mẫu
+ * q_ai_1, q_ai_2... giống nhau mỗi đợt — giữ nguyên id đó thì đợt sau lưu
+ * vào ngân hàng sẽ GHI ĐÈ câu cùng id của đợt trước (đã chứng minh bằng
+ * DB: đẩy 1 câu q_ai_1 đã thay mất câu q_ai_1 của đợt trước, tổng ngân
+ * hàng vẫn 3 thay vì 4). Id mới luôn duy nhất: q_ai_<ms>_<chỉ số>_<ngẫu
+ * nhiên>; vẫn chứa "ai" nên cờ isAiGenerated ở máy chủ không đổi.
+ */
+export function assignUniqueQuestionIds<T extends { id?: string }>(questions: T[]): T[] {
+  const stamp = Date.now();
+  return questions.map((q, idx) => ({
+    ...q,
+    id: `q_ai_${stamp}_${idx}_${Math.random().toString(36).slice(2, 8)}`,
+  }));
+}
+
 /** AI có lúc bọc mảng câu hỏi trong đối tượng {"questions": [...]} — gỡ bọc về mảng. */
 export function normalizeAiQuestionArray(x: unknown): any[] {
   if (Array.isArray(x)) return x;
@@ -485,9 +501,8 @@ Quy tắc dạng câu hỏi (type):
       seen.add(key);
       return true;
     });
-    return deduped.slice(0, count).map((q, idx) => ({
+    return assignUniqueQuestionIds(deduped.slice(0, count)).map((q) => ({
       ...q,
-      id: q.id || `q_ai_${Date.now()}_${idx}`,
       points: q.points || 10,
     }));
   }

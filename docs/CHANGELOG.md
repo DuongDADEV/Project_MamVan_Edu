@@ -1,3 +1,11 @@
+## [dev] 2026-10-29 — Sửa lỗi đợt sinh câu sau ghi đè câu đợt trước (phát hiện từ kiểm chứng nháp)
+
+- Kiểm chứng lại đợt fix nháp (CHECK B/C đều đạt tiêu chí: sinh 3 câu đều có đề thật, lưu hết thì tab nháp rỗng, ngân hàng đúng chủ đề "Test Draft Fix"; đẩy từ nháp cũng vào đúng chủ đề và nháp rỗng) — nhưng phát hiện bất thường: sau bước đẩy, tổng ngân hàng vẫn 3 thay vì 4 và câu trắc nghiệm đơn của đợt B biến mất khỏi danh sách.
+- Nguyên nhân (đã chứng minh bằng DB): AI hay trả id mẫu q_ai_1, q_ai_2... giống nhau mỗi đợt; `generateQuestions` giữ nguyên id đó (`id: q.id || ...`), còn đường lưu ngân hàng UPSERT theo id — nên câu q_ai_1 của đợt C đã ghi đè câu q_ai_1 của đợt B. Tổng vẫn 3, câu cũ mất không khôi phục được (chỉ là dữ liệu test).
+- Sửa ở gốc: `generateQuestions` nay luôn gán id duy nhất qua helper mới `assignUniqueQuestionIds` (dạng q_ai_<ms>_<chỉ số>_<ngẫu nhiên>), vẫn chứa "ai" nên cờ isAiGenerated không đổi; khử trùng vẫn theo đề bài như cũ. Bản mẫu (MockAIService) vốn đã dùng id ngẫu nhiên nên không bị. Kiểm chứng mới `scripts/test_question_ids.ts` 6/6 (duy nhất qua 2 đợt, không còn id mẫu, đề giữ nguyên).
+- Dữ liệu thật không bị: ngân hàng "từ láy" không có cặp id trùng nào (các id q_ai_* thật đều là timestamp/ngẫu nhiên); 2 câu "Câu hỏi chưa có tiêu đề" cũ vẫn còn đó nhưng thuộc chủ dự án, topic NULL — không tự xóa, chờ chủ dự án quyết.
+- Không regen sơ đồ đợt này (sửa đúng hành vi, không đổi luồng đã vẽ).
+
 ## [dev] 2026-10-28 — Ẩn đoạn trích lộ đáp án ở đề giao học sinh (nối tiếp vụ điền từ 23:22)
 
 - Kiểm chứng trình duyệt đợt điền từ cho thấy: đề đã có ___ đúng, AI sinh thật (không rớt bản mẫu), nhưng dòng "Ngữ liệu căn cứ" ở thẻ duyệt chứa nguyên văn nguồn nên có cả đáp án. Phân biệt rõ: thẻ duyệt là của giáo viên — hiện đủ đoạn trích để đối chiếu là đúng, không sửa. Nhưng cùng trường `passage` đó, khi lưu thành câu hỏi rồi giao bài, màn làm bài của học sinh CŨNG hiện đoạn trích lên trên câu hỏi — học sinh nhìn đoạn trích là thấy đáp án. Đó mới là chỗ lộ thật.
