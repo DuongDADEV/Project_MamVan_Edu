@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Bổ sung: máy chủ phải biết mốc mặc định (phát hiện khi kiểm chứng đợt quà)
+
+- Kiểm chứng API sau đợt sửa hiện hình: yêu cầu cho mốc mặc định (reward_bookmark) bị tính deductedXp = 0 (không trừ XP!) và reward_id trả về trỏ nhầm sang mốc tự tạo cùng họ rương — vì máy chủ chỉ tra mốc trong DB, còn 5 mốc mặc định chỉ nằm ở máy khách. Yêu cầu cho mốc tự tạo thì đúng (trừ 50, id chính xác).
+- Sửa: thêm bảng CATALOG_TIERS phía máy chủ (bản sao của REWARDS_CATALOG, ghi chú rõ đổi catalog phải đổi cả đây) — đường tạo yêu cầu tra DB trước rồi tra bảng này (đủ XP mới trừ, đúng họ rương cho cả mốc LA/HOA/VANG); đường làm giàu yêu cầu ưu tiên id đã lưu (DB rồi mặc định), khớp họ rương chỉ còn là dự phòng cho yêu cầu cũ.
+- Lưu ý còn tồn (không sửa đợt này): tên + mô tả quà bí mật hiện vẫn nằm trong phản hồi API cho học sinh (luật giấu quà mới chỉ giữ ở giao diện); muốn kín tuyệt đối cần tách endpoint tiết lộ khi mở rương.
+
 ## [dev] 2026-10-29 — Sửa lỗi học sinh không thấy yêu cầu đổi quà (mở rương gãy nửa sau)
 
 - Gốc lỗi: màn học sinh đọc yêu cầu từ state học sinh, nhưng API trạng thái không kèm yêu cầu (bảng trạng thái không có cột đó) nên tải lại là mất dấu; nút mở rương cũng chỉ đổi trạng thái ở máy khách, không gọi máy chủ. Hệ quả: học sinh không bao giờ thấy Được duyệt/Đã trao, nút "Mở rương ngay" không tới được, bộ sưu tập rỗng vĩnh viễn sau tải lại.

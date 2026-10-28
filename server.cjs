@@ -58567,6 +58567,13 @@ rewardsRouter.use(requireAuth);
 var DEFAULT_TEASER = "M\xF3n qu\xE0 b\xED m\u1EADt th\xFA v\u1ECB";
 var DEFAULT_SECRET_NAME = "M\xF3n qu\xE0 b\xED m\u1EADt";
 var DEFAULT_SECRET_DESC = "Chi ti\u1EBFt qu\xE0 t\u1EB7ng d\xE0nh cho h\u1ECDc sinh ch\u0103m ch\u1EC9.";
+var CATALOG_TIERS = [
+  { id: "reward_bookmark", tierKey: "HAT", requiredXp: 280, xpCost: 280, requiredAttendanceDays: 4, teaserDescription: "M\u1ED9t m\xF3n qu\xE0 nh\u1ECF xinh cho b\u01B0\u1EDBc kh\u1EDFi \u0111\u1EA7u ch\u0103m ch\u1EC9.", isPhysical: true },
+  { id: "reward_reading_choice", tierKey: "LA", requiredXp: 320, xpCost: 320, requiredAttendanceDays: 4, teaserDescription: "M\xF3n qu\xE0 b\u1EA5t ng\u1EDD cho m\u1ED9t tu\u1EA7n h\u1ECDc \u0111\u1EC1u \u0111\u1EB7n.", isPhysical: false },
+  { id: "reward_pen", tierKey: "LA", requiredXp: 450, xpCost: 450, requiredAttendanceDays: 5, teaserDescription: "M\xF3n qu\xE0 b\u1EA5t ng\u1EDD v\xE0 h\u1EEFu \xEDch cho nh\u1EEFng trang v\u0103n n\u1EAFn n\xF3t.", isPhysical: true },
+  { id: "reward_notebook", tierKey: "HOA", requiredXp: 650, xpCost: 650, requiredAttendanceDays: 5, teaserDescription: "Qu\xE0 \u0111\u1EB7c bi\u1EC7t d\xE0nh cho b\u1EA1n b\u1EC1n b\u1EC9 v\xE0 ti\u1EBFn b\u1ED9 v\u01B0\u1EE3t b\u1EADc.", isPhysical: true },
+  { id: "reward_golden_box", tierKey: "VANG", requiredXp: 750, xpCost: 750, requiredAttendanceDays: 6, teaserDescription: "Ph\u1EA7n qu\xE0 danh gi\xE1 nh\u1EA5t, d\xE0nh cho ng\u01B0\u1EDDi h\u1ECDc ki\xEAn tr\xEC v\xE0 xu\u1EA5t s\u1EAFc nh\u1EA5t tu\u1EA7n.", isPhysical: true }
+];
 function tierKeyForXp(xpReq) {
   return xpReq <= 300 ? "HAT" : xpReq <= 500 ? "LA" : xpReq <= 700 ? "HOA" : "VANG";
 }
@@ -58745,7 +58752,8 @@ async function enrichRequests(conn, rows) {
   const stateMap = new Map(stateRows.map((s) => [s.student_id, s]));
   return rows.map((row) => {
     const tierKey = String(row.chest_type || "hat").toUpperCase();
-    const matched = rewards.find((r) => r.tierKey === tierKey);
+    const stored = row.reward_id && (rewards.find((r) => r.id === row.reward_id) || CATALOG_TIERS.find((r) => r.id === row.reward_id));
+    const matched = stored || rewards.find((r) => r.tierKey === tierKey);
     const live = stateMap.get(row.student_id);
     const xpWeekActual = live?.xp_week ?? row.xp_week_snapshot ?? 0;
     const attendanceDaysActual = live?.attendance_days_this_week ?? 0;
@@ -58836,7 +58844,7 @@ rewardsRouter.post("/reward-requests", async (req, res) => {
   }
   const tiers = await query("SELECT * FROM `reward_tiers`");
   const rewards = tiers.map(rowToReward);
-  const reward = rewards.find((r) => r.id === rewardId) || rewards.find((r) => `tier_${String(r.tierKey || "").toLowerCase()}` === rewardId);
+  const reward = rewards.find((r) => r.id === rewardId) || rewards.find((r) => `tier_${String(r.tierKey || "").toLowerCase()}` === rewardId) || CATALOG_TIERS.find((r) => r.id === rewardId);
   const tierRaw = String(reward?.tierKey || rewardId.replace(/^tier_/, "") || "hat").toLowerCase();
   const chestType = ["hat", "la", "hoa", "vang"].includes(tierRaw) ? tierRaw : "hat";
   const requiredXp = reward?.requiredXp || 0;

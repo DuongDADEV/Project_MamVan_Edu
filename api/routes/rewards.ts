@@ -50,6 +50,21 @@ const DEFAULT_TEASER = 'Món quà bí mật thú vị';
 const DEFAULT_SECRET_NAME = 'Món quà bí mật';
 const DEFAULT_SECRET_DESC = 'Chi tiết quà tặng dành cho học sinh chăm chỉ.';
 
+/**
+ * Bảng mốc mặc định phía máy chủ (29/10) — BẢN SAO của src/data/rewards.ts
+ * (REWARDS_CATALOG). Máy chủ trước đây chỉ biết mốc trong DB nên yêu cầu
+ * cho mốc mặc định bị tính requiredXp = 0 (không trừ XP!) và khớp nhầm
+ * sang mốc tự tạo cùng họ rương. Khi đổi REWARDS_CATALOG phải đổi cả đây.
+ * gift_name KHÔNG lấy secret.name (lộ quà bí mật) — giữ tên chung.
+ */
+const CATALOG_TIERS: any[] = [
+  { id: 'reward_bookmark', tierKey: 'HAT', requiredXp: 280, xpCost: 280, requiredAttendanceDays: 4, teaserDescription: 'Một món quà nhỏ xinh cho bước khởi đầu chăm chỉ.', isPhysical: true },
+  { id: 'reward_reading_choice', tierKey: 'LA', requiredXp: 320, xpCost: 320, requiredAttendanceDays: 4, teaserDescription: 'Món quà bất ngờ cho một tuần học đều đặn.', isPhysical: false },
+  { id: 'reward_pen', tierKey: 'LA', requiredXp: 450, xpCost: 450, requiredAttendanceDays: 5, teaserDescription: 'Món quà bất ngờ và hữu ích cho những trang văn nắn nót.', isPhysical: true },
+  { id: 'reward_notebook', tierKey: 'HOA', requiredXp: 650, xpCost: 650, requiredAttendanceDays: 5, teaserDescription: 'Quà đặc biệt dành cho bạn bền bỉ và tiến bộ vượt bậc.', isPhysical: true },
+  { id: 'reward_golden_box', tierKey: 'VANG', requiredXp: 750, xpCost: 750, requiredAttendanceDays: 6, teaserDescription: 'Phần quà danh giá nhất, dành cho người học kiên trì và xuất sắc nhất tuần.', isPhysical: true },
+];
+
 function tierKeyForXp(xpReq: number): string {
   return xpReq <= 300 ? 'HAT' : xpReq <= 500 ? 'LA' : xpReq <= 700 ? 'HOA' : 'VANG';
 }
@@ -248,7 +263,13 @@ async function enrichRequests(conn: Db, rows: any[]): Promise<any[]> {
   const stateMap = new Map(stateRows.map((s: any) => [s.student_id, s]));
   return rows.map((row: any) => {
     const tierKey = String(row.chest_type || 'hat').toUpperCase();
-    const matched = rewards.find((r: any) => r.tierKey === tierKey);
+    // Mốc chính xác: id đã lưu lúc tạo (DB trước, mặc định sau); khớp họ
+    // rương chỉ là dự phòng cho yêu cầu cũ chưa có reward_id.
+    const stored =
+      row.reward_id &&
+      (rewards.find((r: any) => r.id === row.reward_id) ||
+        CATALOG_TIERS.find((r: any) => r.id === row.reward_id));
+    const matched = stored || rewards.find((r: any) => r.tierKey === tierKey);
     const live: any = stateMap.get(row.student_id);
     const xpWeekActual = live?.xp_week ?? row.xp_week_snapshot ?? 0;
     const attendanceDaysActual = live?.attendance_days_this_week ?? 0;
@@ -339,12 +360,14 @@ rewardsRouter.post('/reward-requests', async (req: AuthedRequest, res) => {
     if (!rewardId) httpErr(res, 400, 'BAD_INPUT');
     return;
   }
-  // Tier khớp theo id hoặc tier_xxx (như createRequest gốc).
+  // Tier khớp theo id hoặc tier_xxx (như createRequest gốc); mốc mặc định
+  // không nằm trong DB nên tra thêm bảng CATALOG_TIERS.
   const tiers = await query<any>('SELECT * FROM `reward_tiers`');
   const rewards = tiers.map(rowToReward);
   const reward =
     rewards.find((r: any) => r.id === rewardId) ||
-    rewards.find((r: any) => `tier_${String(r.tierKey || '').toLowerCase()}` === rewardId);
+    rewards.find((r: any) => `tier_${String(r.tierKey || '').toLowerCase()}` === rewardId) ||
+    CATALOG_TIERS.find((r: any) => r.id === rewardId);
   const tierRaw = String(reward?.tierKey || rewardId.replace(/^tier_/, '') || 'hat').toLowerCase();
   const chestType = ['hat', 'la', 'hoa', 'vang'].includes(tierRaw) ? tierRaw : 'hat';
   const requiredXp = reward?.requiredXp || 0;
