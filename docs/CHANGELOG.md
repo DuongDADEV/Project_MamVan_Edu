@@ -1,3 +1,7 @@
+## 2026-10-28 — Video không có bước quiz thì đi tới Hoàn thành cũng không được tính xong luồng
+
+- Sửa: màn video trước đây chỉ đánh dấu `video_flow_completed` trong bước quiz (handleCompleteQuizStep). Sau bản "luồng thắng gắn kèm" (video của chủ đề không còn bước Luyện tập), video thuần xem + đọc tóm tắt + Hoàn thành KHÔNG còn đường nào ghi dấu xong luồng — màn Hoàn thành vẫn chúc mừng nhưng trạng thái máy chủ thiếu dấu, tiến độ chủ đề kẹt (trường hợp thật: video 1 đã tới màn Hoàn thành mà vẫn 50%). Nay bắt chước đúng mẫu màn lý thuyết: bước sang màn Hoàn thành (từ bước xem hoặc bước tóm tắt) thì đánh dấu xong luồng, cộng thêm một effect đánh dấu khi màn Hoàn thành đang hiển thị (cho học sinh đang đứng sẵn ở màn đó). markStepCompleted đã khử trùng lặp nên không ghi đúp.
+
 ## 2026-10-28 — Màn bài học không còn báo "không tìm thấy" trong lúc đang tải
 
 - Sửa: màn video/lý thuyết trước đây báo "Không tìm thấy..." ngay khi dữ liệu chưa tải xong (không có trạng thái đang tải) — mạng chậm là học sinh thấy báo không có bài dù bài vẫn tồn tại (API trả về 200 bình thường). Nay đang tải thì hiện "Đang tải bài giảng..."/"Đang tải bài lý thuyết...", chỉ báo không tìm thấy khi truy vấn đã xong mà thật sự không có bài.

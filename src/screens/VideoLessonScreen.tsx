@@ -334,13 +334,34 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     );
   }
 
+  // 28/10: giống màn lý thuyết — bước sang màn Hoàn thành thì đánh dấu
+  // xong luồng video ngay (trước đây chỉ bước quiz mới đánh dấu, nên
+  // video không có bước quiz thì đi tới Hoàn thành cũng không được tính).
+  const flowMarkedRef = useRef(false);
+  useEffect(() => {
+    if (currentStep?.key === 'complete' && !flowMarkedRef.current) {
+      flowMarkedRef.current = true;
+      onUpdateState((prev) => ({
+        ...prev,
+        ...markStepCompleted(prev, `video_flow_completed:${videoId}`),
+      }));
+    }
+  }, [currentStep?.key, videoId]);
+
   // 1. Chuyển sang bước tiếp theo sau khi xem video
   const handleProceedFromVideo = () => {
+    const landsOnComplete = currentStepIndex + 2 >= dynamicSteps.length;
     onUpdateState((prev) => {
-      const xpRes = { updatedState: markStepCompleted(prev, `video_watch:${videoId}`) };
+      let updated = markStepCompleted(prev, `video_watch:${videoId}`);
+      if (landsOnComplete) {
+        updated = markStepCompleted(
+          { ...prev, ...updated },
+          `video_flow_completed:${videoId}`
+        );
+      }
       return {
         ...prev,
-        ...xpRes.updatedState,
+        ...updated,
         currentProgress: {
           type: 'video',
           topicId: video.topicId,
@@ -356,11 +377,18 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
 
   // 2. Chuyển sang bước tiếp theo sau khi đọc tóm tắt
   const handleProceedFromSummary = () => {
+    const landsOnComplete = currentStepIndex + 2 >= dynamicSteps.length;
     onUpdateState((prev) => {
-      const xpRes = { updatedState: markStepCompleted(prev, `summary_read:${videoId}`) };
+      let updated = markStepCompleted(prev, `summary_read:${videoId}`);
+      if (landsOnComplete) {
+        updated = markStepCompleted(
+          { ...prev, ...updated },
+          `video_flow_completed:${videoId}`
+        );
+      }
       return {
         ...prev,
-        ...xpRes.updatedState,
+        ...updated,
         currentProgress: {
           type: 'video',
           topicId: video.topicId,
