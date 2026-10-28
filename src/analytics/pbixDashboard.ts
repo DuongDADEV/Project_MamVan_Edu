@@ -377,8 +377,10 @@ export function computePbixDashboard(input: PbixComputeInput): PbixDashboard {
   const submissionRate = totalTargets > 0 ? submittedTargets / totalTargets : null;
 
   // --- KPI 3: Câu trả lời chờ chấm (NoFilter ngày) ---
+  // Máy chủ ghi 'PENDING_TEACHER_REVIEW' (không phải 'PENDING') nên phải
+  // đếm cả hai, nếu không KPI này luôn ≈ 0 dù hàng đợi có bài chờ.
   const pendingAnswers = new Set(
-    scopedAnswers.filter((a) => a.gradingStatus === 'PENDING').map((a) => a.answerId),
+    scopedAnswers.filter((a) => a.gradingStatus === 'PENDING' || a.gradingStatus === 'PENDING_TEACHER_REVIEW').map((a) => a.answerId),
   ).size;
 
   // --- KPI 4: Tỷ lệ điểm đạt (điểm-trọng số, CÓ lọc ngày qua submitted_date) ---

@@ -384,7 +384,12 @@ attemptsRouter.post('/attempts', requireRole('student'), ah(async (req: AuthedRe
           ? { selected: qtype === 'single_choice' ? (resp.selected || [])[0] || null : resp.selected || [] }
           : { text: resp.text || '' };
       const key = q.correct_answer != null ? parseJson(q.correct_answer, q.correct_answer) : payload.answer ?? null;
-      const isAuto = q.grading_method === 'AUTO' && key != null && qtype !== 'essay';
+      // Luật chấm (chủ dự án 28/10): chỉ tự luận mới cần cô giáo chấm; câu
+      // có đáp án sẵn thì tự chấm theo đáp án. grading_method NULL (câu tạo
+      // từ trình soạn không gửi trường này) được hiểu là AUTO với câu không
+      // phải tự luận; chỉ khi đặt tường minh TEACHER mới chờ chấm tay.
+      const method = q.grading_method || 'AUTO';
+      const isAuto = method === 'AUTO' && key != null && qtype !== 'essay';
       let isCorrect: boolean | null = null;
       let score: number | null = null;
       let gStatus = 'PENDING_TEACHER_REVIEW';

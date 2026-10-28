@@ -856,7 +856,7 @@ contentRouter.post('/quizzes/:id/duplicate', async (req: Request, res: Response)
             duplicatorId,
             JSON.stringify(qPayload),
             qRow.max_score ?? null,
-            qRow.grading_method ?? null,
+            qRow.grading_method ?? (qRow.type === 'essay' ? 'TEACHER' : 'AUTO'),
             qRow.difficulty ?? null,
           ]
         );
@@ -1088,7 +1088,7 @@ contentRouter.post('/questions', async (req: Request, res: Response) => {
         teacherId,
         JSON.stringify(full),
         body.max_score ?? body.payload?.max_score ?? null,
-        body.grading_method ?? body.payload?.grading_method ?? null,
+        body.grading_method ?? body.payload?.grading_method ?? (dbType === 'essay' ? 'TEACHER' : 'AUTO'),
         body.difficulty ?? body.payload?.difficulty ?? null,
       ]
     );

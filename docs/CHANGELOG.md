@@ -1,3 +1,9 @@
+## [dev] 2026-10-28 — Luật chấm: chỉ tự luận mới cần cô giáo chấm
+
+- Nộp bài (server): câu có đáp án sẵn nay tự chấm theo đáp án, kể cả khi `grading_method` của câu là NULL (câu tạo từ trình soạn không gửi trường này — đây chính là nguyên nhân khiến câu trắc nghiệm vẫn rơi vào hàng chờ chấm). Chỉ câu tự luận, hoặc câu được đặt tường minh TEACHER, hoặc câu không có đáp án, mới chờ cô giáo chấm. Trước đây cổng tự chấm đòi đúng `grading_method = 'AUTO'` nên mọi câu tạo từ trình soạn đều chờ chấm tay.
+- Tạo/nhân bản câu hỏi (server): khi không gửi tường minh, câu tự luận mặc định TEACHER, các loại còn lại mặc định AUTO — để dữ liệu mới tự nhất quán với luật chấm.
+- KPI Tổng quan "Câu trả lời chờ chấm": đếm thêm trạng thái 'PENDING_TEACHER_REVIEW' (trước đây chỉ đếm đúng 'PENDING' nên luôn ≈ 0 dù hàng đợi có bài — lệch đã ghi trong `api/routes/dashboard.ts`).
+
 ## [dev] 2026-10-28 — Mặc định từ ngày = ngày đăng nhập đầu tiên + chặn đến ngày < từ ngày
 
 - Tab Tổng quan (báo cáo giáo viên): khi chọn xem riêng một học sinh (bấm dòng em đó trong bảng học sinh), ô "từ ngày" tự đặt thành ngày đăng nhập đầu tiên của em đó (ngày login_date sớm nhất trong các phiên của em); áp một lần mỗi khi đổi học sinh, sau đó giáo viên tự chỉnh thì không bị ghi đè. Học sinh chưa từng đăng nhập thì giữ nguyên khoảng ngày hiện tại. Khi chưa chọn học sinh nào thì vẫn giữ mặc định cũ (khoảng ngày của toàn bộ phiên trong phạm vi).
