@@ -1,3 +1,10 @@
+## [dev] 2026-10-28 — Khóa học lần lượt trong luồng chủ đề
+
+- Học sinh chỉ mở được bài đã xong (quay lại tự do) và bài chưa xong đầu tiên; các bài sau đó xám + ổ khóa + không bấm được. Áp dụng như nhau cho danh sách Học bài ngoài, dải luồng trong màn video/lý thuyết/bài tập và nút "Bài tiếp theo" (cửa nhảy bài được chặn ở màn bài học, không chỉ tô xám).
+- "Xong" nghĩa là đã hoàn thành lượt học: video/lý thuyết tới bước Hoàn thành, bài tập đã nộp ít nhất 1 lần — không đòi làm đúng hết, vì bài kiểm tra 1 lần trả lời sai thì không được làm lại, đòi đúng hết sẽ khóa chết cả luồng phía sau. Tỉ lệ % tiến độ giữ nguyên định nghĩa cũ (bài tập tính khi đúng hết phần chấm tự động).
+- Không khóa: bài tập cô giao qua mục Bài tập (học sinh vẫn làm được bài giao dù nó đang khóa trong luồng), nút Tiếp tục học ở Trang chủ (luôn trỏ bài chưa xong đầu tiên nên vốn đã mở), và màn giáo viên xem trước.
+- Sơ đồ đã cập nhật theo luật (mục Học bài: bỏ mô tả nhảy bài tự do, thêm luật khóa 28/10) và regen + publish cùng đợt.
+
 ## [dev] 2026-10-28 — Sửa Tổng quan trống Tỷ lệ điểm đạt dù đã có câu chấm xong
 
 - Nguyên nhân: MySQL DECIMAL trả về dạng chuỗi ("10.00") nên phía client cộng điểm bằng nối chuỗi: 2 câu 0/10 + 10/10 thành tổng "010.0010.00" → NaN khi so sánh → KPI Tỷ lệ điểm đạt, tỉ lệ cá nhân và biểu đồ mức tư duy đều rơi về rỗng. Trước đợt chấm 28/10 chưa có câu nào đã chấm nên lỗi này không lộ ra; khi 2 câu đầu tiên được chấm xong nó mới hiện.

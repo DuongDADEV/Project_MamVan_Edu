@@ -28,7 +28,7 @@ import { BreakReminderModal } from './components/BreakReminderModal.tsx';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal.tsx';
 import { QuizRunner } from './components/QuizRunner.tsx';
 import { StudentTopicFlowStrip } from './components/StudentTopicFlowStrip.tsx';
-import { buildTopicFlowPath, nextFlowItem } from './logic/topicFlow.ts';
+import { buildTopicFlowPath, nextFlowItem, isFlowItemLocked } from './logic/topicFlow.ts';
 import { QuizReviewScreen } from './components/QuizReviewScreen.tsx';
 import { QuizResult } from './components/QuizResult.tsx';
 import { Palette } from 'lucide-react';
@@ -1188,15 +1188,20 @@ export default function App() {
                     path={homeworkFlowPath}
                     currentType="quiz"
                     currentId={targetQuiz.id}
-                    onJump={(type, id) =>
+                    onJump={(type, id) => {
+                      // Khóa lần lượt cũng áp cho dải luồng trong màn bài
+                      // tập; riêng việc mở bài tập được giao thì không khóa
+                      // ở cửa vào (học sinh vẫn làm được bài cô giao).
+                      if (isFlowItemLocked(homeworkFlowPath, studentState.completedSteps, type, id)) return;
                       setActiveFlow(
                         type === 'video'
                           ? { type: 'video', videoId: id }
                           : type === 'theory'
                             ? { type: 'theory', theoryId: id }
                             : { type: 'homework', homeworkQuizId: id }
-                      )
-                    }
+                      );
+                    }}
+                    completedSteps={studentState.completedSteps}
                   />
                 )}
                 <QuizRunner

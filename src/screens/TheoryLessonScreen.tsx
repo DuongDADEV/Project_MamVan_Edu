@@ -29,7 +29,7 @@ import {
   TopicWithMeta,
   VideoLessonWithMeta,
 } from '../services/index.ts';
-import { buildTopicFlowPath, nextFlowItem } from '../logic/topicFlow.ts';
+import { buildTopicFlowPath, nextFlowItem, isFlowItemLocked } from '../logic/topicFlow.ts';
 import { StudentTopicFlowStrip } from '../components/StudentTopicFlowStrip.tsx';
 import { selectTheoryPracticeQuizzes } from '../logic/theoryFlow.ts';
 
@@ -216,6 +216,14 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     () => (theory ? nextFlowItem(topicFlowPath, 'theory', theoryId) : undefined),
     [topicFlowPath, theory, theoryId]
   );
+
+  // Chặn nhảy tới bài bị khóa trong luồng (học lần lượt 28/10) — xem ghi
+  // chú tương tự ở VideoLessonScreen.
+  const openFlowItemGuarded = (type: 'video' | 'theory' | 'quiz', id: string) => {
+    if (!onOpenFlowItem) return;
+    if (isFlowItemLocked(topicFlowPath, state.completedSteps, type, id)) return;
+    onOpenFlowItem(type, id);
+  };
 
   const dynamicSteps = useMemo<FlowStep[]>(() => {
     const steps: FlowStep[] = [
@@ -581,7 +589,8 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
           path={topicFlowPath}
           currentType="theory"
           currentId={theoryId}
-          onJump={onOpenFlowItem}
+          onJump={openFlowItemGuarded}
+          completedSteps={state.completedSteps}
         />
       )}
 
@@ -926,7 +935,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
               <div className="flex justify-center gap-3 flex-wrap">
                 {nextTopicFlowItem && onOpenFlowItem && (
                   <button
-                    onClick={() => onOpenFlowItem(nextTopicFlowItem.type, nextTopicFlowItem.id)}
+                    onClick={() => openFlowItemGuarded(nextTopicFlowItem.type, nextTopicFlowItem.id)}
                     className="px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]"
                   >
                     <span>Bài tiếp theo: {nextTopicFlowItem.title}</span>

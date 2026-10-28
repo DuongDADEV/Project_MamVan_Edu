@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { StudentState, Topic } from '../types.ts';
 import { calculateAllMastery, isTopicSolid } from '../logic/mastery.ts';
-import { BookOpen, ArrowRight, Filter, Layers, PenLine, Play, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, ArrowRight, Filter, Layers, PenLine, Play, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { deriveFlowItems } from '../logic/flowOrder.ts';
+import { flowLockedIndexes } from '../logic/topicFlow.ts';
 import { countTopicFlowDone } from '../logic/topicCompletion.ts';
 import { useLiveQuery, contentService, quizService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta, QuestionWithMeta } from '../services/index.ts';
 
@@ -247,6 +248,9 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                         ths.map((t) => t.id),
                         qzs.map((q) => q.id)
                       );
+                      // Khóa học lần lượt: chỉ mở bài đã xong (quay lại) và
+                      // bài chưa xong đầu tiên; các bài sau xám + không bấm.
+                      const locked = flowLockedIndexes(items, state.completedSteps || []);
                       if (items.length === 0) {
                         return (
                           <div className="p-6 rounded-2xl bg-[#FFFDF8] border border-[#E6DCC8] border-dashed text-center">
@@ -267,6 +271,7 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                               ? ths.find((t) => t.id === item.id)
                               : qzs.find((q) => q.id === item.id);
                         if (!src) return null;
+                        const isLocked = locked.has(idx);
                         const meta =
                           item.type === 'video'
                             ? `Video • ${Math.max(1, Math.round((src.durationSec || 0) / 60))} phút`
@@ -277,6 +282,8 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                           <button
                             key={item.type + ':' + item.id}
                             type="button"
+                            disabled={isLocked}
+                            title={isLocked ? 'Học xong bài trước để mở bài này' : undefined}
                             onClick={() =>
                               item.type === 'video'
                                 ? onSelectVideo(item.id)
@@ -284,9 +291,17 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                                   ? onSelectTheory(item.id)
                                   : onSelectQuiz?.(item.id)
                             }
-                            className="w-full flex items-center gap-3 bg-white border border-slate-200 hover:border-[#E2704A]/60 hover:shadow-sm rounded-2xl px-3.5 py-3 text-left transition-all"
+                            className={`w-full flex items-center gap-3 border rounded-2xl px-3.5 py-3 text-left transition-all ${
+                              isLocked
+                                ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                                : 'bg-white border-slate-200 hover:border-[#E2704A]/60 hover:shadow-sm'
+                            }`}
                           >
-                            <span className="w-7 h-7 rounded-full bg-[#2F3E6B] text-white text-xs font-black flex items-center justify-center shrink-0">
+                            <span
+                              className={`w-7 h-7 rounded-full text-white text-xs font-black flex items-center justify-center shrink-0 ${
+                                isLocked ? 'bg-slate-300' : 'bg-[#2F3E6B]'
+                              }`}
+                            >
                               {idx + 1}
                             </span>
                             <span
@@ -307,12 +322,22 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                               )}
                             </span>
                             <span className="flex-1 min-w-0">
-                              <span className="block font-bold text-sm text-[#1E1B4B] truncate">
+                              <span
+                                className={`block font-bold text-sm truncate ${
+                                  isLocked ? 'text-slate-400' : 'text-[#1E1B4B]'
+                                }`}
+                              >
                                 {src.title}
                               </span>
-                              <span className="block text-[11px] text-slate-500">{meta}</span>
+                              <span className="block text-[11px] text-slate-500">
+                                {isLocked ? 'Học xong bài trước để mở' : meta}
+                              </span>
                             </span>
-                            <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
+                            {isLocked ? (
+                              <Lock className="w-4 h-4 text-slate-400 shrink-0" />
+                            ) : (
+                              <ArrowRight className="w-4 h-4 text-slate-300 shrink-0" />
+                            )}
                           </button>
                         );
                       });

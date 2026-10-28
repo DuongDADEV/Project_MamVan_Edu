@@ -59092,7 +59092,7 @@ async function attemptsWithAnswers(studentIds) {
   const asgs = asgIds.length ? await query(`SELECT \`id\`, \`title\` FROM \`assignments\` WHERE \`id\` IN (${inList(asgIds)})`, asgIds) : [];
   const acts = actIds.length ? await query(`SELECT \`id\`, \`title\` FROM \`learning_activities\` WHERE \`id\` IN (${inList(actIds)})`, actIds) : [];
   const qIds = [...new Set(answers.map((a) => a.question_id))];
-  const qs = qIds.length ? await query(`SELECT \`id\`, \`prompt\`, \`type\` FROM \`questions\` WHERE \`id\` IN (${inList(qIds)})`, qIds) : [];
+  const qs = qIds.length ? await query(`SELECT \`id\`, \`prompt\`, \`type\`, \`level\` FROM \`questions\` WHERE \`id\` IN (${inList(qIds)})`, qIds) : [];
   const stRows = await query("SELECT `id`, `name` FROM `students`");
   const names = new Map(stRows.map((s) => [s.id, s.name]));
   const qMap = new Map(qs.map((q) => [q.id, q]));
@@ -59107,6 +59107,7 @@ async function attemptsWithAnswers(studentIds) {
       questionId: a.question_id,
       prompt: q?.prompt || a.question_id,
       questionType: q?.type || "",
+      level: q?.level || "",
       responseText: renderResponse(a.response_json, parseJson),
       isCorrect: a.is_correct,
       score: a.score_awarded,

@@ -80,3 +80,46 @@ export function prevFlowItem(
   const idx = flowIndexOf(path, type, id);
   return idx > 0 ? path[idx - 1] : undefined;
 }
+
+/**
+ * KHÓA HỌC LẦN LƯỢT (28/10, chủ dự án chốt): học sinh chỉ được mở bài theo
+ * đúng thứ tự luồng — bài chưa xong ĐẦU TIÊN là bài đang học (được mở),
+ * các bài sau nó bị khóa (xám, không bấm được); bài nào đã xong thì quay
+ * lại tự do. "Xong" ở đây là đã hoàn thành lượt học: video/lý thuyết tới
+ * bước Hoàn thành, bài tập đã nộp ít nhất 1 lần — KHÔNG đòi làm đúng hết,
+ * vì bài kiểm tra 1 lần mà trả lời sai thì không được làm lại, đòi đúng hết
+ * sẽ khóa chết cả luồng phía sau.
+ */
+export function isFlowItemFinished(
+  item: { type: TopicFlowType; id: string },
+  completedSteps: string[] | undefined
+): boolean {
+  const steps = new Set(completedSteps || []);
+  if (item.type === 'video') return steps.has(`video_flow_completed:${item.id}`);
+  if (item.type === 'theory') return steps.has(`theory_flow_completed:${item.id}`);
+  return steps.has(`quiz_completed:${item.id}`);
+}
+
+/** Vị trí các mục bị khóa trong luồng: mọi mục sau mục chưa xong đầu tiên. */
+export function flowLockedIndexes(
+  path: Array<{ type: TopicFlowType; id: string }>,
+  completedSteps: string[] | undefined
+): Set<number> {
+  const locked = new Set<number>();
+  const firstUnfinished = path.findIndex((it) => !isFlowItemFinished(it, completedSteps));
+  if (firstUnfinished === -1) return locked;
+  for (let i = firstUnfinished + 1; i < path.length; i++) locked.add(i);
+  return locked;
+}
+
+/** Mục có nằm trong luồng mà đang bị khóa không (mục ngoài luồng thì không khóa). */
+export function isFlowItemLocked(
+  path: Array<{ type: TopicFlowType; id: string }>,
+  completedSteps: string[] | undefined,
+  type: TopicFlowType,
+  id: string
+): boolean {
+  const idx = flowIndexOf(path as TopicFlowItem[], type, id);
+  if (idx === -1) return false;
+  return flowLockedIndexes(path, completedSteps).has(idx);
+}

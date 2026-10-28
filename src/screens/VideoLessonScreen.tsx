@@ -28,7 +28,7 @@ import {
   TopicWithMeta,
   QuestionWithMeta,
 } from '../services/index.ts';
-import { buildTopicFlowPath, nextFlowItem } from '../logic/topicFlow.ts';
+import { buildTopicFlowPath, nextFlowItem, isFlowItemLocked } from '../logic/topicFlow.ts';
 import { StudentTopicFlowStrip } from '../components/StudentTopicFlowStrip.tsx';
 
 interface FlowStep {
@@ -168,6 +168,15 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     () => (video ? nextFlowItem(topicFlowPath, 'video', videoId) : undefined),
     [topicFlowPath, video, videoId]
   );
+
+  // Chặn nhảy tới bài bị khóa trong luồng (học lần lượt 28/10): chỉ mở
+  // bài đã xong (quay lại) và bài chưa xong đầu tiên; bài sau đó bị khóa
+  // dù bấm từ dải luồng hay nút "Bài tiếp theo".
+  const openFlowItemGuarded = (type: 'video' | 'theory' | 'quiz', id: string) => {
+    if (!onOpenFlowItem) return;
+    if (isFlowItemLocked(topicFlowPath, state.completedSteps, type, id)) return;
+    onOpenFlowItem(type, id);
+  };
 
   // Luồng chủ đề thắng bài gắn kèm (28/10): bài tập đã nằm trong luồng
   // chủ đề chỉ làm ở vị trí luồng của nó — không lặp lại thành bước gắn
@@ -532,7 +541,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
           path={topicFlowPath}
           currentType="video"
           currentId={videoId}
-          onJump={onOpenFlowItem}
+          onJump={openFlowItemGuarded}
+          completedSteps={state.completedSteps}
         />
       )}
 
@@ -976,7 +986,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               <div className="flex justify-center gap-3 flex-wrap">
                 {nextTopicFlowItem && onOpenFlowItem && (
                   <button
-                    onClick={() => onOpenFlowItem(nextTopicFlowItem.type, nextTopicFlowItem.id)}
+                    onClick={() => openFlowItemGuarded(nextTopicFlowItem.type, nextTopicFlowItem.id)}
                     className="px-8 py-3.5 rounded-2xl gradient-primary text-white font-bold text-sm shadow-md shadow-indigo-500/25 hover:brightness-105 flex items-center gap-2 transition-all active:scale-[0.99]"
                   >
                     <span>Bài tiếp theo: {nextTopicFlowItem.title}</span>
