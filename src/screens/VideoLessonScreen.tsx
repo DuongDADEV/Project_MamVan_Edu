@@ -312,6 +312,22 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     }
   }, [currentStep?.key, summarySecondsLeft]);
 
+  // 28/10: giống màn lý thuyết — bước sang màn Hoàn thành thì đánh dấu
+  // xong luồng video ngay (trước đây chỉ bước quiz mới đánh dấu, nên
+  // video không có bước quiz thì đi tới Hoàn thành cũng không được tính).
+  // PHẢI đặt trước mọi early return: hook sau return có điều kiện làm
+  // số hook thay đổi giữa các lần vẽ → React lỗi "Rendered more hooks".
+  const flowMarkedRef = useRef(false);
+  useEffect(() => {
+    if (currentStep?.key === 'complete' && !flowMarkedRef.current) {
+      flowMarkedRef.current = true;
+      onUpdateState((prev) => ({
+        ...prev,
+        ...markStepCompleted(prev, `video_flow_completed:${videoId}`),
+      }));
+    }
+  }, [currentStep?.key, videoId]);
+
   // 28/10: đang tải thì hiện "Đang tải", chỉ báo "không tìm thấy" khi
   // cả 2 truy vấn đã xong mà vẫn không có video — trước đây màn hình
   // báo không tìm thấy ngay trong lúc dữ liệu chưa về, mạng chậm là kẹt.
@@ -333,20 +349,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       </div>
     );
   }
-
-  // 28/10: giống màn lý thuyết — bước sang màn Hoàn thành thì đánh dấu
-  // xong luồng video ngay (trước đây chỉ bước quiz mới đánh dấu, nên
-  // video không có bước quiz thì đi tới Hoàn thành cũng không được tính).
-  const flowMarkedRef = useRef(false);
-  useEffect(() => {
-    if (currentStep?.key === 'complete' && !flowMarkedRef.current) {
-      flowMarkedRef.current = true;
-      onUpdateState((prev) => ({
-        ...prev,
-        ...markStepCompleted(prev, `video_flow_completed:${videoId}`),
-      }));
-    }
-  }, [currentStep?.key, videoId]);
 
   // 1. Chuyển sang bước tiếp theo sau khi xem video
   const handleProceedFromVideo = () => {

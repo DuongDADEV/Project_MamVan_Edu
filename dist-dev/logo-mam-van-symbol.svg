@@ -1,0 +1,160 @@
+<svg width="256" height="256" viewBox="50 30 300 255" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Soft Radial Glow -->
+    <radialGradient id="favBgGlow" cx="200" cy="155" r="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="85%" stop-color="#FAF5EB" />
+      <stop offset="100%" stop-color="#F2E8D5" />
+    </radialGradient>
+
+    <!-- Gradient Bìa Sách Xanh Thẫm -->
+    <linearGradient id="favBookCover" x1="200" y1="230" x2="200" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2D6846" />
+      <stop offset="100%" stop-color="#1A472E" />
+    </linearGradient>
+
+    <!-- Gradient Trang Sách Trái -->
+    <linearGradient id="favPageLeft" x1="80" y1="200" x2="200" y2="255" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FCFAF4" />
+      <stop offset="60%" stop-color="#F2E8D5" />
+      <stop offset="100%" stop-color="#E4D5BC" />
+    </linearGradient>
+
+    <!-- Gradient Trang Sách Phải -->
+    <linearGradient id="favPageRight" x1="200" y1="255" x2="320" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E4D5BC" />
+      <stop offset="40%" stop-color="#F2E8D5" />
+      <stop offset="100%" stop-color="#FCFAF4" />
+    </linearGradient>
+
+    <!-- Gradient Lá Trái (Xanh tươi) -->
+    <linearGradient id="favLeafLeft" x1="120" y1="150" x2="200" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6FAF79" />
+      <stop offset="60%" stop-color="#4D8F5A" />
+      <stop offset="100%" stop-color="#367345" />
+    </linearGradient>
+
+    <!-- Gradient Lá Phải Tích Hợp Ngòi Bút -->
+    <linearGradient id="favLeafRight" x1="200" y1="160" x2="295" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#255937" />
+      <stop offset="50%" stop-color="#3B7D4E" />
+      <stop offset="100%" stop-color="#5FA06E" />
+    </linearGradient>
+
+    <!-- Gradient Dải Lụa & Ánh Sao Vàng Hoàng Kim -->
+    <linearGradient id="favGoldRibbon" x1="170" y1="60" x2="290" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F0CE7A" />
+      <stop offset="45%" stop-color="#D4A346" />
+      <stop offset="100%" stop-color="#B28229" />
+    </linearGradient>
+
+    <filter id="favSoftShadow" x="-10%" y="-10%" width="120%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#1A472E" flood-opacity="0.10" />
+    </filter>
+  </defs>
+
+  <!-- NỀN TRẮNG KEM -->
+  <rect x="50" y="30" width="300" height="255" rx="36" fill="url(#favBgGlow)" />
+
+  <!-- CUỐN SÁCH ĐANG MỞ -->
+  <g filter="url(#favSoftShadow)">
+    <path
+      d="M 68 248 C 105 238, 155 246, 200 258 C 245 246, 295 238, 332 248 C 322 262, 268 269, 200 274 C 132 269, 78 262, 68 248 Z"
+      fill="url(#favBookCover)"
+    />
+    <path
+      d="M 72 242 C 108 233, 155 241, 200 252 C 245 241, 292 233, 328 242 C 314 251, 265 255, 200 260 C 135 255, 86 251, 72 242 Z"
+      fill="#D4C1A2"
+    />
+    <path
+      d="M 78 232 C 112 221, 155 231, 200 244 C 245 231, 288 221, 322 232 C 308 241, 262 246, 200 251 C 138 246, 92 241, 78 232 Z"
+      fill="#EBDDC4"
+    />
+    <path
+      d="M 200 242 C 165 221, 126 211, 95 218 C 91 208, 97 200, 104 196 C 136 193, 170 207, 200 234 Z"
+      fill="url(#favPageLeft)"
+      stroke="#27643E"
+      stroke-width="1.6"
+    />
+    <path
+      d="M 200 242 C 235 221, 274 211, 305 218 C 309 208, 303 200, 296 196 C 264 193, 230 207, 200 234 Z"
+      fill="url(#favPageRight)"
+      stroke="#27643E"
+      stroke-width="1.6"
+    />
+    <ellipse cx="200" cy="254" rx="13" ry="7.5" fill="#C99738" stroke="#9E7120" stroke-width="1.2" />
+    <ellipse cx="200" cy="254" rx="7" ry="3.5" fill="#F4D388" />
+  </g>
+
+  <!-- DẢI LỤA VÀNG -->
+  <path
+    d="M 170 198 C 174 186, 190 190, 196 205 C 204 222, 214 206, 228 182 C 244 152, 268 138, 284 128"
+    stroke="url(#favGoldRibbon)"
+    stroke-width="4.5"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- THÂN MẦM CÂY -->
+  <path
+    d="M 200 244 C 199 216, 201 184, 203 150 C 204 135, 206 120, 209 104"
+    stroke="#27643E"
+    stroke-width="6.5"
+    stroke-linecap="round"
+  />
+
+  <!-- CHIẾC LÁ NHỎ TRÁI -->
+  <g filter="url(#favSoftShadow)">
+    <path
+      d="M 200 148 C 180 138, 152 130, 128 138 C 110 144, 111 161, 127 172 C 154 185, 182 171, 200 148 Z"
+      fill="url(#favLeafLeft)"
+    />
+    <path
+      d="M 134 147 C 150 151, 172 158, 192 153"
+      stroke="#A8D6AF"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      opacity="0.6"
+    />
+  </g>
+
+  <!-- CHIẾC LÁ LỚN TÍCH HỢP NGÒI BÚT MÁY -->
+  <g filter="url(#favSoftShadow)">
+    <path
+      d="M 205 144 C 216 122, 232 88, 258 54 C 276 32, 286 38, 292 52 C 302 76, 298 116, 272 156 C 250 186, 222 188, 206 164 Z"
+      fill="url(#favLeafRight)"
+    />
+    <path
+      d="M 234 134 C 242 120, 254 104, 267 78 C 275 62, 280 52, 284 44 C 279 56, 281 70, 279 84 C 276 102, 264 118, 252 131 C 244 138, 236 138, 234 134 Z"
+      fill="#FFFFFF"
+    />
+    <circle cx="266" cy="88" r="3.5" fill="#255937" />
+    <path
+      d="M 266 84 L 284 44"
+      stroke="#255937"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  </g>
+
+  <!-- BA NGÔI SAO LẤP LÁNH -->
+  <g>
+    <path
+      d="M 193 64 Q 193 75 202 75 Q 193 75 193 86 Q 193 75 184 75 Q 193 75 193 64 Z"
+      fill="#E5B757"
+    />
+    <circle cx="193" cy="75" r="1.8" fill="#FFFDF8" />
+  </g>
+  <g>
+    <path
+      d="M 156 154 Q 156 161 161 161 Q 156 161 156 168 Q 156 161 151 161 Q 156 161 156 154 Z"
+      fill="#E5B757"
+    />
+  </g>
+  <g>
+    <path
+      d="M 239 174 Q 239 179 244 179 Q 239 179 239 184 Q 239 179 234 179 Q 239 179 239 174 Z"
+      fill="#E5B757"
+    />
+  </g>
+</svg>

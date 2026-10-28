@@ -1,3 +1,9 @@
+## [dev] 2026-10-28 — Sửa crash màn video học sinh: hook sau early return
+
+- Nguyên nhân (bản dev chỉ rõ: "Rendered more hooks than during the previous render" tại VideoLessonScreen): fix `84f6b41` thêm early return "Đang tải..." trước, fix `b163836` thêm `useRef` + `useEffect` đánh dấu `video_flow_completed` SAU 2 early return đó. Lần vẽ đầu (đang tải, chưa có video) dừng ở return nên 2 hook không chạy; lần vẽ sau (đã có video) chạy thêm 2 hook → React lỗi, trang trắng lỗi chung. Màn lý thuyết không bị (mọi hook đều trước return).
+- Sửa: dời `flowMarkedRef` + effect đánh dấu hoàn thành lên trước mọi early return trong `VideoLessonScreen.tsx` (effect đã tự chặn khi chưa tới bước Hoàn thành nên dời lên không đổi hành vi). Không cần sửa màn lý thuyết.
+- Bản production trước đó báo mã lỗi minified khác (#310) vì đã minify; bản dev cho đúng tên lỗi + component nên mới xác định được.
+
 ## 2026-10-28 — Mọi mẫu câu hỏi để trống, gợi ý chỉ hiện mờ (không còn chữ mẫu làm nội dung thật)
 
 - Sửa (quét toàn bộ trình soạn): câu hỏi mới trong QuizBuilder, câu mới của bài tập trong TeacherContentScreen và form ngân hàng câu hỏi trước đây gán sẵn nội dung giả làm giá trị thật — 'Lựa chọn 1..4' / 'Lựa chọn A..D' + đáp án đúng gán sẵn, điền từ gán sẵn 'đáp án' / 'từ khóa', đề bài 'Đề bài câu hỏi số 1...', nút 'Thêm phương án' thêm 'Lựa chọn N', đổi dạng câu hỏi cũng hồi sinh lại mẫu giả, nút 'Chèn ngữ liệu' chèn câu mẫu thành nội dung thật — giáo viên phải xóa tay từng cái, quên là học sinh đọc thấy. Nay tất cả để trống ('', []), gợi ý chỉ hiện mờ qua placeholder (ô phương án 'Phương án A...', ô điền từ đã có sẵn; ngân hàng đã có sẵn 'Nội dung phương án A...'), gõ là mất, không lưu thành nội dung. Mẫu lý thuyết đã sạch từ bản 4b1d162 (chỉ còn tiêu đề khối '1. Khái niệm và đặc điểm chung' làm đề mục khởi đầu); rubric tự luận, tiêu đề 'Bài giảng Video mới'/'Bài Lý thuyết mới' và khối tóm tắt video giữ nguyên (đề mục/cấu trúc, không phải chữ rác).
