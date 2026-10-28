@@ -1,3 +1,8 @@
+## [dev] 2026-10-28 — Mặc định từ ngày = ngày đăng nhập đầu tiên + chặn đến ngày < từ ngày
+
+- Tab Tổng quan (báo cáo giáo viên): khi chọn xem riêng một học sinh (bấm dòng em đó trong bảng học sinh), ô "từ ngày" tự đặt thành ngày đăng nhập đầu tiên của em đó (ngày login_date sớm nhất trong các phiên của em); áp một lần mỗi khi đổi học sinh, sau đó giáo viên tự chỉnh thì không bị ghi đè. Học sinh chưa từng đăng nhập thì giữ nguyên khoảng ngày hiện tại. Khi chưa chọn học sinh nào thì vẫn giữ mặc định cũ (khoảng ngày của toàn bộ phiên trong phạm vi).
+- Ràng buộc "đến ngày không được bé hơn từ ngày": ô đến ngày có min = từ ngày, và cả hai ô đều tự kẹp lại khi gõ tay (đổi từ ngày muộn hơn đến ngày thì đến ngày nhảy lên bằng từ ngày; gõ đến ngày sớm hơn từ ngày thì đến ngày về bằng từ ngày) — không còn khoảng ngày ngược.
+
 ## [dev] 2026-10-28 — Lấy kèm câu hỏi khi mở bài tập ngoài cache + hiện mô tả video
 
 - Nối tiếp sửa "Bài tập không còn tồn tại": kiểm chứng 17:47 cho thấy cửa bài tập đã qua (không còn báo không tồn tại) nhưng màn làm bài lại báo "Không tìm thấy câu hỏi trong đề này" — vì câu hỏi của bài mới xuất bản cũng chưa có trong `rawQuestions` của phiên cũ. Nay khi lấy bài theo id thì lấy kèm luôn câu hỏi của chủ đề đó (gộp vào danh sách câu hỏi của màn làm bài, và bài đó cũng được tính vào luồng để nút "bài tiếp" không sai); trong lúc lấy thì hiện "Đang tải bài tập..." thay vì báo không có câu hỏi.

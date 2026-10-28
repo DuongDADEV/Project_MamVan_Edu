@@ -286,6 +286,39 @@ export const PbixOverviewSection: React.FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raw.loaded, dashboard.sessionDateRange]);
 
+  // Mặc định từ ngày = ngày đăng nhập đầu tiên của học sinh đang xem
+  // (chủ dự án 28/10): áp một lần mỗi khi chọn một học sinh khác; sau đó
+  // giáo viên tự chỉnh thì không bị ghi đè lại cho tới khi đổi học sinh.
+  // Học sinh chưa từng đăng nhập thì giữ nguyên khoảng ngày hiện tại.
+  // Đến ngày luôn được kẹp >= từ ngày (kể cả khi từ ngày mới muộn hơn
+  // đến ngày cũ); đến ngày đang để trống thì lấy max của khoảng dữ liệu.
+  const studentDateDefaultAppliedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedStudentId) {
+      studentDateDefaultAppliedFor.current = null;
+      return;
+    }
+    if (!raw.loaded) return;
+    if (studentDateDefaultAppliedFor.current === selectedStudentId) return;
+    const dates = raw.sessions
+      .filter((s) => s.studentId === selectedStudentId)
+      .map((s) => s.loginDate)
+      .filter(Boolean)
+      .sort();
+    if (dates.length === 0) return;
+    const first = dates[0];
+    studentDateDefaultAppliedFor.current = selectedStudentId;
+    onFiltersChange({
+      ...filters,
+      dateFrom: first,
+      dateTo:
+        filters.dateTo && filters.dateTo < first
+          ? first
+          : (filters.dateTo ?? dashboard.sessionDateRange?.max ?? null),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStudentId, raw.loaded, raw.sessions]);
+
   const selectedClassValue =
     filters.classIds.length === 0 ? '__ALL__' : filters.classIds[0];
 
@@ -319,9 +352,14 @@ export const PbixOverviewSection: React.FC<Props> = ({
             type="date"
             className="border border-stone-300 rounded-lg px-3 py-2 bg-white"
             value={filters.dateFrom ?? ''}
-            onChange={(e) =>
-              onFiltersChange({ ...filters, dateFrom: e.target.value || null })
-            }
+            onChange={(e) => {
+              const v = e.target.value || null;
+              onFiltersChange({
+                ...filters,
+                dateFrom: v,
+                dateTo: v && filters.dateTo && filters.dateTo < v ? v : filters.dateTo,
+              });
+            }}
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -329,10 +367,16 @@ export const PbixOverviewSection: React.FC<Props> = ({
           <input
             type="date"
             className="border border-stone-300 rounded-lg px-3 py-2 bg-white"
+            min={filters.dateFrom ?? undefined}
             value={filters.dateTo ?? ''}
-            onChange={(e) =>
-              onFiltersChange({ ...filters, dateTo: e.target.value || null })
-            }
+            onChange={(e) => {
+              const v = e.target.value || null;
+              onFiltersChange({
+                ...filters,
+                dateTo:
+                  v && filters.dateFrom && v < filters.dateFrom ? filters.dateFrom : v,
+              });
+            }}
           />
         </label>
       </div>
