@@ -1,3 +1,8 @@
+## [dev] 2026-10-28 — Luật tiến độ mới: mọi mục trong luồng đều tính, kể cả nháp
+
+- Luật chủ dự án: flowOrder là danh sách chính thức của chủ đề — `countTopicFlowDone` (dùng chung cho % học sinh, bảng hoàn thành giáo viên và quỹ chủ đề) nay đếm MỌI mục trong flowOrder bất kể trạng thái (trước đây video trong videoIds được tính bất kể trạng thái, quiz chỉ tính khi đã xuất bản, lý thuyết chỉ tính khi là theoryId — nên bài nháp "tàng hình" khỏi mẫu số). Bài nháp tính là chưa xong cho tới khi xuất bản + hoàn thành. Chủ đề chưa xếp luồng giữ cách tính cũ (suy ra từ videoIds/theoryId/quiz) để không vỡ chủ đề cũ.
+- Hệ quả với chủ đề "từ láy" (5 phần): từ 2/3 = 67% (tính cả video 2 đã xóa nhờ id còn trong videoIds) thành 1/5 = 20% với học sinh đã xong video 1 (video 2 đã xóa không còn trong flowOrder nên không tính nữa). Danh sách hiển thị vẫn chỉ hiện bài đã xuất bản + còn tồn tại (học sinh chưa mở được bài nháp) — chỉ mẫu số % thay đổi.
+
 ## [dev] 2026-10-28 — Sửa crash màn video học sinh: hook sau early return
 
 - Nguyên nhân (bản dev chỉ rõ: "Rendered more hooks than during the previous render" tại VideoLessonScreen): fix `84f6b41` thêm early return "Đang tải..." trước, fix `b163836` thêm `useRef` + `useEffect` đánh dấu `video_flow_completed` SAU 2 early return đó. Lần vẽ đầu (đang tải, chưa có video) dừng ở return nên 2 hook không chạy; lần vẽ sau (đã có video) chạy thêm 2 hook → React lỗi, trang trắng lỗi chung. Màn lý thuyết không bị (mọi hook đều trước return).
