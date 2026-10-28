@@ -156,6 +156,48 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
   // bật tính năng) thì báo đặt lại 1 lần để nạp két.
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
   const [revealingId, setRevealingId] = useState<string | null>(null);
+  // Ô vừa copy (username:<id> hoặc password:<id>) — hiện "Đã copy!" 2 giây.
+  const [copiedCell, setCopiedCell] = useState<string | null>(null);
+  const handleCopyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback khi trình duyệt chặn clipboard API.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopiedCell(key);
+    setTimeout(() => setCopiedCell((prev) => (prev === key ? null : prev)), 2000);
+  };
+  // Lấy mật khẩu thật (đã hiện thì dùng luôn, chưa thì gọi API reveal rồi
+  // giữ nguyên trạng thái hiện). Trả null khi chưa lưu két hoặc lỗi.
+  const ensureRevealedPassword = async (studentId: string): Promise<string | null> => {
+    const existing = revealedPasswords[studentId];
+    if (existing) return existing;
+    if (revealingId) return null;
+    setRevealingId(studentId);
+    try {
+      const res = await studentService.getStudentPassword(studentId);
+      if (!res.stored || !res.password) {
+        alert('Chưa lưu mật khẩu xem được cho em này (em tạo trước khi bật tính năng). Đặt lại mật khẩu 1 lần là xem được.');
+        return null;
+      }
+      const pw = res.password as string;
+      setRevealedPasswords((prev) => ({ ...prev, [studentId]: pw }));
+      return pw;
+    } catch (e: any) {
+      alert('Không xem được mật khẩu: ' + (e?.message || 'đã xảy ra lỗi'));
+      return null;
+    } finally {
+      setRevealingId(null);
+    }
+  };
   const handleToggleRevealPassword = async (studentId: string) => {
     if (revealedPasswords[studentId]) {
       setRevealedPasswords((prev) => {
@@ -165,20 +207,14 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
       });
       return;
     }
-    if (revealingId) return;
-    setRevealingId(studentId);
-    try {
-      const res = await studentService.getStudentPassword(studentId);
-      if (!res.stored || !res.password) {
-        alert('Chưa lưu mật khẩu xem được cho em này (em tạo trước khi bật tính năng). Đặt lại mật khẩu 1 lần là xem được.');
-        return;
-      }
-      setRevealedPasswords((prev) => ({ ...prev, [studentId]: res.password as string }));
-    } catch (e: any) {
-      alert('Không xem được mật khẩu: ' + (e?.message || 'đã xảy ra lỗi'));
-    } finally {
-      setRevealingId(null);
-    }
+    await ensureRevealedPassword(studentId);
+  };
+  // Bấm vào mật khẩu là copy mật khẩu thật: chưa hiện thì reveal rồi copy.
+  const handleCopyPassword = async (studentId: string) => {
+    if (revealingId === studentId) return;
+    const pw = await ensureRevealedPassword(studentId);
+    if (!pw) return;
+    await handleCopyText(`password:${studentId}`, pw);
   };
 
   const handleResetPassword = async (studentId: string) => {
@@ -483,8 +519,17 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
       header: 'Tên đăng nhập',
       sortable: true,
       render: (item) => (
-        <span className="font-mono text-xs font-semibold text-[#2F3E6B] bg-[#FAF5EB] px-2 py-0.5 rounded border border-[#E6DCC8]">
-          {item.username}
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            onClick={() => handleCopyText(`username:${item.id}`, item.username)}
+            className="font-mono text-xs font-semibold text-[#2F3E6B] bg-[#FAF5EB] px-2 py-0.5 rounded border border-[#E6DCC8] cursor-pointer hover:border-[#2F3E6B] transition-colors"
+            title="Bấm để copy tên đăng nhập"
+          >
+            {item.username}
+          </span>
+          {copiedCell === `username:${item.id}` && (
+            <span className="text-[11px] font-medium text-green-700">Đã copy!</span>
+          )}
         </span>
       ),
     },
@@ -493,13 +538,16 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
       header: 'Mật khẩu',
       // Mắt xem mật khẩu thật đã lưu mã hóa. Em chưa có dữ liệu két thì
       // báo đặt lại 1 lần để nạp két (không tự đặt lại im lặng).
+      // Bấm vào chính mật khẩu là copy mật khẩu thật (chưa hiện thì
+      // reveal rồi copy); mắt vẫn chỉ đổi hiện/ẩn, không copy.
       render: (item) => {
         const revealed = revealedPasswords[item.id];
         return (
           <span className="inline-flex items-center gap-1.5">
             <span
-              className={`font-mono text-xs ${revealed ? 'font-semibold text-[#2F3E6B]' : 'text-[#9CA3AF]'}`}
-              title={revealed ? 'Mật khẩu thật (đã lưu mã hóa)' : 'Bấm mắt để xem mật khẩu thật'}
+              onClick={() => handleCopyPassword(item.id)}
+              className={`font-mono text-xs cursor-pointer ${revealed ? 'font-semibold text-[#2F3E6B]' : 'text-[#9CA3AF]'}`}
+              title={revealed ? 'Bấm để copy mật khẩu' : 'Bấm để xem và copy mật khẩu thật'}
             >
               {revealed ?? '••••••••'}
             </span>
@@ -512,6 +560,9 @@ export const ClassesAndStudentsScreen: React.FC<ClassesAndStudentsScreenProps> =
             >
               {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
+            {copiedCell === `password:${item.id}` && (
+              <span className="text-[11px] font-medium text-green-700">Đã copy!</span>
+            )}
           </span>
         );
       },

@@ -1,3 +1,9 @@
+## 2026-10-28 (BẤM LÀ COPY Ở BẢNG HỌC SINH)
+
+- Bảng học sinh cổng giáo viên: bấm vào **Tên đăng nhập** là copy tên đăng nhập; bấm vào **Mật khẩu** là copy mật khẩu thật (chưa hiện thì tự reveal rồi copy, mắt vẫn chỉ đổi hiện/ẩn, không copy). Sau khi copy hiện "Đã copy!" 2 giây cạnh ô vừa bấm. Copy dùng clipboard API, có fallback khi trình duyệt chặn.
+- Sơ đồ không đổi: chỉ thêm tương tác copy trên 2 cột có sẵn, không thay luồng/node/quan hệ nào nên không sinh lại sơ đồ.
+- Kiểm chứng: tsc 0 lỗi; kiểm chứng trình duyệt sau deploy (bấm 2 ô đều hiện "Đã copy!") mới coi là xong.
+
 ## 2026-10-28 (SỬA GỐC VỤ RELOAD VĂNG ĐĂNG NHẬP — bootstrapStorage reset mỗi lần load)
 
 - Triệu chứng: đăng nhập xong reload trang là văng ra màn đăng nhập, lặp lại 100% (tái hiện 3/3 trên hồ sơ trình duyệt sạch, cả giáo viên mới tinh lẫn gv_toan).
