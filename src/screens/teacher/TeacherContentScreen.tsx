@@ -802,12 +802,38 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     selectedItem?.type === 'topic' ? topics.find((t) => t.id === selectedItem.id) : null;
 
   // ===== DẢI LUỒNG HỌC: chủ đề của mục đang mở + các bài theo đúng thứ tự =====
-  const stripTopic =
+  const stripTopicFromList =
     currentTopic ||
     (currentVideo ? topics.find((t) => t.id === currentVideo.topicId) : null) ||
     (currentTheory ? topics.find((t) => t.id === currentTheory.topicId) : null) ||
     (currentQuiz ? topics.find((t) => t.id === currentQuiz.topicId) : null) ||
     null;
+  // Dự phòng: bài đang mở có topicId nhưng chủ đề đó chưa có trong danh sách
+  // của tab này (tab nạp từ trước khi chủ đề được tạo, hoặc lần nạp danh sách
+  // bị lỗi thoáng qua) thì lấy thẳng chủ đề theo id — dải luồng học không
+  // được phép biến mất chỉ vì danh sách chưa kịp nạp.
+  const openItemTopicId =
+    currentVideo?.topicId || currentTheory?.topicId || currentQuiz?.topicId || null;
+  const [fallbackTopic, setFallbackTopic] = useState<TopicWithMeta | null>(null);
+  useEffect(() => {
+    if (!openItemTopicId || topics.some((t) => t.id === openItemTopicId)) {
+      setFallbackTopic(null);
+      return;
+    }
+    let cancelled = false;
+    contentService
+      .getTopicById(openItemTopicId)
+      .then((t) => {
+        if (!cancelled) setFallbackTopic(t);
+      })
+      .catch(() => {
+        if (!cancelled) setFallbackTopic(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openItemTopicId, topics]);
+  const stripTopic = stripTopicFromList || fallbackTopic;
   const stripItems = stripTopic
     ? deriveFlowItems(
         localFlow[stripTopic.id] ?? stripTopic.flowOrder,

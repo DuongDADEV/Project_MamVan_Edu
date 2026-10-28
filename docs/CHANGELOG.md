@@ -1,3 +1,8 @@
+## 2026-10-28 — Dải luồng học không biến mất khi danh sách chủ đề chưa kịp nạp
+
+- Sửa: màn Nội dung học — khi bài đang mở (video/lý thuyết/quiz) có topicId nhưng chủ đề đó chưa có trong danh sách của tab (tab nạp từ trước khi chủ đề được tạo, hoặc lần nạp danh sách bị lỗi thoáng qua), màn hình tự lấy thẳng chủ đề theo id qua `getTopicById` làm dự phòng thay vì ẩn dải luồng học. Khi danh sách đã có chủ đề thì vẫn dùng bản trong danh sách, không đổi hành vi cũ.
+- Không đổi luồng/sơ đồ: chỉ thêm đường lấy dữ liệu dự phòng cho cùng một dải hiển thị.
+
 ## 2026-10-28 (CHỈNH UI NỘI DUNG HỌC — HẾT HỞ KHI CUỘN)
 
 - Chi tiết chủ đề (khung phải): trước đây nội dung tụm ở giữa khung, để lại khoảng xám trống lớn trên + dưới → nay căn lên đầu khung (justify-start), đọc như trang chi tiết bình thường. Empty state (chưa chọn mục nào) vẫn giữ căn giữa.
