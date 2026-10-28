@@ -1,3 +1,9 @@
+## 2026-10-28 — Sửa gốc vụ mất dải luồng học trong trình soạn bài
+
+- NGUYÊN NHÂN THẬT (đính chính bản sửa trước): `normalizeRow` trong `src/services/api/contentClient.ts` xóa `topicId` của mọi bài (video/lý thuyết/quiz) ngay sau khi nạp từ server — điều kiện xóa chỉ kiểm tra `topic_id` (snake_case) và `payload.topicId`, trong khi server trả về `topicId` (camelCase, đã gộp sẵn, không còn `payload`). Vì vậy trình soạn không biết bài thuộc chủ đề nào nên không hiện dải luồng học, và cây chủ đề cũng báo "chưa có bài nào" dù bài đã gắn vào chủ đề. Lỗi này có từ tầng API GĐ3 (trước đó tầng mock giữ nguyên `topicId` nên dải vẫn hiện).
+- Sửa: chỉ xóa `topicId` khi giá trị đã gộp ra là `undefined` — giữ nguyên `topicId` server trả về. Một dòng, áp dụng cho cả video/lý thuyết/quiz (cùng đi qua `fetchCollection`/`normalizeRow`).
+- Bản sửa dự phòng trước đó (lấy chủ đề theo id khi danh sách thiếu) vẫn giữ nguyên làm lớp phòng thủ thứ hai, giờ đã có thể kích hoạt thật vì `topicId` không còn bị xóa.
+
 ## 2026-10-28 — Dải luồng học không biến mất khi danh sách chủ đề chưa kịp nạp
 
 - Sửa: màn Nội dung học — khi bài đang mở (video/lý thuyết/quiz) có topicId nhưng chủ đề đó chưa có trong danh sách của tab (tab nạp từ trước khi chủ đề được tạo, hoặc lần nạp danh sách bị lỗi thoáng qua), màn hình tự lấy thẳng chủ đề theo id qua `getTopicById` làm dự phòng thay vì ẩn dải luồng học. Khi danh sách đã có chủ đề thì vẫn dùng bản trong danh sách, không đổi hành vi cũ.

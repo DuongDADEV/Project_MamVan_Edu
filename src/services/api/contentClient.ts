@@ -145,7 +145,7 @@ function normalizeRow<T>(row: any): T {
   if (row.status !== undefined) out.status = row.status;
   else if (p.status !== undefined) out.status = p.status;
   out.topicId = p.topicId ?? row.topic_id ?? row.topicId;
-  if (row.topic_id === undefined && p.topicId === undefined) delete out.topicId;
+  if (out.topicId === undefined) delete out.topicId;
   out.teacher_id = p.teacher_id ?? row.teacher_id;
   if (out.teacher_id === undefined) delete out.teacher_id;
   out.deleted_at = row.deleted_at ?? p.deleted_at ?? null;
