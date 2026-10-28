@@ -505,15 +505,16 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         await placeInFlowOrder(targetTopicId, 'theory', newTheory.id);
         setSelectedItem({ type: 'theory', id: newTheory.id });
       } else {
-        // Quiz
+        // Quiz — 28/10: câu mới để TRỐNG (gợi ý mờ qua placeholder trong
+        // trình soạn), không gán sẵn 'Lựa chọn A..D' làm nội dung thật nữa.
         const newQ = await quizService.saveQuestion({
           type: 'single',
           level: 'THONG_HIEU',
           difficulty: 'TB',
-          prompt: 'Đề bài câu hỏi số 1...',
+          prompt: '',
           topicId: targetTopicId,
-          options: ['Lựa chọn A', 'Lựa chọn B', 'Lựa chọn C', 'Lựa chọn D'],
-          answer: 'Lựa chọn A',
+          options: ['', ''],
+          answer: '',
           explanation: '',
           status: 'draft',
           class_ids: ['all', 'class_7a2'],

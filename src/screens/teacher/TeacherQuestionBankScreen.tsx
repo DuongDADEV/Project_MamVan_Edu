@@ -426,15 +426,10 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   const [formDifficulty, setFormDifficulty] = useState<Difficulty>('TB');
   const [formPrompt, setFormPrompt] = useState('');
   const [formPassage, setFormPassage] = useState('');
-  const [formOptions, setFormOptions] = useState<string[]>([
-    'Phương án A',
-    'Phương án B',
-    'Phương án C',
-    'Phương án D',
-  ]);
+  const [formOptions, setFormOptions] = useState<string[]>(['', '', '', '']);
   const [formSingleAnswer, setFormSingleAnswer] = useState<string>('A');
   const [formMultiAnswers, setFormMultiAnswers] = useState<string[]>(['A']);
-  const [formFillAnswers, setFormFillAnswers] = useState<string>('từ khóa 1, từ khóa 2');
+  const [formFillAnswers, setFormFillAnswers] = useState<string>('');
   const [formExplanation, setFormExplanation] = useState('');
   const [formPoints, setFormPoints] = useState<number>(10);
 
@@ -447,7 +442,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     setFormDifficulty('TB');
     setFormPrompt('');
     setFormPassage('');
-    setFormOptions(['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D']);
+    setFormOptions(['', '', '', '']);
     setFormSingleAnswer('A');
     setFormMultiAnswers(['A']);
     setFormFillAnswers('');
@@ -520,6 +515,19 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     if (!formPrompt.trim()) {
       alert('Vui lòng nhập nội dung câu hỏi (đề bài).');
       return;
+    }
+    // 28/10: mẫu để trống nên phải chặn lưu khi chưa nhập đủ (form ngân
+    // hàng chỉ lưu thủ công, không autosave nên alert an toàn).
+    if (formType === 'single' || formType === 'multi') {
+      if (formOptions.some((o) => !o.trim())) {
+        alert('Nhập đủ nội dung cho cả 4 phương án.');
+        return;
+      }
+    } else if (formType === 'fill') {
+      if (!formFillAnswers.split(',').map((s) => s.trim()).filter(Boolean).length) {
+        alert('Nhập ít nhất 1 từ khóa đáp án.');
+        return;
+      }
     }
 
     let finalAnswer: any = formSingleAnswer;

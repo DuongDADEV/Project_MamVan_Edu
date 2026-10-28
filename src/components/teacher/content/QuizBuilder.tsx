@@ -200,7 +200,10 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   // THAO TÁC TRÊN TỪNG CÂU HỎI
   // ==========================================
 
-  // Thêm câu mới
+  // Thêm câu mới — 28/10: mẫu mới để TRỐNG, gợi ý chỉ hiện mờ qua
+  // placeholder (gõ là mất, không lưu thành nội dung). Trước đây mẫu gán
+  // sẵn 'Lựa chọn 1..4' + đáp án 'Lựa chọn 1' làm nội dung thật, giáo viên
+  // phải xóa tay từng cái, quên là học sinh đọc thấy.
   const handleAddQuestion = (type: QuestionType = 'single') => {
     const newQ: QuestionWithMeta = {
       id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
@@ -209,8 +212,8 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
       difficulty: 'TB',
       prompt: '',
       topicId,
-      options: type === 'single' || type === 'multi' ? ['Lựa chọn 1', 'Lựa chọn 2', 'Lựa chọn 3', 'Lựa chọn 4'] : undefined,
-      answer: type === 'single' ? 'Lựa chọn 1' : type === 'multi' ? ['Lựa chọn 1'] : type === 'fill' ? ['đáp án'] : '',
+      options: type === 'single' || type === 'multi' ? ['', ''] : undefined,
+      answer: type === 'single' ? '' : type === 'multi' ? [] : type === 'fill' ? [] : '',
       explanation: '',
       points: 10,
       rubric: type === 'essay' ? DEFAULT_ESSAY_RUBRIC : undefined,
@@ -225,6 +228,24 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
     };
     setQuestions((prev) => [...prev, newQ]);
     isDirtyRef.current = true;
+  };
+
+  // 28/10: câu chưa hoàn thiện thì hiện nhắc nhở mờ trong thẻ câu, KHÔNG
+  // chặn lưu nháp/xuất bản (xuất bản không chặn theo yêu cầu chủ dự án
+  // 24/10; autosave 4s cũng không được alert).
+  const getQuestionIssues = (q: QuestionWithMeta): string[] => {
+    const issues: string[] = [];
+    if (!q.prompt?.trim()) issues.push('chưa nhập đề bài');
+    if (q.type === 'single' || q.type === 'multi') {
+      const opts = q.options || [];
+      if (opts.length < 2 || opts.some((o) => !o.trim())) issues.push('còn phương án trống');
+      const ans = Array.isArray(q.answer) ? q.answer : q.answer ? [q.answer] : [];
+      if (!ans.some((a) => a && opts.includes(a))) issues.push('chưa chọn đáp án đúng');
+    } else if (q.type === 'fill') {
+      const ans = Array.isArray(q.answer) ? q.answer : [];
+      if (!ans.some((a) => a?.trim())) issues.push('chưa nhập đáp án điền từ');
+    }
+    return issues;
   };
 
   // Cập nhật câu
@@ -244,14 +265,20 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
         let nextAnswer: any = q.answer;
 
         if (newType === 'single') {
-          nextOptions = nextOptions && nextOptions.length >= 2 ? nextOptions : ['Lựa chọn 1', 'Lựa chọn 2', 'Lựa chọn 3', 'Lựa chọn 4'];
-          nextAnswer = Array.isArray(nextAnswer) ? nextAnswer[0] || nextOptions[0] : nextOptions[0];
+          nextOptions = nextOptions && nextOptions.length >= 2 ? nextOptions : ['', ''];
+          nextAnswer =
+            typeof nextAnswer === 'string' && nextAnswer && nextOptions.includes(nextAnswer)
+              ? nextAnswer
+              : '';
         } else if (newType === 'multi') {
-          nextOptions = nextOptions && nextOptions.length >= 2 ? nextOptions : ['Lựa chọn 1', 'Lựa chọn 2', 'Lựa chọn 3', 'Lựa chọn 4'];
-          nextAnswer = Array.isArray(nextAnswer) ? nextAnswer : [nextOptions[0]];
+          const opts = nextOptions && nextOptions.length >= 2 ? nextOptions : ['', ''];
+          nextOptions = opts;
+          nextAnswer = Array.isArray(nextAnswer)
+            ? nextAnswer.filter((a) => a && opts.includes(a))
+            : [];
         } else if (newType === 'fill') {
           nextOptions = undefined;
-          nextAnswer = ['từ khóa'];
+          nextAnswer = [];
         } else if (newType === 'essay') {
           nextOptions = undefined;
           nextAnswer = undefined;
@@ -1032,7 +1059,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                             type="button"
                             onClick={() => {
                               handleUpdateQuestion(q.id, {
-                                passage: q.passage ? undefined : 'Đoạn trích thơ hoặc văn xuôi mẫu...',
+                                passage: q.passage ? undefined : '',
                               });
                             }}
                             className="hover:underline flex items-center gap-1 font-medium"
@@ -1103,6 +1130,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                                   const newAns = isCorrect ? e.target.value : q.answer;
                                   handleUpdateQuestion(q.id, { options: newOpts, answer: newAns });
                                 }}
+                                placeholder={`Phương án ${String.fromCharCode(65 + optIdx)}...`}
                                 className="flex-1 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
                               />
                               {(q.options || []).length > 2 && (
@@ -1135,7 +1163,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            const newOpts = [...(q.options || []), `Lựa chọn ${(q.options?.length || 0) + 1}`];
+                            const newOpts = [...(q.options || []), ''];
                             handleUpdateQuestion(q.id, { options: newOpts });
                           }}
                           className="text-[11px] text-[#E2704A] hover:underline font-bold flex items-center gap-1 pt-1"
@@ -1205,6 +1233,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                                   const nextAns = currentAnswers.map((a) => (a === opt ? e.target.value : a));
                                   handleUpdateQuestion(q.id, { options: newOpts, answer: nextAns });
                                 }}
+                                placeholder={`Phương án ${String.fromCharCode(65 + optIdx)}...`}
                                 className="flex-1 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
                               />
                               {(q.options || []).length > 2 && (
@@ -1237,7 +1266,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            const newOpts = [...(q.options || []), `Lựa chọn ${(q.options?.length || 0) + 1}`];
+                            const newOpts = [...(q.options || []), ''];
                             handleUpdateQuestion(q.id, { options: newOpts });
                           }}
                           className="text-[11px] text-[#E2704A] hover:underline font-bold flex items-center gap-1 pt-1"
@@ -1500,6 +1529,15 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                         className="w-full px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
                       />
                     </div>
+                    {/* 28/10: nhắc mờ câu chưa hoàn thiện (không chặn lưu/xuất bản) */}
+                    {(() => {
+                      const issues = getQuestionIssues(q);
+                      return issues.length > 0 ? (
+                        <p className="text-[11px] text-amber-600 font-medium">
+                          ⚠ Câu này {issues.join(', ')} — nhập xong mới nên xuất bản.
+                        </p>
+                      ) : null;
+                    })()}
                   </div>
                 );
               })
