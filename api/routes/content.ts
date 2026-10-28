@@ -1037,9 +1037,12 @@ contentRouter.post('/questions', async (req: Request, res: Response) => {
     }
     // Chuẩn hóa topic_id như saveQuestion gốc: 'all'/topic mẫu → null;
     // topic không tồn tại → null; topic của giáo viên khác → 403.
+    // Chuỗi rỗng cũng là "không có chủ đề" (ngân hàng câu hỏi gửi
+    // topicId: ''): để '' lọt xuống INSERT sẽ vi phạm FK
+    // questions_topic_id_fkey → 500 (lỗi 2026-10-28).
     let topicId: string | null = body.topicId ?? body.topic_id ?? body.payload?.topicId ?? null;
     if (topicId) topicId = String(topicId);
-    if (topicId === 'all' || topicId === 'topic_1' || topicId === 'topic_tho_bon_nam') topicId = null;
+    if (!topicId || topicId === 'all' || topicId === 'topic_1' || topicId === 'topic_tho_bon_nam') topicId = null;
     if (topicId) {
       if (badId(topicId)) return httpErr(res, 400, 'BAD_INPUT');
       const tRows = await query<any>('SELECT `teacher_id` FROM `topics` WHERE `id` = ? LIMIT 1', [topicId]);
@@ -1124,7 +1127,7 @@ contentRouter.patch('/questions/:id', async (req: Request, res: Response) => {
     const merged: any = { ...current, ...body, ...(body.payload || {}), id };
     let topicId: string | null = merged.topicId ?? merged.topic_id ?? row.topic_id;
     if (topicId) topicId = String(topicId);
-    if (topicId === 'all' || topicId === 'topic_1' || topicId === 'topic_tho_bon_nam') topicId = null;
+    if (!topicId || topicId === 'all' || topicId === 'topic_1' || topicId === 'topic_tho_bon_nam') topicId = null;
     if (topicId) {
       const tRows = await query<any>('SELECT `teacher_id` FROM `topics` WHERE `id` = ? LIMIT 1', [topicId]);
       if (!tRows[0]) topicId = null;

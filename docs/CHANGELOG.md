@@ -1,3 +1,11 @@
+## 2026-10-28 (SỬA LỖI KHÔNG TẠO ĐƯỢC CÂU HỎI TRONG NỘI DUNG HỌC — NOT_FOUND + 500)
+
+- Lỗi (user chụp màn hình): ở Nội dung học, tạo câu hỏi thủ công cho bài kiểm tra luôn báo "Tạo câu hỏi thất bại: NOT_FOUND". Tái hiện bằng API: PATCH /questions/<id-mới> → 404, POST /questions (không id, topicId '') → 500.
+- Gốc 1 (404): nhiều màn hình tự sinh id cho câu hỏi MỚI (AssignmentEditor, ngân hàng, AI...) rồi gọi saveQuestion; client thấy có id thì gửi PATCH (coi như cập nhật), nhưng PATCH server chỉ cập nhật dòng đã tồn tại → 404.
+- Gốc 2 (500): câu hỏi ngân hàng gửi topicId '' (không gắn chủ đề); server chỉ chuẩn hóa 'all'/topic mẫu về null mà bỏ sót '' → '' lọt xuống INSERT, vi phạm FK questions_topic_id_fkey (không có topic id '') → 500.
+- Sửa: server chuẩn hóa '' → null ở cả POST và PATCH /questions; client saveItem (contentClient) khi PATCH gặp 404 thì thử lại 1 lần bằng POST (POST upsert theo id nên tạo mới được, áp dụng cho cả questions/topics/quizzes/videos/theories).
+- Không đổi luồng/sơ đồ: vẫn tạo câu hỏi → vào ngân hàng → gắn vào đề như cũ, chỉ sửa đường gọi API bị hỏng.
+
 ## 2026-10-28 (SỬA LỖ ĐIỂM DANH LẠI SAU RELOAD — nút hiện lại, số ngày tăng khống)
 
 - Lỗi (user tái hiện được): học sinh điểm danh xong, load lại trang thì nút "Điểm danh ngay (+2 XP)" hiện lại, bấm lại được. Gốc: server trả `last_attendance_date` dạng ISO (`2026-10-28T00:00:00.000Z`), client so raw với `YYYY-MM-DD` nên tưởng chưa điểm danh. Bấm lại: server chặn XP (trả alreadyCheckedIn, tổng không đổi) nhưng client vẫn +1 ngày và PUT toàn bộ state lên server → số ngày chuyên cần tăng khống, có thể kéo huy hiệu streak sớm.

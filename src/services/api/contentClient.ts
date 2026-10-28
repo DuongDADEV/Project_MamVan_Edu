@@ -238,12 +238,23 @@ async function saveItem<T extends { id: string }>(
   assertSendableId(collection, (item as any).id);
   const isCreate = !(item as any).id;
   const body = toBody(item as Record<string, any>, isCreate);
-  const saved = isCreate
-    ? await apiFetch(`/api/${collection}`, { method: 'POST', body: JSON.stringify(body) })
-    : await apiFetch(`/api/${collection}/${encodeURIComponent((item as any).id)}`, {
+  let saved: any;
+  if (isCreate) {
+    saved = await apiFetch(`/api/${collection}`, { method: 'POST', body: JSON.stringify(body) });
+  } else {
+    try {
+      saved = await apiFetch(`/api/${collection}/${encodeURIComponent((item as any).id)}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
+    } catch (err) {
+      // 2026-10-28: nhiều màn hình tự sinh id cho item MỚI rồi gọi save
+      // (câu hỏi ngân hàng, câu AI...) nên PATCH gặp dòng chưa tồn tại →
+      // 404 NOT_FOUND. POST upsert theo id nên thử lại 1 lần bằng POST.
+      if (!isNotFound(err)) throw err;
+      saved = await apiFetch(`/api/${collection}`, { method: 'POST', body: JSON.stringify(body) });
+    }
+  }
   const out = normalizeRow<T>(unwrap(saved));
   if (cacheKey) upsertLocal(cacheKey, out);
   return out;
