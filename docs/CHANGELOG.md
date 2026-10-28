@@ -1,3 +1,11 @@
+## 2026-10-28 (CHỈNH UI NỘI DUNG HỌC — HẾT HỞ KHI CUỘN)
+
+- Chi tiết chủ đề (khung phải): trước đây nội dung tụm ở giữa khung, để lại khoảng xám trống lớn trên + dưới → nay căn lên đầu khung (justify-start), đọc như trang chi tiết bình thường. Empty state (chưa chọn mục nào) vẫn giữ căn giữa.
+- Màn soạn bài kiểm tra: cột "Cài đặt bài + Giao cho học sinh" nay ghim ở đầu khi cuộn (sticky) thay vì để lại khoảng trắng lớn dưới cột trái; thanh hành động ("Lưu nháp / Giao bài") tràn viền thành chân trang của khung soạn, không còn dải trống dưới thanh khi cuộn; khung soạn bỏ padding đáy để thanh bám sát đáy khung.
+- Toast: trước đây mọi toast đều đỏ kể cả báo thành công (tạo chủ đề xong hiện thanh đỏ, dễ tưởng là lỗi) → nay toast thành công màu xanh, toast lỗi giữ màu đỏ.
+- Ghi chú kiểm chứng: bản sửa làm mới cây (c4f9802) phát tín hiệu đồng bộ ngay khi lưu, phần còn lại là 1 vòng gọi API về server (~1s); kiểm chứng phải đợi 2–3s sau khi lưu rồi mới kết luận, không chụp ngay tức thì.
+- Khoảng trắng dưới cùng của sidebar trái (giữa "Cài đặt" và nhóm cuối) là bố cục cố định của sidebar, không phải lỗi — giữ nguyên.
+
 ## 2026-10-28 (SỬA LỖI TẠO CHỦ ĐỀ XONG CÂY KHÔNG LÀM MỚI — TƯỞNG TẠO THẤT BẠI)
 
 - Lỗi (tái hiện bằng trình duyệt): bấm "Thêm chủ đề" → lưu xong hộp thoại đóng, không báo gì, cây vẫn đếm cũ; reload trang mới thấy chủ đề mới. Chủ đề thực chất đã lưu được (POST /topics 200), chỉ giao diện không cập nhật.

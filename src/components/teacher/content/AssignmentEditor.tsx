@@ -289,7 +289,7 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-5 bg-[#FFFDF8] rounded-2xl md:rounded-l-none border border-[#E6DCC8] shadow-xs">
+    <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-5 pb-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none border border-[#E6DCC8] shadow-xs">
       {/* Đầu màn soạn */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
@@ -345,8 +345,9 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
       )}
 
       <div className="grid lg:grid-cols-5 gap-4 mt-4">
-        {/* Cột cài đặt + đối tượng */}
-        <div className="lg:col-span-2 space-y-4">
+        {/* Cột cài đặt + đối tượng: ghim ở đầu khi cuộn cột phải để khỏi
+            để lại khoảng trắng lớn dưới cột trái. */}
+        <div className="lg:col-span-2 space-y-4 self-start lg:sticky lg:top-0">
           <div className="bg-white border border-[#E6DCC8] rounded-2xl p-4 space-y-3">
             <h4 className="text-xs font-black uppercase tracking-wider text-[#2F3E6B]">Cài đặt bài</h4>
             <div>
@@ -668,8 +669,9 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
         </div>
       </div>
 
-      {/* Thanh hành động */}
-      <div className="sticky bottom-0 mt-4 bg-[#FFFDF8]/95 backdrop-blur border-t border-[#E6DCC8] py-3 flex items-center gap-1.5 flex-wrap">
+      {/* Thanh hành động: chân trang tràn viền của khung soạn (không còn
+          dải trống dưới thanh khi cuộn; z-20 đúng tầng với thanh công cụ). */}
+      <div className="sticky bottom-0 z-20 -mx-5 px-5 mt-4 bg-[#FFFDF8]/95 backdrop-blur border-t border-[#E6DCC8] py-3 flex items-center gap-1.5 flex-wrap">
         <button
           type="button"
           disabled={saving}

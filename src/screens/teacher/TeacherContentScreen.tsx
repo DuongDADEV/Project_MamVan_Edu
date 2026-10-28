@@ -125,8 +125,10 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   // Toast lỗi chung cho màn Nội dung (đợt QA 26/10, blocker 8): các thao tác
   // lưu/xóa/sắp xếp/xuất bản trước đây await trần — lỗi chỉ vào console.
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const showToast = (msg: string) => {
+  const [toastTone, setToastTone] = useState<'error' | 'success'>('error');
+  const showToast = (msg: string, tone: 'error' | 'success' = 'error') => {
     setToastMessage(msg);
+    setToastTone(tone);
     setTimeout(() => setToastMessage(null), 5000);
   };
 
@@ -260,7 +262,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     // "Thêm vào chủ đề" / nút + trên dải luồng để tạo bài đầu tiên.
     if (isCreating && saved?.id) {
       setSelectedItem({ type: 'topic', id: saved.id });
-      showToast(`Đã tạo chủ đề “${saved.title || topicData.title || 'mới'}”.`);
+      showToast(`Đã tạo chủ đề “${saved.title || topicData.title || 'mới'}”.`, 'success');
     }
   };
 
@@ -1006,7 +1008,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         ) : currentTopic ? (
           /* Khối thông tin chi tiết của chủ đề đang chọn */
           <div
-            className="flex-1 min-h-0 overflow-y-auto p-8 rounded-2xl md:rounded-l-none border shadow-xs flex flex-col items-center justify-center text-center space-y-4"
+            className="flex-1 min-h-0 overflow-y-auto p-8 rounded-2xl md:rounded-l-none border shadow-xs flex flex-col items-center justify-start text-center space-y-4"
             style={{
               backgroundColor: `${currentTopic.colorScheme || '#2F3E6B'}26`,
               borderColor: `${currentTopic.colorScheme || '#2F3E6B'}80`,
@@ -1130,7 +1132,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
 
       {/* Modals */}
       {toastMessage && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100%-2rem)] px-4 py-3 rounded-2xl bg-red-600 text-white text-sm font-semibold shadow-xl">
+        <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100%-2rem)] px-4 py-3 rounded-2xl ${toastTone === 'success' ? 'bg-emerald-600' : 'bg-red-600'} text-white text-sm font-semibold shadow-xl`}>
           {toastMessage}
         </div>
       )}
