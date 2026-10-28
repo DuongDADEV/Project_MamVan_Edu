@@ -1,3 +1,10 @@
+## 2026-10-28 (SỬA LỖI TẠO CHỦ ĐỀ XONG CÂY KHÔNG LÀM MỚI — TƯỞNG TẠO THẤT BẠI)
+
+- Lỗi (tái hiện bằng trình duyệt): bấm "Thêm chủ đề" → lưu xong hộp thoại đóng, không báo gì, cây vẫn đếm cũ; reload trang mới thấy chủ đề mới. Chủ đề thực chất đã lưu được (POST /topics 200), chỉ giao diện không cập nhật.
+- Gốc: danh sách Nội dung học nạp qua useLiveQuery(['content']) — chỉ nạp lại khi có event 'content' trên syncEventBus. Lớp mock cũ phát event này ở mọi save, nhưng lớp API GĐ3 (contentClient) không phát event nào nên cây không bao giờ tự làm mới sau tạo/sửa/xóa/xuất bản.
+- Sửa: contentClient phát event sau mọi thao tác đổi nội dung (saveItem, deleteItem, reorder, publish/unpublish/archive, duplicate; topics/videos/theories → 'content', quizzes/questions → 'quiz'); tạo chủ đề mới thì báo toast "Đã tạo chủ đề …" và chọn luôn chủ đề mới.
+- Không đổi luồng/sơ đồ: chỉ thêm tín hiệu làm mới danh sách sau thao tác đã có.
+
 ## 2026-10-28 (SỬA LỖI KHÔNG TẠO ĐƯỢC CÂU HỎI TRONG NỘI DUNG HỌC — NOT_FOUND + 500)
 
 - Lỗi (user chụp màn hình): ở Nội dung học, tạo câu hỏi thủ công cho bài kiểm tra luôn báo "Tạo câu hỏi thất bại: NOT_FOUND". Tái hiện bằng API: PATCH /questions/<id-mới> → 404, POST /questions (không id, topicId '') → 500.

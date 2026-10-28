@@ -260,6 +260,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     // "Thêm vào chủ đề" / nút + trên dải luồng để tạo bài đầu tiên.
     if (isCreating && saved?.id) {
       setSelectedItem({ type: 'topic', id: saved.id });
+      showToast(`Đã tạo chủ đề “${saved.title || topicData.title || 'mới'}”.`);
     }
   };
 

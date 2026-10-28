@@ -25,6 +25,7 @@
  *   cần gọi thêm.
  */
 import { apiFetch, ApiError } from './http.ts';
+import { syncEventBus } from '../mock/eventBus.ts';
 import type {
   ContentRepository,
   QuizRepository,
@@ -179,6 +180,15 @@ function isNotFound(err: unknown): boolean {
   );
 }
 
+/** Báo cho các useLiveQuery('content'/'quiz') nạp lại sau khi nội dung đổi.
+ *  Lớp API GĐ3 từng quên phát event này (lớp mock cũ có phát ở mọi save)
+ *  nên cây chủ đề không làm mới sau khi tạo/sửa/xóa — giáo viên tưởng
+ *  tạo thất bại (tái hiện 2026-10-28: tạo chủ đề xong cây vẫn cũ, reload
+ *  mới thấy). */
+function notifyContentChanged(collection: string): void {
+  syncEventBus.emit(collection === 'quizzes' || collection === 'questions' ? 'quiz' : 'content');
+}
+
 /** Đọc 1 collection từ API và GHI ĐÈ cache (server-thắng, không gộp local). */
 async function fetchCollection<T extends { id: string }>(
   path: string,
@@ -257,6 +267,7 @@ async function saveItem<T extends { id: string }>(
   }
   const out = normalizeRow<T>(unwrap(saved));
   if (cacheKey) upsertLocal(cacheKey, out);
+  notifyContentChanged(collection);
   return out;
 }
 
@@ -270,6 +281,7 @@ async function deleteItem(collection: string, cacheKey: string, id: string): Pro
   }
   await apiFetch(`/api/${collection}/${encodeURIComponent(id)}/delete`, { method: 'POST' });
   markDeletedLocal(cacheKey, id);
+  notifyContentChanged(collection);
 }
 
 const PLURAL: Record<'topic' | 'video' | 'theory', string> = {
@@ -350,6 +362,7 @@ export class ApiContentRepository implements ContentRepository {
     }
     map.forEach((t) => reordered.push(t));
     writeLocalList(TOPIC_CACHE_KEY, reordered);
+    notifyContentChanged('topics');
   }
 
   async reorderTopicVideos(topicId: string, videoIds: string[]): Promise<void> {
@@ -361,6 +374,7 @@ export class ApiContentRepository implements ContentRepository {
       body: JSON.stringify({ videoIds }),
     });
     upsertLocal(TOPIC_CACHE_KEY, normalizeRow<TopicWithMeta>(unwrap(saved)));
+    notifyContentChanged('topics');
   }
 
   async publishContent(
@@ -397,6 +411,7 @@ export class ApiContentRepository implements ContentRepository {
     // Publish topic KHÔNG tự publish con (giữ hành vi). Publish video/
     // lý thuyết chỉ gọi endpoint của item đó — server tự mirror publish
     // topic cha nếu cần.
+    notifyContentChanged(collection);
   }
 
   async unpublishContent(
@@ -413,6 +428,7 @@ export class ApiContentRepository implements ContentRepository {
       list[idx] = { ...list[idx], status: 'draft', updated_at: new Date().toISOString() };
       writeLocalList(CACHE_BY_TYPE[type], list);
     }
+    notifyContentChanged(collection);
   }
 
   async archiveContent(
@@ -431,6 +447,7 @@ export class ApiContentRepository implements ContentRepository {
     if (row && typeof row === 'object' && row.id) {
       upsertLocal<any>(CACHE_BY_TYPE[type], normalizeRow<any>(row));
     }
+    notifyContentChanged(collection);
   }
 
   async duplicateContent(
@@ -522,6 +539,7 @@ export class ApiQuizRepository implements QuizRepository {
     // Questions: DELETE trực tiếp (khảo sát §2.3); UI đã hỏi xác nhận trước.
     if (isLegacyId(id)) return;
     await apiFetch(`/api/questions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    notifyContentChanged('questions');
   }
 
   async publishQuiz(
@@ -549,11 +567,13 @@ export class ApiQuizRepository implements QuizRepository {
             method: 'POST',
             body: JSON.stringify({ classIds: options.classIds }),
           });
+          notifyContentChanged('topics');
         }
       } catch (err) {
         console.warn('[ApiContent] Publish quiz xong nhưng chưa publish được topic cha:', err);
       }
     }
+    notifyContentChanged('quizzes');
     return quiz;
   }
 
@@ -564,6 +584,7 @@ export class ApiQuizRepository implements QuizRepository {
     });
     const quiz = normalizeRow<QuizWithMeta>(unwrap(saved));
     if (quiz && (quiz as any).id) upsertLocal(QUIZ_CACHE_KEY, quiz);
+    notifyContentChanged('quizzes');
     return quiz;
   }
 
@@ -574,6 +595,7 @@ export class ApiQuizRepository implements QuizRepository {
     });
     const quiz = normalizeRow<QuizWithMeta>(unwrap(saved));
     if (quiz && (quiz as any).id) upsertLocal(QUIZ_CACHE_KEY, quiz);
+    notifyContentChanged('quizzes');
     return quiz;
   }
 
@@ -584,6 +606,7 @@ export class ApiQuizRepository implements QuizRepository {
     });
     const quiz = normalizeRow<QuizWithMeta>(unwrap(saved));
     if (quiz && (quiz as any).id) upsertLocal(QUIZ_CACHE_KEY, quiz);
+    notifyContentChanged('quizzes');
     return quiz;
   }
 
