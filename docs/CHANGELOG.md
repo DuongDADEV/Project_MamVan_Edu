@@ -1,3 +1,9 @@
+## [dev] 2026-10-28 — Ẩn đoạn trích lộ đáp án ở đề giao học sinh (nối tiếp vụ điền từ 23:22)
+
+- Kiểm chứng trình duyệt đợt điền từ cho thấy: đề đã có ___ đúng, AI sinh thật (không rớt bản mẫu), nhưng dòng "Ngữ liệu căn cứ" ở thẻ duyệt chứa nguyên văn nguồn nên có cả đáp án. Phân biệt rõ: thẻ duyệt là của giáo viên — hiện đủ đoạn trích để đối chiếu là đúng, không sửa. Nhưng cùng trường `passage` đó, khi lưu thành câu hỏi rồi giao bài, màn làm bài của học sinh CŨNG hiện đoạn trích lên trên câu hỏi — học sinh nhìn đoạn trích là thấy đáp án. Đó mới là chỗ lộ thật.
+- Sửa ở máy chủ (đúng tầng, vì đề giao học sinh vốn KHÔNG kèm đáp án nên client không tự quyết được): `GET /assignments/:id` nhánh học sinh, câu `fill_in_blank` mà đoạn trích chứa đáp án (so sánh thoáng không dấu + khớp ranh giới từ, helper `passageLeaksAnswer` có cả bản client `fillBlank.ts` và bản máy chủ `_shared.ts`) thì trả `passage: null`. Đoạn trích không chứa đáp án vẫn hiện bình thường; màn luyện tập theo luồng vốn không hiện đoạn trích nên không ảnh hưởng.
+- Prompt sinh câu đã dặn từ đợt trước: passage không được chứa từ đáp án (giảm từ gốc) + luật máy chủ này là lưới an toàn cho câu đã lưu.
+
 ## [dev] 2026-10-28 — Sửa lỗi AI trả JSON hỏng + câu điền từ không có ô trống (báo cáo của chủ dự án 23:22)
 
 - Lỗi "Unexpected non-whitespace character after JSON": AI trả JSON kèm chữ thừa sau JSON (kể cả chữ thừa chứa ] hoặc }) — cách trích cũ lấy từ [ đầu tới ] cuối nên gãy, rơi thẳng xuống bản dự phòng mẫu không bám ngữ liệu. Nay: trích JSON bằng quét cân bằng có tôn trọng chuỗi/ký tự thoát, thử mọi khối fence (không chỉ khối đầu), ưu tiên mảng-các-đối-tượng dài nhất; parse lần đầu hỏng thì gọi bù ĐÚNG 1 lần với lệnh chỉ-trả-JSON rồi mới chịu thua về bản dự phòng (vẫn cảnh báo rõ như cũ).

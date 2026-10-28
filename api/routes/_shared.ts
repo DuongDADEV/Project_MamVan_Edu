@@ -349,6 +349,31 @@ export function fillVariants(keyEntry: unknown): string[] {
 }
 
 /**
+ * Đoạn trích có lộ đáp án điền từ không (28/10, bản sao của
+ * src/logic/fillBlank.ts): so sánh thoáng và khớp theo ranh giới từ.
+ * Máy chủ dùng để ẩn đoạn trích ở đề bài giao cho học sinh khi đoạn trích
+ * chứa đáp án; màn duyệt của giáo viên không bị ảnh hưởng.
+ */
+export function passageLeaksAnswer(passage: unknown, answers: unknown): boolean {
+  const squash = (s: string): string =>
+    normFillText(s)
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const text = squash(String(passage ?? ''));
+  if (!text) return false;
+  const padded = ` ${text} `;
+  const keyArr: unknown[] = Array.isArray(answers) ? answers : answers != null ? [answers] : [];
+  for (const k of keyArr) {
+    for (const v of fillVariants(k)) {
+      const needle = ` ${squash(v)} `;
+      if (needle.trim() && padded.includes(needle)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Chấm câu điền trống theo từng ô (bản sao của src/logic/fillBlank.ts).
  * keys: mảng đáp án; student: mảng bài làm theo đúng thứ tự ô.
  */

@@ -49,6 +49,7 @@ import {
   normalizeQType,
   normText,
   gradeFillBlanks,
+  passageLeaksAnswer,
   AUTO_Q_TYPES,
   ah,
 } from './_shared';
@@ -933,11 +934,20 @@ attemptsRouter.get('/assignments/:id', async (req: AuthedRequest, res) => {
       dueAt: a.due_at,
       questions: qIds.map((qid: string) => {
         const p: any = qMap.get(qid) || {};
+        const qType = normalizeQType(p.type);
+        // 28/10: đoạn trích của câu điền từ mà chứa đáp án thì học sinh
+        // nhìn đoạn trích là thấy đáp án — ẩn đoạn trích (đề bài đã đủ
+        // ngữ cảnh với các ô ___). Chỉ áp dụng cho đề giao học sinh;
+        // màn duyệt/ngân hàng của giáo viên vẫn giữ đủ đoạn trích.
+        let passage = p.passage || null;
+        if (qType === 'fill_in_blank' && passage && passageLeaksAnswer(passage, p.answer)) {
+          passage = null;
+        }
         return {
           id: qid,
           prompt: p.prompt || qid,
-          passage: p.passage || null,
-          type: normalizeQType(p.type),
+          passage,
+          type: qType,
           options: Array.isArray(p.options) ? p.options : [],
           points: typeof p.points === 'number' ? p.points : 10,
         };

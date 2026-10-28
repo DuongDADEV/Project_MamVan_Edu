@@ -56856,6 +56856,20 @@ function normFillText(s) {
 function fillVariants(keyEntry) {
   return String(keyEntry ?? "").split("|").map((v) => normFillText(v)).filter(Boolean);
 }
+function passageLeaksAnswer(passage, answers) {
+  const squash = (s) => normFillText(s).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  const text = squash(String(passage ?? ""));
+  if (!text) return false;
+  const padded = ` ${text} `;
+  const keyArr = Array.isArray(answers) ? answers : answers != null ? [answers] : [];
+  for (const k of keyArr) {
+    for (const v of fillVariants(k)) {
+      const needle = ` ${squash(v)} `;
+      if (needle.trim() && padded.includes(needle)) return true;
+    }
+  }
+  return false;
+}
 function gradeFillBlanks(keys, student) {
   const keyArr = Array.isArray(keys) ? keys : keys != null ? [keys] : [];
   const stuArr = Array.isArray(student) ? student : [];
@@ -57669,11 +57683,16 @@ attemptsRouter.get("/assignments/:id", async (req, res) => {
       dueAt: a.due_at,
       questions: qIds.map((qid) => {
         const p = qMap.get(qid) || {};
+        const qType = normalizeQType(p.type);
+        let passage = p.passage || null;
+        if (qType === "fill_in_blank" && passage && passageLeaksAnswer(passage, p.answer)) {
+          passage = null;
+        }
         return {
           id: qid,
           prompt: p.prompt || qid,
-          passage: p.passage || null,
-          type: normalizeQType(p.type),
+          passage,
+          type: qType,
           options: Array.isArray(p.options) ? p.options : [],
           points: typeof p.points === "number" ? p.points : 10
         };

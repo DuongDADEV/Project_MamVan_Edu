@@ -55,6 +55,32 @@ export function blankVariants(keyEntry: unknown): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Đoạn trích có lộ đáp án điền từ không (28/10): so sánh thoáng (không
+ * hoa/thường, không dấu, dấu câu thành khoảng trắng) và khớp theo ranh
+ * giới từ — đáp án "an" trong "lan" không tính là lộ. Dùng để quyết định
+ * có ẩn đoạn trích ở màn học sinh hay không; màn duyệt của giáo viên vẫn
+ * hiện đủ đoạn trích để đối chiếu.
+ */
+export function passageLeaksAnswer(passage: unknown, answers: unknown): boolean {
+  const squash = (s: string): string =>
+    normFillText(s)
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const text = squash(String(passage ?? ''));
+  if (!text) return false;
+  const padded = ` ${text} `;
+  const keyArr: unknown[] = Array.isArray(answers) ? answers : answers != null ? [answers] : [];
+  for (const k of keyArr) {
+    for (const v of blankVariants(k)) {
+      const needle = ` ${squash(v)} `;
+      if (needle.trim() && padded.includes(needle)) return true;
+    }
+  }
+  return false;
+}
+
 export interface FillGrade {
   /** Số ô có đáp án để chấm (ô nào đáp án rỗng thì bỏ qua). */
   gradeable: number;
