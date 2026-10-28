@@ -169,28 +169,41 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     [topicFlowPath, video, videoId]
   );
 
+  // Luồng chủ đề thắng bài gắn kèm (28/10): bài tập đã nằm trong luồng
+  // chủ đề chỉ làm ở vị trí luồng của nó — không lặp lại thành bước gắn
+  // kèm sau video (trước đây cùng 1 bài xuất hiện ở cả bước gắn kèm lẫn
+  // mục luồng, học sinh làm đi làm lại mà thứ tự 1→N cũng vỡ).
+  const flowQuizIds = useMemo(
+    () => new Set(topicFlowPath.filter((it) => it.type === 'quiz').map((it) => it.id)),
+    [topicFlowPath]
+  );
+
   // 1. Bài Luyện tập: ưu tiên video.practiceQuizId hoặc tìm bài kind 'practice' trong chủ đề
   const practiceQuiz: Quiz | undefined = useMemo(() => {
-    return (video?.practiceQuizId && quizzesMap[video.practiceQuizId]) ||
-      topicQuizzes.find((q: Quiz) => q.kind === 'practice');
-  }, [video?.practiceQuizId, quizzesMap, topicQuizzes]);
+    const linked = video?.practiceQuizId ? quizzesMap[video.practiceQuizId] : undefined;
+    if (linked && !flowQuizIds.has(linked.id)) return linked;
+    return topicQuizzes.find((q: Quiz) => q.kind === 'practice' && !flowQuizIds.has(q.id));
+  }, [video?.practiceQuizId, quizzesMap, topicQuizzes, flowQuizIds]);
 
   // 2. Bài Kiểm tra nhanh: ưu tiên video.quickTestId hoặc tìm bài kind 'quick' trong chủ đề
   const quickTestQuiz: Quiz | undefined = useMemo(() => {
-    return (video?.quickTestId && quizzesMap[video.quickTestId]) ||
-      topicQuizzes.find((q: Quiz) => q.kind === 'quick' && q.id !== practiceQuiz?.id);
-  }, [video?.quickTestId, quizzesMap, topicQuizzes, practiceQuiz]);
+    const linked = video?.quickTestId ? quizzesMap[video.quickTestId] : undefined;
+    if (linked && !flowQuizIds.has(linked.id)) return linked;
+    return topicQuizzes.find((q: Quiz) => q.kind === 'quick' && q.id !== practiceQuiz?.id && !flowQuizIds.has(q.id));
+  }, [video?.quickTestId, quizzesMap, topicQuizzes, practiceQuiz, flowQuizIds]);
 
   // 3. Bài Đánh giá năng lực: ưu tiên video.masteryCheckId hoặc bài kind 'review' / 'mastery'
   const masteryQuiz: Quiz | undefined = useMemo(() => {
-    return (video?.masteryCheckId && quizzesMap[video.masteryCheckId]) ||
-      topicQuizzes.find(
-        (q: Quiz) =>
-          (q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') &&
-          q.id !== practiceQuiz?.id &&
-          q.id !== quickTestQuiz?.id
-      );
-  }, [video?.masteryCheckId, quizzesMap, topicQuizzes, practiceQuiz, quickTestQuiz]);
+    const linked = video?.masteryCheckId ? quizzesMap[video.masteryCheckId] : undefined;
+    if (linked && !flowQuizIds.has(linked.id)) return linked;
+    return topicQuizzes.find(
+      (q: Quiz) =>
+        (q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') &&
+        q.id !== practiceQuiz?.id &&
+        q.id !== quickTestQuiz?.id &&
+        !flowQuizIds.has(q.id)
+    );
+  }, [video?.masteryCheckId, quizzesMap, topicQuizzes, practiceQuiz, quickTestQuiz, flowQuizIds]);
 
   // Xây dựng danh sách các bước học ĐỘNG theo đúng những gì giáo viên thực tế giao
   const dynamicSteps = useMemo<FlowStep[]>(() => {

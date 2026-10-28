@@ -48,18 +48,37 @@ export function isTopicFullyComplete(
   completedSteps: string[],
   results: QuestionResult[]
 ): boolean {
-  const quizIds = getTopicQuizIds(topic, quizzes);
+  const { done, total } = countTopicFlowDone(topic, quizzes, questions, completedSteps, results);
+  return total > 0 && done === total;
+}
+
+// Số mục luồng đã xong / tổng số mục — cùng vị ngữ với
+// isTopicFullyComplete, để thanh tiến độ của học sinh và bảng hoàn thành
+// của giáo viên không còn lệch nhau (28/10: thanh cũ chỉ đếm video_watch
+// nên học sinh xem đủ video đã hiện 100% dù chưa xong lý thuyết/bài tập).
+export function countTopicFlowDone(
+  topic: { id: string; flowOrder?: string[]; videoIds?: string[]; theoryId?: string },
+  quizzes: QuizWithMeta[],
+  questions: Record<string, QuestionWithMeta>,
+  completedSteps: string[],
+  results: QuestionResult[]
+): { done: number; total: number } {
+  const quizIds = getTopicQuizIds(topic as TopicWithMeta, quizzes);
   const theoryIds = topic.theoryId ? [topic.theoryId] : [];
   const items = deriveFlowItems(topic.flowOrder, topic.videoIds || [], theoryIds, quizIds);
-  if (items.length === 0) return false;
   const steps = new Set(completedSteps || []);
-  return items.every((item) => {
-    if (item.type === 'video') return steps.has(`video_flow_completed:${item.id}`);
-    if (item.type === 'theory') return steps.has(`theory_flow_completed:${item.id}`);
-    const quiz = quizzes.find((q) => q.id === item.id);
-    if (!quiz) return false;
-    return isQuizAllCorrect(quiz, questions, results);
-  });
+  let done = 0;
+  for (const item of items) {
+    if (item.type === 'video') {
+      if (steps.has(`video_flow_completed:${item.id}`)) done++;
+    } else if (item.type === 'theory') {
+      if (steps.has(`theory_flow_completed:${item.id}`)) done++;
+    } else {
+      const quiz = quizzes.find((q) => q.id === item.id);
+      if (quiz && isQuizAllCorrect(quiz, questions, results)) done++;
+    }
+  }
+  return { done, total: items.length };
 }
 
 /**

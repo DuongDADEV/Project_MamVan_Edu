@@ -168,6 +168,13 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       });
     return ids;
   }, [liveTopicTheories, theory, theoryId]);
+  // Luồng chủ đề thắng bài gắn kèm (28/10): bài tập đã nằm trong luồng
+  // chủ đề (đã xuất bản, cùng chủ đề) chỉ làm ở vị trí luồng của nó —
+  // không lặp lại thành bước Luyện tập/Kiểm tra sau lý thuyết.
+  const flowQuizIds = useMemo(
+    () => new Set((livePublishedQuizzes || []).filter((q) => theory && q.topicId === theory.topicId).map((q) => q.id)),
+    [livePublishedQuizzes, theory]
+  );
   const practiceQuizzes: Quiz[] = useMemo(() => {
     if (!theory) return [];
     return selectTheoryPracticeQuizzes({
@@ -176,18 +183,20 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       topicQuizzes,
       flowOrder: topicFlowOrder,
       excludedQuizIds: otherTheoryLinkIds,
-    });
-  }, [theory, topicQuizzes, topicFlowOrder, otherTheoryLinkIds]);
+    }).filter((q) => !flowQuizIds.has(q.id));
+  }, [theory, topicQuizzes, topicFlowOrder, otherTheoryLinkIds, flowQuizIds]);
   const practiceQuizIds = useMemo(
     () => new Set(practiceQuizzes.map((q) => q.id)),
     [practiceQuizzes]
   );
 
-  // 2. Bài Kiểm tra lý thuyết (không đổi logic, chỉ loại mọi bài Luyện tập)
+  // 2. Bài Kiểm tra lý thuyết (không đổi logic, chỉ loại mọi bài Luyện tập
+  // và mọi bài đã nằm trong luồng chủ đề — bài đó làm ở vị trí luồng).
   const testQuiz: Quiz | undefined = useMemo(() => {
-    return (theory?.testQuizId && quizzesMap[theory.testQuizId]) ||
-      topicQuizzes.find((q: Quiz) => (q.kind === 'quick' || q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') && !practiceQuizIds.has(q.id));
-  }, [theory?.testQuizId, quizzesMap, topicQuizzes, practiceQuizIds]);
+    const linked = theory?.testQuizId ? quizzesMap[theory.testQuizId] : undefined;
+    if (linked && !flowQuizIds.has(linked.id)) return linked;
+    return topicQuizzes.find((q: Quiz) => (q.kind === 'quick' || q.kind === 'mastery' || q.kind === 'homework' || q.kind === 'final') && !practiceQuizIds.has(q.id) && !flowQuizIds.has(q.id));
+  }, [theory?.testQuizId, quizzesMap, topicQuizzes, practiceQuizIds, flowQuizIds]);
 
   // Luong chu de (26/10): du cac bai co da dang theo dung thu tu co xep.
   const topicFlowPath = useMemo(() => {

@@ -3,7 +3,8 @@ import { StudentState, Topic } from '../types.ts';
 import { calculateAllMastery, isTopicSolid } from '../logic/mastery.ts';
 import { BookOpen, ArrowRight, Filter, Layers, PenLine, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import { deriveFlowItems } from '../logic/flowOrder.ts';
-import { useLiveQuery, contentService, quizService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta } from '../services/index.ts';
+import { countTopicFlowDone } from '../logic/topicCompletion.ts';
+import { useLiveQuery, contentService, quizService, VideoLessonWithMeta, TheoryLessonWithMeta, QuizWithMeta, QuestionWithMeta } from '../services/index.ts';
 
 interface LearnScreenProps {
   state: StudentState;
@@ -57,6 +58,10 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
     () => quizService.getQuizzes(undefined, true),
     ['content']
   );
+  const { data: liveQuestions } = useLiveQuery<Record<string, QuestionWithMeta>>(
+    () => quizService.getQuestions(undefined),
+    ['content']
+  );
 
   // Tính trạng thái của từng topic
   const getTopicProgress = (topic: Topic) => {
@@ -81,10 +86,20 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
       statusClass = 'bg-indigo-50 text-[#4F46E5] border-indigo-200';
     }
 
-    // Tính phần trăm hoàn thành bước học của chủ đề
-    const videoSteps = topic.videoIds.map((vId) => `video_watch:${vId}`);
-    const completedVideosCount = videoSteps.filter((s) => state.completedSteps.includes(s)).length;
-    const progressPercent = Math.round((completedVideosCount / Math.max(1, topic.videoIds.length)) * 100);
+    // Tính phần trăm hoàn thành bước học của chủ đề — cùng định nghĩa
+    // với bảng hoàn thành của giáo viên (28/10): đếm mục luồng đã xong
+    // (video xong trọn luồng, lý thuyết xong trọn luồng, bài tập làm đúng
+    // hết phần chấm tự động) trên tổng số mục luồng. Trước đây chỉ đếm
+    // video_watch nên xem đủ video đã hiện 100% dù chưa xong bài tập.
+    const topicQs = (liveQuizzes || []).filter((q) => q.topicId === topic.id);
+    const { done: doneItems, total: totalItems } = countTopicFlowDone(
+      topic,
+      topicQs,
+      (liveQuestions || {}) as Record<string, QuestionWithMeta>,
+      state.completedSteps || [],
+      state.questionResults || []
+    );
+    const progressPercent = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
 
     return { status, statusClass, progressPercent, hasAttempted, isSolid, hasReview };
   };
