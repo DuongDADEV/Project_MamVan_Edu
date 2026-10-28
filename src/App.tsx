@@ -697,13 +697,31 @@ export default function App() {
   const handleAttendanceCheckIn = () => {
     const todayStr = getLocalTodayStr();
     const baseState = rolloverStudentState(studentState);
-    if (baseState.lastAttendanceDate === todayStr) {
+    if (String(baseState.lastAttendanceDate || '').slice(0, 10) === todayStr) {
       showToast('Hôm nay bạn đã điểm danh rồi!');
       return;
     }
 
     checkInStudent(currentStudentId)
       .then((res) => {
+        // Server đã chặn điểm danh trùng (alreadyCheckedIn): KHÔNG +1 ngày,
+        // KHÔNG PUT state — tránh đẩy số ngày khống lên server (lỗi
+        // 2026-10-28: nút hiện lại sau reload do ngày ISO so với YYYY-MM-DD
+        // nên học sinh bấm lại được). Chỉ đồng bộ ngày + số ngày thật từ
+        // server để nút ẩn đi.
+        if (res.alreadyCheckedIn) {
+          const base = rolloverStudentState(studentStateRef.current);
+          setStudentState({
+            ...base,
+            totalXp: res.totalXp,
+            lastAttendanceDate: todayStr,
+            ...(typeof res.attendanceDays === 'number'
+              ? { attendanceDaysThisWeek: res.attendanceDays }
+              : {}),
+          });
+          showToast('Hôm nay bạn đã điểm danh rồi!');
+          return;
+        }
         const base = rolloverStudentState(studentStateRef.current);
         const nextDays = (base.attendanceDaysThisWeek || 0) + 1;
         let newBadges = [...(base.unlockedBadgeIds || [])];

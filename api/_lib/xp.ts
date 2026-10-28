@@ -269,7 +269,10 @@ export async function awardCheckIn(db: Db, studentId: string, vnDateStr: string)
   return runInTx(db, async (tx) => {
     await ensureStateRow(tx, studentId);
     const row = await lockStateRow(tx, studentId);
-    const lastDate = row.last_attendance_date ? String(row.last_attendance_date).slice(0, 10) : null;
+    const rawLast: unknown = row.last_attendance_date;
+    const lastDate = rawLast instanceof Date
+      ? rawLast.toISOString().slice(0, 10)
+      : rawLast ? String(rawLast).slice(0, 10) : null;
     if (lastDate === vnDateStr) {
       return { awarded: 0, totalXp: row.total_xp ?? 0, xpToday: row.xp_today ?? 0, xpWeek: row.xp_week ?? 0 };
     }

@@ -1,3 +1,9 @@
+## 2026-10-28 (SỬA LỖ ĐIỂM DANH LẠI SAU RELOAD — nút hiện lại, số ngày tăng khống)
+
+- Lỗi (user tái hiện được): học sinh điểm danh xong, load lại trang thì nút "Điểm danh ngay (+2 XP)" hiện lại, bấm lại được. Gốc: server trả `last_attendance_date` dạng ISO (`2026-10-28T00:00:00.000Z`), client so raw với `YYYY-MM-DD` nên tưởng chưa điểm danh. Bấm lại: server chặn XP (trả alreadyCheckedIn, tổng không đổi) nhưng client vẫn +1 ngày và PUT toàn bộ state lên server → số ngày chuyên cần tăng khống, có thể kéo huy hiệu streak sớm.
+- Sửa: `mapStateRow` trả ngày dạng `YYYY-MM-DD` (dùng `toDateKey`); `awardCheckIn` so sánh ngày đúng với Date object (trước đó `String(Date).slice(0,10)` ra "Wed Oct 28" nên vòng chặn ngày chết, chỉ còn khóa xp_logs giữ); client so ngày bằng slice(0,10) ở cả nút và guard; `.then` khi alreadyCheckedIn thì KHÔNG +1 ngày, KHÔNG PUT, chỉ đồng bộ ngày + số ngày thật từ server và báo đã điểm danh.
+- Kiểm chứng: API (GET trả ngày `YYYY-MM-DD`; điểm danh lần 2 → alreadyCheckedIn, XP + ngày không đổi) + trình duyệt (điểm danh → reload → nút không hiện lại) mới coi là xong.
+
 ## 2026-10-28 (SỬA GỐC VỤ TRANG HỌC SINH LỖI HÀNG LOẠT — PUT student-states crash cả server)
 
 - Nguyên nhân: học sinh mới đồng bộ state với `last_attendance_date = ''` qua PUT /student-states/:studentId → MySQL STRICT mode từ chối '' cho cột DATE (Error 1292) → handler không có try/catch nên exception không được bắt → process node chết → mọi trang học sinh tải sau đó đều lỗi "Failed to fetch dynamically imported module" (kèm 1 lần 502), dù không thiếu file chunk nào (đủ 16 file trên VPS). Service kẹt trạng thái Paused, Resume/Restart qua SCM không lên được, phải dùng `nssm stop/start` mới chạy lại.

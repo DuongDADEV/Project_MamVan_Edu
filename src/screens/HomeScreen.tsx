@@ -156,7 +156,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       : 'Chào buổi tối';
 
   const todayStr = getLocalTodayStr();
-  const hasCheckedInToday = state.lastAttendanceDate === todayStr;
+  const hasCheckedInToday = String(state.lastAttendanceDate || '').slice(0, 10) === todayStr;
 
   const activeMinutes = Math.floor(state.activeSecondsToday / 60);
 

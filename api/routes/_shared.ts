@@ -221,7 +221,7 @@ export function mapStateRow(row: any, parseJson: (v: any, fb: any) => any): any 
     total_xp: row.total_xp ?? 0,
     active_seconds_today: row.active_seconds_today ?? 0,
     consecutive_days: row.consecutive_days ?? 0,
-    last_attendance_date: row.last_attendance_date || null,
+    last_attendance_date: toDateKey(row.last_attendance_date) || null,
     completed_steps: parseJson(row.completed_steps, []),
     topic_mastery: parseJson(row.topic_mastery, {}),
     unlocked_badge_ids: parseJson(row.unlocked_badge_ids, []),
