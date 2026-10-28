@@ -56059,7 +56059,7 @@ contentRouter.post("/quizzes/:id/duplicate", async (req, res) => {
             duplicatorId,
             JSON.stringify(qPayload),
             qRow.max_score ?? null,
-            qRow.grading_method ?? null,
+            qRow.grading_method ?? (qRow.type === "essay" ? "TEACHER" : "AUTO"),
             qRow.difficulty ?? null
           ]
         );
@@ -56268,7 +56268,7 @@ contentRouter.post("/questions", async (req, res) => {
         teacherId,
         JSON.stringify(full),
         body.max_score ?? body.payload?.max_score ?? null,
-        body.grading_method ?? body.payload?.grading_method ?? null,
+        body.grading_method ?? body.payload?.grading_method ?? (dbType === "essay" ? "TEACHER" : "AUTO"),
         body.difficulty ?? body.payload?.difficulty ?? null
       ]
     );
@@ -57149,7 +57149,8 @@ attemptsRouter.post("/attempts", requireRole("student"), ah(async (req, res) => 
       const qtype = normalizeQType(q.type || payload.type);
       const responseJson = qtype === "single_choice" || qtype === "multiple_choice" ? { selected: qtype === "single_choice" ? (resp.selected || [])[0] || null : resp.selected || [] } : { text: resp.text || "" };
       const key = q.correct_answer != null ? parseJson(q.correct_answer, q.correct_answer) : payload.answer ?? null;
-      const isAuto = q.grading_method === "AUTO" && key != null && qtype !== "essay";
+      const method = q.grading_method || "AUTO";
+      const isAuto = method === "AUTO" && key != null && qtype !== "essay";
       let isCorrect = null;
       let score = null;
       let gStatus = "PENDING_TEACHER_REVIEW";

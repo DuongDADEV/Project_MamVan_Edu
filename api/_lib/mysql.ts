@@ -29,6 +29,19 @@ export const pool: Pool = createPool({
   connectionLimit: 10,
 });
 
+// Ép múi giờ phiên về UTC (sửa lệch +7 giờ 28/10): option `timezone` của
+// mysql2 chỉ để parse phía JS, không tự SET time_zone cho phiên — phiên
+// vẫn chạy SYSTEM (+07) nên máy chủ gửi chuỗi giờ tường +07 mà driver
+// hiểu nhầm thành UTC, khiến mọi TIMESTAMP qua API lệch +7 giờ. Offset
+// số '+00:00' không cần bảng múi giờ của MySQL, và không đổi cách lưu
+// trữ (cột TIMESTAMP vốn lưu UTC; hàm UTC_TIMESTAMP() cũng không phụ
+// thuộc múi giờ phiên) — chỉ sửa giờ đọc ra cho đúng.
+pool.on('connection', (conn: any) => {
+  conn.query("SET time_zone = '+00:00'", (err: any) => {
+    if (err) console.error('[mysql] SET time_zone failed:', err?.message || err);
+  });
+});
+
 /**
  * Db tối thiểu mà mọi helper GĐ3 nhận: query cho SELECT (trả rows),
  * execute cho INSERT/UPDATE/DELETE (trả result header: insertId /

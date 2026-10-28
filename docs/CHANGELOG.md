@@ -1,3 +1,7 @@
+## [dev] 2026-10-28 — Ép múi giờ phiên MySQL về UTC (sửa lệch +7 giờ)
+
+- Nguyên nhân lệch giờ hiển thị (bảng chấm hiện 01:02 29-10 cho bài nộp 18:02 28-10): option `timezone: '+00:00'` của mysql2 chỉ để parse phía JS, không tự SET time_zone cho phiên — phiên vẫn chạy SYSTEM (+07) nên máy chủ gửi chuỗi giờ tường +07 mà driver hiểu nhầm thành UTC, khiến mọi TIMESTAMP qua API lệch +7 giờ. Nay pool ép `SET time_zone = '+00:00'` mỗi khi mở kết nối mới (offset số nên không cần bảng múi giờ). Không đổi cách lưu trữ: cột TIMESTAMP vốn lưu UTC, hàm UTC_TIMESTAMP() không phụ thuộc múi giờ phiên — chỉ sửa giờ đọc ra cho đúng.
+
 ## [dev] 2026-10-28 — Luật chấm: chỉ tự luận mới cần cô giáo chấm
 
 - Nộp bài (server): câu có đáp án sẵn nay tự chấm theo đáp án, kể cả khi `grading_method` của câu là NULL (câu tạo từ trình soạn không gửi trường này — đây chính là nguyên nhân khiến câu trắc nghiệm vẫn rơi vào hàng chờ chấm). Chỉ câu tự luận, hoặc câu được đặt tường minh TEACHER, hoặc câu không có đáp án, mới chờ cô giáo chấm. Trước đây cổng tự chấm đòi đúng `grading_method = 'AUTO'` nên mọi câu tạo từ trình soạn đều chờ chấm tay.
