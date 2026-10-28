@@ -156,7 +156,7 @@ attemptsRouter.get('/student-states/:studentId', async (req: AuthedRequest, res)
   res.json(await readState(db, studentId));
 });
 
-attemptsRouter.put('/student-states/:studentId', async (req: AuthedRequest, res) => {
+attemptsRouter.put('/student-states/:studentId', ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const studentId = req.params.studentId;
   if (!checkKeyLen(res, studentId) || !rejectSentinel(res, studentId)) return;
@@ -188,7 +188,7 @@ attemptsRouter.put('/student-states/:studentId', async (req: AuthedRequest, res)
     );
   }
   res.json(await readState(db, studentId));
-});
+}));
 
 attemptsRouter.post(
   '/student-states/:studentId/check-in',

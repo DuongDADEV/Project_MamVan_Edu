@@ -284,6 +284,14 @@ export function filterStateInput(body: any): Record<string, any> {
   for (const [key, col] of Object.entries(STATE_FIELD_MAP)) {
     if (body[key] === undefined) continue;
     const v = body[key];
+    // 2026-10-28: client học sinh mới gửi last_attendance_date = '' khi
+    // chưa điểm danh lần nào — MySQL STRICT mode từ chối '' cho cột DATE
+    // (Error 1292) và vì handler PUT không có try/catch nên cả process
+    // node crash, kéo sập toàn bộ trang học sinh. Coerce '' về NULL.
+    if (col === 'last_attendance_date' && v === '') {
+      out[col] = null;
+      continue;
+    }
     out[col] = STATE_JSON_COLS.has(col)
       ? JSON.stringify(v ?? (col === 'current_progress' || col === 'topic_mastery' || col === 'preferences' ? {} : []))
       : v;

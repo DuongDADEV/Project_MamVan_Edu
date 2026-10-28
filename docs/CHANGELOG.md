@@ -1,3 +1,9 @@
+## 2026-10-28 (SỬA GỐC VỤ TRANG HỌC SINH LỖI HÀNG LOẠT — PUT student-states crash cả server)
+
+- Nguyên nhân: học sinh mới đồng bộ state với `last_attendance_date = ''` qua PUT /student-states/:studentId → MySQL STRICT mode từ chối '' cho cột DATE (Error 1292) → handler không có try/catch nên exception không được bắt → process node chết → mọi trang học sinh tải sau đó đều lỗi "Failed to fetch dynamically imported module" (kèm 1 lần 502), dù không thiếu file chunk nào (đủ 16 file trên VPS). Service kẹt trạng thái Paused, Resume/Restart qua SCM không lên được, phải dùng `nssm stop/start` mới chạy lại.
+- Sửa: `filterStateInput` (_shared.ts) coerce `last_attendance_date: ''` về NULL; bọc handler PUT /student-states/:studentId bằng `ah` để lỗi (nếu còn) chỉ trả 500, không bao giờ giết process nữa.
+- Kiểm chứng: sau deploy, gửi đúng PUT gây crash trước đây (học sinh test mới, last_attendance_date '') → trả 200, service vẫn Running; kiểm chứng trình duyệt lại các trang học sinh từng lỗi mới coi là xong.
+
 ## 2026-10-28 (BẤM LÀ COPY Ở BẢNG HỌC SINH)
 
 - Bảng học sinh cổng giáo viên: bấm vào **Tên đăng nhập** là copy tên đăng nhập; bấm vào **Mật khẩu** là copy mật khẩu thật (chưa hiện thì tự reveal rồi copy, mắt vẫn chỉ đổi hiện/ẩn, không copy). Sau khi copy hiện "Đã copy!" 2 giây cạnh ô vừa bấm. Copy dùng clipboard API, có fallback khi trình duyệt chặn.
