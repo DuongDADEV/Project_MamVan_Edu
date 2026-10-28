@@ -1,3 +1,10 @@
+## [dev] 2026-10-28 — Xưởng AI: tải file tài liệu .txt/.pdf/.docx làm nguồn
+
+- Trước đây xưởng chỉ nhận dán văn bản và file .txt; file khác báo "sắp được hỗ trợ". Nay tab "Tải file" nhận cả 3 loại: .txt đọc trực tiếp, .pdf trích lớp chữ từng trang bằng pdf.js, .docx trích raw text bằng mammoth — tất cả chạy ngay trên trình duyệt, không tải file lên máy chủ.
+- Thư viện nặng (pdf.js, mammoth) chỉ nạp khi giáo viên thật sự chọn đúng loại file đó (dynamic import), lần mở xưởng bình thường không bị đội bundle.
+- Giới hạn báo rõ, không cắt lặng: file tối đa 10MB; chữ trích ra tối đa 100.000 ký tự (dài hơn thì giữ đầu + báo đã cắt); PDF quét ảnh không có lớp chữ thì báo lỗi, không lưu nguồn rỗng. Nguồn từ file vẫn lưu đúng dạng cũ (localStorage theo giáo viên + chủ đề) nên nút bật/tắt, đếm từ và sinh bản nháp không đổi.
+- Sơ đồ đã cập nhật mục Mầm AI Studio (Panel 1) và regen + publish cùng đợt.
+
 ## [dev] 2026-10-28 — Khóa học lần lượt trong luồng chủ đề
 
 - Học sinh chỉ mở được bài đã xong (quay lại tự do) và bài chưa xong đầu tiên; các bài sau đó xám + ổ khóa + không bấm được. Áp dụng như nhau cho danh sách Học bài ngoài, dải luồng trong màn video/lý thuyết/bài tập và nút "Bài tiếp theo" (cửa nhảy bài được chặn ở màn bài học, không chỉ tô xám).

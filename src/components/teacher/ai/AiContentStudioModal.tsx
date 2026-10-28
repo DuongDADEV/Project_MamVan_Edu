@@ -35,6 +35,7 @@ import {
 import { MamMuc } from '../../MamMuc.tsx';
 import { SkillLevel, Difficulty, QuestionType, Question, TheoryBlock } from '../../../types.ts';
 import { studioKey } from '../../../logic/teacherScope.ts';
+import { extractDocumentText, MAX_EXTRACTED_CHARS } from '../../../logic/extractDocumentText.ts';
 
 interface AiContentStudioModalProps {
   isOpen: boolean;
@@ -243,6 +244,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
   const [newSourceContent, setNewSourceContent] = useState('');
   const [showAddSourceForm, setShowAddSourceForm] = useState(false);
   const [unsupportedFileNotice, setUnsupportedFileNotice] = useState<string | null>(null);
+  const [isExtractingFile, setIsExtractingFile] = useState(false);
   const [previewingSource, setPreviewingSource] = useState<AISource | null>(null);
 
   // 3. STATE TRÒ CHUYỆN VỚI NGUỒN (VÙNG GIỮA) - LƯU LOCALSTORAGE THEO GIÁO VIÊN + CHỦ ĐỀ (26/10)
@@ -578,34 +580,40 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
     setShowAddSourceForm(false);
   };
 
-  // Đọc file .txt
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Đọc file tài liệu (.txt / .pdf / .docx) — trích chữ ngay trên trình duyệt,
+  // không tải file lên máy chủ (xem src/logic/extractDocumentText.ts).
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.name.endsWith('.txt')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-        setSources([
-          ...sources,
-          {
-            id: 'src_file_' + Date.now(),
-            title: file.name.replace('.txt', ''),
-            type: 'file',
-            content: text,
-            wordCount,
-            isEnabled: true,
-            fileName: file.name,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-        setUnsupportedFileNotice(null);
-      };
-      reader.readAsText(file);
-    } else {
-      setUnsupportedFileNotice(`Định dạng "${file.name}" sắp được hỗ trợ. Hiện tại vui lòng dùng file .txt hoặc dán nội dung trực tiếp.`);
+    // Reset input để chọn lại cùng 1 file vẫn kích hoạt onChange.
+    e.target.value = '';
+    if (!file || isExtractingFile) return;
+    setIsExtractingFile(true);
+    setUnsupportedFileNotice(null);
+    try {
+      const { text, truncated } = await extractDocumentText(file);
+      const wordCount = text.split(/\s+/).filter(Boolean).length;
+      setSources([
+        ...sources,
+        {
+          id: 'src_file_' + Date.now(),
+          title: file.name.replace(/\.(txt|pdf|docx)$/i, ''),
+          type: 'file',
+          content: text,
+          wordCount,
+          isEnabled: true,
+          fileName: file.name,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      setUnsupportedFileNotice(
+        truncated
+          ? `File "${file.name}" dài hơn giới hạn nên chỉ giữ ${MAX_EXTRACTED_CHARS.toLocaleString('vi-VN')} ký tự đầu làm nguồn.`
+          : null
+      );
+    } catch (err: any) {
+      setUnsupportedFileNotice(err?.message || `Không đọc được file "${file.name}".`);
+    } finally {
+      setIsExtractingFile(false);
     }
   };
 
@@ -1289,7 +1297,7 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                     activeTabSourceInput === 'file' ? 'bg-white text-[#2F3E6B] shadow-xs' : 'text-[#8C7E6A]'
                   }`}
                 >
-                  Tải file (.txt)
+                  Tải file (.txt, .pdf, .docx)
                 </button>
                 <button
                   type="button"
@@ -1314,14 +1322,18 @@ export const AiContentStudioModal: React.FC<AiContentStudioModalProps> = ({
                 <div className="space-y-2">
                   <label className="border-2 border-dashed border-[#E6DCC8] hover:border-[#E2704A] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#FAF5EB]">
                     <Upload className="w-5 h-5 text-[#8C7E6A] mb-1" />
-                    <span className="text-xs font-bold text-[#2F3E6B]">Chọn tệp văn bản (.txt)</span>
-                    <span className="text-[10px] text-[#8C7E6A]">Hỗ trợ file .txt chứa văn bản bài học</span>
+                    <span className="text-xs font-bold text-[#2F3E6B]">Chọn tệp tài liệu (.txt, .pdf, .docx)</span>
+                    <span className="text-[10px] text-[#8C7E6A]">Trích chữ ngay trên trình duyệt, tối đa 10MB; PDF quét ảnh không có lớp chữ sẽ không trích xuất được</span>
                     <input
                       type="file"
-                      accept=".txt"
+                      accept=".txt,.pdf,.docx"
+                      disabled={isExtractingFile}
                       onChange={handleFileUpload}
                       className="hidden"
                     />
+                    {isExtractingFile && (
+                      <span className="text-[11px] font-bold text-[#E2704A]">⏳ Đang đọc file, vui lòng chờ...</span>
+                    )}
                   </label>
                   {unsupportedFileNotice && (
                     <p className="text-[11px] text-amber-600 bg-amber-50 p-2 rounded-xl border border-amber-200">
