@@ -59352,11 +59352,12 @@ function resolveTeacherId2(caller, queryTeacherId) {
   if (isTeacher(caller)) return caller.teacherId || null;
   return null;
 }
+var VALID_SOURCE_TYPES = /* @__PURE__ */ new Set(["text", "file", "transcript"]);
 function mapSourceRow(row) {
   return {
     id: row.id,
     title: row.title,
-    type: "file",
+    type: VALID_SOURCE_TYPES.has(row.type) ? row.type : "file",
     content: typeof row.content === "string" ? row.content : "",
     wordCount: typeof row.word_count === "number" ? row.word_count : Number(row.word_count) || 0,
     isEnabled: !!row.is_enabled,
@@ -59423,9 +59424,10 @@ aiSourcesRouter.post(
     const fileName = typeof body.fileName === "string" ? body.fileName.slice(0, 255) : null;
     const wordCount = Number(body.wordCount) || 0;
     const isEnabled = body.isEnabled === void 0 ? 1 : body.isEnabled ? 1 : 0;
+    const type = VALID_SOURCE_TYPES.has(body.type) ? body.type : "file";
     await execute(
-      "INSERT INTO `ai_sources` (`id`, `teacher_id`, `topic_id`, `title`, `content`, `file_name`, `word_count`, `is_enabled`) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `content` = VALUES(`content`), `file_name` = VALUES(`file_name`), `word_count` = VALUES(`word_count`), `is_enabled` = VALUES(`is_enabled`)",
-      [id, teacherId, topicId, title, content, fileName, wordCount, isEnabled]
+      "INSERT INTO `ai_sources` (`id`, `teacher_id`, `topic_id`, `title`, `type`, `content`, `file_name`, `word_count`, `is_enabled`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `type` = VALUES(`type`), `content` = VALUES(`content`), `file_name` = VALUES(`file_name`), `word_count` = VALUES(`word_count`), `is_enabled` = VALUES(`is_enabled`)",
+      [id, teacherId, topicId, title, type, content, fileName, wordCount, isEnabled]
     );
     res.json({ ok: true, id });
   })

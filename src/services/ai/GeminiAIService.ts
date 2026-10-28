@@ -47,6 +47,112 @@ export const DEAD_GEMINI_MODELS: ReadonlySet<string> = new Set([
   'gemini-1.5-pro',
 ]);
 
+/**
+ * Quét mọi giá trị JSON cân bằng trong văn bản (mảng hoặc đối tượng), tôn
+ * trọng chuỗi và ký tự thoát — để lấy được JSON thật ngay cả khi AI viết
+ * thêm chữ trước/sau JSON, kể cả khi chữ thừa chứa ] hoặc }.
+ * Trả về theo thứ tự xuất hiện (giá trị ngoài cùng trước).
+ */
+function extractBalancedJsonValues(text: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let s = 0; s < text.length; s++) {
+    const ch = text[s];
+    if (ch !== '{' && ch !== '[') continue;
+    const close = ch === '{' ? '}' : ']';
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = s; i < text.length; i++) {
+      const c = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === '\\') escaped = true;
+        else if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') {
+        inString = true;
+        continue;
+      }
+      if (c === ch) depth++;
+      else if (c === close) {
+        depth--;
+        if (depth === 0) {
+          const v = text.slice(s, i + 1);
+          if (!seen.has(v)) {
+            seen.add(v);
+            out.push(v);
+          }
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Trích JSON từ phản hồi AI, chịu được các dạng hỏng thường gặp:
+ * - JSON thuần; JSON trong code fence (thử MỌI khối fence, không chỉ khối
+ *   đầu — AI có lúc rào ví dụ trước rồi mới rào JSON thật);
+ * - JSON kèm chữ thừa trước/sau (lỗi "non-whitespace character after
+ *   JSON" ngày 28/10: cách cũ lấy từ [ đầu tới ] cuối nên chữ thừa chứa
+ *   ] hoặc } là gãy, rơi thẳng xuống bản dự phòng mẫu).
+ * Thử lần lượt từng ứng viên, cái nào parse được thì lấy; tất cả đều hỏng
+ * mới ném lỗi kèm mảnh đầu phản hồi. Lọc câu hỏi ở tầng trên vẫn loại
+ * ứng viên parse được nhưng không phải câu hỏi, nên lấy nhầm không lọt
+ * được vào nháp.
+ */
+export function extractJsonFromText<T>(text: string): T {
+  const trimmed = text.trim();
+  const candidates: string[] = [trimmed];
+  for (const m of trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/g)) {
+    if (m[1] && m[1].trim()) candidates.push(m[1].trim());
+  }
+  candidates.push(...extractBalancedJsonValues(trimmed));
+  // Chọn ứng viên: mảng-các-đối-tượng dài nhất thắng (bộ câu hỏi/lý thuyết
+  // thật luôn dài hơn ví dụ rác/mẩu ghi chú AI rào kèm, và khác hẳn mảng
+  // con như options vốn là mảng chuỗi); không có mảng-đối-tượng thì lấy
+  // giá trị parse được đầu tiên (đối tượng bọc {"questions": [...]} sẽ
+  // được gỡ ở tầng trên).
+  let firstParsed: unknown = null;
+  let hasFirst = false;
+  let longestObjectArray: unknown[] | null = null;
+  let lastErr: unknown = null;
+  for (const c of candidates) {
+    try {
+      const v = JSON.parse(c) as unknown;
+      if (!hasFirst) {
+        firstParsed = v;
+        hasFirst = true;
+      }
+      const isObjectArray =
+        Array.isArray(v) &&
+        v.length > 0 &&
+        v.every((el) => el !== null && typeof el === 'object' && !Array.isArray(el));
+      if (isObjectArray && (!longestObjectArray || v.length > longestObjectArray.length)) {
+        longestObjectArray = v;
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (longestObjectArray) return longestObjectArray as T;
+  if (hasFirst) return firstParsed as T;
+  throw new Error(
+    `Không thể phân tích dữ liệu JSON từ AI: ${trimmed.slice(0, 100)}... (${lastErr instanceof Error ? lastErr.message : String(lastErr)})`
+  );
+}
+
+/** AI có lúc bọc mảng câu hỏi trong đối tượng {"questions": [...]} — gỡ bọc về mảng. */
+export function normalizeAiQuestionArray(x: unknown): any[] {
+  if (Array.isArray(x)) return x;
+  const obj = x as { questions?: unknown } | null;
+  if (obj && Array.isArray(obj.questions)) return obj.questions;
+  return [];
+}
+
 export class GeminiAIService implements AIService {
   // Đợt 25/10: service chạy qua proxy admin — không còn key/model riêng.
   // Constructor giữ tham số cũ (không dùng) để không vỡ code khởi tạo cũ.
@@ -65,24 +171,7 @@ export class GeminiAIService implements AIService {
    * Trích xuất khối JSON từ chuỗi phản hồi của Gemini
    */
   private parseJsonFromText<T>(text: string): T {
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, text];
-    const rawJson = jsonMatch[1] || text;
-    const cleaned = rawJson.trim();
-    try {
-      return JSON.parse(cleaned);
-    } catch (e) {
-      const startBracket = cleaned.indexOf('[');
-      const endBracket = cleaned.lastIndexOf(']');
-      if (startBracket !== -1 && endBracket !== -1) {
-        return JSON.parse(cleaned.substring(startBracket, endBracket + 1));
-      }
-      const startBrace = cleaned.indexOf('{');
-      const endBrace = cleaned.lastIndexOf('}');
-      if (startBrace !== -1 && endBrace !== -1) {
-        return JSON.parse(cleaned.substring(startBrace, endBrace + 1));
-      }
-      throw new Error(`Không thể phân tích dữ liệu JSON từ AI: ${cleaned.slice(0, 100)}...`);
-    }
+    return extractJsonFromText<T>(text);
   }
 
   /**
@@ -320,7 +409,7 @@ Phân bổ theo ma trận 4 mức độ năng lực:
 Quy tắc dạng câu hỏi (type):
 1. "single": Trắc nghiệm 1 đáp án. options: mảng 4 phương án. answer: ký tự đúng "A", "B", "C" hoặc "D".
 2. "multi": Trắc nghiệm chọn nhiều đáp án. options: mảng 4 phương án. answer: mảng các chữ cái đúng, ví dụ ["A", "C"].
-3. "fill": Điền vào chỗ trống. answer: từ hoặc cụm từ cần điền.
+3. "fill": Điền vào chỗ trống. prompt PHẢI là câu đầy đủ có ô trống dạng ___ tại đúng vị trí cần điền (mỗi ___ là 1 đáp án, đếm số ___ khớp số đáp án); answer: mảng các từ/cụm cần điền theo đúng thứ tự các ô, ví dụ ["chiều sâu", "cao đẹp"]. TUYỆT ĐỐI không để đáp án lộ trong đề bài hay trong đoạn trích.
 4. "essay": Tự luận / Viết đoạn văn ngắn. rubric: mảng các tiêu chí chấm điểm (name, maxScore, description).
 
 Định dạng trả về: DUY NHẤT một mảng JSON thuần túy có đúng ${count} phần tử theo cấu trúc Question[]:
@@ -339,9 +428,22 @@ Quy tắc dạng câu hỏi (type):
   }
 ]`;
 
-    const raw = await this.callGemini(prompt);
-    const first = this.parseJsonFromText<Question[]>(raw);
-    let valid = filterValidQuestions(first);
+    let raw = await this.callGemini(prompt);
+    let first: unknown;
+    try {
+      first = this.parseJsonFromText<unknown>(raw);
+    } catch (parseErr) {
+      // 28/10: AI có lúc trả JSON kèm chữ thừa (lỗi "non-whitespace
+      // character after JSON") — trước đây rơi thẳng xuống bản dự phòng
+      // mẫu khiến giáo viên nhận bộ câu không bám ngữ liệu. Thử lại ĐÚNG
+      // 1 lần với lệnh chỉ-trả-JSON rồi mới chịu thua (lúc đó SmartAIService
+      // mới dùng bản dự phòng và UI cảnh báo rõ như cũ).
+      const strict = `${prompt}\n\nYÊU CẦU ĐỊNH DẠNG NGHIÊM NGẶT: chỉ trả về mảng JSON thuần túy, không thêm bất kỳ chữ nào khác trước/sau JSON, không dùng code fence, không giải thích.`;
+      raw = await this.callGemini(strict);
+      first = this.parseJsonFromText<unknown>(raw);
+      void parseErr;
+    }
+    let valid = filterValidQuestions(normalizeAiQuestionArray(first));
     // 28/10: AI có lúc trả thiếu câu hoặc trả câu thiếu trường (không đề bài,
     // không loại/mức/độ khó) — trước đây những câu đó vẫn vào nháp rồi lúc
     // lưu bị máy chủ đắp mặc định thành câu hỏng. Nay: chỉ giữ câu hợp lệ,
@@ -365,11 +467,11 @@ Quy tắc dạng câu hỏi (type):
         const breakdown = requestedCounts
           ? `\nCƠ CẤU CÒN THIẾU (BẮT BUỘC ĐÚNG TỪNG LOẠI):\n- "single": ${missing.counts!.single} câu\n- "multi": ${missing.counts!.multi} câu\n- "fill": ${missing.counts!.fill} câu\n- "essay": ${missing.counts!.essay} câu\n`
           : '';
-        const followup = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Mầm AI Studio.\nDựa vào ngữ liệu sau:\n${sourcesText}\n\nChủ đề: "${topic}"\n\nLần trả lời trước của bạn chỉ có ${valid.length}/${count} câu hỏi hợp lệ. Hãy tạo thêm ĐÚNG ${missing.total} câu hỏi riêng biệt nữa (không lặp lại các câu đã có), trả về DUY NHẤT một mảng JSON thuần túy theo đúng cấu trúc Question[] như lần trước (mỗi câu bắt buộc có prompt, type, level, difficulty; trắc nghiệm phải có options và answer; tự luận có rubric).\n${breakdown}Độ khó chung: ${difficulty}.`;
+        const followup = `Bạn là chuyên gia khảo thí và ra đề Ngữ văn 7 chuẩn GDPT 2018 theo phong cách Mầm AI Studio.\nDựa vào ngữ liệu sau:\n${sourcesText}\n\nChủ đề: "${topic}"\n\nLần trả lời trước của bạn chỉ có ${valid.length}/${count} câu hỏi hợp lệ. Hãy tạo thêm ĐÚNG ${missing.total} câu hỏi riêng biệt nữa (không lặp lại các câu đã có), trả về DUY NHẤT một mảng JSON thuần túy theo đúng cấu trúc Question[] như lần trước (mỗi câu bắt buộc có prompt, type, level, difficulty; trắc nghiệm phải có options và answer; tự luận có rubric; câu fill bắt buộc có ___ trong prompt, đáp án là mảng theo thứ tự các ô).\n${breakdown}Độ khó chung: ${difficulty}.`;
         try {
           const raw2 = await this.callGemini(followup);
-          const second = this.parseJsonFromText<Question[]>(raw2);
-          valid = [...valid, ...filterValidQuestions(second)];
+          const second = this.parseJsonFromText<unknown>(raw2);
+          valid = [...valid, ...filterValidQuestions(normalizeAiQuestionArray(second))];
         } catch {
           // Giữ số câu đã có; phía gọi báo thiếu.
         }

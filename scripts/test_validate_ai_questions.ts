@@ -39,7 +39,7 @@ check('độ khó lạ -> loại', isValidGeneratedQuestion({ ...good, difficult
 check('trắc nghiệm < 2 lựa chọn -> loại', isValidGeneratedQuestion({ ...good, options: ['a'] } as any) === false);
 check('trắc nghiệm thiếu đáp án -> loại', isValidGeneratedQuestion({ ...good, answer: '' } as any) === false);
 check('điền khuyết đáp án rỗng -> loại', isValidGeneratedQuestion({ ...good, type: 'fill', answer: '' } as any) === false);
-check('điền khuyết đáp án có ô trống hợp lệ', isValidGeneratedQuestion({ ...good, type: 'fill', answer: ['xanh', ''] } as any) === true);
+check('điền khuyết đáp án có ô trống hợp lệ', isValidGeneratedQuestion({ ...good, type: 'fill', prompt: 'Từ ___ và ___ là từ láy.', answer: ['xanh', ''] } as any) === true);
 check('tự luận không cần đáp án', isValidGeneratedQuestion({ ...good, type: 'essay', options: undefined, answer: undefined } as any) === true);
 check('null -> loại', isValidGeneratedQuestion(null as any) === false);
 
@@ -58,6 +58,29 @@ const missing = missingTypeCounts(
 check(
   'thiếu đúng single 1 + multi 1 + essay 1 = 3',
   missing.counts.single === 1 && missing.counts.multi === 1 && missing.counts.fill === 0 && missing.counts.essay === 1 && missing.total === 3
+);
+
+// 28/10: câu điền từ bắt buộc có ô trống ___ trong đề bài.
+const fillGood = {
+  id: 'qf1',
+  prompt: 'Tác giả đã làm nổi bật ___ cảm xúc và thông điệp nhân văn ___ gửi gắm đến bạn đọc.',
+  type: 'fill',
+  answer: ['chiều sâu', 'cao đẹp'],
+  level: 'PHAN_TICH',
+  difficulty: 'TB',
+};
+check('điền từ có ___ hợp lệ', isValidGeneratedQuestion(fillGood as any) === true);
+check(
+  'điền từ đề chỉ là câu lệnh chung -> loại',
+  isValidGeneratedQuestion({ ...fillGood, prompt: 'Điền từ ngữ thích hợp vào các vị trí trống để hoàn thiện nhận định phân tích sau:' } as any) === false
+);
+check(
+  'điền từ đề không có ___ nhưng đáp án đủ -> vẫn loại',
+  isValidGeneratedQuestion({ ...fillGood, prompt: 'Qua ngòi bút tinh tế, tác giả đã làm nổi bật cảm xúc và thông điệp nhân văn gửi gắm đến bạn đọc.' } as any) === false
+);
+check(
+  'điền từ có ___ nhưng đáp án rỗng -> loại',
+  isValidGeneratedQuestion({ ...fillGood, answer: [] } as any) === false
 );
 
 if (failures > 0) {

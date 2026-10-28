@@ -1,3 +1,9 @@
+## [dev] 2026-10-28 — Sửa lỗi AI trả JSON hỏng + câu điền từ không có ô trống (báo cáo của chủ dự án 23:22)
+
+- Lỗi "Unexpected non-whitespace character after JSON": AI trả JSON kèm chữ thừa sau JSON (kể cả chữ thừa chứa ] hoặc }) — cách trích cũ lấy từ [ đầu tới ] cuối nên gãy, rơi thẳng xuống bản dự phòng mẫu không bám ngữ liệu. Nay: trích JSON bằng quét cân bằng có tôn trọng chuỗi/ký tự thoát, thử mọi khối fence (không chỉ khối đầu), ưu tiên mảng-các-đối-tượng dài nhất; parse lần đầu hỏng thì gọi bù ĐÚNG 1 lần với lệnh chỉ-trả-JSON rồi mới chịu thua về bản dự phòng (vẫn cảnh báo rõ như cũ).
+- Câu điền từ "thế này mà là điền từ à": mẫu dự phòng cũ để đề là câu lệnh chung còn đáp án lộ trong đoạn trích, học sinh không có gì để điền. Nay: mẫu dự phòng sửa thành đề là câu có ô trống ___ (đáp án chỉ nằm trong answer); luật sinh câu mới trong prompt yêu cầu fill PHẢI có ___ khớp số đáp án, không lộ đáp án trong đề/trích; lớp kiểm chứng `isValidGeneratedQuestion` loại ngay câu fill không có ___ (cả đường AI thật lẫn đường lưu nháp).
+- Không regen sơ đồ đợt này (sửa đúng hành vi, quy ước ___ đã nằm trong sơ đồ từ đợt điền từ).
+
 ## [dev] 2026-10-28 — TẤT CẢ nguồn Xưởng AI lưu vào database (lệnh chủ dự án 22:50)
 
 - Mở rộng đợt lưu file trước đó: nay nguồn dán văn bản (type 'text') và bản ghi (type 'transcript') cũng lưu database như nguồn file. Bảng `ai_sources` thêm cột `type` (mặc định 'file' cho dòng cũ); API `POST /api/ai-sources` nhận `type` thuộc đúng 3 loại, `GET` trả đúng type từng dòng.

@@ -42,6 +42,13 @@ export function isValidGeneratedQuestion(q: RawQuestion | null | undefined): q i
   if ((q.type === 'single' || q.type === 'multi') && (!Array.isArray(q.options) || q.options.length < 2)) {
     return false;
   }
+  if (q.type === 'fill') {
+    // 28/10: câu điền từ BẮT BUỘC có ô trống ___ trong đề bài. Trước đây
+    // đề chỉ là câu lệnh chung ("Điền từ ngữ thích hợp...") còn đáp án lộ
+    // trong đoạn trích — học sinh không có gì để điền, giáo viên nhìn vào
+    // cũng thấy "thế này mà là điền từ à". Câu không có ___ bị loại ngay.
+    if (!q.prompt.includes('___')) return false;
+  }
   return hasAnswer(q);
 }
 

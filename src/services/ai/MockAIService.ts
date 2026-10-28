@@ -230,6 +230,9 @@ export class MockAIService implements AIService {
     }
 
     // 3. Câu Điền vào ô trống - Phân tích
+    // 28/10: đề bài PHẢI là câu có ô trống ___ (theo quy ước điền từ mới);
+    // bản cũ để đề là câu lệnh chung còn đáp án lộ trong đoạn trích nên
+    // học sinh không có gì để điền — đã sửa: đáp án chỉ nằm trong answer.
     if (questions.length < total) {
       questions.push({
         id: generateId('q_ai'),
@@ -238,8 +241,7 @@ export class MockAIService implements AIService {
         level: 'PHAN_TICH',
         difficulty: 'TB',
         points: 2,
-        prompt: 'Điền từ ngữ thích hợp vào các vị trí trống để hoàn thiện nhận định phân tích sau:',
-        passage: 'Qua ngòi bút tinh tế, tác giả đã làm nổi bật [chiều sâu] cảm xúc và thông điệp nhân văn [cao đẹp] gửi gắm đến bạn đọc.',
+        prompt: 'Qua ngòi bút tinh tế, tác giả đã làm nổi bật ___ cảm xúc và thông điệp nhân văn ___ gửi gắm đến bạn đọc.',
         answer: ['chiều sâu', 'cao đẹp'],
         fillBlanksCount: 2,
         explanation: 'Cần điền các từ ngữ thể hiện đúng quy mô tư tưởng và phẩm chất tình cảm trong nhận định.',
