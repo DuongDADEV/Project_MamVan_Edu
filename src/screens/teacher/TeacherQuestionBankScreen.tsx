@@ -29,6 +29,13 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import {
+  BLANK_TOKEN,
+  countBlanks,
+  blankContexts,
+  createBlankFromSelection,
+  deleteBlank,
+} from '../../logic/fillBlank.ts';
+import {
   quizService,
   contentService,
   useLiveQuery,
@@ -429,9 +436,25 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
   const [formOptions, setFormOptions] = useState<string[]>(['', '', '', '']);
   const [formSingleAnswer, setFormSingleAnswer] = useState<string>('A');
   const [formMultiAnswers, setFormMultiAnswers] = useState<string[]>(['A']);
-  const [formFillAnswers, setFormFillAnswers] = useState<string>('');
+  const [formFillAnswers, setFormFillAnswers] = useState<string[]>([]);
   const [formExplanation, setFormExplanation] = useState('');
   const [formPoints, setFormPoints] = useState<number>(10);
+  const formPromptRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /** Gõ đề bài: số ô trống tăng thì thêm đáp án rỗng cho đủ (không cắt
+      bớt khi gõ, để câu cũ chưa có `___` không bị mất đáp án; lúc lưu sẽ
+      căn theo số ô trống, câu cũ không có `___` thì giữ nguyên đáp án). */
+  const handleFormPromptChange = (value: string) => {
+    setFormPrompt(value);
+    if (formType === 'fill') {
+      const blanks = countBlanks(value);
+      setFormFillAnswers((prev) => {
+        const next = [...prev];
+        while (next.length < blanks) next.push('');
+        return next;
+      });
+    }
+  };
 
   // Mở modal thêm câu hỏi mới
   const handleOpenAddQuestionModal = () => {
@@ -445,7 +468,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
     setFormOptions(['', '', '', '']);
     setFormSingleAnswer('A');
     setFormMultiAnswers(['A']);
-    setFormFillAnswers('');
+    setFormFillAnswers([]);
     setFormExplanation('');
     setFormPoints(10);
     setIsQuestionModalOpen(true);
@@ -484,7 +507,15 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
       });
       setFormMultiAnswers(mapped.length > 0 ? mapped : ['A']);
     } else if (q.type === 'fill') {
-      setFormFillAnswers(Array.isArray(q.answer) ? q.answer.join(', ') : q.answer || '');
+      // Đáp án cũ có thể là mảng (chuẩn mới) hoặc chuỗi ngăn phẩy (form
+      // ngân hàng cũ) — đều chuyển thành mảng để sửa tiếp.
+      setFormFillAnswers(
+        Array.isArray(q.answer)
+          ? [...q.answer]
+          : typeof q.answer === 'string' && q.answer.trim()
+            ? q.answer.split(',').map((s) => s.trim()).filter(Boolean)
+            : []
+      );
     }
     setFormExplanation(q.explanation || '');
     setFormPoints(q.points || 10);
@@ -524,8 +555,16 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         return;
       }
     } else if (formType === 'fill') {
-      if (!formFillAnswers.split(',').map((s) => s.trim()).filter(Boolean).length) {
-        alert('Nhập ít nhất 1 từ khóa đáp án.');
+      const blanks = countBlanks(formPrompt);
+      if (blanks > 0) {
+        const aligned = [...formFillAnswers];
+        while (aligned.length < blanks) aligned.push('');
+        if (aligned.slice(0, blanks).some((a) => !a.trim())) {
+          alert('Nhập đủ đáp án cho từng ô trống (tạo ô bằng cách bôi đen đoạn văn rồi bấm Tạo ô trống).');
+          return;
+        }
+      } else if (!formFillAnswers.some((a) => a.trim())) {
+        alert('Tạo ít nhất 1 ô trống trong câu, hoặc nhập đáp án cho câu cũ.');
         return;
       }
     }
@@ -544,10 +583,16 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
         return letterIndex >= 0 && formOptions[letterIndex] ? formOptions[letterIndex] : k;
       });
     } else if (formType === 'fill') {
-      finalAnswer = formFillAnswers
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      // Câu có `___` thì đáp án căn đúng theo số ô trống (thiếu bù rỗng,
+      // thừa cắt bỏ); câu cũ không có `___` giữ nguyên đáp án.
+      const blanks = countBlanks(formPrompt);
+      if (blanks > 0) {
+        const aligned = [...formFillAnswers];
+        while (aligned.length < blanks) aligned.push('');
+        finalAnswer = aligned.slice(0, blanks);
+      } else {
+        finalAnswer = formFillAnswers;
+      }
     } else if (formType === 'essay') {
       finalAnswer = '';
     }
@@ -1597,10 +1642,11 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                   Nội dung câu hỏi (Đề bài) <span className="text-rose-500">*</span>
                 </label>
                 <textarea
+                  ref={formPromptRef}
                   rows={3}
                   placeholder="Nhập câu hỏi..."
                   value={formPrompt}
-                  onChange={(e) => setFormPrompt(e.target.value)}
+                  onChange={(e) => handleFormPromptChange(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
                 />
               </div>
@@ -1661,19 +1707,96 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                 </div>
               )}
 
-              {/* Đáp án điền từ */}
+              {/* Đáp án điền từ — ô trống nằm trong đề bài */}
               {formType === 'fill' && (
-                <div>
-                  <label className="text-xs font-bold text-[#2F3E6B] block mb-1">
-                    Đáp án đúng (ngăn cách bởi dấu phẩy nếu có nhiều từ)
-                  </label>
-                  <input
-                    type="text"
-                    value={formFillAnswers}
-                    onChange={(e) => setFormFillAnswers(e.target.value)}
-                    placeholder="ví dụ: so sánh, nhân hóa"
-                    className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] outline-none focus:border-[#E2704A]"
-                  />
+                <div className="space-y-2 rounded-xl bg-emerald-50/60 border border-emerald-200 p-3">
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Gõ câu đầy đủ vào ô đề bài, <b>bôi đen</b> đoạn muốn thành ô trống rồi bấm nút dưới
+                    — đoạn đó tự thành đáp án và chỗ đó thành ô trống cho học sinh điền. Chấm từng ô,
+                    điểm từng phần; không phân biệt hoa thường, dấu tiếng Việt, dấu câu cuối câu.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ta = formPromptRef.current;
+                        if (!ta) return;
+                        const made = createBlankFromSelection(
+                          formPrompt,
+                          [...formFillAnswers],
+                          ta.selectionStart ?? 0,
+                          ta.selectionEnd ?? 0
+                        );
+                        if (!made) {
+                          alert('Không tạo được ô trống: vùng chọn chạm vào ô trống đã có. Hãy chọn đoạn chữ khác.');
+                          return;
+                        }
+                        setFormPrompt(made.sentence);
+                        setFormFillAnswers(made.answers);
+                        ta.focus();
+                      }}
+                      className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                      ＋ Tạo ô trống từ đoạn bôi đen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sep = formPrompt && !formPrompt.endsWith(' ') ? ' ' : '';
+                        setFormPrompt(formPrompt + sep + BLANK_TOKEN);
+                        setFormFillAnswers([...formFillAnswers, '']);
+                      }}
+                      className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                    >
+                      ＋ Thêm ô trống ở cuối câu
+                    </button>
+                    <span className="text-[11px] text-emerald-700">
+                      Đang có {countBlanks(formPrompt)} ô trống
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {blankContexts(formPrompt).map((ctx, ansIdx) => (
+                      <div key={ansIdx} className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-emerald-700 shrink-0">
+                          Ô [{ansIdx + 1}] <span className="font-normal italic">({ctx})</span>:
+                        </span>
+                        <input
+                          value={formFillAnswers[ansIdx] ?? ''}
+                          onChange={(e) => {
+                            const next = [...formFillAnswers];
+                            while (next.length <= ansIdx) next.push('');
+                            next[ansIdx] = e.target.value;
+                            setFormFillAnswers(next);
+                          }}
+                          placeholder="Đáp án… (nhiều cách chấp nhận thì cách nhau bằng |)"
+                          className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-xs text-[#2F3E6B] outline-none"
+                        />
+                        <button
+                          type="button"
+                          title="Xóa ô này và trả lại chữ gốc vào câu"
+                          onClick={() => {
+                            const made = deleteBlank(formPrompt, formFillAnswers, ansIdx);
+                            setFormPrompt(made.sentence);
+                            setFormFillAnswers(made.answers);
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    {countBlanks(formPrompt) === 0 && (
+                      <p className="text-[11px] text-amber-700 italic">
+                        Chưa có ô trống nào — bôi đen một đoạn trong đề bài rồi bấm “Tạo ô trống từ đoạn bôi đen”.
+                        {formFillAnswers.some((a) => a?.trim()) && (
+                          <span className="block mt-1 text-emerald-800 not-italic">
+                            Câu này còn đáp án cũ chưa gắn ô trống: {formFillAnswers.filter((a) => a?.trim()).join(' | ')}
+                            {' '}— tạo ô trống mới rồi nhập lại các đáp án này vào từng ô.
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

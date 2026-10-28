@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
@@ -21,6 +21,13 @@ import {
   getAssignmentForEdit,
   updateAssignment,
 } from '../../../services/api/biClient.ts';
+import {
+  BLANK_TOKEN,
+  countBlanks,
+  blankContexts,
+  createBlankFromSelection,
+  deleteBlank,
+} from '../../../logic/fillBlank.ts';
 
 interface AssignmentEditorProps {
   assignmentId: string;
@@ -86,9 +93,24 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
   const [manualOptions, setManualOptions] = useState<string[]>(['', '', '', '']);
   const [manualSingleAnswer, setManualSingleAnswer] = useState('A');
   const [manualMultiAnswers, setManualMultiAnswers] = useState<Set<string>>(new Set(['A']));
-  const [manualFillAnswer, setManualFillAnswer] = useState('');
+  const [manualFillAnswers, setManualFillAnswers] = useState<string[]>([]);
   const [manualSaving, setManualSaving] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+  const manualPromptRef = useRef<HTMLTextAreaElement | null>(null);
+
+  /** Gõ đề bài: số ô trống tăng thì thêm đáp án rỗng cho đủ (không cắt
+      bớt khi gõ, để khỏi mất đáp án; lúc lưu sẽ căn theo số ô trống). */
+  const handleManualPromptChange = (value: string) => {
+    setManualPrompt(value);
+    if (manualType === 'fill') {
+      const blanks = countBlanks(value);
+      setManualFillAnswers((prev) => {
+        const next = [...prev];
+        while (next.length < blanks) next.push('');
+        return next;
+      });
+    }
+  };
 
   const handleAddManualQuestion = async () => {
     const prompt = manualPrompt.trim();
@@ -114,11 +136,15 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
         answer = [...manualMultiAnswers].sort();
       }
     } else if (manualType === 'fill') {
-      if (!manualFillAnswer.trim()) {
-        setManualError('Nhập đáp án điền khuyết.');
+      const blanks = countBlanks(prompt);
+      const aligned = [...manualFillAnswers];
+      while (aligned.length < blanks) aligned.push('');
+      const finalAnswers = aligned.slice(0, blanks);
+      if (blanks === 0 || finalAnswers.some((a) => !a.trim())) {
+        setManualError('Tạo ít nhất 1 ô trống trong câu (bôi đen đoạn văn rồi bấm Tạo ô trống) và nhập đủ đáp án cho từng ô.');
         return;
       }
-      answer = [manualFillAnswer.trim()];
+      answer = finalAnswers;
     }
     setManualSaving(true);
     setManualError(null);
@@ -144,7 +170,7 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
       setManualOptions(['', '', '', '']);
       setManualSingleAnswer('A');
       setManualMultiAnswers(new Set(['A']));
-      setManualFillAnswer('');
+      setManualFillAnswers([]);
       setSavedNote('Đã thêm câu hỏi mới vào đề (và vào ngân hàng của thầy/cô).');
     } catch (e: any) {
       setManualError('Tạo câu hỏi thất bại: ' + (e?.message || 'lỗi không rõ'));
@@ -539,8 +565,9 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
               ))}
             </div>
             <textarea
+              ref={manualPromptRef}
               value={manualPrompt}
-              onChange={(e) => setManualPrompt(e.target.value)}
+              onChange={(e) => handleManualPromptChange(e.target.value)}
               placeholder="Nhập nội dung câu hỏi…"
               rows={3}
               className="w-full bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl px-3 py-2 text-sm text-[#2F3E6B] outline-none focus:border-[#B45309]"
@@ -592,12 +619,90 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
               </div>
             )}
             {manualType === 'fill' && (
-              <input
-                value={manualFillAnswer}
-                onChange={(e) => setManualFillAnswer(e.target.value)}
-                placeholder="Đáp án điền khuyết (chấm khớp chính xác)"
-                className="w-full bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl px-3 py-2 text-sm text-[#2F3E6B] outline-none focus:border-[#B45309]"
-              />
+              <div className="space-y-2 rounded-xl bg-emerald-50/60 border border-emerald-200 p-3">
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  Gõ câu đầy đủ vào ô đề bài, <b>bôi đen</b> đoạn muốn thành ô trống rồi bấm nút dưới
+                  — đoạn đó tự thành đáp án và chỗ đó thành ô trống cho học sinh điền. Chấm từng ô,
+                  điểm từng phần; không phân biệt hoa thường, dấu tiếng Việt, dấu câu cuối câu.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ta = manualPromptRef.current;
+                      if (!ta) return;
+                      const made = createBlankFromSelection(
+                        manualPrompt,
+                        [...manualFillAnswers],
+                        ta.selectionStart ?? 0,
+                        ta.selectionEnd ?? 0
+                      );
+                      if (!made) {
+                        setManualError('Không tạo được ô trống: vùng chọn chạm vào ô trống đã có. Hãy chọn đoạn chữ khác.');
+                        return;
+                      }
+                      setManualError(null);
+                      setManualPrompt(made.sentence);
+                      setManualFillAnswers(made.answers);
+                      ta.focus();
+                    }}
+                    className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
+                  >
+                    ＋ Tạo ô trống từ đoạn bôi đen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sep = manualPrompt && !manualPrompt.endsWith(' ') ? ' ' : '';
+                      setManualPrompt(manualPrompt + sep + BLANK_TOKEN);
+                      setManualFillAnswers([...manualFillAnswers, '']);
+                    }}
+                    className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                  >
+                    ＋ Thêm ô trống ở cuối câu
+                  </button>
+                  <span className="text-[11px] text-emerald-700">
+                    Đang có {countBlanks(manualPrompt)} ô trống
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {blankContexts(manualPrompt).map((ctx, ansIdx) => (
+                    <div key={ansIdx} className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-700 shrink-0">
+                        Ô [{ansIdx + 1}] <span className="font-normal italic">({ctx})</span>:
+                      </span>
+                      <input
+                        value={manualFillAnswers[ansIdx] ?? ''}
+                        onChange={(e) => {
+                          const next = [...manualFillAnswers];
+                          while (next.length <= ansIdx) next.push('');
+                          next[ansIdx] = e.target.value;
+                          setManualFillAnswers(next);
+                        }}
+                        placeholder="Đáp án… (nhiều cách chấp nhận thì cách nhau bằng |)"
+                        className="flex-1 bg-white border border-emerald-200 rounded-xl px-3 py-1.5 text-sm text-[#2F3E6B] outline-none"
+                      />
+                      <button
+                        type="button"
+                        title="Xóa ô này và trả lại chữ gốc vào câu"
+                        onClick={() => {
+                          const made = deleteBlank(manualPrompt, manualFillAnswers, ansIdx);
+                          setManualPrompt(made.sentence);
+                          setManualFillAnswers(made.answers);
+                        }}
+                        className="p-1 text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {countBlanks(manualPrompt) === 0 && (
+                    <p className="text-[11px] text-amber-700 italic">
+                      Chưa có ô trống nào — bôi đen một đoạn trong đề bài rồi bấm “Tạo ô trống từ đoạn bôi đen”.
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
             {manualType === 'essay' && (
               <p className="text-[11px] text-[#8C7E6A]">

@@ -263,9 +263,11 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   };
 
   // Cập nhật câu — riêng câu điền trống: khi đề bài đổi làm số `___`
-  // lệch khỏi số đáp án thì tự căn lại (thêm rỗng / cắt cuối) để dữ liệu
-  // lưu luôn khớp nhau. Tạo/xóa ô bằng nút thì đã tính sẵn đáp án nên
-  // không căn lại (updates có cả answer thì giữ nguyên answer đó).
+  // tăng lên thì thêm đáp án rỗng cho đủ (không bao giờ cắt bớt khi gõ,
+  // để câu cũ chưa có `___` không bị mất đáp án; lúc lưu performSave sẽ
+  // căn mảng đáp án theo đúng số ô trống). Tạo/xóa ô bằng nút thì đã
+  // tính sẵn đáp án nên không căn lại (updates có cả answer thì giữ
+  // nguyên answer đó).
   const handleUpdateQuestion = (qId: string, updates: Partial<QuestionWithMeta>) => {
     setQuestions((prev) =>
       prev.map((q) => {
@@ -275,7 +277,6 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           const blanks = countBlanks(next.prompt || '');
           const ans = Array.isArray(next.answer) ? [...(next.answer as string[])] : [];
           while (ans.length < blanks) ans.push('');
-          if (ans.length > blanks) ans.length = blanks;
           next = { ...next, answer: ans };
         }
         return next;
@@ -501,6 +502,18 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
       setIsSaving(true);
       const questionIds = questions.map((q) => q.id);
 
+      // Căn đáp án điền trống theo đúng số ô trống trong đề lúc lưu:
+      // câu có `___` thì lấy đúng từng đó đáp án theo thứ tự (thiếu bù
+      // rỗng, thừa cắt bỏ); câu cũ không có `___` giữ nguyên đáp án.
+      const questionsToSave = questions.map((q) => {
+        if (q.type !== 'fill') return q;
+        const blanks = countBlanks(q.prompt || '');
+        if (blanks === 0) return q;
+        const ans = Array.isArray(q.answer) ? [...(q.answer as string[])] : [];
+        while (ans.length < blanks) ans.push('');
+        return { ...q, answer: ans.slice(0, blanks) };
+      });
+
       await onSaveQuiz(
         {
           id: quiz.id,
@@ -516,7 +529,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           assignedTo: kind === 'homework' ? assignedTo : undefined,
           assignedStudentIds: kind === 'homework' && assignedTo === 'custom' ? assignedStudentIds : undefined,
         },
-        questions
+        questionsToSave
       );
 
       isDirtyRef.current = false;

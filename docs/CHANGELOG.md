@@ -1,3 +1,8 @@
+## [dev] 2026-10-28 — Điền trống: sửa nốt 2 editor còn lại + chống mất đáp án cũ khi gõ
+
+- Lần kiểm chứng trình duyệt đầu tiên phát hiện: giáo viên còn 2 đường soạn câu điền trống khác ngoài QuizBuilder — màn Bài tập & đánh giá (AssignmentEditor) và modal ngân hàng câu hỏi (TeacherQuestionBankScreen) — vẫn dùng form cũ (1 đáp án rời, không có `___`). Cả 2 nay dùng chung kiểu soạn mới: bôi đen đoạn văn → bấm "Tạo ô trống" (đoạn đó thành đáp án, chỗ đó thành ô trống), sửa/xóa từng ô, nhiều cách chấp nhận cách nhau bằng `|`, nút thêm ô ở cuối câu.
+- Sửa luật đồng bộ đáp án ở cả 3 editor: gõ đề bài chỉ thêm đáp án rỗng khi số ô trống tăng, KHÔNG cắt bớt khi gõ — để câu cũ chưa có `___` không bị mất đáp án lúc sửa đề. Việc căn mảng đáp án theo đúng số ô trống chỉ làm lúc lưu (câu có `___` thì cắt/bù theo thứ tự; câu cũ không có `___` giữ nguyên đáp án nên vẫn sửa/lưu được bình thường).
+
 ## [dev] 2026-10-28 — Điền vào chỗ trống: bôi đen tạo ô, ô nhập nằm trong câu, chấm từng ô
 
 - Soạn câu (giáo viên): bôi đen một đoạn trong đề bài rồi bấm "Tạo ô trống" — đoạn đó thành đáp án, chỗ đó thành ô trống `___` trong câu; đặt con trỏ rồi bấm nút để tạo ô trống rỗng; nút xóa ô trả lại chữ gốc vào đúng vị trí. Mỗi ô sửa đáp án riêng, nhập nhiều cách chấp nhận cách nhau bằng `|`. Gõ `___` trực tiếp vẫn được (đáp án tự căn theo thứ tự). Đề bài và đáp án luôn khớp nhau khi lưu (thừa/thiếu tự căn).

@@ -56850,12 +56850,40 @@ function normalizeQType(t) {
 function normText(s) {
   return String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
+function normFillText(s) {
+  return String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/\s+/g, " ").replace(/[.,;:!?'"”’)\]]+$/g, "").trim();
+}
+function fillVariants(keyEntry) {
+  return String(keyEntry ?? "").split("|").map((v) => normFillText(v)).filter(Boolean);
+}
+function gradeFillBlanks(keys, student) {
+  const keyArr = Array.isArray(keys) ? keys : keys != null ? [keys] : [];
+  const stuArr = Array.isArray(student) ? student : [];
+  let gradeable = 0;
+  let matched = 0;
+  keyArr.forEach((k, i) => {
+    const variants = fillVariants(k);
+    if (!variants.length) return;
+    gradeable += 1;
+    const mine = normFillText(stuArr[i]);
+    if (mine && variants.includes(mine)) matched += 1;
+  });
+  return {
+    gradeable,
+    matched,
+    scoreRatio: gradeable > 0 ? matched / gradeable : 0,
+    isCorrect: gradeable > 0 && matched === gradeable
+  };
+}
 function renderResponse(responseJson, parseJson3) {
   if (responseJson == null) return "\u2014";
   let r = parseJson3(responseJson, responseJson);
   if (r && typeof r === "object") {
     if (Array.isArray(r.selected)) return "Ch\u1ECDn: " + r.selected.join(", ");
     if (typeof r.selected === "string") return "Ch\u1ECDn: " + r.selected;
+    if (Array.isArray(r.blanks)) {
+      return r.blanks.map((b, i) => `\xD4 ${i + 1}: ${b ?? ""}`).join(" | ");
+    }
     if (typeof r.text === "string") return r.text;
   }
   return String(r);
@@ -57152,28 +57180,47 @@ attemptsRouter.post("/attempts", requireRole("student"), ah(async (req, res) => 
       maxTotal += max;
       const resp = responses[qid] || {};
       const qtype = normalizeQType(q.type || payload.type);
-      const responseJson = qtype === "single_choice" || qtype === "multiple_choice" ? { selected: qtype === "single_choice" ? (resp.selected || [])[0] || null : resp.selected || [] } : { text: resp.text || "" };
+      const responseJson = qtype === "single_choice" || qtype === "multiple_choice" ? { selected: qtype === "single_choice" ? (resp.selected || [])[0] || null : resp.selected || [] } : qtype === "fill_in_blank" && Array.isArray(resp.blanks) ? { blanks: resp.blanks } : { text: resp.text || "" };
       const key = q.correct_answer != null ? parseJson(q.correct_answer, q.correct_answer) : payload.answer ?? null;
       const method = q.grading_method || "AUTO";
       const isAuto = method === "AUTO" && key != null && qtype !== "essay";
       let isCorrect = null;
       let score = null;
+      let ratio = 0;
       let gStatus = "PENDING_TEACHER_REVIEW";
       if (isAuto) {
+        let handled = false;
         if (qtype === "single_choice") {
           isCorrect = normText((resp.selected || [])[0] || "") === normText(String(key));
         } else if (qtype === "multiple_choice") {
           const mine = new Set((resp.selected || []).map((s) => normText(s)));
           const keys = new Set((Array.isArray(key) ? key : [key]).map((s) => normText(String(s))));
           isCorrect = mine.size === keys.size && [...mine].every((s) => keys.has(s));
+        } else if (qtype === "fill_in_blank") {
+          handled = true;
+          const student2 = Array.isArray(resp.blanks) ? resp.blanks : resp.text != null && resp.text !== "" ? [resp.text] : [];
+          const g = gradeFillBlanks(key, student2);
+          if (g.gradeable === 0) {
+            pendingCount += 1;
+          } else {
+            isCorrect = g.isCorrect;
+            ratio = g.scoreRatio;
+            score = g.scoreRatio * max;
+            autoScore += score;
+            gStatus = "GRADED";
+            gradedCount += 1;
+          }
         } else {
           const accepted = (Array.isArray(key) ? key : [key]).map((s) => normText(String(s)));
           isCorrect = accepted.includes(normText(resp.text || ""));
         }
-        score = isCorrect ? max : 0;
-        autoScore += score ?? 0;
-        gStatus = "GRADED";
-        gradedCount += 1;
+        if (!handled) {
+          score = isCorrect ? max : 0;
+          ratio = isCorrect ? 1 : 0;
+          autoScore += score ?? 0;
+          gStatus = "GRADED";
+          gradedCount += 1;
+        }
       } else {
         pendingCount += 1;
       }
@@ -57194,7 +57241,7 @@ attemptsRouter.post("/attempts", requireRole("student"), ah(async (req, res) => 
         questionId: qid,
         level: q.level || "VAN_DUNG",
         isCorrect: gStatus === "GRADED" ? !!isCorrect : score != null ? score / max >= 1 : false,
-        scoreRatio: gStatus === "GRADED" ? isCorrect ? 1 : 0 : 0,
+        scoreRatio: gStatus === "GRADED" ? ratio : 0,
         timestamp: Date.now(),
         topicId: q.topic_id || null
       });
