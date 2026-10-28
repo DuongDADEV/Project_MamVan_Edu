@@ -1,3 +1,10 @@
+## [dev] 2026-10-28 — Nguồn file Xưởng AI lưu vào database (lệnh chủ dự án 22:25)
+
+- Trước đây nguồn tài liệu chỉ sống ở localStorage trình duyệt: đổi máy, xóa cache hay lệch khóa là mất (đợt kiểm chứng 21:45 còn ghi nhận nguồn về 0 sau khi tải lại trang). Nay chữ trích từ file giáo viên tải lên (.txt/.pdf/.docx) còn được lưu vào bảng `ai_sources` trên máy chủ, theo giáo viên + chủ đề: upsert theo id client (`src_file_<ts>`) nên tải lại không trùng; bật/tắt và xóa nguồn cũng đồng bộ lên máy chủ.
+- Mở Studio tải bản máy chủ về hợp nhất: nguồn file trên máy chủ là chuẩn; nguồn file ở local mà máy chủ chưa có (tải lên lúc mất mạng) thì giữ lại và đẩy bù; nguồn đã xóa ở nơi khác không bị đẩy lại (dấu đã-đồng-bộ lưu kèm khóa local, tránh hồi sinh như lỗi sync localStorage cũ). Nguồn dán văn bản và bản ghi KHÔNG thuộc phạm vi này — vẫn chỉ ở local.
+- Phạm vi API: `GET /api/ai-sources?topicId=` (giáo viên chỉ thấy của mình, admin gửi `teacher_id`), `POST /api/ai-sources` (teacher_id ép từ JWT, chủ đề phải thuộc giáo viên đó, nội dung tối đa 200.000 ký tự), `PATCH/DELETE /api/ai-sources/:id` (sai chủ thì 404). Lỗi mạng không chặn dùng Studio — nguồn vẫn dùng được ở local, lần mở sau đồng bộ lại, kèm dòng cảnh báo vàng khi đồng bộ lỗi.
+- Sơ đồ đã cập nhật mục Mầm AI Studio (Panel 1) và regen + publish cùng đợt.
+
 ## [dev] 2026-10-28 — Sửa 4 lỗi Xưởng AI / Bản nháp / Ngân hàng câu hỏi (báo lỗi 21:44–21:45)
 
 - Lỗi 1 — chọn tạo 5 câu mà chỉ được 2: `GeminiAIService.generateQuestions` trước đây nhận nguyên vẹn mảng AI trả về, không kiểm tra số lượng hay trường. Nay có lớp kiểm chứng `src/logic/validateAiQuestions.ts` (đề bài không rỗng, loại/mức/độ khó thuộc đúng enum, trắc nghiệm đủ 2 lựa chọn + có đáp án, điền khuyết có đáp án; tự luận không đòi đáp án): câu thiếu trường bị loại ngay, rồi tự gọi bù đúng 1 lần cho số câu còn thiếu theo đúng từng loại, khử trùng theo đề bài. Vẫn thiếu thì màn duyệt báo rõ "AI chỉ tạo được X/Y câu hợp lệ", không lặng lẽ trình thiếu như thể đủ.

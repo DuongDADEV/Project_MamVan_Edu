@@ -24,6 +24,7 @@ import { essaysRouter } from './routes/essays';
 import { rewardsRouter } from './routes/rewards';
 import { dashboardRouter } from './routes/dashboard';
 import { chatRouter } from './routes/chat';
+import { aiSourcesRouter } from './routes/aiSources';
 import { teachersRouter } from './routes/teachers';
 import aiChatRouter from './ai/chat';
 import aiSettingsRouter from './admin/ai-settings';
@@ -54,6 +55,7 @@ export function createApp(): express.Express {
   app.use('/api', rewardsRouter);
   app.use('/api', dashboardRouter);
   app.use('/api', chatRouter);
+  app.use('/api', aiSourcesRouter);
   app.use('/api', teachersRouter);
 
   // Route cũ giữ nguyên path (đã viết lại ruột MySQL + JWT ở GĐ3).
