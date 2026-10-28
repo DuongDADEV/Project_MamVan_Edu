@@ -53,12 +53,12 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
   onBackToList,
   onOpenFlowItem,
 }) => {
-  const { data: liveVideo } = useLiveQuery<VideoLessonWithMeta | null>(
+  const { data: liveVideo, loading: loadingLiveVideo } = useLiveQuery<VideoLessonWithMeta | null>(
     () => contentService.getVideoLessonById(videoId),
     ['content'],
     [videoId]
   );
-  const { data: allVideos } = useLiveQuery<VideoLessonWithMeta[]>(
+  const { data: allVideos, loading: loadingAllVideos } = useLiveQuery<VideoLessonWithMeta[]>(
     () => contentService.getVideoLessons(undefined, true),
     ['content']
   );
@@ -311,6 +311,17 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       return () => clearTimeout(timer);
     }
   }, [currentStep?.key, summarySecondsLeft]);
+
+  // 28/10: đang tải thì hiện "Đang tải", chỉ báo "không tìm thấy" khi
+  // cả 2 truy vấn đã xong mà vẫn không có video — trước đây màn hình
+  // báo không tìm thấy ngay trong lúc dữ liệu chưa về, mạng chậm là kẹt.
+  if (!video && (loadingLiveVideo || loadingAllVideos)) {
+    return (
+      <div className="p-8 text-center text-[#1E1B4B]">
+        <p className="font-bold">Đang tải bài giảng...</p>
+      </div>
+    );
+  }
 
   if (!video) {
     return (

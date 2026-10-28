@@ -1,3 +1,7 @@
+## 2026-10-28 — Màn bài học không còn báo "không tìm thấy" trong lúc đang tải
+
+- Sửa: màn video/lý thuyết trước đây báo "Không tìm thấy..." ngay khi dữ liệu chưa tải xong (không có trạng thái đang tải) — mạng chậm là học sinh thấy báo không có bài dù bài vẫn tồn tại (API trả về 200 bình thường). Nay đang tải thì hiện "Đang tải bài giảng..."/"Đang tải bài lý thuyết...", chỉ báo không tìm thấy khi truy vấn đã xong mà thật sự không có bài.
+
 ## 2026-10-28 — Luồng học không còn lặp bài tập, không còn nhảy cóc; thanh tiến độ khớp dashboard
 
 - NGUYÊN NHÂN (đã đối chiếu code + dữ liệu thật của lớp 7A1, chủ đề "từ láy"): cùng 1 bài tập "Luyện tập mới" (kind practice) xuất hiện ở 4 chỗ — bước gắn kèm sau video 1 (gắn trực tiếp), bước gắn kèm sau video 2 (tự tìm bài practice trong chủ đề khi chưa gắn), bước Luyện tập sau lý thuyết (luật 26/10: mọi bài practice trong chủ đề đều thành bước), và mục luồng số 4 (mọi bài của chủ đề đều tự nối vào luồng) — học sinh gặp cùng 1 câu hỏi 6 lần (1 lần đúng, 5 lần sai) mà vẫn chưa xong luồng. Dải luồng cho nhảy tự do nên em làm lý thuyết trước, bỏ dở luồng video 1 (chỉ xem + đọc tóm tắt, chưa làm bước gắn kèm) — vì vậy dashboard tính chủ đề chưa hoàn thành là ĐÚNG.

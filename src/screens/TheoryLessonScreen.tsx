@@ -56,7 +56,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   onBackToList,
   onOpenFlowItem,
 }) => {
-  const { data: liveTheory } = useLiveQuery<TheoryLessonWithMeta | null>(
+  const { data: liveTheory, loading: loadingLiveTheory } = useLiveQuery<TheoryLessonWithMeta | null>(
     () => contentService.getTheoryLessonById(theoryId),
     ['content'],
     [theoryId]
@@ -260,6 +260,16 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   }, [theoryId, dynamicSteps.length]);
 
   const currentStep = dynamicSteps[currentStepIndex] || dynamicSteps[0];
+
+  // 28/10: như màn video — đang tải thì hiện "Đang tải", chỉ báo không
+  // tìm thấy khi truy vấn đã xong mà vẫn không có bài.
+  if (!theory && loadingLiveTheory) {
+    return (
+      <div className="p-8 text-center text-[#1E1B4B]">
+        <p className="font-bold">Đang tải bài lý thuyết...</p>
+      </div>
+    );
+  }
 
   if (!theory) {
     return (
