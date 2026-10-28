@@ -603,7 +603,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                 Thời lượng: {effectiveDuration >= 60 ? `${Math.round(effectiveDuration / 60)} phút` : `${effectiveDuration} giây`}
               </span>
               <span>·</span>
-              <span>Chủ đề: {video.subtopics.join(', ')}</span>
+              <span>Chủ đề: {(video.subtopics || []).join(', ')}</span>
             </div>
 
             {video.description ? (
@@ -813,7 +813,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
             </p>
 
             <div className="space-y-4 mb-8">
-              {video.summaryPoints.map((point, idx) => (
+              {(video.summaryPoints || []).map((point, idx) => (
                 <div
                   key={idx}
                   className="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 hover:border-indigo-100 transition-colors"

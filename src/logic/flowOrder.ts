@@ -39,6 +39,9 @@ export function insertFlowKeyAfter(
 }
 
 export function parseFlowKey(key: string): FlowItem | null {
+  // Phòng thủ: khóa sai dạng (object/số do dữ liệu cũ hoặc ghi trực tiếp)
+  // từng làm crash cả app ở indexOf — bỏ qua thay vì ném lỗi.
+  if (typeof key !== 'string') return null;
   const idx = key.indexOf(':');
   if (idx <= 0) return null;
   const type = key.slice(0, idx);

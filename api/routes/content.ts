@@ -161,10 +161,17 @@ function topicPayloads(body: any, existing?: any): { videoPayload: any; theoryPa
   const src: any = { ...(body || {}), ...((body || {}).payload || {}) };
   const ev = existing ? parseJson<any>(existing.video_payload, {}) : {};
   const et = existing ? parseJson<any>(existing.theory_payload, {}) : {};
+  // flowOrder chỉ nhận khóa chuỗi "video|theory|quiz:<id>" (định dạng mà
+  // máy khách parse bằng indexOf(':')); khóa sai dạng từng làm crash cả
+  // màn học sinh — lọc bỏ thay vì ghi xuống DB.
+  const cleanFlowOrder = (v: any): string[] =>
+    Array.isArray(v) ? v.filter((k) => typeof k === 'string' && /^(video|theory|quiz):.+/.test(k)) : [];
+  const cleanIdList = (v: any): string[] =>
+    Array.isArray(v) ? v.filter((x) => typeof x === 'string' && !!x) : [];
   const videoPayload = {
     shortDesc: src.shortDesc ?? ev.shortDesc ?? '',
-    videoIds: src.videoIds ?? ev.videoIds ?? [],
-    flowOrder: src.flowOrder ?? ev.flowOrder ?? [],
+    videoIds: cleanIdList(src.videoIds ?? ev.videoIds ?? []),
+    flowOrder: cleanFlowOrder(src.flowOrder ?? ev.flowOrder ?? []),
     colorScheme: src.colorScheme ?? ev.colorScheme ?? '#2F3E6B',
     xpReward: src.xpReward ?? ev.xpReward ?? 0,
     class_ids: src.class_ids ?? src.classIds ?? ev.class_ids ?? ['all'],
@@ -818,6 +825,25 @@ contentRouter.post('/quizzes/:id/publish', payloadPublishHandler('quizzes', true
 contentRouter.post('/quizzes/:id/unpublish', payloadStatusHandler('quizzes', 'draft'));
 contentRouter.post('/quizzes/:id/archive', payloadStatusHandler('quizzes', 'archived'));
 
+// Giá trị ghi lại vào cột JSON: mysql2 đã parse sẵn cột JSON nên giá trị
+// về dạng JS (chuỗi 'Hà Nội', mảng, số). Đẩy thẳng chuỗi chữ vào cột JSON
+// thì MySQL từ chối (Invalid JSON text) — đó là lý do nhân bản quiz có câu
+// điền từ bị 500, trong khi đáp án số '4' lọt vì tình cờ parse được thành
+// số JSON. Chuẩn hóa: chuỗi nào đã là JSON hợp lệ thì giữ nguyên, còn lại
+// stringify; giá trị khác stringify thẳng.
+function toJsonColumn(v: any): any {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string') {
+    try {
+      if (JSON.stringify(JSON.parse(v)) === v) return v;
+    } catch {
+      // Không phải JSON hợp lệ → stringify bên dưới.
+    }
+    return JSON.stringify(v);
+  }
+  return JSON.stringify(v);
+}
+
 contentRouter.post('/quizzes/:id/duplicate', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -850,8 +876,8 @@ contentRouter.post('/quizzes/:id/duplicate', async (req: Request, res: Response)
             qRow.type,
             qRow.level,
             qRow.prompt,
-            qRow.options === null || qRow.options === undefined ? null : typeof qRow.options === 'string' ? qRow.options : JSON.stringify(qRow.options),
-            qRow.correct_answer === null || qRow.correct_answer === undefined ? null : typeof qRow.correct_answer === 'string' ? qRow.correct_answer : JSON.stringify(qRow.correct_answer),
+            qRow.options === null || qRow.options === undefined ? null : toJsonColumn(qRow.options),
+            qRow.correct_answer === null || qRow.correct_answer === undefined ? null : toJsonColumn(qRow.correct_answer),
             qRow.explanation || '',
             duplicatorId,
             JSON.stringify(qPayload),

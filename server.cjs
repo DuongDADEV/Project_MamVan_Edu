@@ -55447,10 +55447,12 @@ function topicPayloads(body, existing) {
   const src = { ...body || {}, ...(body || {}).payload || {} };
   const ev = existing ? parseJson(existing.video_payload, {}) : {};
   const et = existing ? parseJson(existing.theory_payload, {}) : {};
+  const cleanFlowOrder = (v) => Array.isArray(v) ? v.filter((k) => typeof k === "string" && /^(video|theory|quiz):.+/.test(k)) : [];
+  const cleanIdList = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string" && !!x) : [];
   const videoPayload = {
     shortDesc: src.shortDesc ?? ev.shortDesc ?? "",
-    videoIds: src.videoIds ?? ev.videoIds ?? [],
-    flowOrder: src.flowOrder ?? ev.flowOrder ?? [],
+    videoIds: cleanIdList(src.videoIds ?? ev.videoIds ?? []),
+    flowOrder: cleanFlowOrder(src.flowOrder ?? ev.flowOrder ?? []),
     colorScheme: src.colorScheme ?? ev.colorScheme ?? "#2F3E6B",
     xpReward: src.xpReward ?? ev.xpReward ?? 0,
     class_ids: src.class_ids ?? src.classIds ?? ev.class_ids ?? ["all"],
@@ -56028,6 +56030,17 @@ contentRouter.post("/quizzes/:id/delete", payloadDeleteHandler("quizzes"));
 contentRouter.post("/quizzes/:id/publish", payloadPublishHandler("quizzes", true));
 contentRouter.post("/quizzes/:id/unpublish", payloadStatusHandler("quizzes", "draft"));
 contentRouter.post("/quizzes/:id/archive", payloadStatusHandler("quizzes", "archived"));
+function toJsonColumn(v) {
+  if (v === null || v === void 0) return null;
+  if (typeof v === "string") {
+    try {
+      if (JSON.stringify(JSON.parse(v)) === v) return v;
+    } catch {
+    }
+    return JSON.stringify(v);
+  }
+  return JSON.stringify(v);
+}
 contentRouter.post("/quizzes/:id/duplicate", async (req, res) => {
   try {
     const id = String(req.params.id);
@@ -56058,8 +56071,8 @@ contentRouter.post("/quizzes/:id/duplicate", async (req, res) => {
             qRow.type,
             qRow.level,
             qRow.prompt,
-            qRow.options === null || qRow.options === void 0 ? null : typeof qRow.options === "string" ? qRow.options : JSON.stringify(qRow.options),
-            qRow.correct_answer === null || qRow.correct_answer === void 0 ? null : typeof qRow.correct_answer === "string" ? qRow.correct_answer : JSON.stringify(qRow.correct_answer),
+            qRow.options === null || qRow.options === void 0 ? null : toJsonColumn(qRow.options),
+            qRow.correct_answer === null || qRow.correct_answer === void 0 ? null : toJsonColumn(qRow.correct_answer),
             qRow.explanation || "",
             duplicatorId,
             JSON.stringify(qPayload),
@@ -58226,10 +58239,10 @@ async function appendQuestionResult(tx, studentId, result) {
     [studentId, JSON.stringify([result, ...cur])]
   );
 }
-essaysRouter.get("/essays", async (req, res) => {
+essaysRouter.get("/essays", ah(async (req, res) => {
   res.json(await essayList(db2, req.caller, req.query));
-});
-essaysRouter.post("/essays", async (req, res) => {
+}));
+essaysRouter.post("/essays", ah(async (req, res) => {
   const caller = req.caller;
   const body = bodyOf(req);
   const content = typeof body.content === "string" ? body.content.trim() : "";
@@ -58279,8 +58292,8 @@ essaysRouter.post("/essays", async (req, res) => {
   const rows = await query("SELECT * FROM `essay_submissions` WHERE `id` = ? LIMIT 1", [uuid]);
   const qMap = await questionInfo(db2, [questionId]);
   res.status(201).json(mapEssayRow(rows[0], qMap.get(questionId), student.name, void 0));
-});
-essaysRouter.get("/essays/:id", async (req, res) => {
+}));
+essaysRouter.get("/essays/:id", ah(async (req, res) => {
   const caller = req.caller;
   const id = req.params.id;
   if (id.startsWith("review:")) {
@@ -58309,8 +58322,8 @@ essaysRouter.get("/essays/:id", async (req, res) => {
     return;
   }
   res.json(item);
-});
-essaysRouter.patch("/essays/:id/draft", async (req, res) => {
+}));
+essaysRouter.patch("/essays/:id/draft", ah(async (req, res) => {
   const caller = req.caller;
   const id = req.params.id;
   const body = bodyOf(req);
@@ -58364,8 +58377,8 @@ essaysRouter.patch("/essays/:id/draft", async (req, res) => {
   }
   const list = await essayList(db2, caller, {});
   res.json(list.find((e) => e.id === id) || { id });
-});
-essaysRouter.post("/essays/:id/grade", requireRole("teacher", "admin"), async (req, res) => {
+}));
+essaysRouter.post("/essays/:id/grade", requireRole("teacher", "admin"), ah(async (req, res) => {
   const caller = req.caller;
   const id = req.params.id;
   const body = bodyOf(req);
@@ -58405,7 +58418,7 @@ essaysRouter.post("/essays/:id/grade", requireRole("teacher", "admin"), async (r
         "SELECT `score_awarded`, `grading_status` FROM `attempt_answers` WHERE `attempt_id` = ?",
         [ans.attempt_id]
       );
-      const total = allAns.reduce((s, a) => s + (a.score_awarded ?? 0), 0);
+      const total = allAns.reduce((s, a) => s + Number(a.score_awarded ?? 0), 0);
       const allGraded = allAns.every((a) => a.grading_status === "GRADED");
       await tx.execute(
         "UPDATE `attempts` SET `score_awarded` = ?, `grading_status` = ? WHERE `attempt_id` = ?",
@@ -58470,24 +58483,24 @@ essaysRouter.post("/essays/:id/grade", requireRole("teacher", "admin"), async (r
   }
   const list = await essayList(db2, caller, {});
   res.json(list.find((e) => e.id === id) || { id, status: "GRADED" });
-});
-essaysRouter.get("/reviews/pending", requireRole("teacher", "admin"), async (req, res) => {
+}));
+essaysRouter.get("/reviews/pending", requireRole("teacher", "admin"), ah(async (req, res) => {
   const scope = await teacherScope(db2, req.caller);
   if (scope.studentIds && scope.studentIds.length === 0) {
     res.json([]);
     return;
   }
   res.json(await fetchReviews(db2, scope.studentIds, "PENDING", req.query.includeResponseText !== "false"));
-});
-essaysRouter.get("/reviews/graded", requireRole("teacher", "admin"), async (req, res) => {
+}));
+essaysRouter.get("/reviews/graded", requireRole("teacher", "admin"), ah(async (req, res) => {
   const scope = await teacherScope(db2, req.caller);
   if (scope.studentIds && scope.studentIds.length === 0) {
     res.json([]);
     return;
   }
   res.json(await fetchReviews(db2, scope.studentIds, "GRADED", req.query.includeResponseText !== "false"));
-});
-essaysRouter.get("/reviews/:answerId", requireRole("teacher", "admin"), async (req, res) => {
+}));
+essaysRouter.get("/reviews/:answerId", requireRole("teacher", "admin"), ah(async (req, res) => {
   const answerId = req.params.answerId;
   if (!checkKeyLen(res, answerId)) return;
   const rows = await query(
@@ -58504,8 +58517,8 @@ essaysRouter.get("/reviews/:answerId", requireRole("teacher", "admin"), async (r
     return;
   }
   res.json({ answerId, content: renderResponse(row.response_json, parseJson) });
-});
-essaysRouter.post("/reviews/:answerId/grade", requireRole("teacher", "admin"), async (req, res) => {
+}));
+essaysRouter.post("/reviews/:answerId/grade", requireRole("teacher", "admin"), ah(async (req, res) => {
   const caller = req.caller;
   const answerId = req.params.answerId;
   if (!checkKeyLen(res, answerId)) return;
@@ -58540,7 +58553,7 @@ essaysRouter.post("/reviews/:answerId/grade", requireRole("teacher", "admin"), a
       "SELECT `score_awarded`, `grading_status` FROM `attempt_answers` WHERE `attempt_id` = ?",
       [ans.attempt_id]
     );
-    const total = allAns.reduce((s, a) => s + (a.score_awarded ?? 0), 0);
+    const total = allAns.reduce((s, a) => s + Number(a.score_awarded ?? 0), 0);
     const allGraded = allAns.every((a) => a.grading_status === "GRADED");
     await tx.execute(
       "UPDATE `attempts` SET `score_awarded` = ?, `grading_status` = ? WHERE `attempt_id` = ?",
@@ -58557,7 +58570,7 @@ essaysRouter.post("/reviews/:answerId/grade", requireRole("teacher", "admin"), a
     return;
   }
   res.json(out);
-});
+}));
 
 // api/routes/rewards.ts
 var import_express10 = __toESM(require_express2(), 1);

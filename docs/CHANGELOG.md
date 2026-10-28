@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Sửa 2 lỗi nặng tìm được khi kiểm tra toàn luồng giáo viên + học sinh
+
+- NẶNG — Chấm tự luận làm sập cả server: đường chấm phiếu (`/reviews/:answerId/grade`) và đường chấm bài (`/essays/:id/grade`) cộng tổng điểm bằng `reduce((s, a) => s + (a.score_awarded ?? 0))` trong khi cột DECIMAL về dạng chuỗi → tổng thành chuỗi nối ("07.00", "010.0010.0010.00") → MySQL strict-mode từ chối khi ghi → route không có lớp bắt lỗi (Express 4 không bắt rejection của handler async) nên cả tiến trình Node chết, Caddy trả 502 tới khi NSSM khởi động lại. Đã chứng minh bằng thí nghiệm đối chứng (bài chỉ-tự-luận chấm 200, bài hỗn hợp chấm 502 + PID đổi). Sửa: cộng bằng `Number(...)` ở cả 2 đường chấm; bọc toàn bộ 9 route essays bằng `ah()` (theo đúng ghi chú trong `_shared.ts`) để lỗi sau này chỉ thành 500, không chết process.
+- Nhân bản quiz lỗi 500 khi có câu điền từ: đường nhân bản đẩy giá trị cột JSON đã parse sẵn (chuỗi 'Hà Nội') thẳng vào cột JSON → MySQL từ chối Invalid JSON text; đáp án số '4' lọt chỉ vì tình cờ parse được thành số JSON. Sửa: helper `toJsonColumn` — chuỗi đã là JSON hợp lệ thì giữ, còn lại stringify — áp cho cả `options` và `correct_answer` khi nhân bản.
+- Điểm yếu phụ sửa kèm: máy chủ lọc `flowOrder`/`videoIds` ở `topicPayloads` chỉ nhận khóa chuỗi đúng dạng (khóa sai dạng từng làm crash màn học sinh ở `indexOf`); máy khách `parseFlowKey` bỏ qua khóa không phải chuỗi thay vì ném lỗi; màn video phòng thủ `subtopics`/`summaryPoints` thiếu; ngân hàng câu hỏi không còn hiện "NaN phút"/"Đọc ~s" khi thiếu trường.
+
 ## [dev] 2026-10-29 — Bổ sung: máy chủ phải biết mốc mặc định (phát hiện khi kiểm chứng đợt quà)
 
 - Kiểm chứng API sau đợt sửa hiện hình: yêu cầu cho mốc mặc định (reward_bookmark) bị tính deductedXp = 0 (không trừ XP!) và reward_id trả về trỏ nhầm sang mốc tự tạo cùng họ rương — vì máy chủ chỉ tra mốc trong DB, còn 5 mốc mặc định chỉ nằm ở máy khách. Yêu cầu cho mốc tự tạo thì đúng (trừ 50, id chính xác).

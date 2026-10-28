@@ -1390,7 +1390,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                             Video bài giảng
                           </span>
                           <span className="text-xs text-[#8C7E6A]">
-                            Thời lượng: {Math.round(v.durationSec / 60)} phút
+                            Thời lượng: {Number.isFinite(v.durationSec) ? `${Math.round(v.durationSec / 60)} phút` : '—'}
                           </span>
                         </div>
                         <h4 className="font-lora font-bold text-base text-[#2F3E6B] mt-0.5">{v.title}</h4>
@@ -1443,7 +1443,7 @@ export const TeacherQuestionBankScreen: React.FC<TeacherQuestionBankScreenProps>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700">
                           Lý thuyết chi tiết
                         </span>
-                        <span className="text-xs text-[#8C7E6A]">Đọc ~{t.minReadSeconds}s</span>
+                        <span className="text-xs text-[#8C7E6A]">Đọc ~{Number.isFinite(t.minReadSeconds) ? t.minReadSeconds : 25}s</span>
                       </div>
                       <h4 className="font-lora font-bold text-base text-[#2F3E6B] mt-0.5">{t.title}</h4>
                     </div>

@@ -42,6 +42,7 @@ import {
   canAccessStudent,
   findStudent,
   renderResponse,
+  ah,
 } from './_shared';
 
 export const essaysRouter = Router();
@@ -316,11 +317,11 @@ async function appendQuestionResult(
 }
 
 // ---------------------------------------------------------------- essays
-essaysRouter.get('/essays', async (req: AuthedRequest, res) => {
+essaysRouter.get('/essays', ah(async (req: AuthedRequest, res) => {
   res.json(await essayList(db, req.caller!, req.query));
-});
+}));
 
-essaysRouter.post('/essays', async (req: AuthedRequest, res) => {
+essaysRouter.post('/essays', ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const body = bodyOf(req);
   const content = typeof body.content === 'string' ? body.content.trim() : '';
@@ -372,9 +373,9 @@ essaysRouter.post('/essays', async (req: AuthedRequest, res) => {
   const rows = await query<any>('SELECT * FROM `essay_submissions` WHERE `id` = ? LIMIT 1', [uuid]);
   const qMap = await questionInfo(db, [questionId]);
   res.status(201).json(mapEssayRow(rows[0], qMap.get(questionId), student.name, undefined));
-});
+}));
 
-essaysRouter.get('/essays/:id', async (req: AuthedRequest, res) => {
+essaysRouter.get('/essays/:id', ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const id = req.params.id;
   if (id.startsWith('review:')) {
@@ -403,9 +404,9 @@ essaysRouter.get('/essays/:id', async (req: AuthedRequest, res) => {
     return;
   }
   res.json(item);
-});
+}));
 
-essaysRouter.patch('/essays/:id/draft', async (req: AuthedRequest, res) => {
+essaysRouter.patch('/essays/:id/draft', ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const id = req.params.id;
   const body = bodyOf(req);
@@ -461,9 +462,9 @@ essaysRouter.patch('/essays/:id/draft', async (req: AuthedRequest, res) => {
   }
   const list = await essayList(db, caller, {});
   res.json(list.find((e: any) => e.id === id) || { id });
-});
+}));
 
-essaysRouter.post('/essays/:id/grade', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+essaysRouter.post('/essays/:id/grade', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const id = req.params.id;
   const body = bodyOf(req);
@@ -505,7 +506,7 @@ essaysRouter.post('/essays/:id/grade', requireRole('teacher', 'admin'), async (r
         'SELECT `score_awarded`, `grading_status` FROM `attempt_answers` WHERE `attempt_id` = ?',
         [ans.attempt_id]
       );
-      const total = allAns.reduce((s: number, a: any) => s + (a.score_awarded ?? 0), 0);
+      const total = allAns.reduce((s: number, a: any) => s + Number(a.score_awarded ?? 0), 0);
       const allGraded = allAns.every((a: any) => a.grading_status === 'GRADED');
       await tx.execute(
         'UPDATE `attempts` SET `score_awarded` = ?, `grading_status` = ? WHERE `attempt_id` = ?',
@@ -572,28 +573,28 @@ essaysRouter.post('/essays/:id/grade', requireRole('teacher', 'admin'), async (r
   }
   const list = await essayList(db, caller, {});
   res.json(list.find((e: any) => e.id === id) || { id, status: 'GRADED' });
-});
+}));
 
 // ---------------------------------------------------------------- reviews
-essaysRouter.get('/reviews/pending', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+essaysRouter.get('/reviews/pending', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const scope = await teacherScope(db, req.caller!);
   if (scope.studentIds && scope.studentIds.length === 0) {
     res.json([]);
     return;
   }
   res.json(await fetchReviews(db, scope.studentIds, 'PENDING', req.query.includeResponseText !== 'false'));
-});
+}));
 
-essaysRouter.get('/reviews/graded', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+essaysRouter.get('/reviews/graded', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const scope = await teacherScope(db, req.caller!);
   if (scope.studentIds && scope.studentIds.length === 0) {
     res.json([]);
     return;
   }
   res.json(await fetchReviews(db, scope.studentIds, 'GRADED', req.query.includeResponseText !== 'false'));
-});
+}));
 
-essaysRouter.get('/reviews/:answerId', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+essaysRouter.get('/reviews/:answerId', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const answerId = req.params.answerId;
   if (!checkKeyLen(res, answerId)) return;
   const rows = await query<any>(
@@ -610,9 +611,9 @@ essaysRouter.get('/reviews/:answerId', requireRole('teacher', 'admin'), async (r
     return;
   }
   res.json({ answerId, content: renderResponse(row.response_json, parseJson) });
-});
+}));
 
-essaysRouter.post('/reviews/:answerId/grade', requireRole('teacher', 'admin'), async (req: AuthedRequest, res) => {
+essaysRouter.post('/reviews/:answerId/grade', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const caller = req.caller!;
   const answerId = req.params.answerId;
   if (!checkKeyLen(res, answerId)) return;
@@ -651,7 +652,7 @@ essaysRouter.post('/reviews/:answerId/grade', requireRole('teacher', 'admin'), a
       'SELECT `score_awarded`, `grading_status` FROM `attempt_answers` WHERE `attempt_id` = ?',
       [ans.attempt_id]
     );
-    const total = allAns.reduce((s: number, a: any) => s + (a.score_awarded ?? 0), 0);
+    const total = allAns.reduce((s: number, a: any) => s + Number(a.score_awarded ?? 0), 0);
     const allGraded = allAns.every((a: any) => a.grading_status === 'GRADED');
     await tx.execute(
       'UPDATE `attempts` SET `score_awarded` = ?, `grading_status` = ? WHERE `attempt_id` = ?',
@@ -668,4 +669,4 @@ essaysRouter.post('/reviews/:answerId/grade', requireRole('teacher', 'admin'), a
     return;
   }
   res.json(out);
-});
+}));
