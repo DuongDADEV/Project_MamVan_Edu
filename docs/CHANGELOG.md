@@ -1,3 +1,8 @@
+## [dev] 2026-10-29 — Xóa chú thích màu lá bị lặp trong màn Vườn
+
+- Màn Vườn (TreeScreen) vẽ 2 khối chú thích cùng 1 ý nghĩa trong cùng 1 thẻ cây: 1 khối ngay dưới cây ("≥80% • Đã hoàn thành / 50–79% • Đang học / <50% • Cần ôn lại / Chưa học") và 1 khối cuối thẻ ("Vững (≥80%) / Đang tiến bộ (50–79%) / Cần ôn lại (<50%) / Chưa học"). Theo yêu cầu của chủ dự án, xóa khối thứ nhất (đúng khối trong ảnh chụp), chỉ giữ khối "Chú giải trạng thái lá" cuối thẻ.
+- Sơ đồ không regen đợt này (xóa 1 khối hiển thị trùng, không đổi luồng).
+
 ## [dev] 2026-10-29 — Sửa màu lá cây không đổi dù học sinh đã ôn 100% luồng
 
 - NGUYÊN NHÂN (từ ảnh chụp của chủ dự án + dữ liệu thật): lá cây lấy màu từ độ vững trắc nghiệm (`calculateAllMastery`) và bị khóa xám "Chưa học" khi chưa đủ 3 câu NHAN_BIET đã làm — trong khi thanh tiến độ màn Học bài lấy từ tiến độ luồng (`countTopicFlowDone`). Học sinh Khánh Chi là bằng chứng sống: luồng "từ láy" đủ 5/5 mục (2 video + 1 lý thuyết hoàn thành trọn luồng, 2 quiz đã nộp) nên màn Học bài hiện 100%, nhưng toàn bộ 12 kết quả làm bài của em đều ở mức THONG_HIEU, 0 câu NHAN_BIET → cửa ≥3 câu NHAN_BIET không qua → lá giữ xám "Chưa học" dù đã ôn xong.
