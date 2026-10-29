@@ -21,6 +21,9 @@ import { apiFetch } from './http.ts';
 export interface CheckInResult {
   /** Tổng XP mới của học sinh sau điểm danh (server tính). */
   totalXp: number;
+  /** XP hôm nay / XP tuần server trả (để client đồng bộ, không tự tính). */
+  xpToday?: number;
+  xpWeek?: number;
   /** true nếu lần gọi này điểm danh thành công (false = hôm nay đã điểm danh). */
   checkedIn: boolean;
   /** true nếu hôm nay đã điểm danh từ trước (server chống cộng trùng theo ngày). */
@@ -36,6 +39,9 @@ export interface TopicCompleteResult {
   complete: boolean;
   /** Tổng XP mới của học sinh. */
   totalXp: number;
+  /** XP hôm nay / XP tuần server trả (để client đồng bộ, không tự tính). */
+  xpToday?: number;
+  xpWeek?: number;
 }
 
 function num(v: unknown): number | undefined {
@@ -62,6 +68,8 @@ export async function checkInStudent(studentId: string): Promise<CheckInResult> 
     checkedIn: raw?.checkedIn === true,
     alreadyCheckedIn: raw?.alreadyCheckedIn === true,
     attendanceDays: num(raw?.attendanceDays),
+    xpToday: num(raw?.xpToday ?? raw?.xp_today),
+    xpWeek: num(raw?.xpWeek ?? raw?.xp_week),
   };
 }
 
@@ -72,6 +80,9 @@ export interface QuizCompleteResult {
   awardedXp: number;
   /** Tổng XP mới của học sinh. */
   totalXp: number;
+  /** XP hôm nay / XP tuần server trả (để client đồng bộ, không tự tính). */
+  xpToday?: number;
+  xpWeek?: number;
 }
 
 export async function completeQuizOnServer(quizId: string, earned: number): Promise<QuizCompleteResult> {
@@ -89,6 +100,8 @@ export async function completeQuizOnServer(quizId: string, earned: number): Prom
     awarded: raw?.awarded === true,
     awardedXp: num(raw?.awardedXp) ?? 0,
     totalXp,
+    xpToday: num(raw?.xpToday ?? raw?.xp_today),
+    xpWeek: num(raw?.xpWeek ?? raw?.xp_week),
   };
 }
 
@@ -104,5 +117,7 @@ export async function completeTopicOnServer(topicId: string): Promise<TopicCompl
     awarded: raw?.awarded === true,
     complete: raw?.complete === true,
     totalXp,
+    xpToday: num(raw?.xpToday ?? raw?.xp_today),
+    xpWeek: num(raw?.xpWeek ?? raw?.xp_week),
   };
 }

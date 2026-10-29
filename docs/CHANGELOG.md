@@ -1,3 +1,10 @@
+## [dev] 2026-10-29 — Sửa XP tuần hiển thị 0 dù tổng XP đã 53 (ca Dũng)
+
+- NGUYÊN NHÂN (đã đối chiếu DB trực tiếp): server đúng — Dũng total/xp_today/xp_week = 53/53/53, điểm danh tuần = 1. Lỗi ở client: hàm rolloverStudentState tự reset xpWeek về 0 khi không tìm thấy xpWeekKey, mà state từ server KHÔNG BAO GIỜ có xpWeekKey (server không có cột này) nên fallback "legacy-week" từ lastAttendanceDate cũ luôn kích hoạt sai — đúng phiên Dũng vừa nhận quỹ 50 XP + điểm danh 2 XP thì màn Đổi quà vẫn hiện tuần 0.
+- SỬA GỐC: rollover chỉ lật ngày/tuần khi marker đã biết rõ và khác ngày/tuần hiện tại; marker thiếu thì giữ nguyên số server trả (server đã tự rollover khi đọc qua getTotals), chỉ đóng dấu marker để lần sau lật đúng.
+- ĐỒNG BỘ XP SAU MỖI LẦN TRAO (trước đây handler chỉ cập nhật totalXp nên xpToday/xpWeek kẹt ở giá trị lúc đăng nhập): các response điểm danh, quỹ chủ đề, hoàn thành quiz, nộp bài độc lập nay đều trả xpToday/xpWeek; client đồng bộ cả 3 số sau mỗi lần trao. Server vốn đã trả 2 số này ở đường điểm danh + nộp bài, client trước đây không đọc.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Học bài: badge "Đã hoàn thành" khi luồng 100%
 
 - Màn Học bài: chủ đề xong 100% luồng nay hiện badge "Đã hoàn thành" (nền teal) thay vì "Đang học" như trước. Thứ tự badge: Vững > Cần ôn > Đã hoàn thành > Đang học > Chưa học — chủ đề có điểm yếu hoặc bị đánh dấu "Chưa hiểu" vẫn giữ "Cần ôn" (và vẫn lọt bộ lọc "Cần ôn lại") để không giấu nhu cầu ôn lại; "Vững" vẫn là mức cao nhất theo độ vững trắc nghiệm.

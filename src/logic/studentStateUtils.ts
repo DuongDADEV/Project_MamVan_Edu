@@ -32,15 +32,20 @@ export function rolloverStudentState(state: StudentState): StudentState {
   const weekKey = getWeekKey();
   let next = state;
 
-  const dayMarker = state.lastXpResetDate ?? (state.lastAttendanceDate || today);
-  if (dayMarker !== today) {
+  // 29/10: CHỈ lật khi marker đã biết rõ và khác ngày/tuần hiện tại.
+  // State từ server KHÔNG kèm lastXpResetDate/xpWeekKey (server không có
+  // 2 cột này) — trước đây fallback "legacy-week" từ lastAttendanceDate
+  // cũ đã tự reset xpWeek về 0 ngay trong phiên học sinh vừa nhận XP
+  // (ca Dũng 29/10: server 53/53/53 nhưng màn Đổi quà hiện tuần 0).
+  // Server đã tự rollover khi đọc (getTotals), nên marker thiếu thì GIỮ
+  // NGUYÊN số server trả, chỉ đóng dấu marker để lần sau lật đúng.
+  if (state.lastXpResetDate !== undefined && state.lastXpResetDate !== today) {
     next = { ...next, xpToday: 0, activeSecondsToday: 0, lastXpResetDate: today };
   } else if (state.lastXpResetDate !== today) {
     next = { ...next, lastXpResetDate: today };
   }
 
-  const weekMarker = state.xpWeekKey ?? (state.lastAttendanceDate && state.lastAttendanceDate >= weekKey ? weekKey : 'legacy-week');
-  if (weekMarker !== weekKey) {
+  if (state.xpWeekKey !== undefined && state.xpWeekKey !== weekKey) {
     next = { ...next, xpWeek: 0, attendanceDaysThisWeek: 0, exemptDaysUsedThisWeek: 0, xpWeekKey: weekKey };
   } else if (state.xpWeekKey !== weekKey) {
     next = { ...next, xpWeekKey: weekKey };

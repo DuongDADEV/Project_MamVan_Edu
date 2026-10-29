@@ -409,7 +409,12 @@ export default function App() {
       topicXpAttemptedRef.current.add(topic.id);
       completeTopicOnServer(topic.id)
         .then((res) => {
-          setStudentState((prev) => ({ ...prev, totalXp: res.totalXp }));
+          setStudentState((prev) => ({
+            ...prev,
+            totalXp: res.totalXp,
+            ...(typeof res.xpToday === 'number' ? { xpToday: res.xpToday } : {}),
+            ...(typeof res.xpWeek === 'number' ? { xpWeek: res.xpWeek } : {}),
+          }));
           if (res.awarded) {
             showToast(
               `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — đã nhận quỹ XP!`
@@ -423,7 +428,12 @@ export default function App() {
             setTimeout(() => {
               completeTopicOnServer(topic.id)
                 .then((r2) => {
-                  setStudentState((prev) => ({ ...prev, totalXp: r2.totalXp }));
+                  setStudentState((prev) => ({
+                    ...prev,
+                    totalXp: r2.totalXp,
+                    ...(typeof r2.xpToday === 'number' ? { xpToday: r2.xpToday } : {}),
+                    ...(typeof r2.xpWeek === 'number' ? { xpWeek: r2.xpWeek } : {}),
+                  }));
                   if (r2.awarded) {
                     showToast(
                       `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — đã nhận quỹ XP!`
@@ -792,6 +802,8 @@ export default function App() {
             ...(typeof res.attendanceDays === 'number'
               ? { attendanceDaysThisWeek: res.attendanceDays }
               : {}),
+            ...(typeof res.xpToday === 'number' ? { xpToday: res.xpToday } : {}),
+            ...(typeof res.xpWeek === 'number' ? { xpWeek: res.xpWeek } : {}),
           });
           showToast('Hôm nay bạn đã điểm danh rồi!');
           return;
@@ -813,6 +825,8 @@ export default function App() {
           totalXp: res.totalXp,
           lastAttendanceDate: todayStr,
           attendanceDaysThisWeek: nextDays,
+          ...(typeof res.xpToday === 'number' ? { xpToday: res.xpToday } : {}),
+          ...(typeof res.xpWeek === 'number' ? { xpWeek: res.xpWeek } : {}),
           attendanceHistory: [todayStr, ...(base.attendanceHistory || [])],
           unlockedBadgeIds: newBadges,
         };
@@ -1251,7 +1265,12 @@ export default function App() {
                     const quizToast = '🎉 Em đã hoàn thành bài!';
                     try {
                       const qr = await completeQuizOnServer(targetQuiz.id, earned);
-                      setStudentState((prev) => ({ ...prev, totalXp: qr.totalXp }));
+                      setStudentState((prev) => ({
+                        ...prev,
+                        totalXp: qr.totalXp,
+                        ...(typeof qr.xpToday === 'number' ? { xpToday: qr.xpToday } : {}),
+                        ...(typeof qr.xpWeek === 'number' ? { xpWeek: qr.xpWeek } : {}),
+                      }));
                     } catch (err: any) {
                       console.error('Lỗi ghi hoàn thành quiz:', err?.message);
                     }
@@ -1286,7 +1305,12 @@ export default function App() {
               // trả totalXp trong SubmitResult). Client chỉ nhận tổng XP
               // server trả về để hiển thị, không tự cộng xpReward nữa.
               if (info.totalXp !== undefined) {
-                setStudentState((prev) => ({ ...prev, totalXp: info.totalXp! }));
+                setStudentState((prev) => ({
+                  ...prev,
+                  totalXp: info.totalXp!,
+                  ...(typeof info.xpToday === 'number' ? { xpToday: info.xpToday } : {}),
+                  ...(typeof info.xpWeek === 'number' ? { xpWeek: info.xpWeek } : {}),
+                }));
                 showToast(`🎉 Đã nộp bài "${info.title}"!`);
               }
             }}

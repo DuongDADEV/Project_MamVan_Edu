@@ -13,7 +13,7 @@ interface AssignmentAttemptScreenProps {
   studentId: string;
   onBack: () => void;
   /** Báo về App sau khi nộp thành công để trao XP của bài (nếu có cấu hình). */
-  onSubmitted?: (info: { assignmentId: string; title: string; xpReward: number; totalXp?: number }) => void;
+  onSubmitted?: (info: { assignmentId: string; title: string; xpReward: number; totalXp?: number; xpToday?: number; xpWeek?: number }) => void;
 }
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -61,7 +61,7 @@ export const AssignmentAttemptScreen: React.FC<AssignmentAttemptScreenProps> = (
       });
       setResult(r);
       if (detail && onSubmitted) {
-        onSubmitted({ assignmentId, title: detail.title, xpReward: detail.xpReward || 0, totalXp: r.totalXp });
+        onSubmitted({ assignmentId, title: detail.title, xpReward: detail.xpReward || 0, totalXp: r.totalXp, xpToday: r.xpToday, xpWeek: r.xpWeek });
       }
     } catch (e: any) {
       submittedRef.current = false;

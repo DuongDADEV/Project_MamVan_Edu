@@ -689,7 +689,7 @@ attemptsRouter.post('/quiz-completions', requireRole('student'), async (req: Aut
     }
     return await getTotals(tx, studentId);
   });
-  res.status(201).json({ awarded: false, awardedXp: 0, totalXp: out.totalXp });
+  res.status(201).json({ awarded: false, awardedXp: 0, totalXp: out.totalXp, xpToday: out.xpToday, xpWeek: out.xpWeek });
 });
 
 attemptsRouter.get('/attempts/:id', async (req: AuthedRequest, res) => {
@@ -1336,7 +1336,7 @@ attemptsRouter.post('/topics/:id/complete', requireRole('student'), async (req: 
   }
   if (flow.length === 0) {
     const totals0: any = await getTotals(db, studentId);
-    res.json({ awarded: false, complete: false, totalXp: totals0?.totalXp, reason: 'EMPTY_TOPIC' });
+    res.json({ awarded: false, complete: false, totalXp: totals0?.totalXp, xpToday: totals0?.xpToday, xpWeek: totals0?.xpWeek, reason: 'EMPTY_TOPIC' });
     return;
   }
 
@@ -1344,7 +1344,7 @@ attemptsRouter.post('/topics/:id/complete', requireRole('student'), async (req: 
   const steps = new Set<string>(state.completed_steps || []);
   const completeKey = `topic:${topicId}:complete`;
   if (steps.has(completeKey)) {
-    res.json({ awarded: false, complete: true, totalXp: state.total_xp, alreadyAwarded: true });
+    res.json({ awarded: false, complete: true, totalXp: state.total_xp, xpToday: state.xp_today, xpWeek: state.xp_week, alreadyAwarded: true });
     return;
   }
   // Câu trả lời đúng từ SERVER: attempt_answers của em (mọi lượt làm).
@@ -1431,12 +1431,12 @@ attemptsRouter.post('/topics/:id/complete', requireRole('student'), async (req: 
     void unknownIds;
   }
   if (!complete) {
-    res.json({ awarded: false, complete: false, totalXp: state.total_xp, missing });
+    res.json({ awarded: false, complete: false, totalXp: state.total_xp, xpToday: state.xp_today, xpWeek: state.xp_week, missing });
     return;
   }
   if (xpReward <= 0) {
     // Giữ đúng tryAwardTopicCompletion: quỹ = 0 thì không trao, không ghi bước.
-    res.json({ awarded: false, complete: true, totalXp: state.total_xp });
+    res.json({ awarded: false, complete: true, totalXp: state.total_xp, xpToday: state.xp_today, xpWeek: state.xp_week });
     return;
   }
   // Chống cộng trùng 2 lớp: xp.ts chặn theo khóa xp_logs `topic:<id>`,
@@ -1455,7 +1455,7 @@ attemptsRouter.post('/topics/:id/complete', requireRole('student'), async (req: 
         'ON DUPLICATE KEY UPDATE `completed_steps` = VALUES(`completed_steps`)',
       [studentId, JSON.stringify(curSteps)]
     );
-    return { awarded: res2.awarded > 0, totalXp: res2.totalXp };
+    return { awarded: res2.awarded > 0, totalXp: res2.totalXp, xpToday: res2.xpToday, xpWeek: res2.xpWeek };
   });
-  res.json({ awarded: awarded.awarded, complete: true, totalXp: awarded.totalXp });
+  res.json({ awarded: awarded.awarded, complete: true, totalXp: awarded.totalXp, xpToday: awarded.xpToday, xpWeek: awarded.xpWeek });
 });

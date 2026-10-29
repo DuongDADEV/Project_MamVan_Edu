@@ -194,6 +194,9 @@ export interface SubmitResult {
   gradedCount: number;
   /** Tổng XP mới của học sinh sau nộp bài (server tính, nếu server trả). */
   totalXp?: number;
+  /** XP hôm nay / XP tuần server trả (để client đồng bộ, không tự tính). */
+  xpToday?: number;
+  xpWeek?: number;
 }
 
 /** Bóc envelope { data | rows | items } hoặc giữ nguyên. */
@@ -644,6 +647,8 @@ export async function submitAssignmentAttempt(input: {
     pendingCount: typeof data.pendingCount === 'number' ? data.pendingCount : 0,
     gradedCount: typeof data.gradedCount === 'number' ? data.gradedCount : 0,
     totalXp: typeof (data.totalXp ?? data.total_xp) === 'number' ? (data.totalXp ?? data.total_xp) : undefined,
+    xpToday: typeof (data.xpToday ?? data.xp_today) === 'number' ? (data.xpToday ?? data.xp_today) : undefined,
+    xpWeek: typeof (data.xpWeek ?? data.xp_week) === 'number' ? (data.xpWeek ?? data.xp_week) : undefined,
   };
 }
 
