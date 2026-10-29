@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Thẻ Nhiệm vụ tuần ở Trang chủ hiện cả bài được giao
+
+- VẤN ĐỀ (chủ dự án báo): giao 1 bài tập ở phần Bài tập thì hiện ở đó, nhưng thẻ "Nhiệm vụ tuần" ở giao diện chính vẫn "Chưa có bài tập về nhà mới". Nguyên nhân: quyết định 25/10 (c029adb) đã rút code gộp bài BI khỏi thẻ này — thẻ chỉ liệt kê BTVN quiz (kind homework), không nhìn assignments; hậu quả "học sinh có bài được giao vẫn thấy thẻ trống" khi đó đã được chấp nhận.
+- SỬA (src/screens/HomeScreen.tsx, đảo quyết định 25/10 theo yêu cầu mới): thẻ gộp lại bài được giao từ CÙNG nguồn với mục Bài tập (getStudentAssignments trong services/api/biClient.ts) + BTVN quiz, sắp xếp theo hạn nộp, tối đa 4 bài; nút "Làm bài" của bài BI đã có sẵn đường onOpenAssignment. Bài mới giao 29/10 (asg_mvt7f76axgblt6, "Bài kiểm tra mới", đã xuất bản) sẽ hiện ở thẻ này với các học sinh thấy nó ở mục Bài tập.
+- Sơ đồ không regen đợt này (khôi phục nguồn dữ liệu của thẻ đã có, không đổi luồng).
+
 ## [dev] 2026-10-29 — Học xong là +XP thật + xóa huy hiệu XP giả
 
 - VẤN ĐỀ (chủ dự án báo, số liệu thật): học sinh Minh An (annm10) học xong đủ 5/5 mục luồng "từ láy", làm đúng hết, nhưng tổng chỉ 3 XP (điểm danh 2 + quiz 1), không nhận 50 XP quỹ chủ đề. Nguyên nhân: route POST /api/topics/:id/complete tự bổ sung videoIds/theoryId/quiz ngoài luồng vào danh sách xét — video_1793170144462 đã xóa khỏi luồng nhưng còn sót id trong videoIds nên bị đòi thêm bước video_flow_completed không tồn tại; client chỉ thử lại 1 lần rồi thôi nên kẹt vĩnh viễn.
