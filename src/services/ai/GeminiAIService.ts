@@ -605,12 +605,18 @@ Các loại khối:
       )
       .join('\n');
 
+    // 29/10: thêm đề bài vào prompt để AI chấm đúng yêu cầu, không chấm
+    // chung chung (chủ dự án: "gợi ý đúng chuẩn thật luôn").
+    const assignmentLine = options?.assignmentPrompt?.trim()
+      ? `\nĐề bài học sinh phải làm:\n"""\n${options.assignmentPrompt.trim()}\n"""\n`
+      : '';
+
     const prompt = `Bạn là giáo viên giàu kinh nghiệm chấm bài Ngữ văn 7.
 Hãy chấm bài làm văn của học sinh dưới đây:
 """
 ${essayText}
 """
-
+${assignmentLine}
 Bộ tiêu chí Rubric đánh giá:
 ${rubricPrompt}
 
@@ -633,8 +639,59 @@ Phong cách nhận xét: ${options?.tone || 'encouraging'} (khích lệ, chỉ r
   "confidenceScore": 0.95
 }`;
 
-    const raw = await this.callGemini(prompt);
-    return this.parseJsonFromText<AIEssayGradingResult>(raw);
+    // 29/10: AI (kể cả leg đầu Gemini) thỉnh thoảng trả JSON lệch dạng —
+    // thiếu mảng rubricScores, mảng nằm ở key khác, hoặc object thay vì
+    // mảng — khiến màn chấm báo "không trả về điểm theo tiêu chí nào"
+    // dù call đã thành công (chứng cứ ai_usage 19:22 29/10: leg gemini).
+    // Chuẩn hóa khoan dung + thử lại 1 lần (lượt sau có thể sang leg
+    // khác); vẫn không có điểm hợp lệ thì ném rõ, tuyệt đối không bịa.
+    const normalize = (parsed: any): AIEssayGradingResult | null => {
+      if (!parsed || typeof parsed !== 'object') return null;
+      const rawArr = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed.rubricScores)
+          ? parsed.rubricScores
+          : Array.isArray(parsed.scores)
+            ? parsed.scores
+            : Array.isArray(parsed.criteria)
+              ? parsed.criteria
+              : parsed.rubricScores && typeof parsed.rubricScores === 'object'
+                ? Object.values(parsed.rubricScores)
+                : null;
+      if (!rawArr || !rawArr.length) return null;
+      const rubricScores = (rawArr as any[])
+        .map((it: any) => ({
+          criterionName: String(it?.criterionName ?? it?.name ?? it?.criterion ?? ''),
+          suggestedScore: Number(it?.suggestedScore ?? it?.score ?? 0) || 0,
+          maxScore: Number(it?.maxScore ?? 0) || 0,
+          reason: String(it?.reason ?? ''),
+          comment: String(it?.comment ?? ''),
+        }))
+        .filter((r) => r.criterionName);
+      if (!rubricScores.length) return null;
+      const total = Number((parsed as any).totalScore);
+      return {
+        rubricScores,
+        totalScore: Number.isFinite(total)
+          ? total
+          : rubricScores.reduce((s, r) => s + r.suggestedScore, 0),
+        overallComment: String((parsed as any).overallComment ?? (parsed as any).comment ?? ''),
+        confidenceScore: Number((parsed as any).confidenceScore) || undefined,
+      };
+    };
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let parsed: any = null;
+      try {
+        const raw = await this.callGemini(prompt);
+        parsed = this.parseJsonFromText<any>(raw);
+      } catch {
+        parsed = null;
+      }
+      const norm = normalize(parsed);
+      if (norm) return norm;
+    }
+    throw new Error('AI trả về không đúng định dạng điểm theo tiêu chí sau 2 lần thử — thầy/cô bấm lại để thử lượt khác, bài vẫn giữ trạng thái chờ chấm.');
   }
 
   /**

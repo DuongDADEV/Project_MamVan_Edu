@@ -198,7 +198,9 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
           maxScore: maxPoints,
         };
       });
-      const res = await aiService.suggestEssayGrade(text, rubricForAI);
+      const res = await aiService.suggestEssayGrade(text, rubricForAI, undefined, {
+        assignmentPrompt: submission.promptTitle || undefined,
+      });
       // Ghép điểm AI vào đúng tiêu chí đang hiển thị (khớp tên, fallback
       // theo thứ tự) để tổng và từng tiêu chí luôn nhất quán.
       const mapped = initialRubric.map((c, idx) => {

@@ -66,6 +66,8 @@ export interface AIRubricCriterion {
 }
 
 export interface AIEssayGradingOptions {
+  // 29/10: đề bài học sinh phải làm — AI chấm đúng yêu cầu, không chung chung.
+  assignmentPrompt?: string;
   tone?: 'encouraging' | 'neutral' | 'strict';
   strictness?: number; // 1 (nhẹ tay) -> 5 (rất khắt khe)
   mentionGoodPointsFirst?: boolean;

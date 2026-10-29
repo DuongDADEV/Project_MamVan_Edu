@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Gợi ý AI: chuẩn hóa khoan dung + thử lại, thêm đề bài vào prompt
+
+- Nguyên nhân lỗi "AI không trả về điểm theo tiêu chí nào" khi bấm "Tạo gợi ý AI" (bài Nguyễn Minh An, nội dung "22"): chứng cứ bảng ai_usage cho thấy lượt đó do leg gemini (gemini-2.5-flash) phục vụ lúc 19:22:20 — call thành công nhưng JSON trả về lệch dạng (thiếu mảng rubricScores hợp lệ), nên bước ghép điểm ra rỗng. Tái hiện cùng prompt qua leg groq thì JSON chuẩn đủ 4 tiêu chí — lỗi nằm ở dạng trả về từng lượt, không phải ở đề hay rubric.
+- Sửa trong GeminiAIService.suggestEssayGrade: chuẩn hóa khoan dung (nhận mảng ở key rubricScores/scores/criteria, object thay vì mảng, item với key criterionName/name/criterion và suggestedScore/score); parse lỗi hoặc rỗng thì tự thử lại 1 lần (lượt sau có thể sang leg khác); sau 2 lần vẫn không có điểm hợp lệ thì ném rõ, tuyệt đối không bịa điểm. Đồng thời prompt chấm nay kèm đề bài (promptTitle) để AI chấm đúng yêu cầu thay vì chung chung.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Gợi ý AI chấm thật theo rubric, bỏ điểm mặc định 80%
 
 - Vấn đề chủ dự án nêu ("AI gợi ý đúng chuẩn thật luôn chứ không phải điểm mặc định"): (1) đường live chưa bao giờ sinh gợi ý AI — code tự gợi ý chỉ nằm ở mock repo thời localStorage, còn đường API (App.tsx nộp bài) chỉ POST bài với trạng thái PENDING_TEACHER, nên pill "Đã có gợi ý AI" luôn 0; (2) mở bài chưa có gợi ý, màn chấm tự điền mỗi tiêu chí 80% điểm tối đa (dù chú thích ghi "khởi tạo điểm = 0") — đó chính là "điểm mặc định".
