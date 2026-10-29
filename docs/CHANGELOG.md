@@ -1,3 +1,9 @@
+## [dev] 2026-10-30 — Xóa mã mức độ nhận thức khỏi tab Ma trận năng lực
+
+- Chủ dự án khoanh: 4 mã nội bộ NHAN_BIET / THONG_HIEU / PHAN_TICH / VAN_DUNG hiện trên đầu mỗi thẻ mức độ ở tab Ma trận năng lực (TreeScreen) — cùng lỗi lộ mã nội bộ như vụ GRADED trước đây. Đã xóa luôn dòng mã đó, chỉ còn tên hiển thị (Nhớ được / Hiểu được / Phân tích được / Vận dụng được).
+- Tiện tay sửa luôn nhãn "Chưa đủ dữ liệu (<3 câu)" thành "(<5 câu)" cho khớp luật thật: MASTERY_CONFIG.MIN_QUESTIONS_REQUIRED = 5 (luật này đã được chốt từ trước, nhãn <3 là chữ cũ sai).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Popup chủ đề chỉ hiện câu trong bài cô giao (luật "giao gì làm đấy")
 
 - Chủ dự án chốt: học sinh chỉ làm bài cô giao, câu không giao không được hiện. Popup chi tiết chủ đề trước đây liệt kê toàn bộ câu published mang topicId của chủ đề nên lòi ra 5 câu mồ côi trong ngân hàng "từ láy" (4 câu AI sinh từ nguồn Văn 7 + 1 câu tiếng Indonesia gõ tay) dù chúng không nằm trong bài nào đã giao.

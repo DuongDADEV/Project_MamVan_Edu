@@ -366,7 +366,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
 
                 let statusBadge = (
                   <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold">
-                    Chưa đủ dữ liệu (&lt;3 câu)
+                    Chưa đủ dữ liệu (&lt;5 câu)
                   </span>
                 );
 
@@ -397,9 +397,6 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-[11px] font-mono text-slate-400 font-semibold block">
-                          {key}
-                        </span>
                         <h4 className="text-base font-extrabold text-[#1E1B4B]">
                           {info.displayName}
                         </h4>
