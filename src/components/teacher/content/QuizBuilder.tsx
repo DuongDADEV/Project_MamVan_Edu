@@ -11,7 +11,6 @@ import {
   RubricCriterion,
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
-import { CollapsedToolbarBar } from './TopicFlowStrip.tsx';
 
 import { QuestionBankModal } from './QuestionBankModal.tsx';
 import {
@@ -70,9 +69,6 @@ interface QuizBuilderProps {
   onBack?: () => void;
   /** Thu gọn thanh công cụ (nút 2/3 trên dải luồng) */
   toolbarCollapsed?: boolean;
-  onExpandToolbar?: () => void;
-  /** Ẩn hẳn thanh công cụ khi đã gộp vào thanh chung (thu cả hai) */
-  hideToolbarBar?: boolean;
 }
 
 // Cấu hình mặc định cho từng loại bài kiểm tra
@@ -143,8 +139,6 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   onPreviewStudent,
   onBack,
   toolbarCollapsed,
-  onExpandToolbar,
-  hideToolbarBar,
 }) => {
   // 1. Cài đặt bài kiểm tra (Quiz Settings)
   const [title, setTitle] = useState(quiz.title || '');
@@ -583,13 +577,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
-      {toolbarCollapsed ? (hideToolbarBar ? null : (
-        <CollapsedToolbarBar
-          label="Bài tập"
-          detail={title}
-          onExpand={onExpandToolbar || (() => {})}
-        />
-      )) : (
+      {!toolbarCollapsed && (
       <>
       {/* Top Header — dính chặt phía trên khi thân trình soạn cuộn */}
       <div className="sticky top-0 z-20 shrink-0 p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">

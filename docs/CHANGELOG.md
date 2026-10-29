@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Xóa hẳn thanh mỏng khi chỉ thu thanh công cụ
+
+- Theo lệnh chủ dự án: thanh mỏng "Bài giảng Video 1 — Mở lại thanh công cụ" khi chỉ thu thanh công cụ đã bị xóa hẳn, không còn chiếm chỗ. Khi thu thanh công cụ, hàng công cụ biến mất luôn; mở lại bằng cụm 3 nút trên dải luồng (nút 2 mở thanh công cụ, nút 3 mở cả hai).
+- Thanh gộp khi thu CẢ hai vẫn giữ nguyên (là lối mở lại duy nhất khi cả hai cùng thu). Component CollapsedToolbarBar + prop onExpandToolbar/hideToolbarBar đã dọn sạch khỏi 4 trình soạn.
+- Sơ đồ không regen đợt này (chỉ đổi hiển thị khi thu gọn).
+
 ## [dev] 2026-10-29 — Bảng "Học sinh cần quan tâm" cuộn ngang, hiện đủ thông tin
 
 - Nguyên nhân chữ bị cắt: bảng dùng `w-full` + `table-fixed` ép vừa khung card (5/12 hàng) nên cột co lại, `truncate` cắt tên và gợi ý theo dõi. Khung đã có `overflow-x-auto` nhưng bảng không bao giờ tràn nên thanh ngang không xuất hiện.

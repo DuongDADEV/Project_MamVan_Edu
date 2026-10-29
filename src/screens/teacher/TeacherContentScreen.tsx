@@ -1028,8 +1028,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onChanged={loadAssignmentSummaries}
             onDeleted={() => setSelectedItem(null)}
             toolbarCollapsed={toolbarCollapsed}
-            onExpandToolbar={() => setToolbarCollapsed(false)}
-            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentVideo ? (
           <VideoLessonEditor
@@ -1045,8 +1043,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onCreateLinkedQuiz={handleCreateLinkedQuiz}
             onBack={() => setSelectedItem({ type: 'topic', id: currentVideo.topicId })}
             toolbarCollapsed={toolbarCollapsed}
-            onExpandToolbar={() => setToolbarCollapsed(false)}
-            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentTheory ? (
           <TheoryLessonEditor
@@ -1062,8 +1058,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onCreateLinkedQuiz={handleCreateLinkedQuiz}
             onBack={() => setSelectedItem({ type: 'topic', id: currentTheory.topicId })}
             toolbarCollapsed={toolbarCollapsed}
-            onExpandToolbar={() => setToolbarCollapsed(false)}
-            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentQuiz ? (
           <QuizBuilder
@@ -1092,8 +1086,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
               }
             }}
             toolbarCollapsed={toolbarCollapsed}
-            onExpandToolbar={() => setToolbarCollapsed(false)}
-            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentTopic ? (
           /* Khối thông tin chi tiết của chủ đề đang chọn */

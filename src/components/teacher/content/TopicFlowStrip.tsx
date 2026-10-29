@@ -50,39 +50,6 @@ const TYPE_LABEL: Record<FlowItemType, string> = {
 };
 
 /**
- * Thanh mỏng thay cho hàng công cụ của trình soạn khi bị thu gọn (nút 2/3).
- * Luôn giữ 1 nút mở lại để giáo viên không bị kẹt; cụm 3 nút trên dải luồng
- * vẫn bấm được nên thanh này chỉ là lối mở lại tiện tay.
- */
-export const CollapsedToolbarBar: React.FC<{
-  label: string;
-  detail?: string;
-  onExpand: () => void;
-  className?: string;
-}> = ({ label, detail, onExpand, className }) => (
-  <div
-    className={`sticky top-0 z-20 shrink-0 px-4 py-1.5 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center gap-2 ${className || ''}`}
-  >
-    <span className="text-xs font-bold text-[#2F3E6B] truncate">{label}</span>
-    {detail && (
-      <span className="text-[11px] text-[#8C7E6A] truncate hidden sm:inline">
-        {detail}
-      </span>
-    )}
-    <span className="flex-1" />
-    <button
-      type="button"
-      onClick={onExpand}
-      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] hover:border-[#2F3E6B] transition-colors shrink-0"
-      title="Mở lại thanh công cụ"
-    >
-      <PanelBottomOpen className="w-3.5 h-3.5" />
-      <span>Mở lại thanh công cụ</span>
-    </button>
-  </div>
-);
-
-/**
  * Dải LUỒNG HỌC — một thanh MỎNG gọn ngay trên trình soạn: các bài trong chủ
  * đề xếp sát nhau theo đúng thứ tự (nút tròn icon theo loại + tên bài nằm
  * ngang bên cạnh), bấm để tới bài, kéo–thả đổi thứ tự, nút + ở cuối để thêm.
