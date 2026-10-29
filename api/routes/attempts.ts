@@ -1150,13 +1150,29 @@ attemptsRouter.post('/topics/:id/complete', requireRole('student'), async (req: 
   const quizById = new Map<string, any>();
   for (const q of [...quizRows, ...payloadQuizRows]) quizById.set(q.id, q);
   const quizzes = [...quizById.values()].filter((q: any) => q.status === 'published');
-  // Thứ tự luồng: flowOrder đã lưu, rồi bổ sung mục còn thiếu cuối
-  // (deriveFlowItems: video -> lý thuyết -> bài tập).
+  // LUẬT 29/10 (chủ dự án: "học xong là +XP"): luồng cô xếp (flowOrder) là
+  // danh sách chính thức của chủ đề — chỉ tính đúng các mục trong đó.
+  // Trước đây route còn bổ sung videoIds/theoryId/quiz ngoài luồng, nên
+  // video đã xóa khỏi luồng nhưng còn sót id trong videoIds (vd
+  // video_1793170144462 ở chủ đề "từ láy") chặn trao quỹ dù học sinh đã
+  // 100% luồng và làm đúng hết — đúng ca Minh An gặp (tổng 3 XP, mất 50 XP).
+  // Mục trong luồng được công nhận khi hàng còn tồn tại, chưa soft-delete
+  // (quiz thêm điều kiện đã xuất bản, như filter ở trên). Chủ đề chưa xếp
+  // luồng (flowOrder rỗng) giữ cách tính cũ (mọi mục hợp lệ).
   const flowOrder: string[] = Array.isArray(vPayload.flowOrder) ? vPayload.flowOrder : [];
   const valid = new Map<string, { type: string; id: string }>();
   for (const id of videoIds) valid.set(`video:${id}`, { type: 'video', id });
   if (theoryId) valid.set(`theory:${theoryId}`, { type: 'theory', id: theoryId });
   for (const q of quizzes) valid.set(`quiz:${q.id}`, { type: 'quiz', id: q.id });
+  for (const key of flowOrder) {
+    if (valid.has(key) || typeof key !== 'string') continue;
+    const [kind, itemId] = key.split(':');
+    if (!itemId) continue;
+    const table = kind === 'video' ? 'video_lessons' : kind === 'theory' ? 'theory_lessons' : null;
+    if (!table) continue;
+    const rows = await query<any>(`SELECT \`id\` FROM \`${table}\` WHERE \`id\` = ? AND \`deleted_at\` IS NULL LIMIT 1`, [itemId]);
+    if (rows[0]) valid.set(key, { type: kind, id: itemId });
+  }
   const flow: { type: string; id: string }[] = [];
   const used = new Set<string>();
   for (const key of flowOrder) {
@@ -1166,8 +1182,10 @@ attemptsRouter.post('/topics/:id/complete', requireRole('student'), async (req: 
       used.add(key);
     }
   }
-  for (const [key, item] of valid) {
-    if (!used.has(key)) flow.push(item);
+  if (flowOrder.length === 0) {
+    for (const [key, item] of valid) {
+      if (!used.has(key)) flow.push(item);
+    }
   }
   if (flow.length === 0) {
     const totals0: any = await getTotals(db, studentId);

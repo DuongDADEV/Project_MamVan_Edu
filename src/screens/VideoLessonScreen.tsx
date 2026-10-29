@@ -766,7 +766,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                 <span className="text-slate-700">
                   Thời lượng đã xem thật: <strong className="text-[#4F46E5] font-bold font-mono">{Math.round(watchedRatio * 100)}%</strong> (Cần ≥ 80% để sang bước tiếp theo)
                 </span>
-                <span className="text-[#4F46E5] font-bold">+5 XP khi hoàn thành</span>
               </div>
               <div className="w-full h-2.5 bg-indigo-100 rounded-full overflow-hidden">
                 <div
@@ -803,9 +802,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               <h2 className="text-xl sm:text-2xl font-extrabold text-[#1E1B4B]">
                 Kiến thức trọng tâm sau bài giảng
               </h2>
-              <span className="text-xs px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-extrabold">
-                +2 XP khi hoàn thành
-              </span>
             </div>
 
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">

@@ -644,9 +644,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
               <h2 className="text-xl sm:text-2xl font-extrabold text-[#1E1B4B]">
                 {theory.title}
               </h2>
-              <span className="text-xs px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[#4F46E5] font-extrabold self-start sm:self-auto">
-                +10 XP khi bấm "Đã hiểu"
-              </span>
             </div>
 
             {/* MỤC LỤC NHANH (Table of Contents) — chỉ hiện khi nội dung render theo

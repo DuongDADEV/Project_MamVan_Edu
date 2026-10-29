@@ -1,3 +1,10 @@
+## [dev] 2026-10-29 — Học xong là +XP thật + xóa huy hiệu XP giả
+
+- VẤN ĐỀ (chủ dự án báo, số liệu thật): học sinh Minh An (annm10) học xong đủ 5/5 mục luồng "từ láy", làm đúng hết, nhưng tổng chỉ 3 XP (điểm danh 2 + quiz 1), không nhận 50 XP quỹ chủ đề. Nguyên nhân: route POST /api/topics/:id/complete tự bổ sung videoIds/theoryId/quiz ngoài luồng vào danh sách xét — video_1793170144462 đã xóa khỏi luồng nhưng còn sót id trong videoIds nên bị đòi thêm bước video_flow_completed không tồn tại; client chỉ thử lại 1 lần rồi thôi nên kẹt vĩnh viễn.
+- SỬA (api/routes/attempts.ts): flowOrder là danh sách chính thức — route chỉ xét đúng các mục trong flowOrder, mục trong luồng được công nhận khi hàng còn tồn tại, chưa soft-delete (quiz thêm điều kiện đã xuất bản). Chủ đề chưa xếp luồng giữ cách tính cũ. Mô phỏng với dữ liệu thật của Minh An: trước sửa missing = [video_1793170144462] (complete = false), sau sửa missing = [] (complete = true → trao 50 XP). Minh An sẽ nhận 50 XP ở lần mở app tới (client gọi lại route khi vào app, ref theo phiên).
+- XÓA huy hiệu XP giả (mô hình XP 22/10 đã bãi bỏ XP theo hành động, engine server không hề trao các khoản này nhưng giao diện vẫn hứa): "+5 XP khi hoàn thành" (màn video), "+2 XP khi hoàn thành" (bước Trọng tâm), "+10 XP khi bấm \"Đã hiểu\"" (màn lý thuyết). Thanh đo thời lượng xem thật + cổng xem ≥ 80% giữ nguyên (chống tua video, không phải huy hiệu XP).
+- Sơ đồ không regen đợt này (sửa luật trao quỹ + xóa huy hiệu hiển thị, không đổi luồng học).
+
 ## [dev] 2026-10-29 — Xóa chú thích màu lá bị lặp trong màn Vườn
 
 - Màn Vườn (TreeScreen) vẽ 2 khối chú thích cùng 1 ý nghĩa trong cùng 1 thẻ cây: 1 khối ngay dưới cây ("≥80% • Đã hoàn thành / 50–79% • Đang học / <50% • Cần ôn lại / Chưa học") và 1 khối cuối thẻ ("Vững (≥80%) / Đang tiến bộ (50–79%) / Cần ôn lại (<50%) / Chưa học"). Theo yêu cầu của chủ dự án, xóa khối thứ nhất (đúng khối trong ảnh chụp), chỉ giữ khối "Chú giải trạng thái lá" cuối thẻ.
