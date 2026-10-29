@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Bảng "Học sinh cần quan tâm" cuộn ngang, hiện đủ thông tin
+
+- Nguyên nhân chữ bị cắt: bảng dùng `w-full` + `table-fixed` ép vừa khung card (5/12 hàng) nên cột co lại, `truncate` cắt tên và gợi ý theo dõi. Khung đã có `overflow-x-auto` nhưng bảng không bao giờ tràn nên thanh ngang không xuất hiện.
+- Sửa: bảng đặt `min-w-[720px]` (cột giữ đúng tỷ lệ 22/22/12/14/30, đủ hiện trọn tên và gợi ý), bỏ `truncate` ở cột Họ tên và Gợi ý theo dõi (giữ tooltip). Hàng "Tổng cộng" gộp thành `tfoot` dính đáy trong cùng bảng thay cho bảng riêng ngoài khung cuộn, để cột luôn thẳng hàng khi cuộn ngang. Card, lưới trang, KPI, cuộn dọc 7 dòng giữ nguyên.
+- Sơ đồ không regen đợt này (chỉ đổi hiển thị bảng).
+
 ## [dev] 2026-10-29 — Thu cả hai chỉ còn 1 thanh mỏng (gộp thanh thu gọn)
 
 - Theo phản hồi chủ dự án ("thu cả 2 vào nó cũng chả bé hơn là bao"): khi thu gọn CẢ luồng lẫn thanh công cụ, trước đây vẫn còn 2 thanh mỏng chồng nhau (~70px). Nay khung phải gộp thành đúng 1 thanh duy nhất ("Luồng học: <chủ đề> · <tên bài> — đã thu gọn cả hai, bấm để mở lại") kèm đủ 3 nút, còn trình soạn ẩn hẳn thanh công cụ của nó đi. Thu riêng từng cái giữ nguyên 1 thanh mỏng như trước, chỉ làm mỏng hơn một chút (giảm padding).

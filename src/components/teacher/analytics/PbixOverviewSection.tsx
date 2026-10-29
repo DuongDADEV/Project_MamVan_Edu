@@ -476,10 +476,12 @@ export const PbixOverviewSection: React.FC<Props> = ({
               className="flex-1 min-h-0 overflow-x-auto overflow-y-auto"
               style={studentsScroll.maxHeight !== undefined ? { maxHeight: studentsScroll.maxHeight } : undefined}
             >
-              {/* Chiều cao đo từ render thực tế (thead + 7 dòng đầu): lúc chưa
-                  cuộn thấy đúng 7 dòng học sinh, từ dòng thứ 8 trở đi chỉ
-                  thấy khi cuộn trong bảng. */}
-              <table className="w-full text-sm table-fixed border-separate border-spacing-0">
+              {/* Bảng rộng tối thiểu 720px nên khung hẹp sẽ cuộn ngang (29/10:
+                  trước đây w-full + table-fixed ép bảng vừa khung nên chữ bị
+                  cắt). Hàng Tổng cộng là tfoot dính đáy cùng khung cuộn để
+                  cột luôn thẳng hàng khi cuộn ngang. Chiều cao đo từ render
+                  thực tế (thead + 7 dòng đầu). */}
+              <table className="min-w-[720px] text-sm table-fixed border-separate border-spacing-0">
                 <colgroup>
                   <col style={{ width: '22%' }} />
                   <col style={{ width: '22%' }} />
@@ -515,7 +517,7 @@ export const PbixOverviewSection: React.FC<Props> = ({
                         selectedStudentId === r.studentId ? 'bg-indigo-50' : ''
                       }`}
                     >
-                      <td className={`py-2 pr-3 font-medium truncate ${cellBorder}`} title={r.name}>{r.name}</td>
+                      <td className={`py-2 pr-3 font-medium ${cellBorder}`} title={r.name}>{r.name}</td>
                       <td className={`py-2 pr-3 whitespace-nowrap ${cellBorder}`}>
                         {formatVNDateTime(r.lastLoginAt)}
                       </td>
@@ -523,41 +525,30 @@ export const PbixOverviewSection: React.FC<Props> = ({
                       <td className={`py-2 pr-3 text-right ${cellBorder}`}>
                         {formatOneDecimalPercent(r.personalRate)}
                       </td>
-                      <td className={`py-2 truncate ${cellBorder}`} title={r.suggestion}>{r.suggestion}</td>
+                      <td className={`py-2 ${cellBorder}`} title={r.suggestion}>{r.suggestion}</td>
                     </tr>
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
-            {dashboard.studentsTotal && (
-              <div className="shrink-0 overflow-x-auto border-t border-stone-200">
-                <table className="w-full text-sm table-fixed">
-                  <colgroup>
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '12%' }} />
-                    <col style={{ width: '14%' }} />
-                    <col style={{ width: '30%' }} />
-                  </colgroup>
-                  <tbody>
+                {dashboard.studentsTotal && (
+                  <tfoot>
                     <tr className="font-bold">
-                      <td className="py-2 pr-3">Tổng cộng</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
+                      <td className="py-2 pr-3 sticky bottom-0 z-10 bg-white border-t border-stone-200">Tổng cộng</td>
+                      <td className="py-2 pr-3 whitespace-nowrap sticky bottom-0 z-10 bg-white border-t border-stone-200">
                         {formatVNDateTime(dashboard.studentsTotal.lastLoginAt)}
                       </td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className="py-2 pr-3 text-right sticky bottom-0 z-10 bg-white border-t border-stone-200">
                         {dashboard.studentsTotal.unsubmitted}
                       </td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className="py-2 pr-3 text-right sticky bottom-0 z-10 bg-white border-t border-stone-200">
                         {formatOneDecimalPercent(dashboard.studentsTotal.overallRate)}
                       </td>
-                      <td className="py-2 truncate" title={dashboard.studentsTotal.suggestion}>{dashboard.studentsTotal.suggestion}</td>
+                      <td className="py-2 sticky bottom-0 z-10 bg-white border-t border-stone-200" title={dashboard.studentsTotal.suggestion}>{dashboard.studentsTotal.suggestion}</td>
                     </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  </tfoot>
+                )}
+              </table>
+            </div>
             </>
           )}
         </div>
