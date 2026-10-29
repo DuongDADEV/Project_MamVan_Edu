@@ -353,6 +353,22 @@ essaysRouter.post('/essays', ah(async (req: AuthedRequest, res) => {
     httpErr(res, 400, 'BAD_INPUT');
     return;
   }
+  // 29/10 — LUẬT TỰ LUẬN 1 LẦN (chủ dự án chốt): mỗi học sinh mỗi câu
+  // tự luận chỉ có đúng 1 phiếu; bài nộp đầu tiên là bài được chấm.
+  // Làm lại không tạo phiếu mới (giao diện khóa ô nhập, server chặn
+  // trùng ở đây để máy khác/app cũ cũng không lách được).
+  const dup = await query<any>(
+    'SELECT `id`, `status` FROM `essay_submissions` WHERE `student_id` = ? AND `question_id` = ? LIMIT 1',
+    [studentId, questionId]
+  );
+  if (dup.length) {
+    res.status(409).json({
+      error: 'ESSAY_ALREADY_SUBMITTED',
+      existingId: dup[0].id,
+      existingStatus: dup[0].status,
+    });
+    return;
+  }
   // essay_submissions.id là CHAR(36) — dùng UUID thật.
   const uuid = randomUUID();
   await query(

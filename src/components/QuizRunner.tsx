@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Question, Quiz, QuestionResult, EssaySubmission } from '../types.ts';
+import { essayRepository } from '../services/index.ts';
 import { SKILL_METADATA } from '../logic/mastery.ts';
 import { splitPromptBlanks, countBlanks, gradeFillBlanks } from '../logic/fillBlank.ts';
 import { MamMuc } from './MamMuc.tsx';
@@ -43,6 +44,9 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
   const [practiceChecked, setPracticeChecked] = useState<Record<string, boolean>>({});
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  // 29/10 — LUẬT TỰ LUẬN 1 LẦN: câu tự luận đã nộp (theo máy chủ) thì
+  // khóa ô nhập khi làm lại; giá trị là status phiếu đầu tiên.
+  const [lockedEssays, setLockedEssays] = useState<Record<string, string>>({});
   const submittedRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const submitLatestRef = useRef<() => void>(() => {});
@@ -63,6 +67,29 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     submittedRef.current = false;
     setTimeLeft(quiz.timeLimitMinutes ? quiz.timeLimitMinutes * 60 : 0);
   }, [quiz.id]);
+
+  // 29/10: tải phiếu tự luận đã nộp từ MÁY CHỦ (không dùng state local)
+  // để khóa đúng câu đã nộp. Tải lỗi thì mở khóa tạm — máy chủ vẫn chặn
+  // trùng khi nộp nên không lọt phiếu mới. Không có studentId (xem trước
+  // của giáo viên) thì không khóa.
+  useEffect(() => {
+    if (!studentId) return;
+    let cancelled = false;
+    essayRepository
+      .getSubmissions({ studentId, includeReviews: false })
+      .then((subs) => {
+        if (cancelled) return;
+        const locked: Record<string, string> = {};
+        (subs || []).forEach((s) => {
+          if (s.questionId) locked[s.questionId] = s.status || 'PENDING_TEACHER';
+        });
+        setLockedEssays(locked);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [quiz?.id, studentId]);
 
   // Đảm bảo chỉ số câu hỏi luôn an toàn, không bao giờ vượt quá chiều dài mảng câu hỏi
   const safeIndex = questions.length > 0 ? Math.min(currentIndex, questions.length - 1) : 0;
@@ -162,6 +189,11 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           topicId: q.topicId,
         });
       } else if (q.type === 'essay') {
+        if (lockedEssays[q.id]) {
+          // Đã nộp từ trước: không tạo phiếu mới, không ghi kết quả mới —
+          // điểm lấy từ bài nộp đầu tiên ở phần Kết quả.
+          return;
+        }
         const text = (essayDrafts[q.id] || '').trim();
         const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
         if (words > 0) {
@@ -214,9 +246,10 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     );
   }
 
+  const currentEssayLocked = currentQ.type === 'essay' ? !!lockedEssays[currentQ.id] : false;
   const isCurrentAnswered =
     currentQ.type === 'essay'
-      ? (essayDrafts[currentQ.id]?.trim().split(/\s+/).length || 0) >= 5
+      ? currentEssayLocked || (essayDrafts[currentQ.id]?.trim().split(/\s+/).length || 0) >= 5
       : userAnswers[currentQ.id] !== undefined;
 
   const isChecked = isPractice && practiceChecked[currentQ.id];
@@ -475,24 +508,32 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               </div>
             )}
 
-            <div className="relative">
-              <textarea
-                rows={7}
-                value={essayDrafts[currentQ.id] || ''}
-                onChange={(e) =>
-                  setEssayDrafts({ ...essayDrafts, [currentQ.id]: e.target.value })
-                }
-                placeholder="Viết đoạn văn của em tại đây (hãy diễn đạt tự nhiên, chân thành)..."
-                className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50/40 focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-indigo-100 outline-none text-sm text-[#1E1B4B] font-sans leading-relaxed resize-none transition-all"
-              />
-
-              <div className="flex items-center justify-between text-xs text-slate-400 mt-2 px-1">
-                <span>* Bài viết sẽ được lưu và chuyển tới giáo viên nhận xét chi tiết.</span>
-                <span className="font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
-                  {(essayDrafts[currentQ.id]?.trim().split(/\s+/).filter(Boolean).length || 0)} từ
-                </span>
+            {currentEssayLocked ? (
+              <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 text-sm text-[#1E1B4B] leading-relaxed">
+                {lockedEssays[currentQ.id] === 'GRADED'
+                  ? 'Bài này em đã làm và đã được chấm. Em hãy xem điểm của mình ở phần kết quả nhé!'
+                  : 'Bài này em đã làm, đang chờ giáo viên chấm. Em hãy xem điểm của mình ở phần kết quả nhé!'}
               </div>
-            </div>
+            ) : (
+              <div className="relative">
+                <textarea
+                  rows={7}
+                  value={essayDrafts[currentQ.id] || ''}
+                  onChange={(e) =>
+                    setEssayDrafts({ ...essayDrafts, [currentQ.id]: e.target.value })
+                  }
+                  placeholder="Viết đoạn văn của em tại đây (hãy diễn đạt tự nhiên, chân thành)..."
+                  className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50/40 focus:bg-white focus:border-[#4F46E5] focus:ring-4 focus:ring-indigo-100 outline-none text-sm text-[#1E1B4B] font-sans leading-relaxed resize-none transition-all"
+                />
+
+                <div className="flex items-center justify-between text-xs text-slate-400 mt-2 px-1">
+                  <span>* Bài viết sẽ được lưu và chuyển tới giáo viên nhận xét chi tiết.</span>
+                  <span className="font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
+                    {(essayDrafts[currentQ.id]?.trim().split(/\s+/).filter(Boolean).length || 0)} từ
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -584,7 +625,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               {(() => {
                 const unanswered = questions.filter((q) =>
                   q.type === 'essay'
-                    ? !(essayDrafts[q.id] || '').trim()
+                    ? !lockedEssays[q.id] && !(essayDrafts[q.id] || '').trim()
                     : userAnswers[q.id] === undefined
                 ).length;
                 return unanswered > 0

@@ -56939,6 +56939,43 @@ var AUTO_Q_TYPES = /* @__PURE__ */ new Set([
 // api/routes/attempts.ts
 var attemptsRouter = (0, import_express8.Router)();
 attemptsRouter.use(requireAuth);
+function optionTexts(payload) {
+  const opts = Array.isArray(payload?.options) ? payload.options : [];
+  return opts.map((o) => typeof o === "string" ? o : String(o?.text ?? o?.label ?? ""));
+}
+function letterToOptionText(v, texts) {
+  const t = String(v ?? "").trim();
+  if (/^[A-Za-z]$/.test(t) && texts.length > 0) {
+    const idx = t.toUpperCase().charCodeAt(0) - 65;
+    if (idx >= 0 && idx < texts.length && texts[idx]) return texts[idx];
+  }
+  return t;
+}
+function recomputeAuto(qtype, payload, key, resp, max) {
+  const texts = optionTexts(payload);
+  if (qtype === "single_choice") {
+    const mine = letterToOptionText((resp.selected || [])[0] || resp.selected || "", texts);
+    const want = letterToOptionText(String(key), texts);
+    const ok2 = normText(mine) === normText(want);
+    return { isCorrect: ok2, score: ok2 ? max : 0, ratio: ok2 ? 1 : 0, gradeable: true };
+  }
+  if (qtype === "multiple_choice") {
+    const sel = Array.isArray(resp.selected) ? resp.selected : resp.selected != null ? [resp.selected] : [];
+    const mine = new Set(sel.map((s) => normText(letterToOptionText(s, texts))));
+    const keys = new Set((Array.isArray(key) ? key : [key]).map((s) => normText(letterToOptionText(String(s), texts))));
+    const ok2 = mine.size === keys.size && [...mine].every((s) => keys.has(s));
+    return { isCorrect: ok2, score: ok2 ? max : 0, ratio: ok2 ? 1 : 0, gradeable: true };
+  }
+  if (qtype === "fill_in_blank") {
+    const student = Array.isArray(resp.blanks) ? resp.blanks : resp.text != null && resp.text !== "" ? [resp.text] : [];
+    const g = gradeFillBlanks(key, student);
+    if (g.gradeable === 0) return { isCorrect: null, score: null, ratio: 0, gradeable: false };
+    return { isCorrect: g.isCorrect, score: g.scoreRatio * max, ratio: g.scoreRatio, gradeable: true };
+  }
+  const accepted = (Array.isArray(key) ? key : [key]).map((s) => normText(String(s)));
+  const ok = accepted.includes(normText(resp.text || ""));
+  return { isCorrect: ok, score: ok ? max : 0, ratio: ok ? 1 : 0, gradeable: true };
+}
 async function readState(conn, studentId) {
   const rows = await conn.query(
     "SELECT * FROM `student_states` WHERE `student_id` = ? LIMIT 1",
@@ -57228,10 +57265,12 @@ attemptsRouter.post("/attempts", requireRole("student"), ah(async (req, res) => 
       if (isAuto) {
         let handled = false;
         if (qtype === "single_choice") {
-          isCorrect = normText((resp.selected || [])[0] || "") === normText(String(key));
+          const texts = optionTexts(payload);
+          isCorrect = normText(letterToOptionText((resp.selected || [])[0] || "", texts)) === normText(letterToOptionText(String(key), texts));
         } else if (qtype === "multiple_choice") {
-          const mine = new Set((resp.selected || []).map((s) => normText(s)));
-          const keys = new Set((Array.isArray(key) ? key : [key]).map((s) => normText(String(s))));
+          const texts = optionTexts(payload);
+          const mine = new Set((resp.selected || []).map((s) => normText(letterToOptionText(s, texts))));
+          const keys = new Set((Array.isArray(key) ? key : [key]).map((s) => normText(letterToOptionText(String(s), texts))));
           isCorrect = mine.size === keys.size && [...mine].every((s) => keys.has(s));
         } else if (qtype === "fill_in_blank") {
           handled = true;
@@ -57470,6 +57509,101 @@ attemptsRouter.get("/attempts/:id", async (req, res) => {
     answers: answers.map((a) => ({ ...a, response_json: parseJson(a.response_json, null) }))
   });
 });
+attemptsRouter.post("/attempts/:id/regrade", requireRole("teacher", "admin"), ah(async (req, res) => {
+  const caller = req.caller;
+  const attemptId = req.params.id;
+  if (!checkKeyLen(res, attemptId)) return;
+  const rows = await query("SELECT * FROM `attempts` WHERE `attempt_id` = ? LIMIT 1", [attemptId]);
+  const att = rows[0];
+  if (!att) {
+    httpErr(res, 404, "NOT_FOUND");
+    return;
+  }
+  if (isTeacher(caller) && !await canAccessStudent(db2, caller, att.student_id)) {
+    httpErr(res, 403, "FORBIDDEN");
+    return;
+  }
+  const result = await withTransaction(async (tx) => {
+    const answers = await tx.query("SELECT * FROM `attempt_answers` WHERE `attempt_id` = ?", [attemptId]);
+    const qIds = [...new Set(answers.map((a) => a.question_id))];
+    const qRows = qIds.length ? await tx.query(
+      "SELECT `id`, `type`, `correct_answer`, `max_score`, `payload`, `grading_method`, `topic_id`, `level` FROM `questions` WHERE `id` IN (" + qIds.map(() => "?").join(",") + ")",
+      qIds
+    ) : [];
+    const qMap = new Map(qRows.map((q) => [q.id, q]));
+    let autoScore = 0;
+    let gradedCount = 0;
+    let pendingCount = 0;
+    let changed = 0;
+    const qResults = [];
+    for (const a of answers) {
+      const q = qMap.get(a.question_id);
+      const max = toNum(a.max_score, 10);
+      let isCorrect = a.is_correct == null ? null : !!a.is_correct;
+      let score = a.score_awarded == null ? null : toNum(a.score_awarded, 0);
+      let gStatus = a.grading_status;
+      let ratio = score != null && max > 0 ? score / max : 0;
+      if (q) {
+        const payload = parseJson(q.payload, {});
+        const qtype = normalizeQType(q.type || payload.type);
+        const key = q.correct_answer != null ? parseJson(q.correct_answer, q.correct_answer) : payload.answer ?? null;
+        const method = q.grading_method || "AUTO";
+        const recomputable = method === "AUTO" && key != null && qtype !== "essay";
+        if (recomputable) {
+          const resp = parseJson(a.response_json, {});
+          const r = recomputeAuto(qtype, payload, key, resp, max);
+          if (r.gradeable) {
+            isCorrect = r.isCorrect;
+            score = r.score;
+            ratio = r.ratio;
+            gStatus = "GRADED";
+            qResults.push({
+              questionId: a.question_id,
+              level: q.level || "VAN_DUNG",
+              isCorrect: !!r.isCorrect,
+              scoreRatio: r.ratio,
+              timestamp: Date.now(),
+              topicId: q.topic_id || null
+            });
+          }
+        }
+      }
+      if (gStatus === "GRADED") {
+        gradedCount += 1;
+        autoScore += score ?? 0;
+      } else {
+        pendingCount += 1;
+      }
+      const oldCorrect = a.is_correct == null ? null : !!a.is_correct;
+      const oldScore = a.score_awarded == null ? null : toNum(a.score_awarded, 0);
+      if (oldCorrect !== isCorrect || oldScore !== score || a.grading_status !== gStatus) {
+        changed += 1;
+        await tx.execute(
+          "UPDATE `attempt_answers` SET `is_correct` = ?, `score_awarded` = ?, `grading_status` = ? WHERE `answer_id` = ?",
+          [isCorrect == null ? null : isCorrect ? 1 : 0, score, gStatus, a.answer_id]
+        );
+      }
+    }
+    const gradingStatus = pendingCount === 0 ? "GRADED" : gradedCount === 0 ? "PENDING_TEACHER_REVIEW" : "PARTIALLY_GRADED";
+    await tx.execute(
+      "UPDATE `attempts` SET `score_awarded` = ?, `grading_status` = ?, `grading_mode` = ? WHERE `attempt_id` = ?",
+      [gradedCount > 0 ? autoScore : null, gradingStatus, pendingCount === 0 ? "AUTO" : gradedCount === 0 ? "TEACHER" : "MIXED", attemptId]
+    );
+    if (qResults.length) {
+      const stRows = await tx.query(
+        "SELECT `question_results` FROM `student_states` WHERE `student_id` = ? LIMIT 1",
+        [att.student_id]
+      );
+      const cur = parseJson(stRows[0]?.question_results, []);
+      await tx.execute(
+        "INSERT INTO `student_states` (`student_id`, `question_results`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `question_results` = VALUES(`question_results`)",
+        [att.student_id, JSON.stringify([...qResults, ...cur])]
+      );
+    }
+    return { scoreAwarded: gradedCount > 0 ? autoScore : null, maxScore: att.max_score, gradedCount, pendingCount, changed };
+  });
+  res.json({ attemptId, ...result });
+}));
 async function assignmentEditShape(conn, id) {
   const rows = await conn.query("SELECT * FROM `assignments` WHERE `id` = ? LIMIT 1", [id]);
   const a = rows[0];
@@ -58293,6 +58427,18 @@ essaysRouter.post("/essays", ah(async (req, res) => {
   const questionId = body.questionId || body.question_id || "q_essay_01";
   if (typeof questionId === "string" && questionId.length > 100) {
     httpErr(res, 400, "BAD_INPUT");
+    return;
+  }
+  const dup = await query(
+    "SELECT `id`, `status` FROM `essay_submissions` WHERE `student_id` = ? AND `question_id` = ? LIMIT 1",
+    [studentId, questionId]
+  );
+  if (dup.length) {
+    res.status(409).json({
+      error: "ESSAY_ALREADY_SUBMITTED",
+      existingId: dup[0].id,
+      existingStatus: dup[0].status
+    });
     return;
   }
   const uuid = (0, import_node_crypto8.randomUUID)();

@@ -57,6 +57,62 @@ import {
 export const attemptsRouter = Router();
 attemptsRouter.use(requireAuth);
 
+// 29/10: đường Bài tập gửi chữ cái (A/B/C/D) thay vì nội dung phương án,
+// trong khi server so với nội dung đáp án nên trắc nghiệm luôn 0 điểm
+// dù chọn đúng. Đổi chữ cái → nội dung phương án trước khi so; key dạng
+// chữ cái (vd câu lưu key 'A' thay vì nội dung) cũng chuẩn hóa tương tự.
+// Không có danh sách phương án thì giữ nguyên giá trị (hành vi cũ).
+function optionTexts(payload: any): string[] {
+  const opts = Array.isArray(payload?.options) ? payload.options : [];
+  return opts.map((o: any) => (typeof o === 'string' ? o : String(o?.text ?? o?.label ?? '')));
+}
+function letterToOptionText(v: string, texts: string[]): string {
+  const t = String(v ?? '').trim();
+  if (/^[A-Za-z]$/.test(t) && texts.length > 0) {
+    const idx = t.toUpperCase().charCodeAt(0) - 65;
+    if (idx >= 0 && idx < texts.length && texts[idx]) return texts[idx];
+  }
+  return t;
+}
+// Chấm tự động lại 1 đáp án đã lưu (dùng cho endpoint regrade): trả
+// gradeable=false khi không có gì để chấm (câu điền trống không đáp án)
+// để giữ nguyên trạng thái chờ chấm thay vì chấm 0 oan.
+function recomputeAuto(
+  qtype: string,
+  payload: any,
+  key: any,
+  resp: any,
+  max: number
+): { isCorrect: boolean | null; score: number | null; ratio: number; gradeable: boolean } {
+  const texts = optionTexts(payload);
+  if (qtype === 'single_choice') {
+    const mine = letterToOptionText((resp.selected || [])[0] || resp.selected || '', texts);
+    const want = letterToOptionText(String(key), texts);
+    const ok = normText(mine) === normText(want);
+    return { isCorrect: ok, score: ok ? max : 0, ratio: ok ? 1 : 0, gradeable: true };
+  }
+  if (qtype === 'multiple_choice') {
+    const sel: any[] = Array.isArray(resp.selected) ? resp.selected : resp.selected != null ? [resp.selected] : [];
+    const mine = new Set(sel.map((s: string) => normText(letterToOptionText(s, texts))));
+    const keys = new Set((Array.isArray(key) ? key : [key]).map((s: any) => normText(letterToOptionText(String(s), texts))));
+    const ok = mine.size === keys.size && [...mine].every((s) => keys.has(s));
+    return { isCorrect: ok, score: ok ? max : 0, ratio: ok ? 1 : 0, gradeable: true };
+  }
+  if (qtype === 'fill_in_blank') {
+    const student = Array.isArray((resp as any).blanks)
+      ? (resp as any).blanks
+      : resp.text != null && resp.text !== ''
+        ? [resp.text]
+        : [];
+    const g = gradeFillBlanks(key, student);
+    if (g.gradeable === 0) return { isCorrect: null, score: null, ratio: 0, gradeable: false };
+    return { isCorrect: g.isCorrect, score: g.scoreRatio * max, ratio: g.scoreRatio, gradeable: true };
+  }
+  const accepted = (Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s)));
+  const ok = accepted.includes(normText(resp.text || ''));
+  return { isCorrect: ok, score: ok ? max : 0, ratio: ok ? 1 : 0, gradeable: true };
+}
+
 /** Đọc state (tạo dòng trắng nếu chưa có) + tổng XP từ getTotals. */
 async function readState(conn: Db, studentId: string): Promise<any> {
   const rows = await conn.query<any>(
@@ -405,10 +461,14 @@ attemptsRouter.post('/attempts', requireRole('student'), ah(async (req: AuthedRe
         // vì chấm 0 oan.
         let handled = false;
         if (qtype === 'single_choice') {
-          isCorrect = normText((resp.selected || [])[0] || '') === normText(String(key));
+          const texts = optionTexts(payload);
+          isCorrect =
+            normText(letterToOptionText((resp.selected || [])[0] || '', texts)) ===
+            normText(letterToOptionText(String(key), texts));
         } else if (qtype === 'multiple_choice') {
-          const mine = new Set<string>((resp.selected || []).map((s: string) => normText(s)));
-          const keys = new Set((Array.isArray(key) ? key : [key]).map((s: any) => normText(String(s))));
+          const texts = optionTexts(payload);
+          const mine = new Set<string>((resp.selected || []).map((s: string) => normText(letterToOptionText(s, texts))));
+          const keys = new Set((Array.isArray(key) ? key : [key]).map((s: any) => normText(letterToOptionText(String(s), texts))));
           isCorrect = mine.size === keys.size && [...mine].every((s) => keys.has(s));
         } else if (qtype === 'fill_in_blank') {
           handled = true;
@@ -682,6 +742,110 @@ attemptsRouter.get('/attempts/:id', async (req: AuthedRequest, res) => {
     answers: answers.map((a: any) => ({ ...a, response_json: parseJson(a.response_json, null) })),
   });
 });
+
+// 29/10: chấm lại 1 bài đã nộp (dùng sau khi sửa luật chấm — vd vụ
+// trắc nghiệm đường Bài tập chấm sai chữ cái). Chỉ chấm lại đáp án AUTO
+// chưa qua tay giáo viên; đáp án chờ chấm tay, bài tự luận và XP giữ
+// nguyên. Giáo viên chỉ chấm lại được bài của học sinh mình quản.
+attemptsRouter.post('/attempts/:id/regrade', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
+  const caller = req.caller!;
+  const attemptId = req.params.id;
+  if (!checkKeyLen(res, attemptId)) return;
+  const rows = await query<any>('SELECT * FROM `attempts` WHERE `attempt_id` = ? LIMIT 1', [attemptId]);
+  const att = rows[0];
+  if (!att) {
+    httpErr(res, 404, 'NOT_FOUND');
+    return;
+  }
+  if (isTeacher(caller) && !(await canAccessStudent(db, caller, att.student_id))) {
+    httpErr(res, 403, 'FORBIDDEN');
+    return;
+  }
+  const result = await withTransaction(async (tx: Db) => {
+    const answers = await tx.query<any>('SELECT * FROM `attempt_answers` WHERE `attempt_id` = ?', [attemptId]);
+    const qIds = [...new Set(answers.map((a: any) => a.question_id))];
+    const qRows = qIds.length
+      ? await tx.query<any>(
+          'SELECT `id`, `type`, `correct_answer`, `max_score`, `payload`, `grading_method`, `topic_id`, `level` ' +
+            'FROM `questions` WHERE `id` IN (' + qIds.map(() => '?').join(',') + ')',
+          qIds
+        )
+      : [];
+    const qMap = new Map(qRows.map((q: any) => [q.id, q]));
+    let autoScore = 0;
+    let gradedCount = 0;
+    let pendingCount = 0;
+    let changed = 0;
+    const qResults: any[] = [];
+    for (const a of answers) {
+      const q: any = qMap.get(a.question_id);
+      const max = toNum(a.max_score, 10);
+      let isCorrect: boolean | null = a.is_correct == null ? null : !!a.is_correct;
+      let score: number | null = a.score_awarded == null ? null : toNum(a.score_awarded, 0);
+      let gStatus: string = a.grading_status;
+      let ratio = score != null && max > 0 ? score / max : 0;
+      if (q) {
+        const payload: any = parseJson<any>(q.payload, {});
+        const qtype = normalizeQType(q.type || payload.type);
+        const key = q.correct_answer != null ? parseJson(q.correct_answer, q.correct_answer) : payload.answer ?? null;
+        const method = q.grading_method || 'AUTO';
+        const recomputable = method === 'AUTO' && key != null && qtype !== 'essay';
+        if (recomputable) {
+          const resp = parseJson<any>(a.response_json, {});
+          const r = recomputeAuto(qtype, payload, key, resp, max);
+          if (r.gradeable) {
+            isCorrect = r.isCorrect;
+            score = r.score;
+            ratio = r.ratio;
+            gStatus = 'GRADED';
+            qResults.push({
+              questionId: a.question_id,
+              level: q.level || 'VAN_DUNG',
+              isCorrect: !!r.isCorrect,
+              scoreRatio: r.ratio,
+              timestamp: Date.now(),
+              topicId: q.topic_id || null,
+            });
+          }
+        }
+      }
+      if (gStatus === 'GRADED') {
+        gradedCount += 1;
+        autoScore += score ?? 0;
+      } else {
+        pendingCount += 1;
+      }
+      const oldCorrect = a.is_correct == null ? null : !!a.is_correct;
+      const oldScore = a.score_awarded == null ? null : toNum(a.score_awarded, 0);
+      if (oldCorrect !== isCorrect || oldScore !== score || a.grading_status !== gStatus) {
+        changed += 1;
+        await tx.execute(
+          'UPDATE `attempt_answers` SET `is_correct` = ?, `score_awarded` = ?, `grading_status` = ? WHERE `answer_id` = ?',
+          [isCorrect == null ? null : isCorrect ? 1 : 0, score, gStatus, a.answer_id]
+        );
+      }
+    }
+    const gradingStatus = pendingCount === 0 ? 'GRADED' : gradedCount === 0 ? 'PENDING_TEACHER_REVIEW' : 'PARTIALLY_GRADED';
+    await tx.execute(
+      'UPDATE `attempts` SET `score_awarded` = ?, `grading_status` = ?, `grading_mode` = ? WHERE `attempt_id` = ?',
+      [gradedCount > 0 ? autoScore : null, gradingStatus, pendingCount === 0 ? 'AUTO' : gradedCount === 0 ? 'TEACHER' : 'MIXED', attemptId]
+    );
+    if (qResults.length) {
+      const stRows = await tx.query<any>(
+        'SELECT `question_results` FROM `student_states` WHERE `student_id` = ? LIMIT 1',
+        [att.student_id]
+      );
+      const cur: any[] = parseJson(stRows[0]?.question_results, []);
+      await tx.execute(
+        'INSERT INTO `student_states` (`student_id`, `question_results`) VALUES (?, ?) ' +
+          'ON DUPLICATE KEY UPDATE `question_results` = VALUES(`question_results`)',
+        [att.student_id, JSON.stringify([...qResults, ...cur])]
+      );
+    }
+    return { scoreAwarded: gradedCount > 0 ? autoScore : null, maxScore: att.max_score, gradedCount, pendingCount, changed };
+  });
+  res.json({ attemptId, ...result });
+}));
 
 // ---------------------------------------------------------------- assignments
 async function assignmentEditShape(conn: Db, id: string): Promise<any | null> {
