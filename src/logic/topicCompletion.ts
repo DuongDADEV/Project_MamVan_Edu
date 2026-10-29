@@ -1,6 +1,46 @@
-import { QuestionResult, StudentState } from '../types.ts';
+import { QuestionResult, StudentState, MasteryStatus } from '../types.ts';
 import { TopicWithMeta, QuizWithMeta, QuestionWithMeta } from '../services/types.ts';
 import { deriveFlowItems, parseFlowKey } from './flowOrder.ts';
+
+/**
+ * Lá cây tri thức theo TIẾN ĐỘ LUỒNG HỌC (29/10, chủ dự án chốt: "ôn 100%
+ * rồi sao không đổi màu — đổi màu như ghi chú").
+ *
+ * Trước đây lá lấy từ độ vững trắc nghiệm (calculateAllMastery) và bị khóa
+ * xám "Chưa học" khi chưa đủ 3 câu NHAN_BIET đã làm — nên học sinh xong
+ * 100% luồng (đủ video/lý thuyết/bài tập) vẫn thấy lá xám, lệch với thanh
+ * tiến độ 100% ở màn Học bài và với chính ghi chú trên cây (≥80% đã hoàn
+ * thành). Nay lá dùng đúng phần trăm tiến độ của màn Học bài
+ * (countTopicFlowDone): 0% → xám Chưa học, 1–49% → vàng Cần ôn lại,
+ * 50–79% → xanh biển Đang học, ≥80% → xanh đậm Đã hoàn thành. Trả đúng
+ * shape TopicLeafData của GrowthTree (trường masteryStatus giữ tên cũ để
+ * khỏi đổi component, nhưng giá trị nay phản ánh tiến độ luồng).
+ */
+export function buildTopicLeaf(
+  topic: { id: string; title: string; flowOrder?: string[]; videoIds?: string[]; theoryId?: string },
+  quizzes: QuizWithMeta[],
+  questions: Record<string, QuestionWithMeta>,
+  completedSteps: string[],
+  results: QuestionResult[]
+): { topicId: string; topicTitle: string; masteryStatus: MasteryStatus; percentage: number } {
+  const { done, total } = countTopicFlowDone(
+    topic as TopicWithMeta,
+    quizzes,
+    questions,
+    completedSteps,
+    results
+  );
+  const percentage = total > 0 ? Math.round((done / total) * 100) : 0;
+  const masteryStatus: MasteryStatus =
+    percentage >= 80
+      ? 'SOLID'
+      : percentage >= 50
+        ? 'PROGRESSING'
+        : percentage > 0
+          ? 'NEEDS_REVIEW'
+          : 'INSUFFICIENT_DATA';
+  return { topicId: topic.id, topicTitle: topic.title, masteryStatus, percentage };
+}
 
 /**
  * Đánh giá hoàn thành TOÀN BỘ chủ đề theo mô hình XP mới (chủ dự án duyệt

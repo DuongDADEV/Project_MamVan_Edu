@@ -4,6 +4,7 @@ import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../d
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
+import { buildTopicLeaf } from '../logic/topicCompletion.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
 import type { NavTab } from '../components/Navbar.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
@@ -36,6 +37,7 @@ import {
   studentService,
   VideoLessonWithMeta,
   QuizWithMeta,
+  QuestionWithMeta,
 } from '../services/index.ts';
 
 interface HomeScreenProps {
@@ -78,6 +80,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(state.profile.grade || undefined, true),
     ['quiz', 'content']
+  );
+  const { data: liveQuestions } = useLiveQuery<Record<string, QuestionWithMeta>>(
+    () => quizService.getQuestions(undefined),
+    ['content']
   );
 
   // Xác định bài học tiếp tục / bắt đầu
@@ -237,31 +243,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   });
 
-  // Dữ liệu lá cho cây
-  const topicLeavesData = activeTopics.map((t) => {
-    const tMastery = calculateAllMastery(state.questionResults, t.id);
-    const avg = Math.round(
-      (tMastery.NHAN_BIET.percentage +
-        tMastery.THONG_HIEU.percentage +
-        tMastery.PHAN_TICH.percentage +
-        tMastery.VAN_DUNG.percentage) /
-        4
-    );
-
-    let status: any = 'INSUFFICIENT_DATA';
-    if (tMastery.NHAN_BIET.totalQuestionsAttempted >= 3) {
-      if (avg >= 80) status = 'SOLID';
-      else if (avg >= 50) status = 'PROGRESSING';
-      else status = 'NEEDS_REVIEW';
-    }
-
-    return {
-      topicId: t.id,
-      topicTitle: t.title,
-      masteryStatus: status,
-      percentage: avg,
-    };
-  });
+  // Dữ liệu lá cho cây — màu lá theo TIẾN ĐỘ LUỒNG HỌC (cùng phần trăm với
+  // màn Học bài), không theo độ vững trắc nghiệm nữa (29/10: lá từng kẹt
+  // xám "Chưa học" khi chưa đủ 3 câu NHAN_BIET dù luồng đã 100%).
+  const topicLeavesData = activeTopics.map((t) =>
+    buildTopicLeaf(
+      t,
+      liveQuizzes || [],
+      liveQuestions || {},
+      state.completedSteps || [],
+      state.questionResults || []
+    )
+  );
 
   const handleCheckInClick = () => {
     setWateringTrigger(true);

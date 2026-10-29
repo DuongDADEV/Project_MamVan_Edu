@@ -3,6 +3,13 @@ import { StudentState, Topic } from '../types.ts';
 import { BADGES_CATALOG } from '../data/badges.ts';
 import { TREE_STAGES_CONFIG } from '../config.ts';
 import { calculateAllMastery, SKILL_METADATA } from '../logic/mastery.ts';
+import { buildTopicLeaf } from '../logic/topicCompletion.ts';
+import {
+  useLiveQuery,
+  quizService,
+  QuizWithMeta,
+  QuestionWithMeta,
+} from '../services/index.ts';
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import { GrowthTree, TopicLeafData } from '../components/GrowthTree.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
@@ -59,30 +66,26 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
 
   // Dữ liệu lá trên cây lấy từ danh sách chủ đề thực tế (chỉ hiện chủ đề giáo viên đã xuất bản)
   const activeTopics = topics || [];
-  const topicLeavesData: TopicLeafData[] = activeTopics.map((t) => {
-    const tMastery = calculateAllMastery(state.questionResults || [], t.id);
-    const avg = Math.round(
-      (tMastery.NHAN_BIET.percentage +
-        tMastery.THONG_HIEU.percentage +
-        tMastery.PHAN_TICH.percentage +
-        tMastery.VAN_DUNG.percentage) /
-        4
-    );
-
-    let status: any = 'INSUFFICIENT_DATA';
-    if (tMastery.NHAN_BIET.totalQuestionsAttempted >= 3) {
-      if (avg >= 80) status = 'SOLID';
-      else if (avg >= 50) status = 'PROGRESSING';
-      else status = 'NEEDS_REVIEW';
-    }
-
-    return {
-      topicId: t.id,
-      topicTitle: t.title,
-      masteryStatus: status,
-      percentage: avg,
-    };
-  });
+  const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
+    () => quizService.getQuizzes(state.profile?.grade || undefined, true),
+    ['quiz', 'content']
+  );
+  const { data: liveQuestions } = useLiveQuery<Record<string, QuestionWithMeta>>(
+    () => quizService.getQuestions(undefined),
+    ['content']
+  );
+  // Màu lá theo TIẾN ĐỘ LUỒNG HỌC (cùng phần trăm với màn Học bài), không
+  // theo độ vững trắc nghiệm nữa (29/10: lá từng kẹt xám "Chưa học" khi
+  // chưa đủ 3 câu NHAN_BIET dù luồng đã 100%).
+  const topicLeavesData: TopicLeafData[] = activeTopics.map((t) =>
+    buildTopicLeaf(
+      t,
+      liveQuizzes || [],
+      liveQuestions || {},
+      state.completedSteps || [],
+      state.questionResults || []
+    )
+  );
 
   // Tính toán toàn bộ Mastery 4 mức
   const allMastery = calculateAllMastery(state.questionResults);
