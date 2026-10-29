@@ -1,3 +1,8 @@
+## [dev] 2026-10-30 — Xóa chữ tiếng Anh "GRADED" ở màn Kết quả học tập
+
+- Thẻ "Điểm theo từng bài kiểm tra" trước đây in trực tiếp enum trạng thái chấm từ server nên lòi chữ "GRADED" sau điểm số; popup chi tiết lần làm cũng in enum đó ở tiêu đề lần làm. Xóa cả 2 chỗ (điểm số đã đủ ý nghĩa; câu chờ chấm từng câu vẫn hiện "Cô giáo chưa chấm" như trước, bài chưa có điểm vẫn hiện "Đã nộp — cô giáo chưa chấm").
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Xóa luôn toast nộp bài
 
 - Chủ dự án chốt: bỏ hẳn thông báo nộp bài (cả dạng pill cũ lẫn thẻ mới làm đợt trước) — màn kết quả nộp bài đã đủ, toast chỉ thêm nhiễu. Xóa call showToast ở handler onSubmitted của luồng bài tập (đồng bộ XP từ server giữ nguyên); hạ tầng toast dạng thẻ (ToastContent, icon, formatScore ở App) cũng gỡ theo vì không còn call site nào dùng. Các toast khác (điểm danh, huy hiệu, quà, lỗi...) giữ nguyên.

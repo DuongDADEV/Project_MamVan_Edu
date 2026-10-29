@@ -460,7 +460,6 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                       : acc
                   )
                 : null;
-              const latest = attempts[0];
               return (
                 <div key={a.assignmentId} className="border border-[#E6DCC8] rounded-2xl p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -473,9 +472,6 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                     {best ? (
                       <>
                         Điểm cao nhất: <span className="font-bold text-[#2F6B4F]">{formatScore(Number(best.score_awarded))}/{formatScore(Number(best.max_score))}</span>
-                        {latest?.grading_status && (
-                          <span className="text-slate-500"> • Trạng thái chấm: {latest.grading_status}</span>
-                        )}
                       </>
                     ) : attempts.length > 0 ? (
                       <span className="text-amber-600 font-bold">Đã nộp — cô giáo chưa chấm</span>
@@ -792,9 +788,6 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                     {att.submittedAt && ` • ${fmtDateTime(new Date(att.submittedAt).getTime())}`}
                     {att.score != null && att.maxScore != null && (
                       <span className="text-[#2F6B4F]"> • Điểm {formatScore(att.score)}/{formatScore(att.maxScore)}</span>
-                    )}
-                    {att.gradingStatus && (
-                      <span className="font-normal text-slate-500"> • {att.gradingStatus}</span>
                     )}
                   </p>
                   {(att.answers || []).map((ans) => {
