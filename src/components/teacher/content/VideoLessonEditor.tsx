@@ -42,6 +42,8 @@ interface VideoLessonEditorProps {
   /** Thu gọn thanh công cụ (nút 2/3 trên dải luồng) */
   toolbarCollapsed?: boolean;
   onExpandToolbar?: () => void;
+  /** Ẩn hẳn thanh công cụ khi đã gộp vào thanh chung (thu cả hai) */
+  hideToolbarBar?: boolean;
 }
 
 export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
@@ -55,6 +57,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   onBack,
   toolbarCollapsed,
   onExpandToolbar,
+  hideToolbarBar,
 }) => {
   const [title, setTitle] = useState(video.title || '');
   const [description, setDescription] = useState(video.description || '');
@@ -305,13 +308,13 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
-      {toolbarCollapsed ? (
+      {toolbarCollapsed ? (hideToolbarBar ? null : (
         <CollapsedToolbarBar
           label="Bài giảng Video"
           detail={title}
           onExpand={onExpandToolbar || (() => {})}
         />
-      ) : (
+      )) : (
       <>
       {/* Top Action Bar — dính chặt phía trên khi thân trình soạn cuộn */}
       <div className="sticky top-0 z-20 shrink-0 p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">

@@ -1,3 +1,8 @@
+## [dev] 2026-10-29 — Thu cả hai chỉ còn 1 thanh mỏng (gộp thanh thu gọn)
+
+- Theo phản hồi chủ dự án ("thu cả 2 vào nó cũng chả bé hơn là bao"): khi thu gọn CẢ luồng lẫn thanh công cụ, trước đây vẫn còn 2 thanh mỏng chồng nhau (~70px). Nay khung phải gộp thành đúng 1 thanh duy nhất ("Luồng học: <chủ đề> · <tên bài> — đã thu gọn cả hai, bấm để mở lại") kèm đủ 3 nút, còn trình soạn ẩn hẳn thanh công cụ của nó đi. Thu riêng từng cái giữ nguyên 1 thanh mỏng như trước, chỉ làm mỏng hơn một chút (giảm padding).
+- Sơ đồ không regen đợt này (chỉ đổi hiển thị khi thu gọn).
+
 ## [dev] 2026-10-29 — Thu gọn dải luồng / thanh công cụ kiểu ribbon Word
 
 - Theo yêu cầu chủ dự án (kèm ảnh ribbon Word + ảnh trình soạn): thêm 3 nút thu gọn ở mép phải dải luồng học trong trình soạn của cô giáo — (1) thu gọn chính dải luồng, (2) thu gọn thanh công cụ của trình soạn bên dưới (hàng Quay lại / Xem trước / Lưu nháp / Cập nhật lên web), (3) thu gọn cả hai cùng lúc. Khi thu gọn, mỗi phần chỉ còn 1 thanh mỏng có nút mở lại; cụm 3 nút luôn hiện trên dải (kể cả khi dải đã thu) nên lúc nào cũng mở lại được.

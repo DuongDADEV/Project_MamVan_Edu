@@ -26,7 +26,7 @@ import {
   deleteAssignmentCompletely,
   getTeacherAssignments,
 } from '../../services/api/biClient.ts';
-import { TopicFlowStrip } from '../../components/teacher/content/TopicFlowStrip.tsx';
+import { CombinedCollapsedBar, TopicFlowStrip } from '../../components/teacher/content/TopicFlowStrip.tsx';
 import {
   FlowItemType,
   deriveFlowItems,
@@ -991,7 +991,17 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
         {/* Dải luồng học — TRÊN CÙNG khung phải, trên cả hàng công cụ.
             Đầy đủ chức năng: bấm nút tròn mở đúng bài, kéo-thả đổi thứ tự,
             '+ Thêm bài' mở menu 3 loại. */}
-        {stripTopic && (
+        {stripTopic && stripCollapsed && toolbarCollapsed ? (
+          <CombinedCollapsedBar
+            topicTitle={stripTopic.title}
+            editorLabel={currentVideo ? 'Bài giảng Video' : currentTheory ? 'Lý thuyết' : currentQuiz ? 'Bài tập' : selectedItem?.type === 'assignment' ? 'Bài tập & đánh giá' : ''}
+            collapsed={stripCollapsed}
+            toolbarCollapsed={toolbarCollapsed}
+            onToggleStrip={() => setStripCollapsed((p) => !p)}
+            onToggleToolbar={() => setToolbarCollapsed((p) => !p)}
+            onToggleBoth={toggleBothCollapsed}
+          />
+        ) : stripTopic ? (
           <TopicFlowStrip
             topicTitle={stripTopic.title}
             items={stripItems}
@@ -1008,7 +1018,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onAdd={(kind) => handleCreateNewManual(kind, stripTopic.id)}
             onReorder={handleFlowReorder}
           />
-        )}
+        ) : null}
         {selectedItem?.type === 'assignment' && teacher ? (
           <AssignmentEditor
             key={selectedItem.id}
@@ -1019,6 +1029,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onDeleted={() => setSelectedItem(null)}
             toolbarCollapsed={toolbarCollapsed}
             onExpandToolbar={() => setToolbarCollapsed(false)}
+            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentVideo ? (
           <VideoLessonEditor
@@ -1035,6 +1046,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onBack={() => setSelectedItem({ type: 'topic', id: currentVideo.topicId })}
             toolbarCollapsed={toolbarCollapsed}
             onExpandToolbar={() => setToolbarCollapsed(false)}
+            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentTheory ? (
           <TheoryLessonEditor
@@ -1051,6 +1063,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onBack={() => setSelectedItem({ type: 'topic', id: currentTheory.topicId })}
             toolbarCollapsed={toolbarCollapsed}
             onExpandToolbar={() => setToolbarCollapsed(false)}
+            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentQuiz ? (
           <QuizBuilder
@@ -1080,6 +1093,7 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             }}
             toolbarCollapsed={toolbarCollapsed}
             onExpandToolbar={() => setToolbarCollapsed(false)}
+            hideToolbarBar={stripCollapsed && toolbarCollapsed}
           />
         ) : currentTopic ? (
           /* Khối thông tin chi tiết của chủ đề đang chọn */

@@ -61,7 +61,7 @@ export const CollapsedToolbarBar: React.FC<{
   className?: string;
 }> = ({ label, detail, onExpand, className }) => (
   <div
-    className={`sticky top-0 z-20 shrink-0 px-4 py-2 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center gap-2 ${className || ''}`}
+    className={`sticky top-0 z-20 shrink-0 px-4 py-1.5 bg-[#FAF5EB] border-b border-[#E6DCC8] flex items-center gap-2 ${className || ''}`}
   >
     <span className="text-xs font-bold text-[#2F3E6B] truncate">{label}</span>
     {detail && (
@@ -92,6 +92,126 @@ export const CollapsedToolbarBar: React.FC<{
  * bên dưới, (3) thu gọn cả hai cùng lúc. Trạng thái thu gọn được khung phải
  * (TeacherContentScreen) giữ + lưu localStorage theo giáo viên.
  */
+/**
+ * Cụm 3 nút thu gọn kiểu ribbon Word — dùng chung cho dải luồng và thanh
+ * gộp khi thu cả hai: (1) thu/mở luồng, (2) thu/mở thanh công cụ,
+ * (3) thu/mở cả hai cùng lúc.
+ */
+export const CollapseButtons: React.FC<{
+  collapsed?: boolean;
+  toolbarCollapsed?: boolean;
+  onToggleStrip?: () => void;
+  onToggleToolbar?: () => void;
+  onToggleBoth?: () => void;
+}> = ({ collapsed, toolbarCollapsed, onToggleStrip, onToggleToolbar, onToggleBoth }) => (
+  <div className="flex items-center gap-1 shrink-0 pl-2 ml-1 border-l border-[#E6DCC8]">
+    <button
+      type="button"
+      onClick={onToggleStrip}
+      className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors ${
+        collapsed
+          ? 'bg-[#2F3E6B] border-[#2F3E6B] text-white'
+          : 'bg-white border-[#E6DCC8] text-[#2F3E6B] hover:border-[#2F3E6B]'
+      }`}
+      title={collapsed ? 'Mở lại luồng học' : 'Thu gọn luồng học'}
+    >
+      {collapsed ? (
+        <PanelTopOpen className="w-4 h-4" />
+      ) : (
+        <PanelTopClose className="w-4 h-4" />
+      )}
+    </button>
+    <button
+      type="button"
+      onClick={onToggleToolbar}
+      className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors ${
+        toolbarCollapsed
+          ? 'bg-[#2F3E6B] border-[#2F3E6B] text-white'
+          : 'bg-white border-[#E6DCC8] text-[#2F3E6B] hover:border-[#2F3E6B]'
+      }`}
+      title={toolbarCollapsed ? 'Mở lại thanh công cụ' : 'Thu gọn thanh công cụ'}
+    >
+      {toolbarCollapsed ? (
+        <PanelBottomOpen className="w-4 h-4" />
+      ) : (
+        <PanelBottomClose className="w-4 h-4" />
+      )}
+    </button>
+    <button
+      type="button"
+      onClick={onToggleBoth}
+      className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors ${
+        collapsed && toolbarCollapsed
+          ? 'bg-[#E2704A] border-[#E2704A] text-white'
+          : 'bg-white border-[#E6DCC8] text-[#2F3E6B] hover:border-[#E2704A]'
+      }`}
+      title={
+        collapsed && toolbarCollapsed
+          ? 'Mở lại cả luồng và thanh công cụ'
+          : 'Thu gọn cả luồng và thanh công cụ'
+      }
+    >
+      <ChevronsUpDown className="w-4 h-4" />
+    </button>
+  </div>
+);
+
+/**
+ * Thanh gộp duy nhất khi thu CẢ hai (29/10, theo yêu cầu chủ dự án: thu cả
+ * hai mà vẫn còn 2 thanh thì "chả bé hơn là bao"). Thay cho cả dải luồng
+ * lẫn thanh công cụ — chỉ còn 1 hàng mỏng, vẫn giữ đủ 3 nút để mở lại.
+ */
+export const CombinedCollapsedBar: React.FC<{
+  topicTitle: string;
+  editorLabel: string;
+  collapsed?: boolean;
+  toolbarCollapsed?: boolean;
+  onToggleStrip?: () => void;
+  onToggleToolbar?: () => void;
+  onToggleBoth?: () => void;
+}> = ({
+  topicTitle,
+  editorLabel,
+  collapsed,
+  toolbarCollapsed,
+  onToggleStrip,
+  onToggleToolbar,
+  onToggleBoth,
+}) => (
+  <div className="shrink-0 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl px-3 py-1 mb-2 shadow-xs flex items-center gap-2">
+    <button
+      type="button"
+      onClick={onToggleBoth}
+      className="flex items-center gap-2 min-w-0 text-left"
+      title="Mở lại cả luồng và thanh công cụ"
+    >
+      <span className="text-[9px] font-black uppercase tracking-widest text-[#8C7E6A] shrink-0">
+        Luồng học
+      </span>
+      <span className="text-xs font-black text-[#2F3E6B] truncate max-w-48">
+        {topicTitle}
+      </span>
+      {editorLabel && (
+        <>
+          <span className="text-[#D8CCAF] shrink-0">·</span>
+          <span className="text-xs font-bold text-[#2F3E6B] truncate max-w-40">
+            {editorLabel}
+          </span>
+        </>
+      )}
+      <span className="text-[11px] text-[#8C7E6A] shrink-0">— đã thu gọn cả hai, bấm để mở lại</span>
+    </button>
+    <span className="flex-1" />
+    <CollapseButtons
+      collapsed={collapsed}
+      toolbarCollapsed={toolbarCollapsed}
+      onToggleStrip={onToggleStrip}
+      onToggleToolbar={onToggleToolbar}
+      onToggleBoth={onToggleBoth}
+    />
+  </div>
+);
+
 export const TopicFlowStrip: React.FC<TopicFlowStripProps> = ({
   topicTitle,
   items,
@@ -123,62 +243,19 @@ export const TopicFlowStrip: React.FC<TopicFlowStripProps> = ({
   // Cụm 3 nút thu gọn — hiện ở cả 2 trạng thái của dải để lúc nào cũng
   // bấm được, kể cả khi dải đã thu gọn.
   const collapseCluster = (
-    <div className="flex items-center gap-1 shrink-0 pl-2 ml-1 border-l border-[#E6DCC8]">
-      <button
-        type="button"
-        onClick={onToggleStrip}
-        className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors ${
-          collapsed
-            ? 'bg-[#2F3E6B] border-[#2F3E6B] text-white'
-            : 'bg-white border-[#E6DCC8] text-[#2F3E6B] hover:border-[#2F3E6B]'
-        }`}
-        title={collapsed ? 'Mở lại luồng học' : 'Thu gọn luồng học'}
-      >
-        {collapsed ? (
-          <PanelTopOpen className="w-4 h-4" />
-        ) : (
-          <PanelTopClose className="w-4 h-4" />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={onToggleToolbar}
-        className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors ${
-          toolbarCollapsed
-            ? 'bg-[#2F3E6B] border-[#2F3E6B] text-white'
-            : 'bg-white border-[#E6DCC8] text-[#2F3E6B] hover:border-[#2F3E6B]'
-        }`}
-        title={toolbarCollapsed ? 'Mở lại thanh công cụ' : 'Thu gọn thanh công cụ'}
-      >
-        {toolbarCollapsed ? (
-          <PanelBottomOpen className="w-4 h-4" />
-        ) : (
-          <PanelBottomClose className="w-4 h-4" />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={onToggleBoth}
-        className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors ${
-          collapsed && toolbarCollapsed
-            ? 'bg-[#E2704A] border-[#E2704A] text-white'
-            : 'bg-white border-[#E6DCC8] text-[#2F3E6B] hover:border-[#E2704A]'
-        }`}
-        title={
-          collapsed && toolbarCollapsed
-            ? 'Mở lại cả luồng và thanh công cụ'
-            : 'Thu gọn cả luồng và thanh công cụ'
-        }
-      >
-        <ChevronsUpDown className="w-4 h-4" />
-      </button>
-    </div>
+    <CollapseButtons
+      collapsed={collapsed}
+      toolbarCollapsed={toolbarCollapsed}
+      onToggleStrip={onToggleStrip}
+      onToggleToolbar={onToggleToolbar}
+      onToggleBoth={onToggleBoth}
+    />
   );
 
   // Dải đã thu gọn: chỉ còn thanh mỏng (tiêu đề chủ đề + cụm 3 nút).
   if (collapsed) {
     return (
-      <div className="shrink-0 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl px-3 py-1.5 mb-3 shadow-xs flex items-center gap-2">
+      <div className="shrink-0 bg-[#FFFDF8] border border-[#E6DCC8] rounded-2xl px-3 py-1 mb-2 shadow-xs flex items-center gap-2">
         <button
           type="button"
           onClick={onToggleStrip}
