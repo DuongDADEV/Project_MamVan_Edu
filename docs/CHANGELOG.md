@@ -1,3 +1,9 @@
+## [dev] 2026-10-30 — Thu hoạch lá 100%: pháo hoa rồi lá biến mất
+
+- Chủ dự án chốt: chủ đề học xong 100%, bấm vào lá của nó trên cây thì nổ pháo hoa chúc mừng rồi lá biến mất (thu hoạch). Làm mới: component FireworksBurst (canvas toàn màn hình, tên lửa bay lên nổ thành chùm hạt tỏa tròn, 5 đợt, tôn trọng prefers-reduced-motion) + GrowthTree: lá nào tiến độ luồng >= 100% mà chưa thu hoạch thì bấm vào chỉ nổ pháo hoa (không mở modal/bài học như các lá khác); pháo hoa xong thì lá biến mất, các lá còn lại giữ nguyên vị trí (không dồn vị trí).
+- Lá đã thu hoạch được nhớ theo tài khoản trong localStorage (mamvan_harvested_leaves:<studentId>) nên tải lại trang vẫn không hiện lại, áp dụng cả cây ở màn Vườn và cây thu gọn ở Trang chủ. Nếu cô thêm bài khiến tiến độ tụt dưới 100% thì lá trở lại để học tiếp và ăn mừng lại (dọn khỏi danh sách thu hoạch). Lá Vững 80-99% giữ nguyên hành vi cũ (bấm mở modal/bài học).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Xóa mã mức độ nhận thức khỏi tab Ma trận năng lực
 
 - Chủ dự án khoanh: 4 mã nội bộ NHAN_BIET / THONG_HIEU / PHAN_TICH / VAN_DUNG hiện trên đầu mỗi thẻ mức độ ở tab Ma trận năng lực (TreeScreen) — cùng lỗi lộ mã nội bộ như vụ GRADED trước đây. Đã xóa luôn dòng mã đó, chỉ còn tên hiển thị (Nhớ được / Hiểu được / Phân tích được / Vận dụng được).

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TREE_STAGES_CONFIG } from '../config.ts';
 import { MasteryStatus } from '../types.ts';
+import { FireworksBurst } from './FireworksBurst.tsx';
 
 export interface TopicLeafData {
   topicId: string;
@@ -18,6 +19,9 @@ interface GrowthTreeProps {
   onLeafClick?: (topicId: string) => void;
   className?: string;
   compact?: boolean;
+  // Khóa lưu lá đã thu hoạch (localStorage, theo tài khoản). Không truyền thì
+  // lá thu hoạch chỉ biến mất trong phiên xem hiện tại.
+  storageKey?: string;
 }
 
 export const GrowthTree: React.FC<GrowthTreeProps> = ({
@@ -29,6 +33,7 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
   onLeafClick,
   className = '',
   compact = false,
+  storageKey,
 }) => {
   // Xác định giai đoạn hiện tại
   const currentStageIndex = (() => {
@@ -97,12 +102,64 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
   // Lá đang được "nhấp" vào cây (hiệu ứng ấn xuống khi bấm lá đã hoàn thành)
   const [pressedTopicId, setPressedTopicId] = useState<string | null>(null);
 
+  // Lá đã thu hoạch (chủ đề 100% đã bấm ăn mừng): nhớ theo tài khoản để tải
+  // lại trang vẫn không hiện lại. Chỉ ẩn khi chủ đề vẫn 100% — nếu cô thêm
+  // bài khiến tiến độ tụt xuống thì lá trở lại để học tiếp và ăn mừng lại
+  // (effect dọn dẹp bên dưới gỡ id đó khỏi danh sách đã thu hoạch).
+  const [harvested, setHarvested] = useState<Set<string>>(() => {
+    if (!storageKey) return new Set();
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const [celebratingTopicId, setCelebratingTopicId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!storageKey || topicLeaves.length === 0) return;
+    const pct = new Map(topicLeaves.map((l) => [l.topicId, l.percentage]));
+    const pruned = [...harvested].filter((id) => {
+      const p = pct.get(id);
+      return p !== undefined && p >= 100;
+    });
+    if (pruned.length !== harvested.size) {
+      setHarvested(new Set(pruned));
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(pruned));
+      } catch {}
+    }
+    // Chỉ dọn khi danh sách lá thay đổi; harvested cố tình không nằm trong deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicLeaves, storageKey]);
+
   const handleLeafPress = (leaf: TopicLeafData) => {
     if (leaf.masteryStatus === 'SOLID') {
       setPressedTopicId(leaf.topicId);
       setTimeout(() => setPressedTopicId(null), 320);
     }
+    // Chủ đề học xong 100%: bấm lá -> pháo hoa chúc mừng, rồi lá biến mất
+    // (thu hoạch). Không mở modal/bài học như các lá khác.
+    if (leaf.percentage >= 100 && !harvested.has(leaf.topicId)) {
+      setCelebratingTopicId(leaf.topicId);
+      return;
+    }
     if (onLeafClick) onLeafClick(leaf.topicId);
+  };
+
+  const handleFireworksDone = () => {
+    if (!celebratingTopicId) return;
+    const next = new Set(harvested);
+    next.add(celebratingTopicId);
+    setHarvested(next);
+    setCelebratingTopicId(null);
+    if (storageKey) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify([...next]));
+      } catch {}
+    }
   };
 
   // Chỉ vẽ tối đa 15 lá (đúng số chủ đề thực tế, không vẽ lá thừa)
@@ -301,6 +358,9 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
 
           {/* CÁC CHIẾC LÁ ĐẠI DIỆN CHO TỪNG CHỦ ĐỀ HỌC (Interactive Topic Leaves) */}
           {visibleLeaves.map((leaf, index) => {
+            // Lá đã thu hoạch (vẫn 100%) thì không vẽ nữa — các lá khác giữ
+            // nguyên vị trí vì map vẫn đi theo index gốc.
+            if (harvested.has(leaf.topicId) && leaf.percentage >= 100) return null;
             const style = getLeafStyle(leaf.masteryStatus);
             const pos = LEAF_POSITIONS[index];
             const isMainLeaf = index < 4; // 4 lá chính đầu tiên to hơn, có nhãn
@@ -369,6 +429,9 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
           </div>
         )}
       </div>
+
+      {/* Pháo hoa chúc mừng khi thu hoạch lá 100% — xong thì lá biến mất. */}
+      {celebratingTopicId && <FireworksBurst onDone={handleFireworksDone} />}
 
       {/* THÔNG TIN TIẾN TRÌNH GIAI ĐOẠN */}
       <div className="mt-2 text-center max-w-xs">

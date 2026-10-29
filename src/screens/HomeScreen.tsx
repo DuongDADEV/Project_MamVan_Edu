@@ -696,6 +696,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             isWatering={wateringTrigger}
             onWaterComplete={() => setWateringTrigger(false)}
             onLeafClick={(tId) => onSelectTopic(tId)}
+            storageKey={`mamvan_harvested_leaves:${state.profile?.id || 'hs001'}`}
           />
         </div>
 
