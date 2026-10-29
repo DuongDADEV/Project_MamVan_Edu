@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, FileCheck, Home, Clock, CheckCircle2, Circle, ChevronRight, Eye } from 'lucide-react';
+import { ClipboardList, Clock, CheckCircle2, Circle, ChevronRight, Eye } from 'lucide-react';
 import { Topic, Quiz, TEST_QUIZ_KINDS } from '../types.ts';
 import { getStudentAssignments } from '../services/api/biClient.ts';
 
-type Tab = 'test' | 'homework';
-
-// BTVN nội dung (kind 'homework') và bài tập BI đều nằm ở tab "Về nhà" (làm lại không giới hạn).
+// 29/10, chủ dự án: gộp thành 1 trang — kiểm tra (làm 1 lần), BTVN nội dung
+// (kind 'homework') và bài tập BI đều hiện chung 1 danh sách, xếp theo hạn nộp.
+// Quy tắc làm lại theo từng loại vẫn giữ (kiểm tra làm xong chỉ xem lại).
 export const TEST_KINDS = TEST_QUIZ_KINDS;
 
 interface AssignmentsScreenProps {
@@ -29,6 +29,7 @@ type ListItem =
       timeLimitMinutes?: number;
       done: boolean;
       kindLabel: string;
+      kind: Quiz['kind'];
     }
   | {
       source: 'assignment';
@@ -79,7 +80,6 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
   onSelectQuiz,
   onOpenAssignment,
 }) => {
-  const [tab, setTab] = useState<Tab>('test');
   const [biItems, setBiItems] = useState<ListItem[]>([]);
   const [biLoaded, setBiLoaded] = useState(false);
 
@@ -150,6 +150,7 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
           timeLimitMinutes: q.timeLimitMinutes,
           done: completedQuizIds.includes(q.id),
           kindLabel: KIND_LABEL[q.kind] || 'Kiểm tra',
+          kind: q.kind,
         }))
         .sort(sortByDue),
     [quizzes, topicName, completedQuizIds]
@@ -171,13 +172,17 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
             timeLimitMinutes: q.timeLimitMinutes,
             done: completedQuizIds.includes(q.id),
             kindLabel: KIND_LABEL.homework,
+            kind: q.kind,
           })),
         ...biItems,
       ].sort(sortByDue),
     [quizzes, topicName, completedQuizIds, biItems]
   );
 
-  const items = tab === 'test' ? testItems : homeworkItems;
+  const items = useMemo<ListItem[]>(
+    () => [...testItems, ...homeworkItems].sort(sortByDue),
+    [testItems, homeworkItems]
+  );
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
@@ -190,37 +195,13 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
         </p>
       </div>
 
-      {/* 2 tab: Kiểm tra / Về nhà */}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTab('test')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition ${
-            tab === 'test' ? 'bg-[#2F3E6B] text-white shadow' : 'bg-white border border-[#E6DCC8] text-[#2F3E6B]'
-          }`}
-        >
-          <FileCheck className="w-4 h-4" /> Kiểm tra ({testItems.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('homework')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition ${
-            tab === 'homework' ? 'bg-[#2F3E6B] text-white shadow' : 'bg-white border border-[#E6DCC8] text-[#2F3E6B]'
-          }`}
-        >
-          <Home className="w-4 h-4" /> Về nhà ({homeworkItems.length})
-        </button>
-      </div>
-
-      {tab === 'homework' && !biLoaded && (
+      {!biLoaded && (
         <p className="text-sm text-[#8C7E6A] italic">Đang tải bài tập cô giao…</p>
       )}
 
-      {items.length === 0 && (tab === 'test' || biLoaded) ? (
+      {items.length === 0 && biLoaded ? (
         <div className="bg-white border border-[#E6DCC8] rounded-2xl p-8 text-center">
-          <p className="font-bold text-[#2F3E6B]">
-            {tab === 'test' ? 'Chưa có bài kiểm tra nào.' : 'Chưa có bài tập về nhà nào.'}
-          </p>
+          <p className="font-bold text-[#2F3E6B]">Chưa có bài tập nào.</p>
           <p className="text-sm text-[#8C7E6A] mt-1">Khi cô giao bài mới, bài sẽ hiện ở đây theo hạn nộp.</p>
         </div>
       ) : (
@@ -260,7 +241,9 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
                 </span>
               </span>
               <span className="shrink-0 flex items-center gap-1 text-xs font-bold text-[#2F3E6B]">
-                {item.done && tab === 'test' ? (
+                {item.done &&
+                item.source === 'quiz' &&
+                TEST_KINDS.includes((item as Extract<ListItem, { source: 'quiz' }>).kind) ? (
                   <>
                     <Eye className="w-4 h-4" /> Xem lại
                   </>

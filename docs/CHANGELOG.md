@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Gộp trang Bài tập thành 1 danh sách
+
+- TRƯỚC: trang Bài tập chia 2 tab "Kiểm tra (0)" / "Về nhà (1)" — học sinh phải bấm qua lại mới thấy đủ bài. Theo yêu cầu chủ dự án, gộp thành 1 trang: kiểm tra (làm 1 lần), BTVN quiz và bài BI cô giao hiện chung 1 danh sách, xếp theo hạn nộp.
+- GIỮ NGUYÊN quy tắc theo từng loại (không đổi luật, chỉ đổi hiển thị): bài kiểm tra làm xong vẫn chỉ "Xem lại" (không tính điểm mới, nút Xem lại dựa theo kind của từng bài thay vì tab đang chọn như trước); bài về nhà/bài giao làm lại không giới hạn, làm xong hiện "Đã nộp". Trạng thái trống gộp thành 1 dòng "Chưa có bài tập nào."; dòng "Đang tải bài tập cô giao…" hiện khi chưa tải xong bài giao.
+- Sơ đồ không regen đợt này (gộp hiển thị của 1 màn, không đổi luồng).
+
 ## [dev] 2026-10-29 — Xóa huy hiệu +20 XP giả ở thẻ Nhiệm vụ tuần
 
 - Huy hiệu "+20 XP" gắn cứng trên thẻ Nhiệm vụ tuần (Trang chủ học sinh) là hứa suông: engine XP server không có khoản trao nào cho nhiệm vụ tuần (chỉ có điểm danh, nộp bài, quỹ chủ đề, đổi quà) — cùng họ huy hiệu giả đã xóa đợt trước (+5 video, +2 trọng tâm, +10 "Đã hiểu"). Xóa huy hiệu, giữ nguyên danh sách bài và nút "Làm bài".
