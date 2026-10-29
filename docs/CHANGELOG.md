@@ -1,3 +1,8 @@
+## [dev] 2026-10-30 — Xóa luôn toast nộp bài
+
+- Chủ dự án chốt: bỏ hẳn thông báo nộp bài (cả dạng pill cũ lẫn thẻ mới làm đợt trước) — màn kết quả nộp bài đã đủ, toast chỉ thêm nhiễu. Xóa call showToast ở handler onSubmitted của luồng bài tập (đồng bộ XP từ server giữ nguyên); hạ tầng toast dạng thẻ (ToastContent, icon, formatScore ở App) cũng gỡ theo vì không còn call site nào dùng. Các toast khác (điểm danh, huy hiệu, quà, lỗi...) giữ nguyên.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Bỏ ".00" ở màn Bài tập + Trang chủ, toast nộp bài thành thẻ đẹp hơn
 
 - ".00" còn sót: đợt trước chỉ sửa màn Kết quả học tập, còn màn Bài tập (AssignmentsScreen) và thẻ bài tập ở Trang chủ (HomeScreen) vẫn render trực tiếp chuỗi DECIMAL từ MySQL nên vẫn hiện "10.00/10.00" — nay cả 2 chỗ đều qua formatScore ("10/10", điểm lẻ giữ 1 chữ số thập phân).
