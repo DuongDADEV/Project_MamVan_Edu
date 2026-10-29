@@ -1390,6 +1390,7 @@ export default function App() {
                   setCurrentTab('learn');
                 }}
                 questions={rawQuestions || {}}
+                quizzes={rawQuizzes || []}
                 studentId={currentStudentId}
               />
             )}

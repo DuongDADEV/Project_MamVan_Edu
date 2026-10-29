@@ -1,3 +1,9 @@
+## [dev] 2026-10-30 — Popup chủ đề chỉ hiện câu trong bài cô giao (luật "giao gì làm đấy")
+
+- Chủ dự án chốt: học sinh chỉ làm bài cô giao, câu không giao không được hiện. Popup chi tiết chủ đề trước đây liệt kê toàn bộ câu published mang topicId của chủ đề nên lòi ra 5 câu mồ côi trong ngân hàng "từ láy" (4 câu AI sinh từ nguồn Văn 7 + 1 câu tiếng Indonesia gõ tay) dù chúng không nằm trong bài nào đã giao.
+- Nay phần Trắc nghiệm + khóa Đáp án chỉ tính câu trong bài đã giao: (1) câu trong các quiz nằm trong luồng học của chủ đề (theo đúng thứ tự luồng), (2) câu trong quiz BTVN của chủ đề, (3) câu học sinh từng làm ở chủ đề này (bài kiểm tra cô giao cũng vào đường này). Câu chỉ nằm trong ngân hàng thì không hiện, dù mang topicId của chủ đề. Phần Tự luận giữ nguyên (phiếu tự luận chỉ tồn tại khi học sinh đã làm qua bài được giao).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Xóa nút "Kiểm tra ngay" ở màn làm bài luyện tập
 
 - Chủ dự án chốt: học sinh không được biết trước đúng/sai trước khi nộp. Gỡ toàn bộ cơ chế kiểm tra tức thì khỏi QuizRunner (chế độ Luyện tập): nút "Kiểm tra ngay", hộp phản hồi đúng/sai + lời giải hiện ngay sau khi bấm, và cả việc tô xanh đáp án đúng / đỏ đáp án sai khi kiểm tra (cùng trạng thái practiceChecked và các khóa input theo đó).

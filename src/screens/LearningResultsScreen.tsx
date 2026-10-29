@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Trophy, Target, Zap, BookOpenCheck, Award, Lock, TrendingUp, X, MessageSquareText, CheckCircle2, XCircle, Circle, FileCheck } from 'lucide-react';
 import { StudentState, Topic, QuestionResult, EssaySubmission } from '../types.ts';
-import { QuestionWithMeta } from '../services/types.ts';
+import { QuestionWithMeta, QuizWithMeta } from '../services/types.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
 import { countLearningSteps } from '../logic/studentStateUtils.ts';
 import { formatScore } from '../utils/scoreFormat.ts';
@@ -21,6 +21,10 @@ interface LearningResultsScreenProps {
   onSelectTopic?: (topicId: string) => void;
   // Ngân hàng câu hỏi (để tra loại câu: trắc nghiệm = single/multi/fill, tự luận = essay).
   questions?: Record<string, QuestionWithMeta>;
+  // Các quiz học sinh nhìn thấy được (để xác định bài cô giao: quiz trong
+  // luồng học của chủ đề + quiz BTVN). Câu chỉ nằm trong ngân hàng mà không
+  // nằm trong bài nào đã giao thì KHÔNG hiện ở popup này.
+  quizzes?: QuizWithMeta[];
   studentId?: string;
 }
 
@@ -129,6 +133,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
   topics,
   onSelectTopic,
   questions = {},
+  quizzes = [],
   studentId,
 }) => {
   const results = state.questionResults || [];
@@ -310,36 +315,65 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
 
   // Popup chi tiết chủ đề, chia 3 phần xếp chồng (30/10, chủ dự án):
   // Trắc nghiệm (mỗi câu 1 dòng, không % điểm, không thẻ "Lần làm"),
-  // Tự luận (như cũ), Đáp án (khóa tới khi đúng 100% toàn bộ câu TN+ĐK
-  // của chủ đề — câu nào cũng từng trả lời đúng; câu không có đáp án thì
-  // không tính vào điều kiện vì không có "đúng" để đạt).
+  // Tự luận (như cũ), Đáp án (khóa tới khi đúng 100%).
+  // LUẬT "GIAO GÌ LÀM ĐẤY" (30/10, chủ dự án): phần Trắc nghiệm + khóa Đáp án
+  // chỉ tính câu trong bài cô giao — quiz nằm trong luồng học của chủ đề,
+  // quiz BTVN của chủ đề, hoặc câu học sinh từng làm (bài kiểm tra cô giao
+  // cũng vào đường này). Câu chỉ nằm trong ngân hàng mà không nằm trong bài
+  // nào đã giao thì KHÔNG hiện, dù nó mang topicId của chủ đề.
   const detailSections = useMemo(() => {
     if (!detailTopic) return null;
-    const tQuestions = Object.values(questions).filter(
-      (q) => q.topicId === detailTopic.topic.id && MCQ_TYPES.has(q.type) && q.status !== 'draft' && q.status !== 'archived'
-    );
     const everCorrect = new Set(detailTopic.mcq.filter((r) => r.isCorrect).map((r) => r.questionId));
     const attempted = new Set(detailTopic.mcq.map((r) => r.questionId));
-    const mcRows: { key: string; prompt: string; state: McRowState }[] = [
-      ...tQuestions.map((q) => ({
-        key: q.id,
-        prompt: q.prompt,
-        state: (everCorrect.has(q.id) ? 'correct' : attempted.has(q.id) ? 'wrong' : 'todo') as McRowState,
-      })),
-      // Câu đã gỡ khỏi ngân hàng nhưng học sinh từng làm: vẫn hiện để không mất câu.
-      ...[...attempted]
-        .filter((id) => !questions[id])
-        .map((id) => ({
+    const rowIds: string[] = [];
+    const pushRow = (id: string) => {
+      if (!rowIds.includes(id)) rowIds.push(id);
+    };
+    const visibleQuizById = new Map(quizzes.map((qz) => [qz.id, qz]));
+    // 1. Quiz trong luồng học, theo đúng thứ tự luồng.
+    for (const key of detailTopic.topic.flowOrder || []) {
+      if (typeof key !== 'string' || !key.startsWith('quiz:')) continue;
+      const qz = visibleQuizById.get(key.slice('quiz:'.length));
+      if (!qz || qz.status === 'draft' || qz.status === 'archived') continue;
+      for (const qid of qz.questionIds || []) pushRow(qid);
+    }
+    // 2. Quiz BTVN của chủ đề.
+    for (const qz of quizzes) {
+      if (qz.topicId !== detailTopic.topic.id || qz.kind !== 'homework') continue;
+      if (qz.status === 'draft' || qz.status === 'archived') continue;
+      for (const qid of qz.questionIds || []) pushRow(qid);
+    }
+    // 3. Câu học sinh từng làm ở chủ đề này (kể cả bài kiểm tra cô giao).
+    for (const id of attempted) pushRow(id);
+    const mcRows: { key: string; prompt: string; state: McRowState }[] = rowIds
+      .filter((id) => {
+        const q = questions[id];
+        // Câu đã gỡ khỏi ngân hàng: chỉ giữ khi học sinh từng làm (giữ lịch sử).
+        if (!q) return attempted.has(id);
+        return MCQ_TYPES.has(q.type);
+      })
+      .map((id) => {
+        const q = questions[id];
+        if (!q) {
+          return {
+            key: id,
+            prompt: 'Câu hỏi (đã gỡ khỏi ngân hàng)',
+            state: (everCorrect.has(id) ? 'correct' : 'wrong') as McRowState,
+          };
+        }
+        return {
           key: id,
-          prompt: 'Câu hỏi (đã gỡ khỏi ngân hàng)',
-          state: (everCorrect.has(id) ? 'correct' : 'wrong') as McRowState,
-        })),
-    ];
-    const gateQuestions = tQuestions.filter((q) => resolveCorrectAnswer(q) != null);
+          prompt: q.prompt,
+          state: (everCorrect.has(id) ? 'correct' : attempted.has(id) ? 'wrong' : 'todo') as McRowState,
+        };
+      });
+    const gateQuestions = rowIds
+      .map((id) => questions[id])
+      .filter((q) => q && MCQ_TYPES.has(q.type) && resolveCorrectAnswer(q) != null);
     const unlocked = gateQuestions.length > 0 && gateQuestions.every((q) => everCorrect.has(q.id));
     const xpReward = typeof (detailTopic.topic as any).xpReward === 'number' ? (detailTopic.topic as any).xpReward : 0;
     return { mcRows, gateQuestions, unlocked, xpReward };
-  }, [detailTopic, questions]);
+  }, [detailTopic, questions, quizzes]);
 
   useEffect(() => {
     if (!detailTest || !studentId) {
@@ -675,7 +709,8 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
       </div>
 
       {/* POPUP CHI TIẾT CHỦ ĐỀ: 3 phần xếp chồng — Trắc nghiệm (mỗi câu 1 dòng,
-          không % điểm), Tự luận (như cũ), Đáp án (khóa tới khi đúng 100%). */}
+          không % điểm), Tự luận (như cũ), Đáp án (khóa tới khi đúng 100%).
+          Chỉ câu trong bài cô giao mới hiện (luồng học + BTVN + câu từng làm). */}
       {detailTopic && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setDetailTopicId(null)}>
           <div
