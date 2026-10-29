@@ -96,6 +96,23 @@ function stripProfile(row: any): any {
   return out;
 }
 
+/**
+ * Chuẩn hóa giá trị datetime client gửi (thường là ISO `new Date().toISOString()`,
+ * vd `2026-11-01T06:44:00.000Z`) sang dạng MySQL DATETIME `YYYY-MM-DD HH:MM:SS`.
+ * MySQL strict mode từ chối chuỗi ISO (chữ T/Z, mili giây) → insert teachers lỗi
+ * → transaction rollback → CREATE_PROFILE_FAILED (2026-10-29: mọi tài khoản
+ * giáo viên dùng thử đều tạo lỗi vì lý do này; tài khoản chính thức không gửi
+ * trial_expires_at nên không bị). Pool ép session time_zone '+00:00' nên format
+ * theo UTC giữ nguyên thời điểm client tính.
+ * Trả null khi không có giá trị; trả undefined khi giá trị không parse được.
+ */
+function toMysqlDatetime(value: unknown): string | null | undefined {
+  if (value === undefined || value === null || value === '') return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function checkIdLen(res: Response, ...ids: (string | undefined | null)[]): boolean {
   for (const id of ids) {
     if (id && id.length > 191) {
@@ -164,6 +181,11 @@ adminUsersRouter.post('/admin/users', async (req: Request, res: Response) => {
       if (await usernameTaken(username)) {
         return httpErr(res, 400, 'USERNAME_TAKEN');
       }
+      // trial_expires_at phải về dạng DATETIME trước khi insert (xem toMysqlDatetime).
+      const trialExpiresAt = toMysqlDatetime(body.trial_expires_at);
+      if (trialExpiresAt === undefined) {
+        return httpErr(res, 400, 'BAD_INPUT');
+      }
       const email = synthEmail(role, username);
       const hashed = await hashPassword(password);
       const authUserId = randomUUID();
@@ -189,7 +211,7 @@ adminUsersRouter.post('/admin/users', async (req: Request, res: Response) => {
                 body.school ? String(body.school) : null,
                 body.subject ? String(body.subject) : null,
                 body.status ? String(body.status) : 'active',
-                body.trial_expires_at || null,
+                trialExpiresAt,
               ]
             );
           } else {
