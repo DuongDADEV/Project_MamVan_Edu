@@ -22,6 +22,10 @@ interface GrowthTreeProps {
   // Khóa lưu lá đã thu hoạch (localStorage, theo tài khoản). Không truyền thì
   // lá thu hoạch chỉ biến mất trong phiên xem hiện tại.
   storageKey?: string;
+  // Dữ liệu quiz/câu hỏi đã tải xong chưa. Lúc đang tải, tiến độ tính thiếu
+  // quiz nên tụt dưới 100% trong chớp mắt — phải coi như chưa sẵn sàng để
+  // không hiện lại lá đã thu hoạch và không xóa dấu thu hoạch nhầm.
+  dataReady?: boolean;
 }
 
 export const GrowthTree: React.FC<GrowthTreeProps> = ({
@@ -34,6 +38,7 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
   className = '',
   compact = false,
   storageKey,
+  dataReady = true,
 }) => {
   // Xác định giai đoạn hiện tại
   const currentStageIndex = (() => {
@@ -119,7 +124,10 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
   const [celebratingTopicId, setCelebratingTopicId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!storageKey || topicLeaves.length === 0) return;
+    // CHỈ dọn khi dữ liệu đã tải xong: lúc đang tải, tiến độ tính thiếu quiz
+    // nên tụt dưới 100% trong chớp mắt — dọn lúc đó sẽ xóa nhầm dấu thu hoạch
+    // và lá hiện lại vĩnh viễn sau khi tải lại trang (lỗi 30/10).
+    if (!dataReady || !storageKey || topicLeaves.length === 0) return;
     const pct = new Map(topicLeaves.map((l) => [l.topicId, l.percentage]));
     const pruned = [...harvested].filter((id) => {
       const p = pct.get(id);
@@ -133,7 +141,7 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
     }
     // Chỉ dọn khi danh sách lá thay đổi; harvested cố tình không nằm trong deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicLeaves, storageKey]);
+  }, [topicLeaves, storageKey, dataReady]);
 
   const handleLeafPress = (leaf: TopicLeafData) => {
     if (leaf.masteryStatus === 'SOLID') {
@@ -359,8 +367,10 @@ export const GrowthTree: React.FC<GrowthTreeProps> = ({
           {/* CÁC CHIẾC LÁ ĐẠI DIỆN CHO TỪNG CHỦ ĐỀ HỌC (Interactive Topic Leaves) */}
           {visibleLeaves.map((leaf, index) => {
             // Lá đã thu hoạch (vẫn 100%) thì không vẽ nữa — các lá khác giữ
-            // nguyên vị trí vì map vẫn đi theo index gốc.
-            if (harvested.has(leaf.topicId) && leaf.percentage >= 100) return null;
+            // nguyên vị trí vì map vẫn đi theo index gốc. Lúc dữ liệu chưa
+            // tải xong thì cứ ẩn lá đã thu hoạch (tiến độ lúc đó tính thiếu
+            // nên không đáng tin để xét hiện lại hay không).
+            if (harvested.has(leaf.topicId) && (!dataReady || leaf.percentage >= 100)) return null;
             const style = getLeafStyle(leaf.masteryStatus);
             const pos = LEAF_POSITIONS[index];
             const isMainLeaf = index < 4; // 4 lá chính đầu tiên to hơn, có nhãn

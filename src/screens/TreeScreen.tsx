@@ -224,6 +224,7 @@ export const TreeScreen: React.FC<TreeScreenProps> = ({ state, topics, onSelectT
               onWaterComplete={() => setIsWatering(false)}
               onLeafClick={(tId) => setSelectedLeafTopicId(tId)}
               storageKey={`mamvan_harvested_leaves:${state.profile?.id || 'hs001'}`}
+              dataReady={liveQuizzes !== null && liveQuestions !== null}
               className="my-4"
             />
 

@@ -1,3 +1,9 @@
+## [dev] 2026-10-30 — Sửa lỗi lá đã thu hoạch hiện lại sau khi tải lại trang
+
+- Nguyên nhân thật: lúc tải lại trang, useLiveQuery trả null trong khi chờ dữ liệu nên danh sách quiz tạm thành rỗng — tiến độ chủ đề tính thiếu các mục quiz nên tụt dưới 100% trong chớp mắt. Effect dọn dẹp của đợt thu hoạch đã chạy đúng lúc đó và xóa nhầm dấu thu hoạch khỏi localStorage, khiến lá hiện lại vĩnh viễn.
+- Sửa: GrowthTree nhận thêm cờ dataReady (quiz + câu hỏi đã tải xong mới true, cả màn Vườn và Trang chủ đều truyền); lúc chưa sẵn sàng thì lá đã thu hoạch cứ ẩn (không xét tiến độ tạm thời), và effect dọn dẹp chỉ chạy khi dữ liệu đã sẵn sàng. Nhờ vậy tải lại trang không còn xóa nhầm dấu thu hoạch.
+- Lưu ý: dấu thu hoạch của lần bấm trước đã bị lỗi cũ xóa mất nên lá đó sẽ hiện lại một lần cuối — bấm ăn mừng lại một lần nữa là từ nay tải lại trang vẫn ẩn như đúng luật.
+
 ## [dev] 2026-10-30 — Thu hoạch lá 100%: pháo hoa rồi lá biến mất
 
 - Chủ dự án chốt: chủ đề học xong 100%, bấm vào lá của nó trên cây thì nổ pháo hoa chúc mừng rồi lá biến mất (thu hoạch). Làm mới: component FireworksBurst (canvas toàn màn hình, tên lửa bay lên nổ thành chùm hạt tỏa tròn, 5 đợt, tôn trọng prefers-reduced-motion) + GrowthTree: lá nào tiến độ luồng >= 100% mà chưa thu hoạch thì bấm vào chỉ nổ pháo hoa (không mở modal/bài học như các lá khác); pháo hoa xong thì lá biến mất, các lá còn lại giữ nguyên vị trí (không dồn vị trí).
