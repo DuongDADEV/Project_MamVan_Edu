@@ -1,3 +1,8 @@
+## [dev] 2026-10-29 — Xóa huy hiệu +20 XP giả ở thẻ Nhiệm vụ tuần
+
+- Huy hiệu "+20 XP" gắn cứng trên thẻ Nhiệm vụ tuần (Trang chủ học sinh) là hứa suông: engine XP server không có khoản trao nào cho nhiệm vụ tuần (chỉ có điểm danh, nộp bài, quỹ chủ đề, đổi quà) — cùng họ huy hiệu giả đã xóa đợt trước (+5 video, +2 trọng tâm, +10 "Đã hiểu"). Xóa huy hiệu, giữ nguyên danh sách bài và nút "Làm bài".
+- Sơ đồ không regen đợt này (xóa 1 huy hiệu hiển thị).
+
 ## [dev] 2026-10-29 — Thẻ Nhiệm vụ tuần ở Trang chủ hiện cả bài được giao
 
 - VẤN ĐỀ (chủ dự án báo): giao 1 bài tập ở phần Bài tập thì hiện ở đó, nhưng thẻ "Nhiệm vụ tuần" ở giao diện chính vẫn "Chưa có bài tập về nhà mới". Nguyên nhân: quyết định 25/10 (c029adb) đã rút code gộp bài BI khỏi thẻ này — thẻ chỉ liệt kê BTVN quiz (kind homework), không nhìn assignments; hậu quả "học sinh có bài được giao vẫn thấy thẻ trống" khi đó đã được chấp nhận.

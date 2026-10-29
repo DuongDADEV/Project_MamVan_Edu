@@ -705,9 +705,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-purple-100 text-[#8B5CF6]">
                 {weeklyTasks.length > 0 ? `Nhiệm vụ tuần · ${weeklyTasks.length} bài` : 'Nhiệm vụ tuần'}
               </span>
-              <span className="text-xs font-black px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200">
-                +20 XP
-              </span>
             </div>
 
             <h3 className="font-extrabold text-base text-[#1E1B4B] mb-2">
