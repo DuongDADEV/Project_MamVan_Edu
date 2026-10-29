@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Clock, CheckCircle2, Circle, ChevronRight, Eye } from 'lucide-react';
 import { Topic, Quiz, TEST_QUIZ_KINDS } from '../types.ts';
 import { getStudentAssignments } from '../services/api/biClient.ts';
+import { formatScore } from '../utils/scoreFormat.ts';
 
 // 29/10, chủ dự án: gộp thành 1 trang — kiểm tra (làm 1 lần), BTVN nội dung
 // (kind 'homework') và bài tập BI đều hiện chung 1 danh sách, xếp theo hạn nộp.
@@ -105,7 +106,7 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
               const best = scored.reduce((acc: any, cur: any) =>
                 Number(cur.score_awarded) / Number(cur.max_score) > Number(acc.score_awarded) / Number(acc.max_score) ? cur : acc
               );
-              bestScoreText = `Điểm cao nhất: ${best.score_awarded}/${best.max_score}`;
+              bestScoreText = `Điểm cao nhất: ${formatScore(Number(best.score_awarded))}/${formatScore(Number(best.max_score))}`;
             }
           }
           return {

@@ -7,6 +7,7 @@ import { calculateAllMastery } from '../logic/mastery.ts';
 import { buildTopicLeaf } from '../logic/topicCompletion.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { getStudentAssignments } from '../services/api/biClient.ts';
+import { formatScore } from '../utils/scoreFormat.ts';
 import type { NavTab } from '../components/Navbar.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
 import { ChestIllustration } from '../components/rewards/ChestIllustration.tsx';
@@ -160,7 +161,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           const best = scored.reduce((acc: any, cur: any) =>
             Number(cur.score_awarded) / Number(cur.max_score) > Number(acc.score_awarded) / Number(acc.max_score) ? cur : acc
           );
-          bestScoreText = `Điểm cao nhất: ${best.score_awarded}/${best.max_score}`;
+          bestScoreText = `Điểm cao nhất: ${formatScore(Number(best.score_awarded))}/${formatScore(Number(best.max_score))}`;
         }
       }
       return {

@@ -32,7 +32,8 @@ import { buildTopicFlowPath, nextFlowItem, isFlowItemLocked } from './logic/topi
 import { QuizReviewScreen } from './components/QuizReviewScreen.tsx';
 import { QuizResult } from './components/QuizResult.tsx';
 import { ConfettiBurst } from './components/ConfettiBurst.tsx';
-import { Palette } from 'lucide-react';
+import { Palette, CheckCircle2 } from 'lucide-react';
+import { formatScore } from './utils/scoreFormat.ts';
 
 // Services & Shared Repositories
 import {
@@ -624,13 +625,16 @@ export default function App() {
   const [isThemeSelectorOpen, setIsThemeSelectorOpen] = useState(false);
 
   // 5. Quản lý Toast thông báo nhỏ
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Toast có 2 dạng: chuỗi thường (mọi thông báo cũ) và thẻ có tiêu đề +
+  // dòng phụ (hiện dùng cho toast nộp bài: điểm thật từ kết quả nộp).
+  type ToastContent = string | { title: string; sub?: string };
+  const [toastMessage, setToastMessage] = useState<ToastContent | null>(null);
   // 29/10: tung hoa khi nhận quỹ XP chủ đề (tăng key để bắn lại mỗi lần).
   const [celebrateKey, setCelebrateKey] = useState(0);
 
-  const showToast = useCallback((msg: string) => {
+  const showToast = useCallback((msg: ToastContent) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4000);
   }, []);
 
   // 6. Hook đo Active Learning Time
@@ -1311,7 +1315,18 @@ export default function App() {
                   ...(typeof info.xpToday === 'number' ? { xpToday: info.xpToday } : {}),
                   ...(typeof info.xpWeek === 'number' ? { xpWeek: info.xpWeek } : {}),
                 }));
-                showToast(`🎉 Đã nộp bài "${info.title}"!`);
+                showToast({
+                  title: 'Đã nộp bài!',
+                  sub: [
+                    `"${info.title}"`,
+                    typeof info.autoScore === 'number' && typeof info.maxScore === 'number'
+                      ? `Điểm ${formatScore(info.autoScore)}/${formatScore(info.maxScore)}`
+                      : null,
+                    typeof info.pendingCount === 'number' && info.pendingCount > 0
+                      ? `Còn ${info.pendingCount} câu chờ cô chấm`
+                      : null,
+                  ].filter(Boolean).join(' • '),
+                });
               }
             }}
           />
@@ -1481,8 +1496,22 @@ export default function App() {
 
       {/* TOAST THÔNG BÁO NHẸ NHÀNG */}
       {toastMessage && (
-        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#8B5CF6] text-white text-xs sm:text-sm font-bold shadow-xl shadow-indigo-500/25 border border-indigo-300/30 animate-[slideUp_0.2s_ease] backdrop-blur-md">
-          {toastMessage}
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] rounded-3xl bg-gradient-to-r from-[#4F46E5] to-[#8B5CF6] text-white shadow-2xl shadow-indigo-500/30 border border-indigo-300/30 animate-[slideUp_0.2s_ease] backdrop-blur-md">
+          {typeof toastMessage === 'string' ? (
+            <p className="px-6 py-3.5 text-sm font-bold text-center">{toastMessage}</p>
+          ) : (
+            <div className="flex items-center gap-3 px-5 py-4">
+              <span className="shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-white" />
+              </span>
+              <span>
+                <span className="block text-sm font-black">{toastMessage.title}</span>
+                {toastMessage.sub && (
+                  <span className="block text-xs font-semibold text-white/85 mt-0.5">{toastMessage.sub}</span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

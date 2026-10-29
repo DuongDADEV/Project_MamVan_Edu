@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Bỏ ".00" ở màn Bài tập + Trang chủ, toast nộp bài thành thẻ đẹp hơn
+
+- ".00" còn sót: đợt trước chỉ sửa màn Kết quả học tập, còn màn Bài tập (AssignmentsScreen) và thẻ bài tập ở Trang chủ (HomeScreen) vẫn render trực tiếp chuỗi DECIMAL từ MySQL nên vẫn hiện "10.00/10.00" — nay cả 2 chỗ đều qua formatScore ("10/10", điểm lẻ giữ 1 chữ số thập phân).
+- Toast nộp bài: trước đây chỉ là viên pill một dòng chữ ("Đã nộp bài ...!"). Nay toast có 2 dạng (chuỗi cũ giữ nguyên, không sửa các call site khác): dạng thẻ mới cho toast nộp bài — vòng tròn icon tick trắng + tiêu đề "Đã nộp bài!" + dòng phụ gồm tên bài, điểm thật từ kết quả nộp (autoScore/maxScore qua formatScore) và "Còn N câu chờ cô chấm" khi còn câu chờ chấm. Cố tình KHÔNG ghi +XP trong toast: server chỉ cộng XP lần nộp đầu, toast hiện ở mọi lần nộp nên ghi XP sẽ thành hứa ảo (bài học đợt xóa badge XP giả).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Sửa popup "Xem chi tiết" bài kiểm tra của học sinh + bỏ ".00" ở điểm số
 
 - NGUYÊN NHÂN popup trống (đã đọc code, không phải do giới hạn 200 như chẩn đoán đầu): màn "Kết quả học tập" là màn CỦA HỌC SINH, nhưng popup gọi /api/dashboard/attempts + /api/reviews/pending + /api/reviews/graded — cả 3 route đều requireRole('teacher','admin') nên học sinh gọi luôn bị 403, catch đặt rỗng → popup luôn hiện câu fallback. Nói cách khác popup này chưa bao giờ mở được với tài khoản học sinh.

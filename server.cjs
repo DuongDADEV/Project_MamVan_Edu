@@ -56466,7 +56466,7 @@ mediaRouter.post("/media/upload", (req, res) => {
 });
 
 // api/routes/attempts.ts
-var import_express8 = __toESM(require_express2(), 1);
+var import_express9 = __toESM(require_express2(), 1);
 
 // api/_lib/xp.ts
 var ATTENDANCE_DAILY_XP_FALLBACK = 2;
@@ -56686,6 +56686,9 @@ async function getTotals(db3, studentId) {
     xpWeek: lastVn && vnWeekKey(lastVn) === vnWeekKey(todayVn) ? row.xp_week ?? 0 : 0
   };
 }
+
+// api/routes/dashboard.ts
+var import_express8 = __toESM(require_express2(), 1);
 
 // api/routes/_shared.ts
 var db2 = { query, execute };
@@ -56924,8 +56927,304 @@ var AUTO_Q_TYPES = /* @__PURE__ */ new Set([
   "multiple_choice"
 ]);
 
+// api/routes/dashboard.ts
+var dashboardRouter = (0, import_express8.Router)();
+dashboardRouter.use(requireAuth, requireRole("teacher", "admin"));
+async function scopedStudents(caller, classFilter) {
+  if (!isTeacher(caller)) {
+    if (classFilter) {
+      const rows2 = await query("SELECT `id` FROM `students` WHERE `class_id` = ?", [classFilter]);
+      return rows2.map((r) => r.id);
+    }
+    return null;
+  }
+  const classIds = await teacherClassIds(db2, caller.teacherId);
+  if (classFilter && !classIds.includes(classFilter)) return [];
+  const wanted = classFilter ? [classFilter] : classIds;
+  if (!wanted.length) return [];
+  const rows = await query(
+    `SELECT \`id\` FROM \`students\` WHERE \`class_id\` IN (${wanted.map(() => "?").join(",")})`,
+    wanted
+  );
+  return rows.map((r) => r.id);
+}
+function inList(ids) {
+  return ids.map(() => "?").join(",");
+}
+async function sessionsSummary(studentIds) {
+  const empty = { sessions: [], activeLast7: 0, activePrev7: 0, anchorDate: null, perDay: [] };
+  const where = studentIds ? `WHERE \`student_id\` IN (${inList(studentIds)})` : "";
+  const params = studentIds || [];
+  const rows = await query(
+    `SELECT ss.*, s.\`name\` AS student_name FROM \`student_sessions\` ss LEFT JOIN \`students\` s ON s.\`id\` = ss.\`student_id\` ${where} ORDER BY ss.\`login_at\` DESC`,
+    params
+  );
+  const sessions = rows.map((s) => ({
+    id: s.session_id,
+    studentId: s.student_id,
+    studentName: s.student_name || "H\u1ECDc sinh",
+    loginAt: s.login_at,
+    logoutAt: s.logout_at,
+    // login_date là DATE → mysql2 trả Date object: chuẩn hóa về
+    // 'YYYY-MM-DD' ngay đây, không để Date lọt xuống shiftDate/so
+    // sánh chuỗi (đã crash process ở GĐ4).
+    loginDate: toDateKey(s.login_date) || null,
+    durationMinutes: s.session_duration_minutes,
+    deviceType: s.device_type,
+    status: s.session_status
+  }));
+  const dates = sessions.map((s) => s.loginDate).filter(Boolean);
+  if (!dates.length) return { ...empty, sessions };
+  const anchor = dates.slice().sort().slice(-1)[0];
+  const inWin = (d, from, to) => d >= from && d <= to;
+  const last7 = new Set(
+    sessions.filter((s) => s.loginDate && inWin(s.loginDate, shiftDate(anchor, -6), anchor)).map((s) => s.studentId)
+  );
+  const prev7 = new Set(
+    sessions.filter((s) => s.loginDate && inWin(s.loginDate, shiftDate(anchor, -13), shiftDate(anchor, -7))).map((s) => s.studentId)
+  );
+  const perDay = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = shiftDate(anchor, -i);
+    perDay.push({ date: d, count: sessions.filter((s) => s.loginDate === d).length });
+  }
+  return { sessions, activeLast7: last7.size, activePrev7: prev7.size, anchorDate: anchor, perDay };
+}
+async function assignmentsProgress(caller, studentIds) {
+  const teacherId = isTeacher(caller) ? caller.teacherId : null;
+  const asgs = teacherId ? await query(
+    "SELECT * FROM `assignments` WHERE `teacher_id` = ? AND `published_at` IS NOT NULL ORDER BY `published_at` ASC",
+    [teacherId]
+  ) : await query(
+    "SELECT * FROM `assignments` WHERE `published_at` IS NOT NULL ORDER BY `published_at` ASC"
+  );
+  if (!asgs.length) return [];
+  const asgIds = asgs.map((a) => a.id);
+  const targets = await query(
+    `SELECT * FROM \`assignment_targets\` WHERE \`assignment_id\` IN (${inList(asgIds)})`,
+    asgIds
+  );
+  const aqs = await query(
+    `SELECT \`assignment_id\` FROM \`assignment_questions\` WHERE \`assignment_id\` IN (${inList(asgIds)})`,
+    asgIds
+  );
+  const atts = await query(
+    `SELECT \`assignment_id\`, \`student_id\`, \`score_awarded\`, \`max_score\` FROM \`attempts\` WHERE \`assignment_id\` IN (${inList(asgIds)})`,
+    asgIds
+  );
+  const names = /* @__PURE__ */ new Map();
+  const stRows = await query("SELECT `id`, `name` FROM `students`");
+  for (const s of stRows) names.set(s.id, s.name);
+  const qCount = /* @__PURE__ */ new Map();
+  for (const r of aqs) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
+  const attByKey = /* @__PURE__ */ new Map();
+  for (const a of atts) {
+    const k = a.assignment_id + "|" + a.student_id;
+    const cur = attByKey.get(k) || { count: 0, best: null, max: null };
+    cur.count += 1;
+    if (a.score_awarded != null && (cur.best == null || a.score_awarded > cur.best)) {
+      cur.best = a.score_awarded;
+      cur.max = a.max_score;
+    }
+    attByKey.set(k, cur);
+  }
+  return asgs.map((a) => {
+    const tlist = targets.filter((t) => t.assignment_id === a.id && (studentIds === null || studentIds.includes(t.student_id))).map((t) => {
+      const att = attByKey.get(a.id + "|" + t.student_id);
+      return {
+        id: t.target_id,
+        studentId: t.student_id,
+        studentName: names.get(t.student_id) || "H\u1ECDc sinh",
+        status: t.submission_status,
+        assignedAt: t.assigned_at,
+        dueAt: t.due_at,
+        firstSubmittedAt: t.first_submitted_at,
+        attemptsCount: att?.count || 0,
+        bestScore: att?.best ?? null,
+        maxScore: att?.max ?? null
+      };
+    }).sort((x, y) => x.studentName.localeCompare(y.studentName, "vi"));
+    return {
+      id: a.id,
+      title: a.title,
+      activityType: a.activity_type,
+      displayLocation: a.display_location,
+      publishedAt: a.published_at,
+      dueAt: a.due_at,
+      isTimed: !!a.is_timed,
+      timeLimitMinutes: a.time_limit_minutes,
+      xpReward: a.xp_reward ?? 0,
+      questionCount: qCount.get(a.id) || 0,
+      targets: tlist,
+      submittedCount: tlist.filter((t) => t.status === "SUBMITTED").length
+    };
+  });
+}
+async function attemptsWithAnswers(studentIds) {
+  const where = studentIds ? `WHERE \`student_id\` IN (${inList(studentIds)})` : "";
+  const params = studentIds || [];
+  const atts = await query(
+    `SELECT * FROM \`attempts\` ${where} ORDER BY \`submitted_at\` DESC LIMIT 200`,
+    params
+  );
+  if (!atts.length) return [];
+  const attIds = atts.map((a) => a.attempt_id);
+  const asgIds = [...new Set(atts.map((a) => a.assignment_id).filter(Boolean))];
+  const actIds = [...new Set(atts.map((a) => a.learning_activity_id).filter(Boolean))];
+  const answers = await query(
+    `SELECT * FROM \`attempt_answers\` WHERE \`attempt_id\` IN (${inList(attIds)})`,
+    attIds
+  );
+  const asgs = asgIds.length ? await query(`SELECT \`id\`, \`title\` FROM \`assignments\` WHERE \`id\` IN (${inList(asgIds)})`, asgIds) : [];
+  const acts = actIds.length ? await query(`SELECT \`id\`, \`title\` FROM \`learning_activities\` WHERE \`id\` IN (${inList(actIds)})`, actIds) : [];
+  const qIds = [...new Set(answers.map((a) => a.question_id))];
+  const qs = qIds.length ? await query(`SELECT \`id\`, \`prompt\`, \`type\`, \`level\` FROM \`questions\` WHERE \`id\` IN (${inList(qIds)})`, qIds) : [];
+  const stRows = await query("SELECT `id`, `name` FROM `students`");
+  const names = new Map(stRows.map((s) => [s.id, s.name]));
+  const qMap = new Map(qs.map((q) => [q.id, q]));
+  const asgMap = new Map(asgs.map((a) => [a.id, a.title]));
+  const actMap = new Map(acts.map((a) => [a.id, a.title]));
+  const ansByAtt = /* @__PURE__ */ new Map();
+  for (const a of answers) {
+    const q = qMap.get(a.question_id);
+    const list = ansByAtt.get(a.attempt_id) || [];
+    list.push({
+      id: a.answer_id,
+      questionId: a.question_id,
+      prompt: q?.prompt || a.question_id,
+      questionType: q?.type || "",
+      level: q?.level || "",
+      responseText: renderResponse(a.response_json, parseJson),
+      isCorrect: a.is_correct,
+      score: a.score_awarded,
+      maxScore: a.max_score,
+      gradingStatus: a.grading_status,
+      gradingMethod: a.grading_method,
+      responseTimeSeconds: a.response_time_seconds
+    });
+    ansByAtt.set(a.attempt_id, list);
+  }
+  return atts.map((a) => ({
+    id: a.attempt_id,
+    studentId: a.student_id,
+    studentName: names.get(a.student_id) || "H\u1ECDc sinh",
+    // assignmentId để màn học sinh khớp popup theo đúng bài giao, không lọc
+    // theo tiêu đề (nhiều bài có thể trùng tên, ví dụ 2 bài "Bài kiểm tra mới").
+    assignmentId: a.assignment_id || null,
+    learningActivityId: a.learning_activity_id || null,
+    sourceType: a.assignment_id ? "assignment" : "activity",
+    sourceTitle: a.assignment_id ? asgMap.get(a.assignment_id) || a.assignment_id : actMap.get(a.learning_activity_id) || a.learning_activity_id,
+    attemptNo: a.attempt_no,
+    status: a.status,
+    submittedAt: a.submitted_at,
+    score: a.score_awarded,
+    maxScore: a.max_score,
+    gradingStatus: a.grading_status,
+    gradingMode: a.grading_mode,
+    answers: ansByAtt.get(a.attempt_id) || []
+  }));
+}
+dashboardRouter.get("/dashboard/overview", ah(async (req, res) => {
+  const caller = req.caller;
+  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
+  const studentIds = await scopedStudents(caller, classFilter);
+  if (studentIds && studentIds.length === 0) {
+    res.json({
+      totalStudents: 0,
+      activeLast7: 0,
+      activePrev7: 0,
+      anchorDate: null,
+      submissionRate: null,
+      submittedTargets: 0,
+      totalTargets: 0,
+      pendingReviews: 0,
+      passRate: null,
+      perDay: []
+    });
+    return;
+  }
+  const from = typeof req.query.from === "string" ? req.query.from : null;
+  const to = typeof req.query.to === "string" ? req.query.to : null;
+  const summary = await sessionsSummary(studentIds);
+  const tgtWhere = studentIds ? `WHERE \`student_id\` IN (${inList(studentIds)})` : "";
+  const tgtParams = studentIds || [];
+  const targets = await query(`SELECT \`submission_status\` FROM \`assignment_targets\` ${tgtWhere}`, tgtParams);
+  const submittedTargets = targets.filter((t) => t.submission_status === "SUBMITTED").length;
+  const submissionRate = targets.length > 0 ? submittedTargets / targets.length : null;
+  const revWhere = studentIds ? `WHERE r.\`review_status\` = 'PENDING' AND a.\`student_id\` IN (${inList(studentIds)})` : `WHERE r.\`review_status\` = 'PENDING'`;
+  const revRows = await query(
+    "SELECT COUNT(*) AS c FROM `answer_reviews` r JOIN `attempt_answers` aa ON aa.`answer_id` = r.`answer_id` JOIN `attempts` a ON a.`attempt_id` = aa.`attempt_id` " + revWhere,
+    tgtParams
+  );
+  const attWhereParts = [];
+  const attParams = [];
+  if (studentIds) {
+    attWhereParts.push(`a.\`student_id\` IN (${inList(studentIds)})`);
+    attParams.push(...studentIds);
+  }
+  if (from) {
+    attWhereParts.push("a.`submitted_date` >= ?");
+    attParams.push(from);
+  }
+  if (to) {
+    attWhereParts.push("a.`submitted_date` <= ?");
+    attParams.push(to);
+  }
+  const attWhere = attWhereParts.length ? "WHERE " + attWhereParts.join(" AND ") : "";
+  const graded = await query(
+    `SELECT aa.\`score_awarded\`, aa.\`max_score\` FROM \`attempt_answers\` aa JOIN \`attempts\` a ON a.\`attempt_id\` = aa.\`attempt_id\` ${attWhere} AND aa.\`grading_status\` = 'GRADED'`,
+    attParams
+  );
+  let scoreSum = 0;
+  let maxSum = 0;
+  for (const g of graded) {
+    scoreSum += Number(g.score_awarded ?? 0);
+    maxSum += Number(g.max_score ?? 0);
+  }
+  const passRate = maxSum > 0 ? scoreSum / maxSum : null;
+  res.json({
+    totalStudents: studentIds === null ? (await query("SELECT COUNT(*) AS c FROM `students`"))[0]?.c ?? 0 : studentIds.length,
+    activeLast7: summary.activeLast7,
+    activePrev7: summary.activePrev7,
+    anchorDate: summary.anchorDate,
+    submissionRate,
+    submittedTargets,
+    totalTargets: targets.length,
+    pendingReviews: Number(revRows[0]?.c ?? 0),
+    passRate,
+    perDay: summary.perDay
+  });
+}));
+dashboardRouter.get("/dashboard/sessions", ah(async (req, res) => {
+  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
+  const studentIds = await scopedStudents(req.caller, classFilter);
+  if (studentIds && studentIds.length === 0) {
+    res.json({ sessions: [], activeLast7: 0, activePrev7: 0, anchorDate: null, perDay: [] });
+    return;
+  }
+  res.json(await sessionsSummary(studentIds));
+}));
+dashboardRouter.get("/dashboard/assignments-progress", ah(async (req, res) => {
+  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
+  const studentIds = await scopedStudents(req.caller, classFilter);
+  if (studentIds && studentIds.length === 0) {
+    res.json([]);
+    return;
+  }
+  res.json(await assignmentsProgress(req.caller, studentIds));
+}));
+dashboardRouter.get("/dashboard/attempts", ah(async (req, res) => {
+  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
+  const studentIds = await scopedStudents(req.caller, classFilter);
+  if (studentIds && studentIds.length === 0) {
+    res.json([]);
+    return;
+  }
+  res.json(await attemptsWithAnswers(studentIds));
+}));
+
 // api/routes/attempts.ts
-var attemptsRouter = (0, import_express8.Router)();
+var attemptsRouter = (0, import_express9.Router)();
 attemptsRouter.use(requireAuth);
 function optionTexts(payload) {
   const opts = Array.isArray(payload?.options) ? payload.options : [];
@@ -57771,6 +58070,15 @@ attemptsRouter.get("/student-assignments", requireRole("student"), async (req, r
     })
   );
 });
+attemptsRouter.get("/student-attempts-with-answers", requireRole("student"), async (req, res) => {
+  const caller = req.caller;
+  const studentId = caller.studentId;
+  if (!studentId) {
+    httpErr(res, 403, "FORBIDDEN");
+    return;
+  }
+  res.json(await attemptsWithAnswers([studentId]));
+});
 attemptsRouter.get("/assignments/:id", async (req, res) => {
   const caller = req.caller;
   const id = req.params.id;
@@ -58142,9 +58450,9 @@ attemptsRouter.post("/topics/:id/complete", requireRole("student"), async (req, 
 });
 
 // api/routes/essays.ts
-var import_express9 = __toESM(require_express2(), 1);
+var import_express10 = __toESM(require_express2(), 1);
 var import_node_crypto8 = require("node:crypto");
-var essaysRouter = (0, import_express9.Router)();
+var essaysRouter = (0, import_express10.Router)();
 essaysRouter.use(requireAuth);
 async function teacherScope(conn, caller) {
   if (isAdmin(caller)) return { studentIds: null, classIds: null };
@@ -58689,6 +58997,16 @@ essaysRouter.get("/reviews/graded", requireRole("teacher", "admin"), ah(async (r
   }
   res.json(await fetchReviews(db2, scope.studentIds, "GRADED", req.query.includeResponseText !== "false"));
 }));
+essaysRouter.get("/reviews/mine", requireRole("student"), ah(async (req, res) => {
+  const caller = req.caller;
+  if (!caller.studentId) {
+    httpErr(res, 403, "FORBIDDEN");
+    return;
+  }
+  const pending = await fetchReviews(db2, [caller.studentId], "PENDING", true);
+  const graded = await fetchReviews(db2, [caller.studentId], "GRADED", true);
+  res.json([...pending, ...graded]);
+}));
 essaysRouter.get("/reviews/:answerId", requireRole("teacher", "admin"), ah(async (req, res) => {
   const answerId = req.params.answerId;
   if (!checkKeyLen(res, answerId)) return;
@@ -58762,9 +59080,9 @@ essaysRouter.post("/reviews/:answerId/grade", requireRole("teacher", "admin"), a
 }));
 
 // api/routes/rewards.ts
-var import_express10 = __toESM(require_express2(), 1);
+var import_express11 = __toESM(require_express2(), 1);
 var import_node_crypto9 = require("node:crypto");
-var rewardsRouter = (0, import_express10.Router)();
+var rewardsRouter = (0, import_express11.Router)();
 rewardsRouter.use(requireAuth);
 var DEFAULT_TEASER = "M\xF3n qu\xE0 b\xED m\u1EADt th\xFA v\u1ECB";
 var DEFAULT_SECRET_NAME = "M\xF3n qu\xE0 b\xED m\u1EADt";
@@ -59176,299 +59494,6 @@ rewardsRouter.post("/reward-requests/batch", requireRole("teacher", "admin"), as
   });
   res.json({ ok: true, updated: ids.length, status });
 });
-
-// api/routes/dashboard.ts
-var import_express11 = __toESM(require_express2(), 1);
-var dashboardRouter = (0, import_express11.Router)();
-dashboardRouter.use(requireAuth, requireRole("teacher", "admin"));
-async function scopedStudents(caller, classFilter) {
-  if (!isTeacher(caller)) {
-    if (classFilter) {
-      const rows2 = await query("SELECT `id` FROM `students` WHERE `class_id` = ?", [classFilter]);
-      return rows2.map((r) => r.id);
-    }
-    return null;
-  }
-  const classIds = await teacherClassIds(db2, caller.teacherId);
-  if (classFilter && !classIds.includes(classFilter)) return [];
-  const wanted = classFilter ? [classFilter] : classIds;
-  if (!wanted.length) return [];
-  const rows = await query(
-    `SELECT \`id\` FROM \`students\` WHERE \`class_id\` IN (${wanted.map(() => "?").join(",")})`,
-    wanted
-  );
-  return rows.map((r) => r.id);
-}
-function inList(ids) {
-  return ids.map(() => "?").join(",");
-}
-async function sessionsSummary(studentIds) {
-  const empty = { sessions: [], activeLast7: 0, activePrev7: 0, anchorDate: null, perDay: [] };
-  const where = studentIds ? `WHERE \`student_id\` IN (${inList(studentIds)})` : "";
-  const params = studentIds || [];
-  const rows = await query(
-    `SELECT ss.*, s.\`name\` AS student_name FROM \`student_sessions\` ss LEFT JOIN \`students\` s ON s.\`id\` = ss.\`student_id\` ${where} ORDER BY ss.\`login_at\` DESC`,
-    params
-  );
-  const sessions = rows.map((s) => ({
-    id: s.session_id,
-    studentId: s.student_id,
-    studentName: s.student_name || "H\u1ECDc sinh",
-    loginAt: s.login_at,
-    logoutAt: s.logout_at,
-    // login_date là DATE → mysql2 trả Date object: chuẩn hóa về
-    // 'YYYY-MM-DD' ngay đây, không để Date lọt xuống shiftDate/so
-    // sánh chuỗi (đã crash process ở GĐ4).
-    loginDate: toDateKey(s.login_date) || null,
-    durationMinutes: s.session_duration_minutes,
-    deviceType: s.device_type,
-    status: s.session_status
-  }));
-  const dates = sessions.map((s) => s.loginDate).filter(Boolean);
-  if (!dates.length) return { ...empty, sessions };
-  const anchor = dates.slice().sort().slice(-1)[0];
-  const inWin = (d, from, to) => d >= from && d <= to;
-  const last7 = new Set(
-    sessions.filter((s) => s.loginDate && inWin(s.loginDate, shiftDate(anchor, -6), anchor)).map((s) => s.studentId)
-  );
-  const prev7 = new Set(
-    sessions.filter((s) => s.loginDate && inWin(s.loginDate, shiftDate(anchor, -13), shiftDate(anchor, -7))).map((s) => s.studentId)
-  );
-  const perDay = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = shiftDate(anchor, -i);
-    perDay.push({ date: d, count: sessions.filter((s) => s.loginDate === d).length });
-  }
-  return { sessions, activeLast7: last7.size, activePrev7: prev7.size, anchorDate: anchor, perDay };
-}
-async function assignmentsProgress(caller, studentIds) {
-  const teacherId = isTeacher(caller) ? caller.teacherId : null;
-  const asgs = teacherId ? await query(
-    "SELECT * FROM `assignments` WHERE `teacher_id` = ? AND `published_at` IS NOT NULL ORDER BY `published_at` ASC",
-    [teacherId]
-  ) : await query(
-    "SELECT * FROM `assignments` WHERE `published_at` IS NOT NULL ORDER BY `published_at` ASC"
-  );
-  if (!asgs.length) return [];
-  const asgIds = asgs.map((a) => a.id);
-  const targets = await query(
-    `SELECT * FROM \`assignment_targets\` WHERE \`assignment_id\` IN (${inList(asgIds)})`,
-    asgIds
-  );
-  const aqs = await query(
-    `SELECT \`assignment_id\` FROM \`assignment_questions\` WHERE \`assignment_id\` IN (${inList(asgIds)})`,
-    asgIds
-  );
-  const atts = await query(
-    `SELECT \`assignment_id\`, \`student_id\`, \`score_awarded\`, \`max_score\` FROM \`attempts\` WHERE \`assignment_id\` IN (${inList(asgIds)})`,
-    asgIds
-  );
-  const names = /* @__PURE__ */ new Map();
-  const stRows = await query("SELECT `id`, `name` FROM `students`");
-  for (const s of stRows) names.set(s.id, s.name);
-  const qCount = /* @__PURE__ */ new Map();
-  for (const r of aqs) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
-  const attByKey = /* @__PURE__ */ new Map();
-  for (const a of atts) {
-    const k = a.assignment_id + "|" + a.student_id;
-    const cur = attByKey.get(k) || { count: 0, best: null, max: null };
-    cur.count += 1;
-    if (a.score_awarded != null && (cur.best == null || a.score_awarded > cur.best)) {
-      cur.best = a.score_awarded;
-      cur.max = a.max_score;
-    }
-    attByKey.set(k, cur);
-  }
-  return asgs.map((a) => {
-    const tlist = targets.filter((t) => t.assignment_id === a.id && (studentIds === null || studentIds.includes(t.student_id))).map((t) => {
-      const att = attByKey.get(a.id + "|" + t.student_id);
-      return {
-        id: t.target_id,
-        studentId: t.student_id,
-        studentName: names.get(t.student_id) || "H\u1ECDc sinh",
-        status: t.submission_status,
-        assignedAt: t.assigned_at,
-        dueAt: t.due_at,
-        firstSubmittedAt: t.first_submitted_at,
-        attemptsCount: att?.count || 0,
-        bestScore: att?.best ?? null,
-        maxScore: att?.max ?? null
-      };
-    }).sort((x, y) => x.studentName.localeCompare(y.studentName, "vi"));
-    return {
-      id: a.id,
-      title: a.title,
-      activityType: a.activity_type,
-      displayLocation: a.display_location,
-      publishedAt: a.published_at,
-      dueAt: a.due_at,
-      isTimed: !!a.is_timed,
-      timeLimitMinutes: a.time_limit_minutes,
-      xpReward: a.xp_reward ?? 0,
-      questionCount: qCount.get(a.id) || 0,
-      targets: tlist,
-      submittedCount: tlist.filter((t) => t.status === "SUBMITTED").length
-    };
-  });
-}
-async function attemptsWithAnswers(studentIds) {
-  const where = studentIds ? `WHERE \`student_id\` IN (${inList(studentIds)})` : "";
-  const params = studentIds || [];
-  const atts = await query(
-    `SELECT * FROM \`attempts\` ${where} ORDER BY \`submitted_at\` DESC LIMIT 200`,
-    params
-  );
-  if (!atts.length) return [];
-  const attIds = atts.map((a) => a.attempt_id);
-  const asgIds = [...new Set(atts.map((a) => a.assignment_id).filter(Boolean))];
-  const actIds = [...new Set(atts.map((a) => a.learning_activity_id).filter(Boolean))];
-  const answers = await query(
-    `SELECT * FROM \`attempt_answers\` WHERE \`attempt_id\` IN (${inList(attIds)})`,
-    attIds
-  );
-  const asgs = asgIds.length ? await query(`SELECT \`id\`, \`title\` FROM \`assignments\` WHERE \`id\` IN (${inList(asgIds)})`, asgIds) : [];
-  const acts = actIds.length ? await query(`SELECT \`id\`, \`title\` FROM \`learning_activities\` WHERE \`id\` IN (${inList(actIds)})`, actIds) : [];
-  const qIds = [...new Set(answers.map((a) => a.question_id))];
-  const qs = qIds.length ? await query(`SELECT \`id\`, \`prompt\`, \`type\`, \`level\` FROM \`questions\` WHERE \`id\` IN (${inList(qIds)})`, qIds) : [];
-  const stRows = await query("SELECT `id`, `name` FROM `students`");
-  const names = new Map(stRows.map((s) => [s.id, s.name]));
-  const qMap = new Map(qs.map((q) => [q.id, q]));
-  const asgMap = new Map(asgs.map((a) => [a.id, a.title]));
-  const actMap = new Map(acts.map((a) => [a.id, a.title]));
-  const ansByAtt = /* @__PURE__ */ new Map();
-  for (const a of answers) {
-    const q = qMap.get(a.question_id);
-    const list = ansByAtt.get(a.attempt_id) || [];
-    list.push({
-      id: a.answer_id,
-      questionId: a.question_id,
-      prompt: q?.prompt || a.question_id,
-      questionType: q?.type || "",
-      level: q?.level || "",
-      responseText: renderResponse(a.response_json, parseJson),
-      isCorrect: a.is_correct,
-      score: a.score_awarded,
-      maxScore: a.max_score,
-      gradingStatus: a.grading_status,
-      gradingMethod: a.grading_method,
-      responseTimeSeconds: a.response_time_seconds
-    });
-    ansByAtt.set(a.attempt_id, list);
-  }
-  return atts.map((a) => ({
-    id: a.attempt_id,
-    studentId: a.student_id,
-    studentName: names.get(a.student_id) || "H\u1ECDc sinh",
-    sourceType: a.assignment_id ? "assignment" : "activity",
-    sourceTitle: a.assignment_id ? asgMap.get(a.assignment_id) || a.assignment_id : actMap.get(a.learning_activity_id) || a.learning_activity_id,
-    attemptNo: a.attempt_no,
-    status: a.status,
-    submittedAt: a.submitted_at,
-    score: a.score_awarded,
-    maxScore: a.max_score,
-    gradingStatus: a.grading_status,
-    gradingMode: a.grading_mode,
-    answers: ansByAtt.get(a.attempt_id) || []
-  }));
-}
-dashboardRouter.get("/dashboard/overview", ah(async (req, res) => {
-  const caller = req.caller;
-  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
-  const studentIds = await scopedStudents(caller, classFilter);
-  if (studentIds && studentIds.length === 0) {
-    res.json({
-      totalStudents: 0,
-      activeLast7: 0,
-      activePrev7: 0,
-      anchorDate: null,
-      submissionRate: null,
-      submittedTargets: 0,
-      totalTargets: 0,
-      pendingReviews: 0,
-      passRate: null,
-      perDay: []
-    });
-    return;
-  }
-  const from = typeof req.query.from === "string" ? req.query.from : null;
-  const to = typeof req.query.to === "string" ? req.query.to : null;
-  const summary = await sessionsSummary(studentIds);
-  const tgtWhere = studentIds ? `WHERE \`student_id\` IN (${inList(studentIds)})` : "";
-  const tgtParams = studentIds || [];
-  const targets = await query(`SELECT \`submission_status\` FROM \`assignment_targets\` ${tgtWhere}`, tgtParams);
-  const submittedTargets = targets.filter((t) => t.submission_status === "SUBMITTED").length;
-  const submissionRate = targets.length > 0 ? submittedTargets / targets.length : null;
-  const revWhere = studentIds ? `WHERE r.\`review_status\` = 'PENDING' AND a.\`student_id\` IN (${inList(studentIds)})` : `WHERE r.\`review_status\` = 'PENDING'`;
-  const revRows = await query(
-    "SELECT COUNT(*) AS c FROM `answer_reviews` r JOIN `attempt_answers` aa ON aa.`answer_id` = r.`answer_id` JOIN `attempts` a ON a.`attempt_id` = aa.`attempt_id` " + revWhere,
-    tgtParams
-  );
-  const attWhereParts = [];
-  const attParams = [];
-  if (studentIds) {
-    attWhereParts.push(`a.\`student_id\` IN (${inList(studentIds)})`);
-    attParams.push(...studentIds);
-  }
-  if (from) {
-    attWhereParts.push("a.`submitted_date` >= ?");
-    attParams.push(from);
-  }
-  if (to) {
-    attWhereParts.push("a.`submitted_date` <= ?");
-    attParams.push(to);
-  }
-  const attWhere = attWhereParts.length ? "WHERE " + attWhereParts.join(" AND ") : "";
-  const graded = await query(
-    `SELECT aa.\`score_awarded\`, aa.\`max_score\` FROM \`attempt_answers\` aa JOIN \`attempts\` a ON a.\`attempt_id\` = aa.\`attempt_id\` ${attWhere} AND aa.\`grading_status\` = 'GRADED'`,
-    attParams
-  );
-  let scoreSum = 0;
-  let maxSum = 0;
-  for (const g of graded) {
-    scoreSum += Number(g.score_awarded ?? 0);
-    maxSum += Number(g.max_score ?? 0);
-  }
-  const passRate = maxSum > 0 ? scoreSum / maxSum : null;
-  res.json({
-    totalStudents: studentIds === null ? (await query("SELECT COUNT(*) AS c FROM `students`"))[0]?.c ?? 0 : studentIds.length,
-    activeLast7: summary.activeLast7,
-    activePrev7: summary.activePrev7,
-    anchorDate: summary.anchorDate,
-    submissionRate,
-    submittedTargets,
-    totalTargets: targets.length,
-    pendingReviews: Number(revRows[0]?.c ?? 0),
-    passRate,
-    perDay: summary.perDay
-  });
-}));
-dashboardRouter.get("/dashboard/sessions", ah(async (req, res) => {
-  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
-  const studentIds = await scopedStudents(req.caller, classFilter);
-  if (studentIds && studentIds.length === 0) {
-    res.json({ sessions: [], activeLast7: 0, activePrev7: 0, anchorDate: null, perDay: [] });
-    return;
-  }
-  res.json(await sessionsSummary(studentIds));
-}));
-dashboardRouter.get("/dashboard/assignments-progress", ah(async (req, res) => {
-  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
-  const studentIds = await scopedStudents(req.caller, classFilter);
-  if (studentIds && studentIds.length === 0) {
-    res.json([]);
-    return;
-  }
-  res.json(await assignmentsProgress(req.caller, studentIds));
-}));
-dashboardRouter.get("/dashboard/attempts", ah(async (req, res) => {
-  const classFilter = typeof req.query.class_id === "string" ? req.query.class_id : void 0;
-  const studentIds = await scopedStudents(req.caller, classFilter);
-  if (studentIds && studentIds.length === 0) {
-    res.json([]);
-    return;
-  }
-  res.json(await attemptsWithAnswers(studentIds));
-}));
 
 // api/routes/chat.ts
 var import_express12 = __toESM(require_express2(), 1);
