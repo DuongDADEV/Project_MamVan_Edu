@@ -1,3 +1,11 @@
+## [dev] 2026-10-30 — Popup chi tiết chủ đề chia 3 phần xếp chồng, bỏ thẻ "Lần làm"
+
+- Chủ dự án chốt: popup chi tiết chủ đề không liệt kê từng "Lần làm" nữa (dài) mà chia 3 phần xếp chồng nhau:
+  (1) Trắc nghiệm: mỗi câu trắc nghiệm/điền khuyết của chủ đề 1 dòng — Đúng (từng trả lời đúng) / Sai (đã làm mà chưa từng đúng) / Chưa làm — KHÔNG còn "% điểm" sau mỗi câu; câu đã gỡ khỏi ngân hàng nhưng từng làm vẫn hiện để không mất câu.
+  (2) Tự luận: giữ nguyên như cũ (nội dung + "Đã chấm: X/10" hoặc "Cô giáo chưa chấm" + nhận xét của cô); việc thêm điểm/nhận xét để đợt sau theo chủ dự án.
+  (3) Đáp án: chỉ mở khi đúng 100% toàn bộ câu trắc nghiệm + điền khuyết của chủ đề (câu nào cũng từng trả lời đúng; câu không có đáp án thì không tính vào điều kiện vì không có "đúng" để đạt; câu nháp/khóa không tính) — khi mở hiện đáp án đúng từng câu (chữ cái A/B/C tự đổi ra nội dung phương án; điền khuyết nhiều cách chấp nhận hiện dạng "a hoặc b"). Chưa đủ thì hiện đúng câu chủ dự án chốt, XP lấy từ xpReward của chủ đề (không cấu hình thì bỏ đoạn XP): "Chưa hiện đáp án. Em hãy làm lại chính xác các câu trắc nghiệm & điền khuyết để hiện đáp án và được cộng X XP nhé!"
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Xóa chữ tiếng Anh "GRADED" ở màn Kết quả học tập
 
 - Thẻ "Điểm theo từng bài kiểm tra" trước đây in trực tiếp enum trạng thái chấm từ server nên lòi chữ "GRADED" sau điểm số; popup chi tiết lần làm cũng in enum đó ở tiêu đề lần làm. Xóa cả 2 chỗ (điểm số đã đủ ý nghĩa; câu chờ chấm từng câu vẫn hiện "Cô giáo chưa chấm" như trước, bài chưa có điểm vẫn hiện "Đã nộp — cô giáo chưa chấm").

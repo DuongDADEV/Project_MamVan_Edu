@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Trophy, Target, Zap, BookOpenCheck, Award, Lock, TrendingUp, X, MessageSquareText, CheckCircle2, XCircle, FileCheck } from 'lucide-react';
+import { Trophy, Target, Zap, BookOpenCheck, Award, Lock, TrendingUp, X, MessageSquareText, CheckCircle2, XCircle, Circle, FileCheck } from 'lucide-react';
 import { StudentState, Topic, QuestionResult, EssaySubmission } from '../types.ts';
 import { QuestionWithMeta } from '../services/types.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
@@ -39,6 +39,40 @@ const STATUS_META: Record<TopicStatus, { label: string; chip: string; bar: strin
 // từ phiếu chấm essay_submissions, KHÔNG dùng điểm tạm 0.8 mà QuizRunner ghi
 // vào questionResults lúc nộp (điểm tạm đó không phải điểm thật).
 const MCQ_TYPES = new Set(['single', 'multi', 'fill']);
+
+// Trạng thái từng câu trắc nghiệm/điền khuyết trong popup chi tiết chủ đề:
+// correct = từng trả lời đúng (tính cho khóa mở đáp án), wrong = đã làm mà
+// chưa từng đúng, todo = chưa làm.
+type McRowState = 'correct' | 'wrong' | 'todo';
+
+/** Chữ cái A/B/C -> nội dung phương án (đáp án có thể lưu dạng chữ cái hoặc dạng nội dung). */
+function resolveOptionText(ans: string, options?: string[]): string {
+  const t = ans.trim();
+  if (options && /^[A-Z]$/.test(t)) {
+    const idx = t.charCodeAt(0) - 65;
+    if (options[idx] != null) return options[idx];
+  }
+  return ans;
+}
+
+/** Đáp án đúng hiển thị được của 1 câu trắc nghiệm/điền khuyết; null khi câu không có đáp án. */
+function resolveCorrectAnswer(q: any): string | null {
+  const ans = q?.answer;
+  if (ans == null) return null;
+  if (Array.isArray(ans)) {
+    const parts = ans
+      .filter((a: any) => a != null && String(a).trim() !== '')
+      .map((a: any) => {
+        const s = String(a);
+        // Điền khuyết: nhiều cách chấp nhận ngăn bằng | -> hiện dạng "a hoặc b".
+        return q.type === 'fill' && s.includes('|') ? s.split('|').join(' hoặc ') : resolveOptionText(s, q.options);
+      });
+    return parts.length ? parts.join(', ') : null;
+  }
+  const s = String(ans);
+  if (s.trim() === '') return null;
+  return resolveOptionText(s, q.options);
+}
 
 // Ngưỡng "đạt" cho tự luận thang 10 (chuẩn điểm đạt phổ thông).
 const ESSAY_PASS_SCORE = 5;
@@ -273,6 +307,39 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
 
   const detailTopic = topicRows.find((r) => r.topic.id === detailTopicId) || null;
   const detailTest = biAssignments.find((a: any) => a.assignmentId === detailTestId) || null;
+
+  // Popup chi tiết chủ đề, chia 3 phần xếp chồng (30/10, chủ dự án):
+  // Trắc nghiệm (mỗi câu 1 dòng, không % điểm, không thẻ "Lần làm"),
+  // Tự luận (như cũ), Đáp án (khóa tới khi đúng 100% toàn bộ câu TN+ĐK
+  // của chủ đề — câu nào cũng từng trả lời đúng; câu không có đáp án thì
+  // không tính vào điều kiện vì không có "đúng" để đạt).
+  const detailSections = useMemo(() => {
+    if (!detailTopic) return null;
+    const tQuestions = Object.values(questions).filter(
+      (q) => q.topicId === detailTopic.topic.id && MCQ_TYPES.has(q.type) && q.status !== 'draft' && q.status !== 'archived'
+    );
+    const everCorrect = new Set(detailTopic.mcq.filter((r) => r.isCorrect).map((r) => r.questionId));
+    const attempted = new Set(detailTopic.mcq.map((r) => r.questionId));
+    const mcRows: { key: string; prompt: string; state: McRowState }[] = [
+      ...tQuestions.map((q) => ({
+        key: q.id,
+        prompt: q.prompt,
+        state: (everCorrect.has(q.id) ? 'correct' : attempted.has(q.id) ? 'wrong' : 'todo') as McRowState,
+      })),
+      // Câu đã gỡ khỏi ngân hàng nhưng học sinh từng làm: vẫn hiện để không mất câu.
+      ...[...attempted]
+        .filter((id) => !questions[id])
+        .map((id) => ({
+          key: id,
+          prompt: 'Câu hỏi (đã gỡ khỏi ngân hàng)',
+          state: (everCorrect.has(id) ? 'correct' : 'wrong') as McRowState,
+        })),
+    ];
+    const gateQuestions = tQuestions.filter((q) => resolveCorrectAnswer(q) != null);
+    const unlocked = gateQuestions.length > 0 && gateQuestions.every((q) => everCorrect.has(q.id));
+    const xpReward = typeof (detailTopic.topic as any).xpReward === 'number' ? (detailTopic.topic as any).xpReward : 0;
+    return { mcRows, gateQuestions, unlocked, xpReward };
+  }, [detailTopic, questions]);
 
   useEffect(() => {
     if (!detailTest || !studentId) {
@@ -607,8 +674,8 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
         </div>
       </div>
 
-      {/* POPUP CHI TIẾT CHỦ ĐỀ: toàn bộ bài đã làm — trắc nghiệm trước, tự luận sau,
-          nhận xét của cô nằm ngay dưới từng bài tự luận. */}
+      {/* POPUP CHI TIẾT CHỦ ĐỀ: 3 phần xếp chồng — Trắc nghiệm (mỗi câu 1 dòng,
+          không % điểm), Tự luận (như cũ), Đáp án (khóa tới khi đúng 100%). */}
       {detailTopic && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setDetailTopicId(null)}>
           <div
@@ -635,117 +702,83 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
               </button>
             </div>
 
-            {detailTopic.batches.length === 0 && detailTopic.topicEssays.length === 0 ? (
+            {detailSections && detailSections.mcRows.length === 0 && detailTopic.topicEssays.length === 0 ? (
               <p className="text-sm text-slate-400 italic">Em chưa làm bài nào ở chủ đề này.</p>
-            ) : (
+            ) : detailSections ? (
               <>
-                {detailTopic.batches.map((batch, bi) => {
-                  const batchMcq = batch.results.filter((r) => {
-                    const q = questions[r.questionId];
-                    return !q || MCQ_TYPES.has(q.type);
-                  });
-                  const batchMcqCorrect = batchMcq.filter((r) => r.isCorrect).length;
-                  const batchEssays = detailTopic.topicEssays.filter(
-                    (e) => e.submittedAt >= batch.start - BATCH_GAP_MS && e.submittedAt <= batch.end + BATCH_GAP_MS
-                  );
-                  return (
-                    <div key={bi} className="border border-[#E6DCC8] rounded-2xl p-4 space-y-3">
-                      <p className="font-bold text-sm text-[#2F3E6B]">
-                        Lần làm {detailTopic.batches.length - bi} • {fmtDateTime(batch.start)}
-                        <span className="font-normal text-slate-500">
-                          {' '}
-                          • Trắc nghiệm đúng {batchMcqCorrect}/{batchMcq.length} câu
+                {/* 1. Trắc nghiệm: mỗi câu 1 dòng, không % điểm, không thẻ "Lần làm". */}
+                {detailSections.mcRows.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-sm text-[#1E1B4B]">Trắc nghiệm</h4>
+                    {detailSections.mcRows.map((row) => (
+                      <div key={row.key} className="flex items-start gap-2 text-sm">
+                        {row.state === 'correct' ? (
+                          <CheckCircle2 className="w-4 h-4 text-[#2F6B4F] shrink-0 mt-0.5" />
+                        ) : row.state === 'wrong' ? (
+                          <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-300 shrink-0 mt-0.5" />
+                        )}
+                        <span className="text-[#1E1B4B]">
+                          {row.prompt}
+                          <span className="text-slate-500">
+                            {' '}
+                            • {row.state === 'correct' ? 'Đúng' : row.state === 'wrong' ? 'Sai' : 'Chưa làm'}
+                          </span>
                         </span>
-                      </p>
-                      {/* Trắc nghiệm trước */}
-                      <div className="space-y-2">
-                        {batch.results
-                          .filter((r) => {
-                            const q = questions[r.questionId];
-                            return !q || MCQ_TYPES.has(q.type);
-                          })
-                          .map((r) => {
-                            const q = questions[r.questionId];
-                            return (
-                              <div key={r.questionId} className="flex items-start gap-2 text-sm">
-                                {r.isCorrect ? (
-                                  <CheckCircle2 className="w-4 h-4 text-[#2F6B4F] shrink-0 mt-0.5" />
-                                ) : (
-                                  <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                                )}
-                                <span className="text-[#1E1B4B]">
-                                  {q?.prompt || 'Câu hỏi (đã gỡ khỏi ngân hàng)'}
-                                  <span className="text-slate-500">
-                                    {' '}
-                                    • {r.isCorrect ? 'Đúng' : 'Sai'} • Điểm {Math.round(r.scoreRatio * 100)}%
-                                  </span>
-                                </span>
-                              </div>
-                            );
-                          })}
                       </div>
-                      {/* Tự luận sau, kèm nhận xét của cô ngay dưới bài làm */}
-                      {batchEssays.map((e) => (
-                        <div key={e.id} className="bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl p-3 space-y-2">
-                          <p className="text-xs font-bold text-slate-500">
-                            Tự luận • {questions[e.questionId]?.prompt || e.promptTitle || 'Bài viết tự luận'}
-                          </p>
-                          <p className="text-sm text-[#1E1B4B] line-clamp-6">{e.content}</p>
-                          {e.status === 'GRADED' && e.totalScore != null ? (
-                            <p className="text-sm font-bold text-[#2F6B4F]">Đã chấm: {e.totalScore}/10</p>
-                          ) : (
-                            <p className="text-sm font-bold text-amber-600">Cô giáo chưa chấm</p>
-                          )}
-                          {e.teacherFeedback && (
-                            <p className="text-sm text-[#1E1B4B] bg-white border border-[#2F6B4F]/20 rounded-xl p-3 flex gap-2">
-                              <MessageSquareText className="w-4 h-4 shrink-0 mt-0.5 text-[#2F6B4F]" />
-                              <span>
-                                <span className="font-bold">Nhận xét của cô: </span>
-                                {e.teacherFeedback}
-                              </span>
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                      {batchEssays.length === 0 &&
-                        batch.results.some((r) => questions[r.questionId]?.type === 'essay') && (
-                          <p className="text-xs text-slate-400 italic">
-                            Bài tự luận của lần này không còn gắn được với lần làm (đã nộp từ thiết bị khác).
+                    ))}
+                  </div>
+                )}
+                {/* 2. Tự luận: như cũ (điểm + nhận xét thêm sau, theo chủ dự án). */}
+                {detailTopic.topicEssays.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-sm text-[#1E1B4B]">Tự luận</h4>
+                    {detailTopic.topicEssays.map((e) => (
+                      <div key={e.id} className="bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl p-3 space-y-2">
+                        <p className="text-xs font-bold text-slate-500">
+                          Tự luận • {questions[e.questionId]?.prompt || e.promptTitle || 'Bài viết tự luận'}
+                        </p>
+                        <p className="text-sm text-[#1E1B4B] line-clamp-6">{e.content}</p>
+                        {e.status === 'GRADED' && e.totalScore != null ? (
+                          <p className="text-sm font-bold text-[#2F6B4F]">Đã chấm: {e.totalScore}/10</p>
+                        ) : (
+                          <p className="text-sm font-bold text-amber-600">Cô giáo chưa chấm</p>
+                        )}
+                        {e.teacherFeedback && (
+                          <p className="text-sm text-[#1E1B4B] bg-white border border-[#2F6B4F]/20 rounded-xl p-3 flex gap-2">
+                            <MessageSquareText className="w-4 h-4 shrink-0 mt-0.5 text-[#2F6B4F]" />
+                            <span>
+                              <span className="font-bold">Nhận xét của cô: </span>
+                              {e.teacherFeedback}
+                            </span>
                           </p>
                         )}
-                    </div>
-                  );
-                })}
-                {/* Bài tự luận không gắn được vào lần làm nào (vẫn phải hiện) */}
-                {detailTopic.topicEssays.filter(
-                  (e) =>
-                    !detailTopic.batches.some(
-                      (b) => e.submittedAt >= b.start - BATCH_GAP_MS && e.submittedAt <= b.end + BATCH_GAP_MS
-                    )
-                ).map((e) => (
-                  <div key={e.id} className="bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-bold text-slate-500">
-                      Tự luận (không gắn lần làm) • {questions[e.questionId]?.prompt || e.promptTitle || 'Bài viết tự luận'}
-                    </p>
-                    <p className="text-sm text-[#1E1B4B] line-clamp-6">{e.content}</p>
-                    {e.status === 'GRADED' && e.totalScore != null ? (
-                      <p className="text-sm font-bold text-[#2F6B4F]">Đã chấm: {e.totalScore}/10</p>
-                    ) : (
-                      <p className="text-sm font-bold text-amber-600">Cô giáo chưa chấm</p>
-                    )}
-                    {e.teacherFeedback && (
-                      <p className="text-sm text-[#1E1B4B] bg-white border border-[#2F6B4F]/20 rounded-xl p-3 flex gap-2">
-                        <MessageSquareText className="w-4 h-4 shrink-0 mt-0.5 text-[#2F6B4F]" />
-                        <span>
-                          <span className="font-bold">Nhận xét của cô: </span>
-                          {e.teacherFeedback}
-                        </span>
-                      </p>
-                    )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                {/* 3. Đáp án: chỉ mở khi đúng 100% toàn bộ câu TN+ĐK của chủ đề. */}
+                <div className="space-y-2">
+                  <h4 className="font-bold text-sm text-[#1E1B4B]">Đáp án</h4>
+                  {detailSections.gateQuestions.length === 0 ? (
+                    <p className="text-sm text-slate-400 italic">Chủ đề này chưa có câu trắc nghiệm hay điền khuyết có đáp án.</p>
+                  ) : detailSections.unlocked ? (
+                    detailSections.gateQuestions.map((q) => (
+                      <div key={q.id} className="text-sm">
+                        <span className="text-[#1E1B4B]">{q.prompt}</span>
+                        <span className="text-[#2F6B4F] font-bold"> • Đáp án: {resolveCorrectAnswer(q)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      Chưa hiện đáp án. Em hãy làm lại chính xác các câu trắc nghiệm &amp; điền khuyết để hiện đáp án
+                      {detailSections.xpReward > 0 ? ` và được cộng ${detailSections.xpReward} XP` : ''} nhé!
+                    </p>
+                  )}
+                </div>
               </>
-            )}
+            ) : null}
           </div>
         </div>
       )}
