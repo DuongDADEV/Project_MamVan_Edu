@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { formatScore } from '../../../utils/scoreFormat.ts';
 import { EssaySubmission, RubricTemplate, RubricCriterion, GradedSampleEssay } from '../../../types.ts';
+import { aiService, essayRepository } from '../../../services/index.ts';
 import {
   ArrowLeft,
   Sparkles,
@@ -43,6 +44,7 @@ interface SplitGradingWorkspaceProps {
   onPrevSubmission?: () => void;
   hasPrevSubmission?: boolean;
   onSaveToSampleLibrary?: (sample: Partial<GradedSampleEssay>) => Promise<void>;
+  onAiSuggestionAttached?: (updated: EssaySubmission) => void;
 }
 
 export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
@@ -57,6 +59,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
   onPrevSubmission,
   hasPrevSubmission,
   onSaveToSampleLibrary,
+  onAiSuggestionAttached,
 }) => {
   // Chuẩn bị Rubric áp dụng
   const initialRubric: RubricCriterion[] = useMemo(() => {
@@ -89,6 +92,7 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
   const [showSampleEssay, setShowSampleEssay] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSavingDraft, setIsSavingDraft] = useState<boolean>(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [savedToSamples, setSavedToSamples] = useState<boolean>(false);
 
   // Sync state khi đổi submission
@@ -117,10 +121,13 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
       });
       setGeneralFeedback(submission.aiSuggestion.overallComment || '');
     }
-    // 4. Mặc định khởi tạo điểm = 0
+    // 4. Chưa có gì (không gợi ý AI, không nháp, chưa chấm): bắt đầu từ 0.
+    // 29/10: trước đây khởi tạo 80% điểm tối đa — đó chính là "điểm mặc
+    // định" giáo viên phàn nàn, dù chú thích cũ ghi là 0. Nay khớp chú
+    // thích: 0, giáo viên tự chấm hoặc bấm "Tạo gợi ý AI".
     else {
       initialRubric.forEach((c) => {
-        scores[c.name] = (c.maxPoints ?? ((c.weight ?? 20) / 100) * 10) * 0.8;
+        scores[c.name] = 0;
       });
       setGeneralFeedback('');
     }
@@ -167,6 +174,58 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
     });
     setCriterionScores(zeroScores);
     setGeneralFeedback('');
+  };
+
+  // Gợi ý AI thật (29/10): chấm theo đúng rubric đang hiển thị, qua chuỗi
+  // AI của máy chủ (/api/ai/chat) — không dùng điểm ước lượng. Lỗi thì báo
+  // rõ và giữ nguyên trạng thái chờ chấm. Phiếu review: không áp dụng.
+  const canGenerateAI = !submission.id.startsWith('review:');
+  const handleGenerateAI = async () => {
+    if (isGeneratingAI || !canGenerateAI) return;
+    const text = (submission.content || '').trim();
+    if (!text) {
+      alert('Bài nộp trống nên AI không chấm được.');
+      return;
+    }
+    setIsGeneratingAI(true);
+    try {
+      const rubricForAI = initialRubric.map((c) => {
+        const maxPoints = c.maxPoints ?? ((c.weight ?? 20) / 100) * 10;
+        return {
+          name: c.name,
+          description: c.description || c.name,
+          weight: c.weight ?? 20,
+          maxScore: maxPoints,
+        };
+      });
+      const res = await aiService.suggestEssayGrade(text, rubricForAI);
+      // Ghép điểm AI vào đúng tiêu chí đang hiển thị (khớp tên, fallback
+      // theo thứ tự) để tổng và từng tiêu chí luôn nhất quán.
+      const mapped = initialRubric.map((c, idx) => {
+        const maxPoints = c.maxPoints ?? ((c.weight ?? 20) / 100) * 10;
+        const rs = res.rubricScores?.find((r) => r.criterionName === c.name) || res.rubricScores?.[idx];
+        if (!rs) return null;
+        const score = Math.max(0, Math.min(maxPoints, Number(rs.suggestedScore) || 0));
+        return { criterionName: c.name, score, maxScore: maxPoints, reason: rs.reason || '' };
+      }).filter((x): x is { criterionName: string; score: number; maxScore: number; reason: string } => x !== null);
+      if (!mapped.length) throw new Error('AI không trả về điểm theo tiêu chí nào.');
+      const suggestion = {
+        rubricScores: mapped,
+        overallComment: res.overallComment || '',
+        suggestedTotalScore: Math.round(mapped.reduce((s, m) => s + m.score, 0) * 10) / 10,
+        suggestedAt: new Date().toISOString(),
+      };
+      const updated = await essayRepository.attachAiSuggestion(submission.id, suggestion);
+      const nextScores: Record<string, number> = {};
+      mapped.forEach((m) => { nextScores[m.criterionName] = m.score; });
+      setCriterionScores(nextScores);
+      setGeneralFeedback(suggestion.overallComment);
+      if (onAiSuggestionAttached) onAiSuggestionAttached(updated);
+    } catch (e: any) {
+      alert(`Không tạo được gợi ý AI: ${e?.message || 'lỗi không rõ'} — bài vẫn giữ trạng thái chờ chấm, không dùng điểm ước lượng.`);
+    } finally {
+      setIsGeneratingAI(false);
+    }
   };
 
   // Hành động: Lưu nháp
@@ -413,31 +472,63 @@ export const SplitGradingWorkspace: React.FC<SplitGradingWorkspaceProps> = ({
                     Gợi ý chấm tự động bởi AI (Chuẩn GDPT 2018)
                   </span>
                 </div>
-                <p className="text-xs text-purple-800">
-                  AI đã phân tích ngữ nghĩa, cấu trúc và đề xuất mức điểm{' '}
-                  <strong className="text-purple-950 text-sm font-black underline">
-                    {formatScore(aiTotalScore)} / 10
-                  </strong>
-                  . Thầy/cô có toàn quyền điều chỉnh.
-                </p>
+                {submission.aiSuggestion ? (
+                  <p className="text-xs text-purple-800">
+                    AI đã phân tích ngữ nghĩa, cấu trúc và đề xuất mức điểm{' '}
+                    <strong className="text-purple-950 text-sm font-black underline">
+                      {formatScore(aiTotalScore)} / 10
+                    </strong>
+                    . Thầy/cô có toàn quyền điều chỉnh.
+                  </p>
+                ) : (
+                  <p className="text-xs text-purple-800">
+                    {canGenerateAI
+                      ? 'Chưa có gợi ý AI cho bài này. Bấm “Tạo gợi ý AI” để AI chấm thật theo đúng rubric bên dưới — thầy/cô vẫn có toàn quyền điều chỉnh.'
+                      : 'Phiếu chấm từ bài tập không dùng gợi ý AI — thầy/cô chấm tay theo rubric bên dưới.'}
+                  </p>
+                )}
               </div>
 
               {/* Nút hành động AI */}
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={handleAcceptAllAI}
-                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1"
-                  title="Điền toàn bộ điểm và nhận xét AI vào ô của giáo viên"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Chấp nhận gợi ý
-                </button>
-                <button
-                  onClick={handleClearAI}
-                  className="px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold rounded-xl transition-colors"
-                  title="Xóa gợi ý AI để tự cho điểm từ đầu"
-                >
-                  Bỏ gợi ý, chấm tay
-                </button>
+                {submission.aiSuggestion ? (
+                  <>
+                    <button
+                      onClick={handleAcceptAllAI}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1"
+                      title="Điền toàn bộ điểm và nhận xét AI vào ô của giáo viên"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Chấp nhận gợi ý
+                    </button>
+                    <button
+                      onClick={handleClearAI}
+                      className="px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold rounded-xl transition-colors"
+                      title="Xóa gợi ý AI để tự cho điểm từ đầu"
+                    >
+                      Bỏ gợi ý, chấm tay
+                    </button>
+                    {canGenerateAI && (
+                      <button
+                        onClick={handleGenerateAI}
+                        disabled={isGeneratingAI}
+                        className="px-2.5 py-1.5 bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50"
+                        title="Chấm lại bằng AI theo rubric"
+                      >
+                        {isGeneratingAI ? 'Đang tạo…' : 'Tạo lại gợi ý'}
+                      </button>
+                    )}
+                  </>
+                ) : canGenerateAI ? (
+                  <button
+                    onClick={handleGenerateAI}
+                    disabled={isGeneratingAI}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1 disabled:opacity-50"
+                    title="AI chấm bài này theo đúng rubric bên dưới"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {isGeneratingAI ? 'Đang tạo gợi ý…' : 'Tạo gợi ý AI'}
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

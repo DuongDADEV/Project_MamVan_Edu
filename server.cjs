@@ -58399,6 +58399,55 @@ essaysRouter.patch("/essays/:id/draft", ah(async (req, res) => {
   const list = await essayList(db2, caller, {});
   res.json(list.find((e) => e.id === id) || { id });
 }));
+essaysRouter.post("/essays/:id/ai-suggestion", requireRole("teacher", "admin"), ah(async (req, res) => {
+  const caller = req.caller;
+  const id = req.params.id;
+  const body = bodyOf(req);
+  if (id.startsWith("review:")) {
+    httpErr(res, 400, "BAD_INPUT");
+    return;
+  }
+  if (!checkKeyLen(res, id)) return;
+  const rows = await query("SELECT * FROM `essay_submissions` WHERE `id` = ? LIMIT 1", [id]);
+  const row = rows[0];
+  if (!row) {
+    httpErr(res, 404, "NOT_FOUND");
+    return;
+  }
+  if (isTeacher(caller) && !await canAccessStudent(db2, caller, row.student_id)) {
+    httpErr(res, 403, "FORBIDDEN");
+    return;
+  }
+  if (row.status === "GRADED") {
+    httpErr(res, 400, "ALREADY_GRADED");
+    return;
+  }
+  const incoming = body.aiSuggestion?.rubricScores || body.rubricScores;
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    httpErr(res, 400, "BAD_INPUT");
+    return;
+  }
+  const normalized = incoming.filter((c) => c && typeof c.criterionName === "string" && c.criterionName.trim()).map((c) => {
+    const max = toNum(c.maxScore, NaN);
+    const raw = toNum(c.score ?? c.suggestedScore, NaN);
+    return {
+      criterionName: String(c.criterionName),
+      score: Number.isFinite(raw) && Number.isFinite(max) ? Math.max(0, Math.min(max, raw)) : 0,
+      maxScore: Number.isFinite(max) ? max : 0,
+      reason: typeof c.reason === "string" ? c.reason : ""
+    };
+  });
+  if (!normalized.length) {
+    httpErr(res, 400, "BAD_INPUT");
+    return;
+  }
+  await query(
+    "UPDATE `essay_submissions` SET `ai_suggested_scores` = ?, `ai_suggested_feedback` = ?, `status` = ? WHERE `id` = ?",
+    [JSON.stringify(normalized), typeof body.aiSuggestion?.overallComment === "string" ? body.aiSuggestion.overallComment : null, "AI_SUGGESTED", id]
+  );
+  const list = await essayList(db2, caller, {});
+  res.json(list.find((e) => e.id === id) || { id });
+}));
 essaysRouter.post("/essays/:id/grade", requireRole("teacher", "admin"), ah(async (req, res) => {
   const caller = req.caller;
   const id = req.params.id;

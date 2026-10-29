@@ -2014,6 +2014,35 @@ export class MockEssayRepository implements EssayRepository {
     return newEssay;
   }
 
+  async attachAiSuggestion(
+    id: string,
+    suggestion: NonNullable<EssaySubmission['aiSuggestion']>
+  ): Promise<EssaySubmission> {
+    const states = await attemptRepo.getAllStates();
+    let targetEssay: EssaySubmission | null = null;
+    for (const [sId, st] of Object.entries(states)) {
+      const eIdx = st.essaySubmissions?.findIndex((e) => e.id === id);
+      if (eIdx !== undefined && eIdx >= 0) {
+        targetEssay = { ...st.essaySubmissions[eIdx], aiSuggestion: suggestion, status: 'AI_SUGGESTED' };
+        st.essaySubmissions[eIdx] = targetEssay;
+        await attemptRepo.saveStudentState(sId, st);
+        break;
+      }
+    }
+    if (!targetEssay) {
+      const independent = readStorage<EssaySubmission[]>(STORAGE_KEYS.ESSAYS, []);
+      const idx = independent.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        targetEssay = { ...independent[idx], aiSuggestion: suggestion, status: 'AI_SUGGESTED' };
+        independent[idx] = targetEssay;
+        writeStorage(STORAGE_KEYS.ESSAYS, independent);
+      }
+    }
+    if (!targetEssay) throw new Error('Không tìm thấy bài viết');
+    syncEventBus.emit('essay');
+    return targetEssay;
+  }
+
   async saveSubmissionDraft(
     id: string,
     draft: {

@@ -232,6 +232,12 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
   };
 
   // Xử lý lưu nháp
+  // Gợi ý AI gắn xong: cập nhật hàng đợi + bài đang mở để số liệu "Đã có
+  // gợi ý AI" và banner màn chấm đồng bộ ngay, khỏi tải lại trang.
+  const handleAiSuggestionAttached = (updated: EssaySubmission) => {
+    setSubmissions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+  };
+
   const handleSaveDraft = async (draft: {
     rubricScores: { criterionName: string; score: number; maxScore: number }[];
     teacherFeedback: string;
@@ -337,6 +343,7 @@ export const TeacherGradingScreen: React.FC<TeacherGradingScreenProps> = ({
           onPrevSubmission={handlePrev}
           hasPrevSubmission={hasPrev}
           onSaveToSampleLibrary={handleSaveToSampleLibrary}
+          onAiSuggestionAttached={handleAiSuggestionAttached}
         />
       ) : detailStudentId ? (
         /* XEM CHI TIẾT THEO HỌC SINH (Figma Giao diện 1) */

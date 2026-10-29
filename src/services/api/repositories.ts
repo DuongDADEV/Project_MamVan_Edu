@@ -1230,6 +1230,25 @@ export class ApiEssayRepository implements EssayRepository {
     throw new Error('Không tìm thấy bài viết');
   }
 
+  async attachAiSuggestion(
+    id: string,
+    suggestion: NonNullable<EssaySubmission['aiSuggestion']>
+  ): Promise<EssaySubmission> {
+    if (id.startsWith('review:')) {
+      throw new Error('Phiếu chấm từ bài tập không gắn gợi ý AI theo đường này.');
+    }
+    const json = await apiFetch(`/api/essays/${encodeURIComponent(id)}/ai-suggestion`, {
+      method: 'POST',
+      body: JSON.stringify({ aiSuggestion: suggestion }),
+    });
+    const row = unwrapEntity(json, ['essay', 'submission', 'data']);
+    syncEventBus.emit('essay');
+    if (row) return toEssay(row);
+    const item = await this.getSubmissionById(id);
+    if (item) return item;
+    throw new Error('Không tìm thấy bài viết');
+  }
+
   async gradeSubmission(
     id: string,
     grading: {

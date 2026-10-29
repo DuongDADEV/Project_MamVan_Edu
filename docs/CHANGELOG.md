@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Gợi ý AI chấm thật theo rubric, bỏ điểm mặc định 80%
+
+- Vấn đề chủ dự án nêu ("AI gợi ý đúng chuẩn thật luôn chứ không phải điểm mặc định"): (1) đường live chưa bao giờ sinh gợi ý AI — code tự gợi ý chỉ nằm ở mock repo thời localStorage, còn đường API (App.tsx nộp bài) chỉ POST bài với trạng thái PENDING_TEACHER, nên pill "Đã có gợi ý AI" luôn 0; (2) mở bài chưa có gợi ý, màn chấm tự điền mỗi tiêu chí 80% điểm tối đa (dù chú thích ghi "khởi tạo điểm = 0") — đó chính là "điểm mặc định".
+- Sửa: (a) endpoint mới POST /api/essays/:id/ai-suggestion (teacher/admin, kiểm tra quyền quản lý học sinh, từ chối bài đã GRADED, chuẩn hóa điểm về [0, maxScore], lưu ai_suggested_scores + ai_suggested_feedback + status AI_SUGGESTED); (b) repo EssayRepository.attachAiSuggestion (API + mock); (c) màn chấm SplitGradingWorkspace có nút "Tạo gợi ý AI" (bài chưa có gợi ý) / "Tạo lại gợi ý" (đã có) — gọi aiService.suggestEssayGrade qua chuỗi AI máy chủ (/api/ai/chat, giáo viên/admin mới gọi được, học sinh 403 như cũ), chấm theo đúng rubric đang hiển thị, ghép điểm theo tên tiêu chí (fallback theo thứ tự), lưu xong cập nhật ngay hàng đợi + bài đang mở; AI lỗi thì báo rõ, giữ trạng thái chờ chấm, không dùng điểm ước lượng; (d) chưa có gợi ý thì điểm khởi tạo về 0 (khớp chú thích cũ). Phiếu review: không áp dụng nút này.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ, chỉ thêm cách sinh gợi ý trong màn chấm).
+
 ## [dev] 2026-10-29 — Xóa hẳn thanh mỏng khi chỉ thu thanh công cụ
 
 - Theo lệnh chủ dự án: thanh mỏng "Bài giảng Video 1 — Mở lại thanh công cụ" khi chỉ thu thanh công cụ đã bị xóa hẳn, không còn chiếm chỗ. Khi thu thanh công cụ, hàng công cụ biến mất luôn; mở lại bằng cụm 3 nút trên dải luồng (nút 2 mở thanh công cụ, nút 3 mở cả hai).

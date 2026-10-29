@@ -338,6 +338,12 @@ export interface EssayRepository {
     },
     teacherActorId: string
   ): Promise<EssaySubmission>;
+  // Gắn gợi ý AI thật (chấm theo rubric qua /api/ai/chat) vào bài tự luận
+  // chưa chấm — thay cho điểm mặc định 80% trước đây.
+  attachAiSuggestion(
+    id: string,
+    suggestion: NonNullable<EssaySubmission['aiSuggestion']>
+  ): Promise<EssaySubmission>;
   // Huấn luyện & Cấu hình AI
   getRubricTemplates(): Promise<RubricTemplate[]>;
   saveRubricTemplate(template: Partial<RubricTemplate>): Promise<RubricTemplate>;
