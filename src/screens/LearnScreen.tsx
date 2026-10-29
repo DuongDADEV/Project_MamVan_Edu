@@ -187,8 +187,16 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
                     </h3>
                   </div>
 
-                  {/* Trạng thái chủ đề */}
+                  {/* Trạng thái chủ đề + XP hoàn thành */}
                   <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {typeof topic.xpReward === 'number' && topic.xpReward > 0 && (
+                      <span
+                        className="text-xs px-3 py-1 rounded-full border font-bold bg-amber-50 border-amber-200 text-amber-700"
+                        title="Hoàn thành chủ đề nhận đủ số XP này (đúng 100% các câu có đáp án ngay)"
+                      >
+                        +{topic.xpReward} XP
+                      </span>
+                    )}
                     <span
                       className={`text-xs px-3 py-1 rounded-full border font-bold ${prog.statusClass}`}
                     >

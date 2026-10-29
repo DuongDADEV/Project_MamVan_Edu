@@ -1,3 +1,11 @@
+## [dev] 2026-10-29 — Học bài: XP chủ đề lên thẻ, bỏ XP lẻ từng luồng, tung hoa
+
+- (1) Thẻ chủ đề chính ở màn Học bài nay hiện badge "+X XP" (lấy từ xpReward giáo viên cấu hình) khi xpReward > 0, kèm chú thích "hoàn thành chủ đề nhận đủ số XP này (đúng 100% các câu có đáp án ngay)".
+- (2) Bỏ XP lẻ tẻ từng luồng: POST /api/quiz-completions chỉ còn ghi bước quiz_completed, không cộng XP nữa (xóa awardQuizCompletion khỏi xp.ts); màn kết quả quiz bỏ ô "Điểm XP" (cả 2 luồng video/lý thuyết vốn đã truyền 0); toast nộp quiz trong luồng Học bài bỏ nhánh "+X XP". XP duy nhất của luồng vẫn là quỹ chủ đề ở /topics/:id/complete: đúng đủ xpReward giáo viên cấu hình, một lần, khi xong hết mục luồng và đúng 100% câu trắc nghiệm + điền khuyết (tự luận không chặn). XP bài tập giao, điểm danh, quà giữ nguyên.
+- (3) Luật tự luận 1 lần KHÔNG code lại đợt này: đã live từ đợt deploy 22:5x — kiểm chứng trực tiếp tối nay: chunk client đang phục vụ chứa đúng câu khóa, và POST /api/essays trùng (học sinh + câu) trả 409 ESSAY_ALREADY_SUBMITTED, không ghi gì.
+- (4) Hiệu ứng Tung hoa (component ConfettiBurst mới, canvas thuần, không thư viện ngoài, tôn trọng prefers-reduced-motion): bắn sau mỗi lần hoàn thành — bước cuối video, bước cuối lý thuyết, màn kết quả quiz (70 mảnh), và khi nhận quỹ XP chủ đề (140 mảnh, gắn vào toast nhận quỹ ở App).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Thẻ Trợ lý phân tích: icon tia sáng → mascot Mầm Mực
 
 - Theo ảnh chủ dự án gửi: thẻ giới thiệu "Trợ lý phân tích học tập" trong tab Phân tích đổi biểu tượng từ icon tia sáng (Sparkles) sang mascot Mầm Mực (component MamMuc có sẵn, size sm, không animation). Nút bong bóng nổi và tiêu đề khung chat giữ nguyên icon cũ (chủ dự án mới chỉ ảnh chụp thẻ giới thiệu).

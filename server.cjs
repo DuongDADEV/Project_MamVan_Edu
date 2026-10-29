@@ -56626,18 +56626,6 @@ async function awardTopicCompletion(db3, studentId, topicId, amount) {
     })
   );
 }
-async function awardQuizCompletion(db3, studentId, quizId, amount) {
-  if (!quizId) throw new Error("BAD_INPUT");
-  return runInTx(
-    db3,
-    async (tx) => awardOnce(tx, studentId, {
-      key: `quiz:${quizId}`,
-      amount,
-      actionName: "Ho\xE0n th\xE0nh b\xE0i quiz",
-      todayVn: vnTodayStr()
-    })
-  );
-}
 async function deductForGift(db3, studentId, amount, requestId) {
   if (!requestId) throw new Error("BAD_INPUT");
   const costNum = Number(amount);
@@ -57444,22 +57432,7 @@ attemptsRouter.post("/quiz-completions", requireRole("student"), async (req, res
     httpErr(res, 403, "FORBIDDEN");
     return;
   }
-  const qIds = Array.isArray(qPayload.questionIds) ? qPayload.questionIds : [];
-  let cap = qIds.length * 10;
-  if (qIds.length) {
-    const qq = await query(
-      `SELECT \`max_score\` FROM \`questions\` WHERE \`id\` IN (${qIds.map(() => "?").join(",")})`,
-      qIds
-    );
-    if (qq.length) {
-      cap = 0;
-      for (const r of qq) cap += toNum(r.max_score, 10);
-      if (cap <= 0) cap = qIds.length * 10;
-    }
-  }
-  const earned = Math.max(0, Math.min(toNum(body.earned, 0), cap));
   const out = await withTransaction(async (tx) => {
-    const awarded = await awardQuizCompletion(tx, studentId, quizId, earned);
     const cur = await tx.query(
       "SELECT `completed_steps` FROM `student_states` WHERE `student_id` = ? LIMIT 1",
       [studentId]
@@ -57472,9 +57445,9 @@ attemptsRouter.post("/quiz-completions", requireRole("student"), async (req, res
         [studentId, JSON.stringify([...curSteps, marker])]
       );
     }
-    return awarded;
+    return await getTotals(tx, studentId);
   });
-  res.status(201).json({ awarded: out.awarded > 0, awardedXp: out.awarded, totalXp: out.totalXp });
+  res.status(201).json({ awarded: false, awardedXp: 0, totalXp: out.totalXp });
 });
 attemptsRouter.get("/attempts/:id", async (req, res) => {
   const caller = req.caller;

@@ -66,9 +66,9 @@ export async function checkInStudent(studentId: string): Promise<CheckInResult> 
 }
 
 export interface QuizCompleteResult {
-  /** true nếu lần gọi này trao XP bài quiz (false = đã trao ở lần làm trước). */
+  /** 29/10: luôn false — server không còn trao XP từng bài quiz. */
   awarded: boolean;
-  /** Số XP thực trao lần này (0 nếu đã trao trước đó). */
+  /** 29/10: luôn 0 — XP chỉ cộng ở quỹ chủ đề. Giữ field cho ổn định shape. */
   awardedXp: number;
   /** Tổng XP mới của học sinh. */
   totalXp: number;

@@ -5,6 +5,7 @@ import { markStepCompleted } from '../logic/studentStateUtils.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
+import { ConfettiBurst } from '../components/ConfettiBurst.tsx';
 import {
   BookOpen,
   ArrowRight,
@@ -101,7 +102,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     essays: EssaySubmission[];
     earned: number;
     max: number;
-    xpAwarded: number;
     cappedNotice?: string;
   } | null>(null);
 
@@ -386,7 +386,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
     // Mô hình XP mới: không cộng XP lẻ — chỉ ghi nhận hoàn thành bước;
     // XP nằm ở quỹ chủ đề + XP của từng bài tập.
     let finalUpdated = markStepCompleted(state, `quiz_completed:${qId}`);
-    const xpAwarded = 0;
     const cappedNotice = undefined;
     if (isNextComplete) {
       finalUpdated = markStepCompleted(
@@ -418,7 +417,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       essays: essays || [],
       earned,
       max,
-      xpAwarded,
       cappedNotice,
     });
   };
@@ -874,7 +872,6 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
                 essaySubmissions={quizOutcome.essays}
                 earnedScore={quizOutcome.earned}
                 maxScore={quizOutcome.max}
-                xpAwarded={quizOutcome.xpAwarded}
                 cappedNotice={quizOutcome.cappedNotice}
                 onContinue={() => {
                   setQuizOutcome(null);
@@ -900,6 +897,8 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       {/* ================= BƯỚC CUỐI: TỔNG KẾT HOÀN THÀNH ================= */}
       {currentStep.kind === 'complete' && (
         <div className="space-y-6 animate-[fadeIn_0.4s_ease]">
+          {/* 29/10: tung hoa sau mỗi lần hoàn thành */}
+          <ConfettiBurst pieces={70} />
           <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-xl shadow-indigo-950/5 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-60 h-60 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
 

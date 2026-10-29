@@ -15,8 +15,9 @@
  * XP nộp bài = assignments.xp_reward, không phụ thuộc đúng/sai, chỉ trả
  * lần nộp ĐẦU cho mỗi bài (giữ hành vi client cũ, chống farm XP);
  * key submission:<attemptId> chỉ chống retry trùng attempt.
- * POST /quiz-completions: XP bài quiz nội dung (BTVN trong chủ đề) —
- * giữ đúng App cũ (QuizRunner chấm local, trả totalScore, 1 lần/quiz).
+ * POST /quiz-completions: ghi nhận hoàn thành bài quiz nội dung (BTVN
+ * trong chủ đề) — KHÔNG cộng XP (29/10: bỏ XP lẻ tẻ từng luồng; XP chỉ
+ * cộng một lần ở quỹ chủ đề khi đúng 100% câu có đáp án ngay).
  */
 import { Router } from 'express';
 import { query, execute, withTransaction, parseJson, toMySQLDatetime } from '../_lib/mysql';
@@ -27,7 +28,6 @@ import {
   awardCheckIn,
   awardSubmission,
   awardTopicCompletion,
-  awardQuizCompletion,
   getTotals,
 } from '../_lib/xp';
 import { teacherClassIds } from '../_lib/scope';
@@ -619,12 +619,10 @@ attemptsRouter.post('/attempts', requireRole('student'), ah(async (req: AuthedRe
  * chỉ cho assignment/activity, không có nguồn quiz).
  * - Học sinh chỉ nộp cho chính mình; quiz phải published, topic phải
  *   published và đúng lớp (class_ids chứa lớp em hoặc 'all').
- * - XP = điểm bài làm (earned, QuizRunner chấm local như cũ) — server
- *   CHẶN TRÊN bằng tổng max_score các câu của quiz trong DB (chống
- *   client khai điểm vô hạn); floor về số nguyên như awardXP cũ.
- * - Chỉ trả 1 lần/quiz (key quiz:<id>); điểm 0 không tiêu khóa (đúng
- *   App cũ: xpEarned = 0 thì không gọi awardXP, làm lại vẫn được trả).
- * - Đồng thời ghi bước quiz_completed:<id> vào completed_steps để
+ * - 29/10: KHÔNG cộng XP nữa (chủ dự án: bỏ XP lẻ tẻ từng luồng).
+ *   Điểm bài làm (earned) chỉ còn dùng để client hiển thị kết quả;
+ *   XP duy nhất của luồng là quỹ chủ đề ở /topics/:id/complete.
+ * - Chỉ ghi bước quiz_completed:<id> vào completed_steps để
  *   /topics/:id/complete và dải luồng nhận biết (merge, không ghi đè).
  */
 attemptsRouter.post('/quiz-completions', requireRole('student'), async (req: AuthedRequest, res) => {
@@ -674,23 +672,8 @@ attemptsRouter.post('/quiz-completions', requireRole('student'), async (req: Aut
     httpErr(res, 403, 'FORBIDDEN');
     return;
   }
-  // Chặn trên điểm: tổng max_score câu hỏi của quiz (mặc định 10/câu).
-  const qIds: string[] = Array.isArray(qPayload.questionIds) ? qPayload.questionIds : [];
-  let cap = qIds.length * 10;
-  if (qIds.length) {
-    const qq = await query<any>(
-      `SELECT \`max_score\` FROM \`questions\` WHERE \`id\` IN (${qIds.map(() => '?').join(',')})`,
-      qIds
-    );
-    if (qq.length) {
-      cap = 0;
-      for (const r of qq) cap += toNum(r.max_score, 10);
-      if (cap <= 0) cap = qIds.length * 10;
-    }
-  }
-  const earned = Math.max(0, Math.min(toNum(body.earned, 0), cap));
+  // 29/10: chỉ ghi bước hoàn thành, không cộng XP (xem comment đầu handler).
   const out: any = await withTransaction(async (tx: Db) => {
-    const awarded: any = await awardQuizCompletion(tx, studentId, quizId, earned);
     const cur = await tx.query<any>(
       'SELECT `completed_steps` FROM `student_states` WHERE `student_id` = ? LIMIT 1',
       [studentId]
@@ -704,9 +687,9 @@ attemptsRouter.post('/quiz-completions', requireRole('student'), async (req: Aut
         [studentId, JSON.stringify([...curSteps, marker])]
       );
     }
-    return awarded;
+    return await getTotals(tx, studentId);
   });
-  res.status(201).json({ awarded: out.awarded > 0, awardedXp: out.awarded, totalXp: out.totalXp });
+  res.status(201).json({ awarded: false, awardedXp: 0, totalXp: out.totalXp });
 });
 
 attemptsRouter.get('/attempts/:id', async (req: AuthedRequest, res) => {

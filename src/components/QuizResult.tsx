@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Question, Quiz, QuestionResult, EssaySubmission, SkillLevel } from '../types.ts';
+import { ConfettiBurst } from './ConfettiBurst.tsx';
 import { SKILL_METADATA, generateMamMucFeedback, calculateAllMastery } from '../logic/mastery.ts';
 import { MamMuc } from './MamMuc.tsx';
 import { CheckCircle2, XCircle, Award, ArrowRight, RotateCcw, BookOpen, Sparkles, Star } from 'lucide-react';
@@ -11,7 +12,6 @@ interface QuizResultProps {
   essaySubmissions: EssaySubmission[];
   earnedScore: number;
   maxScore: number;
-  xpAwarded: number;
   cappedNotice?: string;
   onContinue: () => void;
   onReviewWeakArea?: (topicId: string) => void;
@@ -24,7 +24,6 @@ export const QuizResult: React.FC<QuizResultProps> = ({
   essaySubmissions,
   earnedScore,
   maxScore,
-  xpAwarded,
   cappedNotice,
   onContinue,
   onReviewWeakArea,
@@ -47,6 +46,8 @@ export const QuizResult: React.FC<QuizResultProps> = ({
 
   return (
     <div className="w-full max-w-2xl mx-auto py-6 px-4 sm:px-6 text-[#1E1B4B]">
+      {/* 29/10: tung hoa sau mỗi lần hoàn thành bài quiz */}
+      <ConfettiBurst pieces={70} />
       {/* THẺ TỔNG KẾT KẾT QUẢ */}
       <div className="bg-white rounded-3xl p-6 sm:p-10 text-center relative overflow-hidden mb-6 border border-slate-100 shadow-xl shadow-indigo-950/5">
         {/* Nền trang trí glow nhẹ */}
@@ -65,8 +66,8 @@ export const QuizResult: React.FC<QuizResultProps> = ({
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mb-6 font-medium">{quiz.title}</p>
 
-          {/* Cột số liệu: Điểm & XP */}
-          <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto mb-6">
+          {/* Cột số liệu: chỉ còn Điểm số (29/10: bỏ XP lẻ từng bài) */}
+          <div className="grid grid-cols-1 gap-4 max-w-[220px] mx-auto mb-6">
             {/* Điểm số */}
             <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100">
               <span className="text-xs uppercase tracking-wider text-slate-500 font-bold block mb-1">
@@ -83,17 +84,6 @@ export const QuizResult: React.FC<QuizResultProps> = ({
               </span>
             </div>
 
-            {/* XP nhận được */}
-            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200">
-              <span className="text-xs uppercase tracking-wider text-slate-500 font-bold block mb-1">
-                Điểm XP
-              </span>
-              <div className="flex items-center justify-center gap-1 text-3xl font-black text-amber-600 font-mono tabular-nums">
-                <span>+{xpAwarded}</span>
-                <span className="text-xs font-sans text-amber-700 font-extrabold">XP</span>
-              </div>
-              <span className="text-xs text-amber-700 font-medium mt-1 block">Tưới cây lớn 🌱</span>
-            </div>
           </div>
 
           {/* Thông báo trần XP nếu có */}

@@ -5,6 +5,7 @@ import { markStepCompleted } from '../logic/studentStateUtils.ts';
 import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
+import { ConfettiBurst } from '../components/ConfettiBurst.tsx';
 import {
   Clock,
   ArrowRight,
@@ -113,7 +114,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
     essays: EssaySubmission[];
     earned: number;
     max: number;
-    xpAwarded: number;
     cappedNotice?: string;
   } | null>(null);
 
@@ -465,7 +465,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       essaySubmissions: [...essays, ...(state.essaySubmissions || [])],
     };
 
-    const xpAwarded = 0;
     const cappedNotice = undefined;
 
     if (isNextComplete) {
@@ -494,7 +493,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       essays,
       earned,
       max,
-      xpAwarded,
       cappedNotice,
     });
   };
@@ -921,7 +919,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                 essaySubmissions={quizOutcome.essays}
                 earnedScore={quizOutcome.earned}
                 maxScore={quizOutcome.max}
-                xpAwarded={quizOutcome.xpAwarded}
                 cappedNotice={quizOutcome.cappedNotice}
                 onContinue={() => {
                   setQuizOutcome(null);
@@ -947,6 +944,8 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       {/* ================= BƯỚC CUỐI: TỔNG KẾT HOÀN THÀNH ================= */}
       {currentStep.key === 'complete' && (
         <div className="space-y-6 animate-[fadeIn_0.4s_ease]">
+          {/* 29/10: tung hoa sau mỗi lần hoàn thành */}
+          <ConfettiBurst pieces={70} />
           <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-xl shadow-indigo-950/5 text-center relative overflow-hidden">
             {/* Background glowing rings */}
             <div className="absolute top-0 right-0 w-60 h-60 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />

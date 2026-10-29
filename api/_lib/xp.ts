@@ -341,32 +341,6 @@ export async function awardTopicCompletion(
 }
 
 /**
- * XP hoàn thành 1 bài quiz nội dung (BTVN trong chủ đề): chỉ cộng 1 lần
- * cho mỗi quizId (key quiz:<id>) — giữ đúng hành vi client cũ
- * (xpEngine XP_KEYS.quizCompleted, App trả totalScore của QuizRunner).
- * Route phải tự xác minh quiz published + đúng lớp + quyền sở hữu
- * trước khi gọi; engine chỉ chống cộng trùng và cộng điểm.
- * Số XP = điểm bài làm (totalScore, đã làm tròn 1 lẻ ở client) — hàm
- * floor về số nguyên như awardXP cũ (Math.floor(rawXp)).
- */
-export async function awardQuizCompletion(
-  db: Db,
-  studentId: string,
-  quizId: string,
-  amount: number
-): Promise<AwardResult> {
-  if (!quizId) throw new Error('BAD_INPUT');
-  return runInTx(db, async (tx) =>
-    awardOnce(tx, studentId, {
-      key: `quiz:${quizId}`,
-      amount,
-      actionName: 'Hoàn thành bài quiz',
-      todayVn: vnTodayStr(),
-    })
-  );
-}
-
-/**
  * Trừ XP đổi quà (lúc tạo yêu cầu): trừ vào total_xp vĩnh viễn, KHÔNG
  * trừ xp_today/xp_week (đúng hành vi client cũ). Thiếu điểm → throw
  * Error('INSUFFICIENT_XP'), không ghi gì. Cùng requestId trừ 2 lần →

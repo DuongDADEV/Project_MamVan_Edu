@@ -31,6 +31,7 @@ import { StudentTopicFlowStrip } from './components/StudentTopicFlowStrip.tsx';
 import { buildTopicFlowPath, nextFlowItem, isFlowItemLocked } from './logic/topicFlow.ts';
 import { QuizReviewScreen } from './components/QuizReviewScreen.tsx';
 import { QuizResult } from './components/QuizResult.tsx';
+import { ConfettiBurst } from './components/ConfettiBurst.tsx';
 import { Palette } from 'lucide-react';
 
 // Services & Shared Repositories
@@ -413,6 +414,7 @@ export default function App() {
             showToast(
               `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — đã nhận quỹ XP!`
             );
+            setCelebrateKey((k) => k + 1);
           }
           if (!res.complete) {
             // State server chưa kịp nhận bước mới nhất (lưu state local
@@ -426,6 +428,7 @@ export default function App() {
                     showToast(
                       `🌟 Hoàn thành toàn bộ chủ đề "${topic.title}" — đã nhận quỹ XP!`
                     );
+                    setCelebrateKey((k) => k + 1);
                   }
                 })
                 .catch(() => {});
@@ -612,6 +615,8 @@ export default function App() {
 
   // 5. Quản lý Toast thông báo nhỏ
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // 29/10: tung hoa khi nhận quỹ XP chủ đề (tăng key để bắn lại mỗi lần).
+  const [celebrateKey, setCelebrateKey] = useState(0);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -1237,22 +1242,18 @@ export default function App() {
                     }
 
                     // GĐ3 tích hợp: XP bài quiz nội dung do server trao qua
-                    // POST /api/quiz-completions (1 lần/quiz, điểm = totalScore
-                    // của QuizRunner, chặn trên bằng tổng max_score câu hỏi).
+                    // 29/10: POST /api/quiz-completions chỉ ghi bước hoàn
+                    // thành, KHÔNG cộng XP từng bài nữa — XP chỉ cộng một
+                    // lần ở quỹ chủ đề khi đúng 100% câu có đáp án ngay.
                     // Client chỉ ghi nhận bước + kết quả local; tổng XP lấy
                     // từ server trả về. API lỗi thì vẫn cho đi tiếp (bước đã
                     // ghi local, làm lại quiz sẽ gọi lại server).
-                    let quizToast = '🎉 Em đã hoàn thành bài!';
+                    const quizToast = '🎉 Em đã hoàn thành bài!';
                     try {
                       const qr = await completeQuizOnServer(targetQuiz.id, earned);
                       setStudentState((prev) => ({ ...prev, totalXp: qr.totalXp }));
-                      if (qr.awarded && qr.awardedXp > 0) {
-                        quizToast = `🎉 Xuất sắc! Em đã hoàn thành bài và nhận +${qr.awardedXp} XP!`;
-                      } else if (earned > 0) {
-                        quizToast = '🎉 Em đã hoàn thành bài! (XP của bài này em đã nhận ở lần làm trước)';
-                      }
                     } catch (err: any) {
-                      console.error('Lỗi trao XP quiz nội dung:', err?.message);
+                      console.error('Lỗi ghi hoàn thành quiz:', err?.message);
                     }
                     setStudentState((prev) => {
                       const steps = prev.completedSteps.includes(`quiz_completed:${targetQuiz.id}`)
@@ -1450,6 +1451,9 @@ export default function App() {
           onUpdateState={setStudentState}
         />
       )}
+
+      {/* TUNG HOA KHI NHẬN QUỸ XP CHỦ ĐỀ */}
+      {celebrateKey > 0 && <ConfettiBurst key={celebrateKey} pieces={140} />}
 
       {/* TOAST THÔNG BÁO NHẸ NHÀNG */}
       {toastMessage && (
