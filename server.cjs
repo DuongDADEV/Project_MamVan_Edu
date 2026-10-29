@@ -54377,6 +54377,12 @@ function stripProfile(row) {
   delete out.password_enc;
   return out;
 }
+function toMysqlDatetime(value) {
+  if (value === void 0 || value === null || value === "") return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return void 0;
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
 function checkIdLen(res, ...ids) {
   for (const id of ids) {
     if (id && id.length > 191) {
@@ -54440,6 +54446,10 @@ adminUsersRouter.post("/admin/users", async (req, res) => {
       if (await usernameTaken(username)) {
         return httpErr(res, 400, "USERNAME_TAKEN");
       }
+      const trialExpiresAt = toMysqlDatetime(body.trial_expires_at);
+      if (trialExpiresAt === void 0) {
+        return httpErr(res, 400, "BAD_INPUT");
+      }
       const email = synthEmail(role, username);
       const hashed = await hashPassword(password);
       const authUserId = (0, import_node_crypto3.randomUUID)();
@@ -54464,7 +54474,7 @@ adminUsersRouter.post("/admin/users", async (req, res) => {
                 body.school ? String(body.school) : null,
                 body.subject ? String(body.subject) : null,
                 body.status ? String(body.status) : "active",
-                body.trial_expires_at || null
+                trialExpiresAt
               ]
             );
           } else {
@@ -57894,6 +57904,15 @@ attemptsRouter.post("/topics/:id/complete", requireRole("student"), async (req, 
   for (const id of videoIds) valid.set(`video:${id}`, { type: "video", id });
   if (theoryId) valid.set(`theory:${theoryId}`, { type: "theory", id: theoryId });
   for (const q of quizzes) valid.set(`quiz:${q.id}`, { type: "quiz", id: q.id });
+  for (const key of flowOrder) {
+    if (valid.has(key) || typeof key !== "string") continue;
+    const [kind, itemId] = key.split(":");
+    if (!itemId) continue;
+    const table = kind === "video" ? "video_lessons" : kind === "theory" ? "theory_lessons" : null;
+    if (!table) continue;
+    const rows = await query(`SELECT \`id\` FROM \`${table}\` WHERE \`id\` = ? AND \`deleted_at\` IS NULL LIMIT 1`, [itemId]);
+    if (rows[0]) valid.set(key, { type: kind, id: itemId });
+  }
   const flow = [];
   const used = /* @__PURE__ */ new Set();
   for (const key of flowOrder) {
@@ -57903,8 +57922,10 @@ attemptsRouter.post("/topics/:id/complete", requireRole("student"), async (req, 
       used.add(key);
     }
   }
-  for (const [key, item] of valid) {
-    if (!used.has(key)) flow.push(item);
+  if (flowOrder.length === 0) {
+    for (const [key, item] of valid) {
+      if (!used.has(key)) flow.push(item);
+    }
   }
   if (flow.length === 0) {
     const totals0 = await getTotals(db2, studentId);

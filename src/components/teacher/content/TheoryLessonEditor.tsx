@@ -7,6 +7,8 @@ import {
   TheoryBlockType,
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
+import { CollapsedToolbarBar } from './TopicFlowStrip.tsx';
+
 import {
   ArrowLeft,
   BookOpen,
@@ -44,6 +46,9 @@ interface TheoryLessonEditorProps {
   onPreviewStudent: () => void;
   onCreateLinkedQuiz: (kind: 'practice' | 'quick' | 'mastery') => void;
   onBack?: () => void;
+  /** Thu gọn thanh công cụ (nút 2/3 trên dải luồng) */
+  toolbarCollapsed?: boolean;
+  onExpandToolbar?: () => void;
 }
 
 export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
@@ -55,6 +60,8 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   onPreviewStudent,
   onCreateLinkedQuiz,
   onBack,
+  toolbarCollapsed,
+  onExpandToolbar,
 }) => {
   const [title, setTitle] = useState(theory.title || '');
   const [topicId, setTopicId] = useState(theory.topicId || topics[0]?.id || '');
@@ -291,6 +298,14 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 max-w-full bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
+      {toolbarCollapsed ? (
+        <CollapsedToolbarBar
+          label="Lý thuyết"
+          detail={title}
+          onExpand={onExpandToolbar || (() => {})}
+        />
+      ) : (
+      <>
       {/* Top Header — dính chặt phía trên khi thân trình soạn cuộn */}
       <div className="sticky top-0 z-20 shrink-0 p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
@@ -368,6 +383,8 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
           </button>
         </div>
       </div>
+      </>
+      )}
 
       {/* Main Content Area: Editor + Sidebar Table of Contents */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 flex flex-col lg:flex-row gap-6 min-w-0 max-w-full">

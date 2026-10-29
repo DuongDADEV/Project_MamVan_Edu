@@ -103,6 +103,42 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
   // 2. Mục đang được chọn để chỉnh sửa bên phải
   const [selectedItem, setSelectedItem] = useState<SelectedContentItem | null>(null);
 
+  // Thu gọn kiểu ribbon Word (29/10, theo yêu cầu chủ dự án): 3 nút trên
+  // dải luồng — (1) thu luồng, (2) thu thanh công cụ bên dưới, (3) thu cả
+  // hai. Lưu localStorage theo giáo viên để mở lại vẫn giữ nguyên.
+  const collapseKey = `mamvan_editor_collapse:${teacherId}`;
+  const readCollapsePref = (): { strip: boolean; toolbar: boolean } => {
+    try {
+      const raw = localStorage.getItem(collapseKey);
+      if (!raw) return { strip: false, toolbar: false };
+      const parsed = JSON.parse(raw);
+      return { strip: !!parsed.strip, toolbar: !!parsed.toolbar };
+    } catch {
+      return { strip: false, toolbar: false };
+    }
+  };
+  const [stripCollapsed, setStripCollapsed] = useState(() => readCollapsePref().strip);
+  const [toolbarCollapsed, setToolbarCollapsed] = useState(() => readCollapsePref().toolbar);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        collapseKey,
+        JSON.stringify({ strip: stripCollapsed, toolbar: toolbarCollapsed })
+      );
+    } catch {
+      /* localStorage đầy/khóa thì thôi, trạng thái phiên vẫn chạy */
+    }
+  }, [collapseKey, stripCollapsed, toolbarCollapsed]);
+  const toggleBothCollapsed = () => {
+    if (stripCollapsed && toolbarCollapsed) {
+      setStripCollapsed(false);
+      setToolbarCollapsed(false);
+    } else {
+      setStripCollapsed(true);
+      setToolbarCollapsed(true);
+    }
+  };
+
   // Đợt sửa 24/10: khi mở trình soạn (video/lý thuyết/quiz/bài tập) thì cây trái
   // thu gọn thành rail để vùng soạn chiếm toàn bộ khung phải; thoát soạn thì
   // cây trở lại. Cô vẫn mở lại cây bằng nút trên rail bất cứ lúc nào.
@@ -960,6 +996,11 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             topicTitle={stripTopic.title}
             items={stripItems}
             activeKey={activeFlowKey}
+            collapsed={stripCollapsed}
+            toolbarCollapsed={toolbarCollapsed}
+            onToggleStrip={() => setStripCollapsed((p) => !p)}
+            onToggleToolbar={() => setToolbarCollapsed((p) => !p)}
+            onToggleBoth={toggleBothCollapsed}
             onSelect={(item) => {
               if (item.type === 'quiz') setQuizInitialTab('questions');
               setSelectedItem({ type: item.type, id: item.id });
@@ -976,6 +1017,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             classes={classes}
             onChanged={loadAssignmentSummaries}
             onDeleted={() => setSelectedItem(null)}
+            toolbarCollapsed={toolbarCollapsed}
+            onExpandToolbar={() => setToolbarCollapsed(false)}
           />
         ) : currentVideo ? (
           <VideoLessonEditor
@@ -990,6 +1033,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onPreviewStudent={() => handlePreviewStudent('video')}
             onCreateLinkedQuiz={handleCreateLinkedQuiz}
             onBack={() => setSelectedItem({ type: 'topic', id: currentVideo.topicId })}
+            toolbarCollapsed={toolbarCollapsed}
+            onExpandToolbar={() => setToolbarCollapsed(false)}
           />
         ) : currentTheory ? (
           <TheoryLessonEditor
@@ -1004,6 +1049,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             onPreviewStudent={() => handlePreviewStudent('theory')}
             onCreateLinkedQuiz={handleCreateLinkedQuiz}
             onBack={() => setSelectedItem({ type: 'topic', id: currentTheory.topicId })}
+            toolbarCollapsed={toolbarCollapsed}
+            onExpandToolbar={() => setToolbarCollapsed(false)}
           />
         ) : currentQuiz ? (
           <QuizBuilder
@@ -1031,6 +1078,8 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
                 setSelectedItem({ type: 'topic', id: currentQuiz.topicId });
               }
             }}
+            toolbarCollapsed={toolbarCollapsed}
+            onExpandToolbar={() => setToolbarCollapsed(false)}
           />
         ) : currentTopic ? (
           /* Khối thông tin chi tiết của chủ đề đang chọn */

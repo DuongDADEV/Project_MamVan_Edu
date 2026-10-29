@@ -16,6 +16,8 @@ import { ClassItem, StudentAccount, TeacherProfile } from '../../../services/typ
 import { quizService, studentService } from '../../../services/index.ts';
 import { Question } from '../../../types.ts';
 import { ConfirmDialog } from '../ui/ConfirmDialog.tsx';
+import { CollapsedToolbarBar } from './TopicFlowStrip.tsx';
+
 import {
   deleteAssignmentCompletely,
   getAssignmentForEdit,
@@ -36,6 +38,9 @@ interface AssignmentEditorProps {
   /** Sau khi lưu/xóa để cây nội dung nạp lại danh sách bài */
   onChanged: () => void;
   onDeleted: () => void;
+  /** Thu gọn đầu màn soạn (nút 2/3 trên dải luồng) */
+  toolbarCollapsed?: boolean;
+  onExpandToolbar?: () => void;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -65,6 +70,8 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
   classes,
   onChanged,
   onDeleted,
+  toolbarCollapsed,
+  onExpandToolbar,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -316,6 +323,15 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-5 pb-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none border border-[#E6DCC8] shadow-xs">
+      {toolbarCollapsed ? (
+        <CollapsedToolbarBar
+          label="Bài tập & đánh giá"
+          detail={title}
+          onExpand={onExpandToolbar || (() => {})}
+          className="-mx-5 -mt-5 px-5"
+        />
+      ) : (
+      <>
       {/* Đầu màn soạn */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
@@ -350,6 +366,8 @@ export const AssignmentEditor: React.FC<AssignmentEditorProps> = ({
           <Trash2 className="w-3.5 h-3.5" /> Xóa bài này
         </button>
       </div>
+      </>
+      )}
 
       {/* Tiêu đề */}
       <input

@@ -6,6 +6,8 @@ import {
   VideoFocusPoint,
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
+import { CollapsedToolbarBar } from './TopicFlowStrip.tsx';
+
 import {
   ArrowLeft,
   Video,
@@ -37,6 +39,9 @@ interface VideoLessonEditorProps {
   onPreviewStudent: () => void;
   onCreateLinkedQuiz: (kind: 'practice' | 'quick' | 'mastery') => void;
   onBack?: () => void;
+  /** Thu gọn thanh công cụ (nút 2/3 trên dải luồng) */
+  toolbarCollapsed?: boolean;
+  onExpandToolbar?: () => void;
 }
 
 export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
@@ -48,6 +53,8 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   onPreviewStudent,
   onCreateLinkedQuiz,
   onBack,
+  toolbarCollapsed,
+  onExpandToolbar,
 }) => {
   const [title, setTitle] = useState(video.title || '');
   const [description, setDescription] = useState(video.description || '');
@@ -298,6 +305,14 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
+      {toolbarCollapsed ? (
+        <CollapsedToolbarBar
+          label="Bài giảng Video"
+          detail={title}
+          onExpand={onExpandToolbar || (() => {})}
+        />
+      ) : (
+      <>
       {/* Top Action Bar — dính chặt phía trên khi thân trình soạn cuộn */}
       <div className="sticky top-0 z-20 shrink-0 p-4 bg-[#FAF5EB] border-b border-[#E6DCC8] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
@@ -376,6 +391,8 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
           </button>
         </div>
       </div>
+      </>
+      )}
 
       {/* Main Form Content */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">

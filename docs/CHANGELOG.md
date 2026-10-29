@@ -1,3 +1,9 @@
+## [dev] 2026-10-29 — Thu gọn dải luồng / thanh công cụ kiểu ribbon Word
+
+- Theo yêu cầu chủ dự án (kèm ảnh ribbon Word + ảnh trình soạn): thêm 3 nút thu gọn ở mép phải dải luồng học trong trình soạn của cô giáo — (1) thu gọn chính dải luồng, (2) thu gọn thanh công cụ của trình soạn bên dưới (hàng Quay lại / Xem trước / Lưu nháp / Cập nhật lên web), (3) thu gọn cả hai cùng lúc. Khi thu gọn, mỗi phần chỉ còn 1 thanh mỏng có nút mở lại; cụm 3 nút luôn hiện trên dải (kể cả khi dải đã thu) nên lúc nào cũng mở lại được.
+- Áp dụng cho cả 4 trình soạn (video / lý thuyết / quiz / bài tập giao); trạng thái thu gọn lưu localStorage theo từng giáo viên nên tải lại trang vẫn giữ nguyên. Không đổi luồng, không đổi luật chấm/XP — chỉ đổi hiển thị.
+- Sơ đồ không regen đợt này (thêm nút hiển thị, không đổi luồng).
+
 ## [dev] 2026-10-29 — Gộp trang Bài tập thành 1 danh sách
 
 - TRƯỚC: trang Bài tập chia 2 tab "Kiểm tra (0)" / "Về nhà (1)" — học sinh phải bấm qua lại mới thấy đủ bài. Theo yêu cầu chủ dự án, gộp thành 1 trang: kiểm tra (làm 1 lần), BTVN quiz và bài BI cô giao hiện chung 1 danh sách, xếp theo hạn nộp.
