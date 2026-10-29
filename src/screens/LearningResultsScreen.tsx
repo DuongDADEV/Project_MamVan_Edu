@@ -9,9 +9,8 @@ import { BADGES_CATALOG } from '../data/badges.ts';
 import { essayRepository } from '../services/index.ts';
 import {
   getStudentAssignments,
-  getAttemptsWithAnswers,
-  getPendingReviews,
-  getGradedReviews,
+  getOwnAttemptsWithAnswers,
+  getOwnReviews,
   BiAttempt,
   BiPendingReview,
 } from '../services/api/biClient.ts';
@@ -284,20 +283,21 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
     let cancelled = false;
     setTestDetailLoading(true);
     Promise.all([
-      getAttemptsWithAnswers([studentId]),
-      getPendingReviews([studentId]),
-      getGradedReviews([studentId]),
+      getOwnAttemptsWithAnswers(),
+      getOwnReviews(),
     ])
-      .then(([atts, pending, graded]) => {
+      .then(([atts, reviews]) => {
         if (cancelled) return;
-        // BiAttempt không mang assignmentId; khớp theo tiêu đề bài (tiêu đề do
-        // cô đặt, thực tế là duy nhất trong lớp). Lần làm mới nhất lên trước.
+        // Khớp theo assignmentId (chắc chắn); chỉ khi lần làm không mang
+        // assignmentId mới rơi về khớp tiêu đề bài.
         const mine = (atts || [])
-          .filter((a) => a.sourceType === 'assignment' && a.sourceTitle === detailTest.title)
+          .filter((a) => a.assignmentId
+            ? a.assignmentId === detailTest.assignmentId
+            : a.sourceType === 'assignment' && a.sourceTitle === detailTest.title)
           .sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
         setTestAttempts(mine);
         const attIds = new Set(mine.map((a) => a.id));
-        setTestReviews([...(pending || []), ...(graded || [])].filter((r) => attIds.has(r.attemptId)));
+        setTestReviews((reviews || []).filter((r) => attIds.has(r.attemptId)));
         setTestDetailLoading(false);
       })
       .catch(() => {
@@ -472,7 +472,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                   <p className="text-sm text-[#1E1B4B] mt-1">
                     {best ? (
                       <>
-                        Điểm cao nhất: <span className="font-bold text-[#2F6B4F]">{best.score_awarded}/{best.max_score}</span>
+                        Điểm cao nhất: <span className="font-bold text-[#2F6B4F]">{formatScore(Number(best.score_awarded))}/{formatScore(Number(best.max_score))}</span>
                         {latest?.grading_status && (
                           <span className="text-slate-500"> • Trạng thái chấm: {latest.grading_status}</span>
                         )}
@@ -782,7 +782,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
               <p className="text-sm text-slate-400 italic">Đang tải bài làm…</p>
             ) : testAttempts.length === 0 ? (
               <p className="text-sm text-slate-400 italic">
-                Chưa tải được chi tiết lần làm (bài có thể nộp từ trước khi hệ thống ghi attempts).
+                Chưa tải được chi tiết lần làm, thử mở lại sau.
               </p>
             ) : (
               testAttempts.map((att) => (
@@ -791,7 +791,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                     Lần {att.attemptNo ?? '—'}
                     {att.submittedAt && ` • ${fmtDateTime(new Date(att.submittedAt).getTime())}`}
                     {att.score != null && att.maxScore != null && (
-                      <span className="text-[#2F6B4F]"> • Điểm {att.score}/{att.maxScore}</span>
+                      <span className="text-[#2F6B4F]"> • Điểm {formatScore(att.score)}/{formatScore(att.maxScore)}</span>
                     )}
                     {att.gradingStatus && (
                       <span className="font-normal text-slate-500"> • {att.gradingStatus}</span>
@@ -808,7 +808,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                             • Trả lời: {ans.responseText || '(trống)'}
                             {ans.isCorrect === true && ' • Đúng'}
                             {ans.isCorrect === false && ' • Sai'}
-                            {ans.score != null && ans.maxScore != null && ` • ${ans.score}/${ans.maxScore}`}
+                            {ans.score != null && ans.maxScore != null && ` • ${formatScore(ans.score)}/${formatScore(ans.maxScore)}`}
                             {ans.gradingStatus === 'PENDING' && ' • Cô giáo chưa chấm'}
                           </span>
                         </p>
@@ -818,7 +818,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                             <span>
                               <span className="font-bold">Nhận xét của cô: </span>
                               {review.feedback}
-                              {review.scoreAwarded != null && ` (Điểm câu: ${review.scoreAwarded})`}
+                              {review.scoreAwarded != null && ` (Điểm câu: ${formatScore(review.scoreAwarded)})`}
                             </span>
                           </p>
                         )}

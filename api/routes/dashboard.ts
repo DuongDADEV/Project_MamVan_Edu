@@ -179,7 +179,7 @@ async function assignmentsProgress(caller: any, studentIds: string[] | null): Pr
   });
 }
 
-async function attemptsWithAnswers(studentIds: string[] | null): Promise<any[]> {
+export async function attemptsWithAnswers(studentIds: string[] | null): Promise<any[]> {
   const where = studentIds ? `WHERE \`student_id\` IN (${inList(studentIds)})` : '';
   const params = studentIds || [];
   const atts = await query<any>(
@@ -233,6 +233,10 @@ async function attemptsWithAnswers(studentIds: string[] | null): Promise<any[]> 
     id: a.attempt_id,
     studentId: a.student_id,
     studentName: names.get(a.student_id) || 'Học sinh',
+    // assignmentId để màn học sinh khớp popup theo đúng bài giao, không lọc
+    // theo tiêu đề (nhiều bài có thể trùng tên, ví dụ 2 bài "Bài kiểm tra mới").
+    assignmentId: a.assignment_id || null,
+    learningActivityId: a.learning_activity_id || null,
     sourceType: a.assignment_id ? 'assignment' : 'activity',
     sourceTitle: a.assignment_id
       ? asgMap.get(a.assignment_id) || a.assignment_id

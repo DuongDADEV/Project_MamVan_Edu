@@ -31,6 +31,7 @@ import {
   getTotals,
 } from '../_lib/xp';
 import { teacherClassIds } from '../_lib/scope';
+import { attemptsWithAnswers } from './dashboard';
 import {
   db,
   vnToday,
@@ -1034,6 +1035,19 @@ attemptsRouter.get('/student-assignments', requireRole('student'), async (req: A
         };
       })
   );
+});
+
+// Lần làm kèm đáp án của CHÍNH học sinh đang đăng nhập — màn "Kết quả học
+// tập" của học sinh dùng route này thay cho /dashboard/attempts (route đó
+// chỉ cho teacher/admin nên học sinh gọi luôn bị 403 → popup trống).
+attemptsRouter.get('/student-attempts-with-answers', requireRole('student'), async (req: AuthedRequest, res) => {
+  const caller = req.caller!;
+  const studentId = caller.studentId;
+  if (!studentId) {
+    httpErr(res, 403, 'FORBIDDEN');
+    return;
+  }
+  res.json(await attemptsWithAnswers([studentId]));
 });
 
 attemptsRouter.get('/assignments/:id', async (req: AuthedRequest, res) => {

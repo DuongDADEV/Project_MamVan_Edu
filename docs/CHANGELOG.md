@@ -1,3 +1,11 @@
+## [dev] 2026-10-29 — Sửa popup "Xem chi tiết" bài kiểm tra của học sinh + bỏ ".00" ở điểm số
+
+- NGUYÊN NHÂN popup trống (đã đọc code, không phải do giới hạn 200 như chẩn đoán đầu): màn "Kết quả học tập" là màn CỦA HỌC SINH, nhưng popup gọi /api/dashboard/attempts + /api/reviews/pending + /api/reviews/graded — cả 3 route đều requireRole('teacher','admin') nên học sinh gọi luôn bị 403, catch đặt rỗng → popup luôn hiện câu fallback. Nói cách khác popup này chưa bao giờ mở được với tài khoản học sinh.
+- SỬA GỐC: thêm 2 route riêng cho học sinh, chỉ trả dữ liệu của chính mình — GET /api/student-attempts-with-answers (attempts kèm đáp án, dùng lại attemptsWithAnswers, nay export từ dashboard.ts) và GET /api/reviews/mine (phiếu chờ chấm + đã chấm của chính mình; đăng ký trước /reviews/:answerId để "mine" không bị bắt làm :answerId). Màn học sinh chuyển sang 2 route này.
+- Khớp popup theo assignmentId: attemptsWithAnswers nay trả thêm assignmentId (BiAttempt + mapAttempt cập nhật theo); popup khớp đúng assignmentId, chỉ rơi về khớp tiêu đề khi lần làm không mang assignmentId (tránh gom nhầm khi 2 bài trùng tên, ví dụ 2 bài "Bài kiểm tra mới" trên staging).
+- Bỏ ".00": điểm trên thẻ "Điểm theo từng bài kiểm tra" trước đây render trực tiếp chuỗi DECIMAL từ MySQL ("10.00/10.00") — nay qua formatScore (10/10, điểm lẻ giữ 1 chữ số thập phân). Áp dụng luôn cho điểm lần làm, điểm từng câu và điểm câu trong nhận xét ở popup.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Sửa XP tuần hiển thị 0 dù tổng XP đã 53 (ca Dũng)
 
 - NGUYÊN NHÂN (đã đối chiếu DB trực tiếp): server đúng — Dũng total/xp_today/xp_week = 53/53/53, điểm danh tuần = 1. Lỗi ở client: hàm rolloverStudentState tự reset xpWeek về 0 khi không tìm thấy xpWeekKey, mà state từ server KHÔNG BAO GIỜ có xpWeekKey (server không có cột này) nên fallback "legacy-week" từ lastAttendanceDate cũ luôn kích hoạt sai — đúng phiên Dũng vừa nhận quỹ 50 XP + điểm danh 2 XP thì màn Đổi quà vẫn hiện tuần 0.

@@ -88,6 +88,7 @@ export interface BiAttempt {
   studentName: string;
   sourceType: 'assignment' | 'activity';
   sourceTitle: string;
+  assignmentId: string | null;
   attemptNo: number | null;
   status: string | null;
   submittedAt: string | null;
@@ -416,6 +417,7 @@ function mapAttempt(r: any): BiAttempt {
     studentName: str(pick(r, 'studentName', 'student_name'), 'Học sinh'),
     sourceType: pick(r, 'sourceType', 'source_type') === 'activity' ? 'activity' : 'assignment',
     sourceTitle: str(pick(r, 'sourceTitle', 'source_title')),
+    assignmentId: pick(r, 'assignmentId', 'assignment_id') ?? null,
     attemptNo: numOrNull(pick(r, 'attemptNo', 'attempt_no')),
     status: pick(r, 'status') ?? null,
     submittedAt: pick(r, 'submittedAt', 'submitted_at') ?? null,
@@ -432,6 +434,18 @@ export async function getAttemptsWithAnswers(studentIds: string[]): Promise<BiAt
   if (!studentIds.length) return [];
   const rows = unwrapList(await apiFetch('/api/dashboard/attempts'));
   return rows.map(mapAttempt).filter((a) => studentIds.includes(a.studentId));
+}
+
+/** Lượt làm kèm đáp án của CHÍNH học sinh đang đăng nhập (không qua dashboard teacher-only). */
+export async function getOwnAttemptsWithAnswers(): Promise<BiAttempt[]> {
+  const rows = unwrapList(await apiFetch('/api/student-attempts-with-answers'));
+  return rows.map(mapAttempt);
+}
+
+/** Phiếu chấm của CHÍNH học sinh đang đăng nhập (chờ chấm + đã chấm). */
+export async function getOwnReviews(): Promise<BiPendingReview[]> {
+  const rows = unwrapList(await apiFetch('/api/reviews/mine'));
+  return rows.map(mapReview);
 }
 
 function mapReview(r: any): BiPendingReview {

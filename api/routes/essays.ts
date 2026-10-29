@@ -666,6 +666,21 @@ essaysRouter.get('/reviews/graded', requireRole('teacher', 'admin'), ah(async (r
   res.json(await fetchReviews(db, scope.studentIds, 'GRADED', req.query.includeResponseText !== 'false'));
 }));
 
+// Phiếu chấm của CHÍNH học sinh đang đăng nhập (chờ chấm + đã chấm) — màn
+// "Kết quả học tập" của học sinh dùng route này thay cho /reviews/pending
+// và /reviews/graded (2 route đó chỉ cho teacher/admin).
+// NOTE: phải đăng ký trước /reviews/:answerId để "mine" không bị bắt làm :answerId.
+essaysRouter.get('/reviews/mine', requireRole('student'), ah(async (req: AuthedRequest, res) => {
+  const caller = req.caller!;
+  if (!caller.studentId) {
+    httpErr(res, 403, 'FORBIDDEN');
+    return;
+  }
+  const pending = await fetchReviews(db, [caller.studentId], 'PENDING', true);
+  const graded = await fetchReviews(db, [caller.studentId], 'GRADED', true);
+  res.json([...pending, ...graded]);
+}));
+
 essaysRouter.get('/reviews/:answerId', requireRole('teacher', 'admin'), ah(async (req: AuthedRequest, res) => {
   const answerId = req.params.answerId;
   if (!checkKeyLen(res, answerId)) return;
