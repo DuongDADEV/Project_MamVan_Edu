@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Send,
   Trash2,
-  Sparkles,
   Loader2,
   Database,
   Lightbulb,
@@ -20,6 +19,7 @@ import {
   Tooltip,
 } from 'recharts';
 import { StudentState, EssaySubmission, RewardRequest, Question } from '../../../types.ts';
+import { MamMuc } from '../../MamMuc.tsx';
 import { StudentAccount, ClassItem } from '../../../services/types.ts';
 import { AnalyticsFilter } from '../../../analytics/types.ts';
 import {
@@ -177,9 +177,8 @@ export const AnalyticsAssistantTab: React.FC<AnalyticsAssistantTabProps> = ({
       {/* Thẻ giới thiệu + nguyên tắc số liệu (ẩn ở dạng bong bóng gọn) */}
       {!compact && (
       <div className="bg-[#2F3E6B] text-white rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row gap-4 sm:items-center">
-        <div className="w-12 h-12 shrink-0 rounded-2xl bg-white/10 flex items-center justify-center">
-          <Sparkles className="w-6 h-6" />
-        </div>
+        {/* 29/10: biểu tượng trợ lý đổi từ tia sáng sang mascot Mầm Mực */}
+        <MamMuc size="sm" animate={false} className="shrink-0" />
         <div className="space-y-1">
           <h3 className="font-lora font-bold text-base">Trợ lý phân tích học tập</h3>
           <p className="text-xs text-white/80 leading-relaxed flex items-start gap-1.5">

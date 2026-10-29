@@ -1,3 +1,8 @@
+## [dev] 2026-10-29 — Thẻ Trợ lý phân tích: icon tia sáng → mascot Mầm Mực
+
+- Theo ảnh chủ dự án gửi: thẻ giới thiệu "Trợ lý phân tích học tập" trong tab Phân tích đổi biểu tượng từ icon tia sáng (Sparkles) sang mascot Mầm Mực (component MamMuc có sẵn, size sm, không animation). Nút bong bóng nổi và tiêu đề khung chat giữ nguyên icon cũ (chủ dự án mới chỉ ảnh chụp thẻ giới thiệu).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Sửa chấm trắc nghiệm đường Bài tập + luật tự luận 1 lần
 
 - Chấm trắc nghiệm đường Bài tập (chủ dự án duyệt 20:10 29/10): màn Bài tập gửi chữ cái (A/B/C/D) nhưng server so với nội dung đáp án nên câu chọn đúng vẫn 0 điểm (bài Phúc 20/60). Server nay đổi chữ cái → nội dung phương án trước khi so, key dạng chữ cái cũng chuẩn hóa tương tự; không có danh sách phương án thì giữ hành vi cũ. Thêm POST /api/attempts/:id/regrade (giáo viên quản lý học sinh đó hoặc admin) để chấm lại bài đã nộp mà không động XP: chỉ chấm lại đáp án AUTO chưa qua tay giáo viên, bài tự luận + đáp án chờ chấm tay giữ nguyên, đồng thời ghi kết quả đã sửa vào question_results để mastery phản ánh đúng.
