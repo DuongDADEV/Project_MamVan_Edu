@@ -1,3 +1,8 @@
+## [dev] 2026-10-29 — Học bài: badge "Đã hoàn thành" khi luồng 100%
+
+- Màn Học bài: chủ đề xong 100% luồng nay hiện badge "Đã hoàn thành" (nền teal) thay vì "Đang học" như trước. Thứ tự badge: Vững > Cần ôn > Đã hoàn thành > Đang học > Chưa học — chủ đề có điểm yếu hoặc bị đánh dấu "Chưa hiểu" vẫn giữ "Cần ôn" (và vẫn lọt bộ lọc "Cần ôn lại") để không giấu nhu cầu ôn lại; "Vững" vẫn là mức cao nhất theo độ vững trắc nghiệm.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-29 — Học bài: XP chủ đề lên thẻ, bỏ XP lẻ từng luồng, tung hoa
 
 - (1) Thẻ chủ đề chính ở màn Học bài nay hiện badge "+X XP" (lấy từ xpReward giáo viên cấu hình) khi xpReward > 0, kèm chú thích "hoàn thành chủ đề nhận đủ số XP này (đúng 100% các câu có đáp án ngay)".

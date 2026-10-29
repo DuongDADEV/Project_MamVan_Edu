@@ -73,20 +73,6 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
     const isFlagged = state.flaggedNeedReviewTopicIds.includes(topic.id);
     const hasReview = Object.values(mastery).some((m) => m.status === 'NEEDS_REVIEW') || isFlagged;
 
-    let status: 'Chưa học' | 'Đang học' | 'Cần ôn' | 'Vững' = 'Chưa học';
-    let statusClass = 'bg-slate-100 text-slate-600 border-slate-200';
-
-    if (isSolid) {
-      status = 'Vững';
-      statusClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    } else if (hasReview) {
-      status = 'Cần ôn';
-      statusClass = 'bg-amber-50 text-amber-700 border-amber-200';
-    } else if (hasAttempted) {
-      status = 'Đang học';
-      statusClass = 'bg-indigo-50 text-[#4F46E5] border-indigo-200';
-    }
-
     // Tính phần trăm hoàn thành bước học của chủ đề — cùng định nghĩa
     // với bảng hoàn thành của giáo viên (28/10): đếm mục luồng đã xong
     // (video xong trọn luồng, lý thuyết xong trọn luồng, bài tập làm đúng
@@ -101,6 +87,28 @@ export const LearnScreen: React.FC<LearnScreenProps> = ({
       state.questionResults || []
     );
     const progressPercent = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+
+    // Thứ tự badge (29/10): Vững > Cần ôn > Đã hoàn thành (luồng 100%)
+    // > Đang học > Chưa học. Luồng 100% nhưng chưa Vững thì là "Đã hoàn
+    // thành" thay vì "Đang học" như trước; chủ đề có điểm yếu hoặc bị
+    // đánh dấu "Chưa hiểu" vẫn giữ "Cần ôn" để không giấu nhu cầu ôn lại
+    // (và vẫn lọt bộ lọc "Cần ôn lại").
+    let status: 'Chưa học' | 'Đang học' | 'Cần ôn' | 'Vững' | 'Đã hoàn thành' = 'Chưa học';
+    let statusClass = 'bg-slate-100 text-slate-600 border-slate-200';
+
+    if (isSolid) {
+      status = 'Vững';
+      statusClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    } else if (hasReview) {
+      status = 'Cần ôn';
+      statusClass = 'bg-amber-50 text-amber-700 border-amber-200';
+    } else if (progressPercent === 100) {
+      status = 'Đã hoàn thành';
+      statusClass = 'bg-teal-50 text-teal-700 border-teal-200';
+    } else if (hasAttempted) {
+      status = 'Đang học';
+      statusClass = 'bg-indigo-50 text-[#4F46E5] border-indigo-200';
+    }
 
     return { status, statusClass, progressPercent, hasAttempted, isSolid, hasReview };
   };
