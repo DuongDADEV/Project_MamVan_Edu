@@ -37,3 +37,6 @@ Thumbs.db
 anhzalo/
 
 .vercel
+
+# Deploy zips (build tạm, không commit)
+mamvan-deploy-*.zip
