@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Xóa nút "Kiểm tra ngay" ở màn làm bài luyện tập
+
+- Chủ dự án chốt: học sinh không được biết trước đúng/sai trước khi nộp. Gỡ toàn bộ cơ chế kiểm tra tức thì khỏi QuizRunner (chế độ Luyện tập): nút "Kiểm tra ngay", hộp phản hồi đúng/sai + lời giải hiện ngay sau khi bấm, và cả việc tô xanh đáp án đúng / đỏ đáp án sai khi kiểm tra (cùng trạng thái practiceChecked và các khóa input theo đó).
+- Sau thay đổi, học sinh chỉ còn: chọn đáp án, chuyển câu, nộp bài — đúng/sai và lời giải chỉ thấy ở màn kết quả sau khi nộp (QuizResult/QuizReviewScreen không đổi).
+- Màn làm bài tập được giao (AssignmentAttemptScreen) vốn không có nút kiểm tra ngay nên không đụng tới.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Popup chi tiết chủ đề chia 3 phần xếp chồng, bỏ thẻ "Lần làm"
 
 - Chủ dự án chốt: popup chi tiết chủ đề không liệt kê từng "Lần làm" nữa (dài) mà chia 3 phần xếp chồng nhau:

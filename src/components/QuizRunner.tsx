@@ -4,7 +4,7 @@ import { essayRepository } from '../services/index.ts';
 import { SKILL_METADATA } from '../logic/mastery.ts';
 import { splitPromptBlanks, countBlanks, gradeFillBlanks } from '../logic/fillBlank.ts';
 import { MamMuc } from './MamMuc.tsx';
-import { Clock, CheckCircle2, XCircle, AlertCircle, Send, ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react';
+import { Clock, Send, ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react';
 
 interface QuizRunnerProps {
   quiz: Quiz;
@@ -42,7 +42,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, any>>({});
   const [essayDrafts, setEssayDrafts] = useState<Record<string, string>>({});
-  const [practiceChecked, setPracticeChecked] = useState<Record<string, boolean>>({});
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   // 29/10 — LUẬT TỰ LUẬN 1 LẦN: câu tự luận đã nộp (theo máy chủ) thì
   // khóa ô nhập khi làm lại; giá trị là status phiếu đầu tiên.
@@ -62,7 +61,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
     setCurrentIndex(0);
     setUserAnswers({});
     setEssayDrafts({});
-    setPracticeChecked({});
     setIsSubmitModalOpen(false);
     submittedRef.current = false;
     setTimeLeft(quiz.timeLimitMinutes ? quiz.timeLimitMinutes * 60 : 0);
@@ -247,28 +245,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
   }
 
   const currentEssayLocked = currentQ.type === 'essay' ? !!lockedEssays[currentQ.id] : false;
-  const isCurrentAnswered =
-    currentQ.type === 'essay'
-      ? currentEssayLocked || (essayDrafts[currentQ.id]?.trim().split(/\s+/).length || 0) >= 5
-      : userAnswers[currentQ.id] !== undefined;
-
-  const isChecked = isPractice && practiceChecked[currentQ.id];
-
-  // Kiểm tra tính đúng/sai nếu ở chế độ Luyện tập
-  let isAnswerCorrectInPractice = false;
-  if (isChecked) {
-    if (currentQ.type === 'single') {
-      isAnswerCorrectInPractice = userAnswers[currentQ.id] === currentQ.answer;
-    } else if (currentQ.type === 'multi') {
-      const correctArr = (currentQ.answer as string[]) || [];
-      const userArr = (userAnswers[currentQ.id] as string[]) || [];
-      isAnswerCorrectInPractice =
-        correctArr.length === userArr.length &&
-        correctArr.every((c) => userArr.includes(c));
-    } else if (currentQ.type === 'fill') {
-      isAnswerCorrectInPractice = gradeFillBlanks(currentQ.answer, userAnswers[currentQ.id]).isCorrect;
-    }
-  }
 
   // Format thời gian đếm ngược
   const formatTimer = (sec: number) => {
@@ -343,7 +319,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
                   {sIdx < arr.length - 1 && (
                     <input
                       type="text"
-                      disabled={isChecked}
                       value={((userAnswers[currentQ.id] as string[]) || [])[sIdx] || ''}
                       placeholder={`Ô ${sIdx + 1}`}
                       onChange={(e) => {
@@ -371,20 +346,13 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               const isSelected = userAnswers[currentQ.id] === opt;
               let optClass = 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/20 text-slate-800';
 
-              if (isChecked) {
-                if (opt === currentQ.answer) {
-                  optClass = 'border-emerald-300 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-500/20';
-                } else if (isSelected && opt !== currentQ.answer) {
-                  optClass = 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-500/20';
-                }
-              } else if (isSelected) {
+              if (isSelected) {
                 optClass = 'border-[#4F46E5] bg-indigo-50/70 text-[#1E1B4B] font-bold shadow-xs ring-2 ring-indigo-500/20';
               }
 
               return (
                 <button
                   key={idx}
-                  disabled={isChecked}
                   onClick={() => setUserAnswers({ ...userAnswers, [currentQ.id]: opt })}
                   className={`w-full text-left p-4 rounded-2xl border text-sm sm:text-base transition-all flex items-start gap-3.5 ${optClass}`}
                 >
@@ -415,21 +383,13 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
               const isSelected = currentArr.includes(opt);
               let optClass = 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/20 text-slate-800';
 
-              if (isChecked) {
-                const correctArr = (currentQ.answer as string[]) || [];
-                if (correctArr.includes(opt)) {
-                  optClass = 'border-emerald-300 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-500/20';
-                } else if (isSelected && !correctArr.includes(opt)) {
-                  optClass = 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-500/20';
-                }
-              } else if (isSelected) {
+              if (isSelected) {
                 optClass = 'border-[#4F46E5] bg-indigo-50/70 text-[#1E1B4B] font-bold shadow-xs ring-2 ring-indigo-500/20';
               }
 
               return (
                 <button
                   key={idx}
-                  disabled={isChecked}
                   onClick={() => {
                     const next = isSelected
                       ? currentArr.filter((c) => c !== opt)
@@ -471,7 +431,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
                   </span>
                   <input
                     type="text"
-                    disabled={isChecked}
                     value={val}
                     placeholder="Nhập từ cần điền..."
                     onChange={(e) => {
@@ -537,34 +496,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
           </div>
         )}
 
-        {/* PHẢN HỒI KHI KIỂM TRA ĐÁP ÁN (Chế độ Luyện tập) */}
-        {isChecked && (
-          <div
-            className={`mt-6 p-4 rounded-2xl border text-xs sm:text-sm animate-[fadeIn_0.2s_ease] ${
-              isAnswerCorrectInPractice
-                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
-                : 'bg-amber-50/80 border-amber-200 text-amber-800'
-            }`}
-          >
-            <div className="flex items-center gap-2 font-bold mb-1.5">
-              {isAnswerCorrectInPractice ? (
-                <>
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>Chính xác! Em làm rất tốt!</span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-                  <span>Chưa hoàn toàn chính xác. Hãy cùng xem lời giải nhé:</span>
-                </>
-              )}
-            </div>
-
-            <p className="leading-relaxed pl-7 text-xs sm:text-sm text-slate-700">
-              {currentQ.explanation}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* THANH ĐIỀU HƯỚNG BÊN DƯỚI */}
@@ -579,18 +510,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
         </button>
 
         <div className="flex items-center gap-2">
-          {/* Nút kiểm tra đáp án ở chế độ Luyện tập */}
-          {isPractice && !isChecked && currentQ.type !== 'essay' && (
-            <button
-              disabled={!isCurrentAnswered}
-              onClick={() =>
-                setPracticeChecked({ ...practiceChecked, [currentQ.id]: true })
-              }
-              className="px-5 py-2.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-[#4F46E5] font-bold text-xs hover:bg-indigo-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              Kiểm tra ngay
-            </button>
-          )}
 
           {/* Nút Câu tiếp theo hoặc Nộp bài */}
           {currentIndex < questions.length - 1 ? (
