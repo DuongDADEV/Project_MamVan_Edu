@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Popup kết quả: bỏ "Tổng N câu đã làm", tên chủ đề thành header riêng
+
+- Bỏ dòng "Tổng N câu đã làm" ở thẻ chủ đề trong màn Kết quả: con số này đếm `topicResults.length` — tức cộng dồn mọi lượt làm (làm lại cũng tính thêm), nên chủ đề chỉ có 7 câu mà hiện "Tổng 16 câu", gây hiểu lầm. Dòng "Lịch sử: N lần làm • Gần nhất …" giữ nguyên (đó mới là số liệu đúng nghĩa).
+- Tên chủ đề trong popup chi tiết nay là header riêng: font Lora đậm, cỡ lớn hơn, kèm đường gạch ngang phân tách với các mục Trắc nghiệm / Tự luận bên dưới (trước đây cùng kiểu chữ với nội dung nên khó phân biệt).
+- Lưu ý kèm theo (không phải code mới): khối tự luận thừa "Cô giáo chưa chấm" trong ảnh báo lúc 16:35 là bản local id tạm (`sub_…`) của học sinh cộng với phiếu server đã chấm — code gộp theo câu (đã có từ `d3430fb`) chỉ hiển thị 1 khối (ưu tiên đã chấm). Chunk popup trên server đã khớp bản mới, nên tab nào mở trước đợt deploy mà chưa tải lại vẫn thấy 2 khối — tải lại app là hết. Server đã xác nhận: học sinh chỉ có đúng 1 phiếu cho câu "Thời gian", trạng thái GRADED 8.5/10.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Sửa thông báo đỏ khi upload video lỗi (hết nhắc Supabase, hết hiểu lầm 5MB)
 
 - Thông báo đỏ cũ ghép 2 phần gây hiểu lầm: lỗi dự phòng "quá giới hạn 5MB" + hậu tố "Gói miễn phí Supabase giới hạn ~50MB/file" — đều là chữ từ thời upload lên Supabase, trong khi từ GĐ3 upload đã đi qua API VPS (giới hạn 500MB/file). Học sinh/giáo viên đọc vào tưởng 5MB (hoặc 50MB) là giới hạn chung, dù file 8.9MB hoàn toàn hợp lệ.

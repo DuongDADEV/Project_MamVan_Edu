@@ -536,7 +536,6 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                     <p className="text-xs text-slate-500">
                       Lịch sử: {row.batches.length} lần làm
                       {lastBatch ? ` • Gần nhất ${fmtDateTime(lastBatch.start)}` : ''}
-                      {` • Tổng ${row.attempts} câu đã làm`}
                     </p>
                   </div>
                   <div className="mt-3">
@@ -735,9 +734,9 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
             className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#E8DFD1]">
               <div>
-                <h3 className="font-bold text-lg text-[#1E1B4B]">{detailTopic.topic.title}</h3>
+                <h3 className="font-lora font-bold text-xl text-[#1E1B4B]">{detailTopic.topic.title}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Trắc nghiệm đúng {detailTopic.mcqCorrect}/{detailTopic.mcq.length} câu
                   {detailTopic.mcqAvg !== null && ` • ĐTB ${detailTopic.mcqAvg}/10`} • Tự luận{' '}
