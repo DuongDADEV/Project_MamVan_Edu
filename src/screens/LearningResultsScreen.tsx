@@ -11,6 +11,7 @@ import {
   getStudentAssignments,
   getOwnAttemptsWithAnswers,
   getOwnReviews,
+  getAssignmentDetail,
   BiAttempt,
   BiPendingReview,
 } from '../services/api/biClient.ts';
@@ -327,6 +328,9 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
   const [testAttempts, setTestAttempts] = useState<BiAttempt[]>([]);
   const [testReviews, setTestReviews] = useState<BiPendingReview[]>([]);
   const [testDetailLoading, setTestDetailLoading] = useState(false);
+  // Đề bài kiểm tra (thứ tự câu cô xếp) — để popup xếp câu đúng thứ tự bài,
+  // kể cả câu em chưa làm; lấy không được thì rơi về hợp các câu đã làm.
+  const [assignmentQuestions, setAssignmentQuestions] = useState<{ id: string; prompt: string }[]>([]);
 
   const detailTopic = topicRows.find((r) => r.topic.id === detailTopicId) || null;
   const detailTest = biAssignments.find((a: any) => a.assignmentId === detailTestId) || null;
@@ -397,6 +401,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
     if (!detailTest || !studentId) {
       setTestAttempts([]);
       setTestReviews([]);
+      setAssignmentQuestions([]);
       return;
     }
     let cancelled = false;
@@ -420,16 +425,102 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
         setTestDetailLoading(false);
       })
       .catch(() => {
-        if (!cancelled) {
-          setTestAttempts([]);
-          setTestReviews([]);
-          setTestDetailLoading(false);
-        }
+        if (cancelled) return;
+        setTestAttempts([]);
+        setTestReviews([]);
+        setTestDetailLoading(false);
       });
+    // Đề bài lấy riêng: lỗi (bài đã gỡ, hết quyền) không làm mất lần làm + phiếu chấm.
+    getAssignmentDetail(detailTest.assignmentId)
+      .then((d) => { if (!cancelled) setAssignmentQuestions(d?.questions || []); })
+      .catch(() => { if (!cancelled) setAssignmentQuestions([]); });
     return () => {
       cancelled = true;
     };
   }, [detailTest, studentId]);
+
+  // Popup chi tiết bài kiểm tra: 3 mục xếp chồng như popup chủ đề —
+  // Trắc nghiệm (xanh đúng / đỏ sai), Tự luận (chờ chấm / điểm + nhận xét),
+  // Đáp án (mở ngay khi đã làm lần đầu, KHÔNG cần đúng 100% như popup chủ đề).
+  const testSections = useMemo(() => {
+    if (!detailTest || testAttempts.length === 0) return null;
+    const normType = (t?: string | null) => {
+      const s = String(t || '');
+      if (s === 'single_choice') return 'single';
+      if (s === 'multiple_choice') return 'multi';
+      if (s === 'fill_in_blank') return 'fill';
+      return s;
+    };
+    const detailPrompt = new Map(assignmentQuestions.map((q) => [q.id, q.prompt]));
+    const allAnswers = testAttempts.flatMap((a) => a.answers || []);
+    // Thứ tự câu: theo đề bài cô xếp; lấy đề không được thì rơi về hợp các câu đã làm.
+    const orderedIds: string[] = assignmentQuestions.length > 0
+      ? assignmentQuestions.map((q) => q.id)
+      : [...new Set(allAnswers.map((a) => a.questionId))];
+    const qType = (id: string): string => {
+      const q: any = (questions as any)[id];
+      if (q?.type) return String(q.type);
+      const ans = allAnswers.find((a) => a.questionId === id);
+      return normType(ans?.questionType);
+    };
+    const isAnsCorrect = (a: BiAttempt['answers'][number]) =>
+      a.isCorrect === true || (a.score != null && a.maxScore != null && a.score >= a.maxScore);
+    const everCorrect = new Set(allAnswers.filter(isAnsCorrect).map((a) => a.questionId));
+    const attempted = new Set(allAnswers.map((a) => a.questionId));
+    const mcRows = orderedIds
+      .filter((id) => MCQ_TYPES.has(qType(id)))
+      .map((id) => {
+        const q: any = (questions as any)[id];
+        return {
+          key: id,
+          prompt: q?.prompt || detailPrompt.get(id) || 'Câu hỏi (đã gỡ khỏi ngân hàng)',
+          state: (everCorrect.has(id) ? 'correct' : attempted.has(id) ? 'wrong' : 'todo') as McRowState,
+        };
+      });
+    // Tự luận: gộp theo câu, ưu tiên phiếu đã chấm; cùng trạng thái thì giữ
+    // lần mới nhất (testAttempts đã xếp mới -> cũ).
+    const essayRows = (() => {
+      const byQ = new Map<string, { ans: BiAttempt['answers'][number]; review?: BiPendingReview }>();
+      for (const ans of allAnswers) {
+        if (qType(ans.questionId) !== 'essay') continue;
+        const review = testReviews.find((r) => r.answerId === ans.id);
+        const graded = ans.score != null || review?.scoreAwarded != null;
+        const old = byQ.get(ans.questionId);
+        if (!old) {
+          byQ.set(ans.questionId, { ans, review });
+          continue;
+        }
+        const oldGraded = old.ans.score != null || old.review?.scoreAwarded != null;
+        if (graded && !oldGraded) byQ.set(ans.questionId, { ans, review });
+      }
+      return [...byQ.values()].map(({ ans, review }) => {
+        const q: any = (questions as any)[ans.questionId];
+        const score = ans.score ?? review?.scoreAwarded ?? null;
+        return {
+          key: ans.questionId,
+          prompt: q?.prompt || detailPrompt.get(ans.questionId) || ans.prompt,
+          content: ans.responseText,
+          graded: score != null,
+          score,
+          maxScore: ans.maxScore,
+          feedback: review?.feedback || null,
+        };
+      });
+    })();
+    // Đáp án: mọi câu trắc nghiệm/điền khuyết có đáp án — hiện ngay khi đã
+    // làm lần đầu, không khóa theo tỉ lệ đúng như popup chủ đề.
+    const answerRows = orderedIds
+      .map((id) => (questions as any)[id])
+      .filter((q) => q && MCQ_TYPES.has(String(q.type)) && resolveCorrectAnswer(q) != null);
+    return {
+      mcRows,
+      mcCorrect: mcRows.filter((r) => r.state === 'correct').length,
+      essayRows,
+      essayGraded: essayRows.filter((e) => e.graded).length,
+      essayPending: essayRows.filter((e) => !e.graded).length,
+      answerRows,
+    };
+  }, [detailTest, testAttempts, testReviews, assignmentQuestions, questions]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -835,18 +926,21 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
         </div>
       )}
 
-      {/* POPUP CHI TIẾT BÀI KIỂM TRA: các lần nộp + đáp án + nhận xét của cô */}
+      {/* POPUP CHI TIẾT BÀI KIỂM TRA: 3 mục xếp chồng như popup chủ đề */}
       {detailTest && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setDetailTestId(null)}>
           <div
             className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#E8DFD1]">
               <div>
-                <h3 className="font-bold text-lg text-[#1E1B4B]">{detailTest.title}</h3>
+                <h3 className="font-lora font-bold text-xl text-[#1E1B4B]">{detailTest.title}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {(detailTest.attempts || []).length} lần nộp
+                  {testSections && ` • Trắc nghiệm đúng ${testSections.mcCorrect}/${testSections.mcRows.length} câu`}
+                  {testSections && testSections.essayRows.length > 0 &&
+                    ` • Tự luận ${testSections.essayRows.length} bài (${testSections.essayGraded} đã chấm, ${testSections.essayPending} chưa chấm)`}
                 </p>
               </div>
               <button
@@ -861,53 +955,79 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
 
             {testDetailLoading ? (
               <p className="text-sm text-slate-400 italic">Đang tải bài làm…</p>
-            ) : testAttempts.length === 0 ? (
+            ) : !testSections ? (
               <p className="text-sm text-slate-400 italic">
                 Chưa tải được chi tiết lần làm, thử mở lại sau.
               </p>
             ) : (
-              testAttempts.map((att) => (
-                <div key={att.id} className="border border-[#E6DCC8] rounded-2xl p-4 space-y-3">
-                  <p className="font-bold text-sm text-[#2F3E6B]">
-                    Lần {att.attemptNo ?? '—'}
-                    {att.submittedAt && ` • ${fmtDateTime(new Date(att.submittedAt).getTime())}`}
-                    {att.score != null && att.maxScore != null && (
-                      <span className="text-[#2F6B4F]"> • Điểm {formatScore(att.score)}/{formatScore(att.maxScore)}</span>
-                    )}
-                  </p>
-                  {(att.answers || []).map((ans) => {
-                    const review = testReviews.find((r) => r.answerId === ans.id);
-                    return (
-                      <div key={ans.id} className="space-y-1.5">
-                        <p className="text-sm text-[#1E1B4B]">
-                          <span className="font-bold">{ans.prompt}</span>
-                          <span className="text-slate-500">
+              <>
+                {/* 1. Trắc nghiệm: xanh nếu đúng, đỏ nếu sai. */}
+                {testSections.mcRows.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-sm text-[#1E1B4B]">Trắc nghiệm</h4>
+                    {testSections.mcRows.map((row) => (
+                      <div key={row.key} className="flex items-start gap-2 text-sm">
+                        {row.state === 'correct' ? (
+                          <CheckCircle2 className="w-4 h-4 text-[#2F6B4F] shrink-0 mt-0.5" />
+                        ) : row.state === 'wrong' ? (
+                          <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-300 shrink-0 mt-0.5" />
+                        )}
+                        <span className={row.state === 'correct' ? 'text-[#2F6B4F]' : row.state === 'wrong' ? 'text-red-600' : 'text-[#1E1B4B]'}>
+                          {row.prompt}
+                          <span className="font-bold">
                             {' '}
-                            • Trả lời: {ans.responseText || '(trống)'}
-                            {ans.isCorrect === true && ' • Đúng'}
-                            {ans.isCorrect === false && ' • Sai'}
-                            {ans.score != null && ans.maxScore != null && ` • ${formatScore(ans.score)}/${formatScore(ans.maxScore)}`}
-                            {ans.gradingStatus === 'PENDING' && ' • Cô giáo chưa chấm'}
+                            • {row.state === 'correct' ? 'Đúng' : row.state === 'wrong' ? 'Sai' : 'Chưa làm'}
                           </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* 2. Tự luận: chờ cô chấm / điểm + nhận xét. */}
+                {testSections.essayRows.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-sm text-[#1E1B4B]">Tự luận</h4>
+                    {testSections.essayRows.map((e) => (
+                      <div key={e.key} className="bg-[#FAF5EB] border border-[#E6DCC8] rounded-xl p-3 space-y-2">
+                        <p className="text-xs font-bold text-slate-500">
+                          Tự luận • {e.prompt}
                         </p>
-                        {review?.feedback && (
-                          <p className="text-sm text-[#1E1B4B] bg-[#FAF5EB] border border-[#2F6B4F]/20 rounded-xl p-3 flex gap-2">
+                        <p className="text-sm text-[#1E1B4B] line-clamp-6">{e.content}</p>
+                        {e.graded && e.score != null ? (
+                          <p className="text-sm font-bold text-[#2F6B4F]">
+                            Đã chấm: {formatScore(e.score)}{e.maxScore != null && `/${formatScore(e.maxScore)}`}
+                          </p>
+                        ) : (
+                          <p className="text-sm font-bold text-amber-600">Cô giáo chưa chấm</p>
+                        )}
+                        {e.feedback && (
+                          <p className="text-sm text-[#1E1B4B] bg-white border border-[#2F6B4F]/20 rounded-xl p-3 flex gap-2">
                             <MessageSquareText className="w-4 h-4 shrink-0 mt-0.5 text-[#2F6B4F]" />
                             <span>
                               <span className="font-bold">Nhận xét của cô: </span>
-                              {review.feedback}
-                              {review.scoreAwarded != null && ` (Điểm câu: ${formatScore(review.scoreAwarded)})`}
+                              {e.feedback}
                             </span>
                           </p>
                         )}
                       </div>
-                    );
-                  })}
-                  {(att.answers || []).length === 0 && (
-                    <p className="text-xs text-slate-400 italic">Lần này không còn đáp án chi tiết.</p>
-                  )}
-                </div>
-              ))
+                    ))}
+                  </div>
+                )}
+                {/* 3. Đáp án: mở ngay khi đã làm lần đầu, không cần đúng 100%. */}
+                {testSections.answerRows.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-sm text-[#1E1B4B]">Đáp án</h4>
+                    {testSections.answerRows.map((q: any) => (
+                      <div key={q.id} className="text-sm">
+                        <span className="text-[#1E1B4B]">{q.prompt}</span>
+                        <span className="text-[#2F6B4F] font-bold"> • Đáp án: {resolveCorrectAnswer(q)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

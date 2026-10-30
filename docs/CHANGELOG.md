@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Popup chi tiết Bài tập: 3 mục như popup Chủ đề, đáp án mở ngay từ lần làm đầu
+
+- Trước đây popup chi tiết bài kiểm tra (mục "Điểm theo từng bài kiểm tra") liệt kê từng lần nộp với đáp án thô ("Trả lời: Chọn: D"), khó đọc. Nay viết lại thành 3 mục xếp chồng giống popup chi tiết Chủ đề: (1) Trắc nghiệm — mỗi câu 1 dòng, chữ xanh "Đúng" / đỏ "Sai" / xám "Chưa làm" (đúng = từng trả lời đúng ở bất kỳ lần nộp nào, giống chuẩn popup chủ đề); (2) Tự luận — chờ cô chấm (vàng) hoặc đã chấm kèm điểm + nhận xét của cô; (3) Đáp án — đáp án đúng của mọi câu trắc nghiệm/điền khuyết. Khác popup chủ đề ở đúng 1 điểm theo yêu cầu: đáp án bài tập mở NGAY khi học sinh đã làm lần đầu, KHÔNG cần làm lại đúng hết 100%. Header popup cũng đồng bộ kiểu header chủ đề (font Lora, gạch ngang) + dòng tóm tắt (số lần nộp, đúng/tổng trắc nghiệm, đã chấm/chưa chấm tự luận).
+- Thứ tự câu lấy theo đề bài cô xếp (route chi tiết bài, học sinh chỉ thấy đề không đáp án); lấy đề không được thì rơi về hợp các câu đã làm. Đáp án lấy từ ngân hàng câu hỏi qua `resolveCorrectAnswer` (chữ cái → nội dung phương án, điền khuyết nhiều cách → "a hoặc b") như popup chủ đề.
+- Kiểm chứng bằng dữ liệu thật (bài "Bài kiểm tra mới", học sinh Phúc, 6 lần nộp): đề 6 câu đúng thứ tự; Trắc nghiệm đủ 6 dòng; Đáp án đủ 6 câu; Tự luận rỗng (bài này không có tự luận). Lưu ý: câu "Lớp 7a9 có bao nhiêu học sinh?" hiện xanh vì Phúc từng chọn A ở 1 lần nộp và đáp án đang lưu là chữ A — đó là lỗi dữ liệu đáp án đã biết (đáp án đúng phải là "5 học sinh" = B), giáo viên cần sửa key, code không tự sửa key.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Trang chủ chỉ gợi ý chủ đề tiếp theo cần hoàn thành (bỏ qua chủ đề đã xong 100%)
 
 - Lỗi: thẻ "Bài học đề xuất" trên trang chủ lấy video của chủ đề ĐẦU TIÊN có video trong danh sách, không kiểm tra tiến độ — nên học sinh đã xong 100% Ca dao vẫn bị gợi ý Ca dao thay vì Văn nghị luận (chủ đề tiếp theo chưa xong). Con trỏ "Đang dở" cũ trỏ vào video của chủ đề đã xong cũng gặp cùng lỗi.
