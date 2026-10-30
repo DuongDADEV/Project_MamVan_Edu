@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Clock, CheckCircle2, Circle, ChevronRight, Eye, HelpCircle } from 'lucide-react';
+import { ClipboardList, Clock, CheckCircle2, Circle, ChevronRight, Eye } from 'lucide-react';
 import { Topic, Quiz, TEST_QUIZ_KINDS } from '../types.ts';
 import { getStudentAssignments } from '../services/api/biClient.ts';
 import { formatScore } from '../utils/scoreFormat.ts';
@@ -265,19 +265,20 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
               </span>
               <span className="flex-1 min-w-0">
                 <span className="block font-bold text-[#2F3E6B] truncate">{item.title}</span>
-                <span className="block text-xs text-[#8C7E6A] mt-0.5">
-                  {item.topicName}
-                  {' • '}
-                  <HelpCircle className="inline w-3.5 h-3.5 -mt-0.5" />
-                  {` ${item.questionCount} câu`}
+                <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[#8C7E6A]">
+                  <span>{item.topicName}</span>
+                  <span className="inline-flex items-center rounded-full bg-orange-200 px-2 py-0.5 font-bold text-orange-900">
+                    {item.questionCount} câu
+                  </span>
                   {item.isTimed && item.timeLimitMinutes ? (
-                    <>
-                      {' • '}
-                      <Clock className="inline w-3.5 h-3.5 -mt-0.5" />
-                      {` ${item.timeLimitMinutes} phút`}
-                    </>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-600">
+                      <Clock className="w-3.5 h-3.5" />
+                      {item.timeLimitMinutes} phút
+                    </span>
                   ) : null}
-                  {item.source === 'quiz' ? ` • ${(item as Extract<ListItem, { source: 'quiz' }>).kindLabel}` : ''}
+                  {item.source === 'quiz' ? (
+                    <span>{(item as Extract<ListItem, { source: 'quiz' }>).kindLabel}</span>
+                  ) : null}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-[#8C7E6A] mt-0.5">
                   <Clock className="w-3.5 h-3.5" /> {fmtDue(item.dueMs)}
