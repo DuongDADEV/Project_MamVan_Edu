@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Toast học sinh: căn giữa theo vùng nội dung thay vì cả cửa sổ
+
+- Giáo viên báo (30/10, kèm 2 ảnh): toast "Em đã hoàn thành bài!" và "Hoàn thành toàn bộ chủ đề..." đang nằm giữa cả màn hình, cần sang phải 1 tý để nằm giữa màn hình đề bài.
+- Nguyên nhân: toast học sinh ở App.tsx dùng `fixed left-1/2 -translate-x-1/2` nên căn giữa theo viewport; trên desktop có sidebar trái nên tâm viewport lệch trái so với tâm vùng nội dung.
+- Sửa: giữ nguyên giữa màn hình trên mobile (không có sidebar); trên desktop đẩy left thêm nửa chiều rộng sidebar — md (sidebar 256px) thành `left: calc(50% + 128px)`, lg (sidebar 288px) thành `left: calc(50% + 144px)` — để toast nằm chính giữa vùng nội dung bên phải menu. Áp dụng cho mọi toast học sinh (cả 2 loại trong ảnh đều dùng chung chỗ này).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Popup chi tiết: đồng nhất màu dòng trắc nghiệm + bỏ "lần nộp" ở tiêu đề Bài kiểm tra
 
 - Giáo viên báo (30/10): màu câu đã làm ở popup Bài kiểm tra vs popup chủ đề chưa đồng nhất (bên Bài kiểm tra bôi xanh/đỏ cả dòng), và xóa chữ "lần nộp" ở tiêu đề đã gạch đỏ.

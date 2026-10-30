@@ -1487,7 +1487,7 @@ export default function App() {
 
       {/* TOAST THÔNG BÁO NHẸ NHÀNG */}
       {toastMessage && (
-        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#8B5CF6] text-white text-xs sm:text-sm font-bold shadow-xl shadow-indigo-500/25 border border-indigo-300/30 animate-[slideUp_0.2s_ease] backdrop-blur-md">
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 md:left-[calc(50%+128px)] lg:left-[calc(50%+144px)] -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#8B5CF6] text-white text-xs sm:text-sm font-bold shadow-xl shadow-indigo-500/25 border border-indigo-300/30 animate-[slideUp_0.2s_ease] backdrop-blur-md">
           {toastMessage}
         </div>
       )}
