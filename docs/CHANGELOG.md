@@ -1,3 +1,9 @@
+## [dev] 2026-10-30 — Sửa thông báo đỏ khi upload video lỗi (hết nhắc Supabase, hết hiểu lầm 5MB)
+
+- Thông báo đỏ cũ ghép 2 phần gây hiểu lầm: lỗi dự phòng "quá giới hạn 5MB" + hậu tố "Gói miễn phí Supabase giới hạn ~50MB/file" — đều là chữ từ thời upload lên Supabase, trong khi từ GĐ3 upload đã đi qua API VPS (giới hạn 500MB/file). Học sinh/giáo viên đọc vào tưởng 5MB (hoặc 50MB) là giới hạn chung, dù file 8.9MB hoàn toàn hợp lệ.
+- Nay: thông báo dự phòng nói rõ nguyên nhân thật — "Không tải được file lên máy chủ, mà chế độ lưu dự phòng chỉ nhận file tới 5MB. Hãy kiểm tra mạng, đăng nhập lại rồi thử tải lại, hoặc nén file nhỏ hơn." Hậu tố trong trình soạn video đổi thành "Máy chủ cho phép tới 500MB/file. Có thể dán đường dẫn video thay thế." Đồng thời dọn các chữ Supabase còn sót trong trình soạn video (ghi chú, log lỗi) và trình soạn lý thuyết. Chỉ đổi chữ, không đổi hành vi upload hay mức cap nào.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Gộp thông báo theo chủ đề: 1 chủ đề cập nhật chỉ còn 1 thông báo
 
 - Trước đây thông báo học sinh suy ra từ từng mục đã xuất bản nên cô đăng 1 chủ đề gồm video + 2 bài luyện tập là học sinh nhận 3 thông báo cùng tên chủ đề (ảnh báo cáo: 3 dòng "Bài 1: Ca dao tục ngữ · 25 phút trước"). Nay các mục cùng chủ đề (video/lý thuyết/bài tập, từ 2 mục trở lên) gộp thành 1 thông báo duy nhất: nhãn "Chủ đề mới cập nhật", tiêu đề là tên chủ đề, dòng phụ ghi số nội dung mới (vd "3 nội dung mới"), bấm vào mở tab Học bài đúng chủ đề đó.

@@ -140,7 +140,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     setSaveError(null);
   }, [video.id]);
 
-  // Tải file video lên Supabase Storage (lưu vĩnh viễn, không mất khi tải lại trang)
+  // Tải file video lên máy chủ (lưu vĩnh viễn, không mất khi tải lại trang)
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,10 +177,10 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
         setTitle(file.name.replace(/\.[^/.]+$/, ''));
       }
     } catch (err: any) {
-      console.error('Lỗi tải video lên Supabase:', err);
+      console.error('Lỗi tải video lên máy chủ:', err);
       setUploadError(
         (err?.message || 'Không tải được video lên.') +
-          ' (Gói miễn phí Supabase giới hạn ~50MB/file. Có thể dán đường dẫn video thay thế.)'
+          ' (Máy chủ cho phép tới 500MB/file. Có thể dán đường dẫn video thay thế.)'
       );
     } finally {
       clearInterval(interval);

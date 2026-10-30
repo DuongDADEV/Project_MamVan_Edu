@@ -19,10 +19,12 @@ const MAX_DATAURL_BYTES = 5 * 1024 * 1024;
 function fileToDataUrl(file: File): Promise<string> {
   // DataURL dự phòng bị giới hạn 5MB: file lớn hơn sẽ phình localStorage
   // và làm trình duyệt treo — thà báo lỗi rõ ràng để GV dùng file nhỏ hơn.
+  // Thông báo phải nói rõ nguyên nhân thật (tải lên máy chủ thất bại) chứ
+  // không để người đọc tưởng 5MB là giới hạn chung của hệ thống.
   if (file.size > MAX_DATAURL_BYTES) {
     return Promise.reject(
       new Error(
-        `File "${file.name}" nặng ${(file.size / 1024 / 1024).toFixed(1)}MB — quá giới hạn 5MB cho chế độ lưu dự phòng. Hãy nén/giảm dung lượng hoặc kiểm tra kết nối kho lưu trữ.`
+        `Không tải được file "${file.name}" (${(file.size / 1024 / 1024).toFixed(1)}MB) lên máy chủ, mà chế độ lưu dự phòng chỉ nhận file tới 5MB. Hãy kiểm tra mạng, đăng nhập lại rồi thử tải lại, hoặc nén file nhỏ hơn.`
       )
     );
   }

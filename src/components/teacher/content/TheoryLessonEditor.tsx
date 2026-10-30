@@ -158,7 +158,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
 
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
 
-  // Tải file ảnh / sơ đồ từ máy tính lên Supabase Storage
+  // Tải file ảnh / sơ đồ từ máy tính lên máy chủ
   const handleImageFileUpload = async (blockId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
