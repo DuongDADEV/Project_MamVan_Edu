@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Trình soạn Lý thuyết: bỏ phân loại, chọn chủ đề, bài tập liên kết
+
+- Giáo viên chốt (30/10, kèm 2 ảnh): cả lý thuyết cũng bỏ 3 mục — (1) phân loại vì lý thuyết ở đây là lý thuyết chi tiết, phần lý thuyết sau video đã cấu hình ngay chỗ tạo video rồi; (2) lọc chọn chủ đề vì tạo ở chủ đề nào là chủ đề đó rồi; (3) 2 bài đi kèm ở dưới vì đã có nút [Thêm bài] ở trên. Riêng phần Tiêu đề + Thời gian đọc tối thiểu giữ nguyên theo ý giáo viên chốt sau đó.
+- Trình soạn Lý thuyết bỏ: ô "Phân loại lý thuyết" (nút Lý thuyết chung chi tiết / Tóm tắt sau video), ô "Thuộc chủ đề nào?", và mục 3 "Bài tập thực hành sau khi đọc lý thuyết" (2 ô Bài luyện tập sau lý thuyết / Bài kiểm tra lý thuyết + nút "+ Tạo mới") cùng state, payload và prop quizzes/onCreateLinkedQuiz đi kèm. Vì cả 2 trình soạn đều không dùng nữa nên hàm tạo quiz liên kết ở màn cha cũng xóa luôn.
+- Giữ lại đúng như giáo viên chốt: Tiêu đề bài lý thuyết + Thời gian đọc tối thiểu (kèm nút Tự ước tính). Dữ liệu cũ không xóa: kind/topicId vẫn lưu theo bài (bài mới mặc định lý thuyết chung chi tiết), bài liên kết cũ vẫn nằm trong DB.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Trình soạn Video: bỏ mục "Liên kết bài đi kèm"
 
 - Giáo viên chốt (30/10): chỉ bỏ phần liên kết dưới trong trình soạn Video, giữ nút "+ Thêm bài" trên dải luồng.

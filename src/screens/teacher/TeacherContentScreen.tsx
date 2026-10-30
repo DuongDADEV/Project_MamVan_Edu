@@ -584,63 +584,6 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
     }
   };
 
-  // Tạo liên kết quiz từ editor video hoặc lý thuyết:
-  // quiz thuộc CHỦ ĐỀ của bài đang sửa (không phải chủ đề đầu tiên) và
-  // id của nó được GHI NGƯỢC vào trường liên kết của bài gốc,
-  // nếu không luồng học của học sinh sẽ không bao giờ chạy tới quiz này.
-  const handleCreateLinkedQuiz = async (kind: 'practice' | 'quick' | 'mastery') => {
-    const sourceVideo =
-      selectedItem?.type === 'video' ? videos.find((v) => v.id === selectedItem.id) : null;
-    const sourceTheory =
-      selectedItem?.type === 'theory' ? theories.find((th) => th.id === selectedItem.id) : null;
-    const source = sourceVideo || sourceTheory;
-    const targetTopicId = source?.topicId || topics[0]?.id || 'topic_tho_bon_nam';
-    const newQuiz = await quizService.saveQuiz({
-      title: `${kind === 'practice' ? 'Luyện tập' : kind === 'quick' ? 'Kiểm tra nhanh' : 'Mastery Check'} mới`,
-      kind,
-      topicId: targetTopicId,
-      timeLimitMinutes: kind === 'quick' ? 7 : kind === 'mastery' ? 15 : undefined,
-      xp: kind === 'mastery' ? 20 : 10,
-      questionIds: [],
-      status: 'draft',
-      class_ids: ['all', 'class_7a2'],
-    });
-
-    try {
-      // Chỉ ghi đúng trường liên kết — KHÔNG spread nguyên bài gốc từ state
-      // cha (26/10: state cha có thể còn bản cũ, spread sẽ ghi đè nội dung
-      // mới soạn trong editor chưa kịp lưu; merge trong repo giữ lại mọi
-      // trường còn lại từ bản đã lưu).
-      if (sourceVideo) {
-        const field =
-          kind === 'practice'
-            ? 'practiceQuizId'
-            : kind === 'quick'
-              ? 'quickTestId'
-              : 'masteryCheckId';
-        await contentService.saveVideoLesson({ id: sourceVideo.id, [field]: newQuiz.id } as any);
-      } else if (sourceTheory) {
-        const field = kind === 'practice' ? 'practiceQuizId' : 'testQuizId';
-        await contentService.saveTheoryLesson({ id: sourceTheory.id, [field]: newQuiz.id } as any);
-      }
-    } catch (err) {
-      console.error('Lỗi ghi liên kết quiz vào bài gốc:', err);
-    }
-
-    // Bài liên kết mới chèn NGAY SAU bài gốc trong luồng học (quy tắc vị trí
-    // của chủ dự án) — trước đây nó chỉ hiện ở cuối nhờ thứ tự suy ra tạm.
-    try {
-      await placeInFlowOrder(targetTopicId, 'quiz', newQuiz.id);
-    } catch (err) {
-      console.error('Lỗi đặt bài liên kết vào luồng học:', err);
-    }
-
-    // Ghi nhớ bài gốc để nút Quay lại trong trình tạo bài tập trở về đúng bài đó
-    if (sourceVideo) setQuizReturnTo({ type: 'video', id: sourceVideo.id });
-    else if (sourceTheory) setQuizReturnTo({ type: 'theory', id: sourceTheory.id });
-    setSelectedItem({ type: 'quiz', id: newQuiz.id });
-  };
-
   // Mở modal tạo với AI (Mầm AI Studio style)
   const [aiInitialType, setAiInitialType] = useState<'video' | 'theory' | 'quiz'>('quiz');
   const handleOpenAiModal = (target: string) => {
@@ -1047,13 +990,11 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             key={currentTheory.id}
             theory={currentTheory}
             topics={topics}
-            quizzes={quizzes}
             onSave={async (updated) => {
               await contentService.saveTheoryLesson(updated);
             }}
             onPublish={handleOpenPublishModalForCurrent}
             onPreviewStudent={() => handlePreviewStudent('theory')}
-            onCreateLinkedQuiz={handleCreateLinkedQuiz}
             onBack={() => setSelectedItem({ type: 'topic', id: currentTheory.topicId })}
             toolbarCollapsed={toolbarCollapsed}
           />

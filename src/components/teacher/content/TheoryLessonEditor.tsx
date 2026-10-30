@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   TheoryLessonWithMeta,
   TopicWithMeta,
-  QuizWithMeta,
   TheoryBlock,
   TheoryBlockType,
 } from '../../../services/types.ts';
@@ -26,7 +25,6 @@ import {
   Save,
   UploadCloud,
   CheckCircle2,
-  FileQuestion,
   Copy,
   Layers,
   ListOrdered,
@@ -39,11 +37,9 @@ import { initialBlocksFor, theorySectionsFromBlocks } from '../../../logic/theor
 interface TheoryLessonEditorProps {
   theory: TheoryLessonWithMeta;
   topics: TopicWithMeta[];
-  quizzes: QuizWithMeta[];
   onSave: (updated: Partial<TheoryLessonWithMeta>) => Promise<void>;
   onPublish: () => void;
   onPreviewStudent: () => void;
-  onCreateLinkedQuiz: (kind: 'practice' | 'quick' | 'mastery') => void;
   onBack?: () => void;
   /** Thu gọn thanh công cụ (nút 2/3 trên dải luồng) */
   toolbarCollapsed?: boolean;
@@ -52,11 +48,9 @@ interface TheoryLessonEditorProps {
 export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   theory,
   topics,
-  quizzes,
   onSave,
   onPublish,
   onPreviewStudent,
-  onCreateLinkedQuiz,
   onBack,
   toolbarCollapsed,
 }) => {
@@ -66,9 +60,6 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
     theory.kind || 'general_topic'
   );
   const [minReadSeconds, setMinReadSeconds] = useState<number>(theory.minReadSeconds || 25);
-  const [practiceQuizId, setPracticeQuizId] = useState(theory.practiceQuizId || '');
-  const [testQuizId, setTestQuizId] = useState(theory.testQuizId || '');
-  const [test2QuizId, setTest2QuizId] = useState(theory.test2QuizId || '');
 
   // Khối nội dung trong block-editor — khởi tạo từ bài đang mở (blocks đã
   // lưu > convert từ sections cũ > mẫu mặc định, xem logic/theoryDraft.ts).
@@ -88,9 +79,6 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
     kind: theory.kind || 'general_topic',
     minReadSeconds: theory.minReadSeconds || 25,
     blocks,
-    practiceQuizId: theory.practiceQuizId || '',
-    testQuizId: theory.testQuizId || '',
-    test2QuizId: theory.test2QuizId || '',
   });
   const savedJsonRef = useRef<string>(JSON.stringify(draftRef.current));
   const savingRef = useRef(false);
@@ -101,9 +89,6 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
     setTopicId(theory.topicId || topics[0]?.id || '');
     setKind(theory.kind || 'general_topic');
     setMinReadSeconds(theory.minReadSeconds || 25);
-    setPracticeQuizId(theory.practiceQuizId || '');
-    setTestQuizId(theory.testQuizId || '');
-    setTest2QuizId(theory.test2QuizId || '');
     setBlocks(b);
     draftRef.current = {
       title: theory.title || '',
@@ -111,10 +96,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
       kind: theory.kind || 'general_topic',
       minReadSeconds: theory.minReadSeconds || 25,
       blocks: b,
-      practiceQuizId: theory.practiceQuizId || '',
-      testQuizId: theory.testQuizId || '',
-      test2QuizId: theory.test2QuizId || '',
-    };
+          };
     savedJsonRef.current = JSON.stringify(draftRef.current);
     setSaveError(null);
   }, [theory.id]);
@@ -234,9 +216,6 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
       minReadSeconds: d.minReadSeconds,
       blocks: d.blocks,
       sections: sections.length > 0 ? sections : theoryRef.current.sections,
-      practiceQuizId: d.practiceQuizId,
-      testQuizId: d.testQuizId,
-      test2QuizId: d.test2QuizId,
     };
   };
 
@@ -273,14 +252,14 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
 
   // Đồng bộ ref theo state + hẹn tự lưu sau 2s không gõ nữa
   useEffect(() => {
-    draftRef.current = { title, topicId, kind, minReadSeconds, blocks, practiceQuizId, testQuizId, test2QuizId };
+    draftRef.current = { title, topicId, kind, minReadSeconds, blocks };
     const t = setTimeout(() => {
       if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
         void saveDraft(draftRef.current, true);
       }
     }, 2000);
     return () => clearTimeout(t);
-  }, [title, topicId, kind, minReadSeconds, blocks, practiceQuizId, testQuizId, test2QuizId]);
+  }, [title, topicId, kind, minReadSeconds, blocks]);
 
   // Rời trình soạn: đẩy nốt phần chưa lưu (im lặng, không setState sau unmount)
   useEffect(() => {
@@ -290,8 +269,6 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
       }
     };
   }, []);
-
-  const topicQuizzes = quizzes.filter((q) => !topicId || q.topicId === topicId);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 max-w-full bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
@@ -381,57 +358,8 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 flex flex-col lg:flex-row gap-6 min-w-0 max-w-full">
         {/* Left / Center: Main Form & Blocks */}
         <div className="flex-1 min-w-0 max-w-full space-y-6">
-          {/* 1. Loại lý thuyết & Thông tin chung */}
+          {/* 1. Thông tin chung */}
           <div className="p-4 rounded-3xl bg-[#FAF5EB]/60 border border-[#E6DCC8] space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5">
-                  Phân loại lý thuyết
-                </label>
-                <div className="flex items-center p-1 bg-white rounded-2xl border border-[#E6DCC8]">
-                  <button
-                    type="button"
-                    onClick={() => setKind('general_topic')}
-                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all ${
-                      kind === 'general_topic'
-                        ? 'bg-[#2F3E6B] text-white shadow-xs'
-                        : 'text-[#8C7E6A] hover:text-[#2F3E6B]'
-                    }`}
-                  >
-                    Lý thuyết chung chi tiết
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setKind('summary_post_video')}
-                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all ${
-                      kind === 'summary_post_video'
-                        ? 'bg-[#2F3E6B] text-white shadow-xs'
-                        : 'text-[#8C7E6A] hover:text-[#2F3E6B]'
-                    }`}
-                  >
-                    Tóm tắt sau video
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5">
-                  Thuộc chủ đề nào?
-                </label>
-                <select
-                  value={topicId}
-                  onChange={(e) => setTopicId(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-2xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B]"
-                >
-                  {topics.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title} ({t.tag})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-[#2F3E6B] mb-1">
@@ -843,65 +771,6 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
             </div>
           </div>
 
-          {/* 3. LIÊN KẾT BÀI TẬP */}
-          <div className="space-y-3 pt-3 border-t border-[#E6DCC8] min-w-0 max-w-full">
-            <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
-              <FileQuestion className="w-3.5 h-3.5 text-[#4F46E5]" />
-              <span>Bài tập thực hành sau khi đọc lý thuyết</span>
-            </h4>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0 max-w-full">
-              <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#2F3E6B]">Bài luyện tập sau lý thuyết</span>
-                  <button
-                    type="button"
-                    onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('practice'); }}
-                    className="text-[10px] text-[#E2704A] hover:underline font-bold"
-                  >
-                    + Tạo mới
-                  </button>
-                </div>
-                <select
-                  value={practiceQuizId}
-                  onChange={(e) => setPracticeQuizId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-                >
-                  <option value="">-- Chưa gắn bài --</option>
-                  {topicQuizzes.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#2F3E6B]">Bài kiểm tra lý thuyết</span>
-                  <button
-                    type="button"
-                    onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('quick'); }}
-                    className="text-[10px] text-[#E2704A] hover:underline font-bold"
-                  >
-                    + Tạo mới
-                  </button>
-                </div>
-                <select
-                  value={testQuizId}
-                  onChange={(e) => setTestQuizId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-                >
-                  <option value="">-- Chưa gắn bài --</option>
-                  {topicQuizzes.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Right Sidebar: Auto-generated Table of Contents & Info */}
