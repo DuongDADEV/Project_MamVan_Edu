@@ -1034,13 +1034,11 @@ export const TeacherContentScreen: React.FC<TeacherContentScreenProps> = ({
             key={currentVideo.id}
             video={currentVideo}
             topics={topics}
-            quizzes={quizzes}
             onSave={async (updated) => {
               await contentService.saveVideoLesson(updated);
             }}
             onPublish={handleOpenPublishModalForCurrent}
             onPreviewStudent={() => handlePreviewStudent('video')}
-            onCreateLinkedQuiz={handleCreateLinkedQuiz}
             onBack={() => setSelectedItem({ type: 'topic', id: currentVideo.topicId })}
             toolbarCollapsed={toolbarCollapsed}
           />

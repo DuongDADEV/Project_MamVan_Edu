@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   VideoLessonWithMeta,
   TopicWithMeta,
-  QuizWithMeta,
   VideoFocusPoint,
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
@@ -22,7 +21,6 @@ import {
   CheckCircle2,
   Sparkles,
   ArrowRight,
-  FileQuestion,
   Layers,
   ArrowUp,
   ArrowDown,
@@ -32,11 +30,9 @@ import { uploadLessonMedia } from '../../../services/api/storageClient.ts';
 interface VideoLessonEditorProps {
   video: VideoLessonWithMeta;
   topics: TopicWithMeta[];
-  quizzes: QuizWithMeta[];
   onSave: (updated: Partial<VideoLessonWithMeta>) => Promise<void>;
   onPublish: () => void;
   onPreviewStudent: () => void;
-  onCreateLinkedQuiz: (kind: 'practice' | 'quick' | 'mastery') => void;
   onBack?: () => void;
   /** Thu gọn thanh công cụ (nút 2/3 trên dải luồng) */
   toolbarCollapsed?: boolean;
@@ -45,11 +41,9 @@ interface VideoLessonEditorProps {
 export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   video,
   topics,
-  quizzes,
   onSave,
   onPublish,
   onPreviewStudent,
-  onCreateLinkedQuiz,
   onBack,
   toolbarCollapsed,
 }) => {
@@ -64,9 +58,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
       ? video.summaryPoints
       : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
   );
-  const [practiceQuizId, setPracticeQuizId] = useState(video.practiceQuizId || '');
-  const [quickTestId, setQuickTestId] = useState(video.quickTestId || '');
-  const [masteryCheckId, setMasteryCheckId] = useState(video.masteryCheckId || '');
 
   // Giả lập tiến độ tải video lên
   const [isUploading, setIsUploading] = useState(false);
@@ -90,9 +81,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
       ? video.summaryPoints
       : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
-    practiceQuizId: video.practiceQuizId || '',
-    quickTestId: video.quickTestId || '',
-    masteryCheckId: video.masteryCheckId || '',
   });
   const savedJsonRef = useRef<string>(JSON.stringify(draftRef.current));
   const savingRef = useRef(false);
@@ -114,9 +102,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
         ? video.summaryPoints
         : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
     );
-    setPracticeQuizId(video.practiceQuizId || '');
-    setQuickTestId(video.quickTestId || '');
-    setMasteryCheckId(video.masteryCheckId || '');
     setIsUploading(false);
     setUploadProgress(0);
     draftRef.current = {
@@ -128,10 +113,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
         summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
         ? video.summaryPoints
         : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
-      practiceQuizId: video.practiceQuizId || '',
-      quickTestId: video.quickTestId || '',
-      masteryCheckId: video.masteryCheckId || '',
-    };
+          };
     savedJsonRef.current = JSON.stringify(draftRef.current);
     setSaveError(null);
   }, [video.id]);
@@ -228,9 +210,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     durationSec: d.durationSec,
     sampleUrl: d.sampleUrl.trim(),
     summaryPoints: d.summaryPoints,
-    practiceQuizId: d.practiceQuizId,
-    quickTestId: d.quickTestId,
-    masteryCheckId: d.masteryCheckId,
   });
 
   const saveDraft = async (d: typeof draftRef.current, silent: boolean) => {
@@ -266,14 +245,14 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
   // Đồng bộ ref theo state + hẹn tự lưu sau 2s không gõ nữa
   useEffect(() => {
-    draftRef.current = { title, description, topicId, durationSec, sampleUrl, summaryPoints, practiceQuizId, quickTestId, masteryCheckId };
+    draftRef.current = { title, description, topicId, durationSec, sampleUrl, summaryPoints };
     const t = setTimeout(() => {
       if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
         void saveDraft(draftRef.current, true);
       }
     }, 2000);
     return () => clearTimeout(t);
-  }, [title, description, topicId, durationSec, sampleUrl, summaryPoints, practiceQuizId, quickTestId, masteryCheckId]);
+  }, [title, description, topicId, durationSec, sampleUrl, summaryPoints]);
 
   // Rời trình soạn: đẩy nốt phần chưa lưu (im lặng, không setState sau unmount)
   useEffect(() => {
@@ -288,9 +267,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   const isDurationOver20Mins = durationSec >= 1200;
   const durationMinutes = Math.floor(durationSec / 60);
   const durationRemainingSec = durationSec % 60;
-
-  // Lọc quiz theo chủ đề hiện tại
-  const topicQuizzes = quizzes.filter((q) => !topicId || q.topicId === topicId);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#FFFDF8] rounded-2xl md:rounded-l-none overflow-y-auto overflow-x-hidden shadow-xs">
@@ -612,98 +588,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
           </div>
         </div>
 
-        {/* 4. LIÊN KẾT BÀI ĐI KÈM */}
-        <div className="space-y-3 pt-3 border-t border-[#E6DCC8]">
-          <div>
-            <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
-              <FileQuestion className="w-3.5 h-3.5 text-[#4F46E5]" />
-              <span>Liên kết bài đi kèm video này</span>
-            </h4>
-            <p className="text-[11px] text-[#8C7E6A] mt-0.5">
-              Học sinh sau khi xem video và đọc tóm tắt sẽ lần lượt làm Bài luyện tập → Kiểm tra 1 → Kiểm tra 2
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Luyện tập */}
-            <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#2F3E6B]">Bài luyện tập</span>
-                <button
-                  type="button"
-                  onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('practice'); }}
-                  className="text-[10px] text-[#E2704A] hover:underline font-bold"
-                >
-                  + Tạo mới
-                </button>
-              </div>
-              <select
-                value={practiceQuizId}
-                onChange={(e) => setPracticeQuizId(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-              >
-                <option value="">-- Chưa gắn bài --</option>
-                {topicQuizzes.map((q) => (
-                  <option key={q.id} value={q.id}>
-                    {q.title} ({q.questionIds.length} câu)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Kiểm tra 1 */}
-            <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#2F3E6B]">Kiểm tra 1 (Nhanh)</span>
-                <button
-                  type="button"
-                  onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('quick'); }}
-                  className="text-[10px] text-[#E2704A] hover:underline font-bold"
-                >
-                  + Tạo mới
-                </button>
-              </div>
-              <select
-                value={quickTestId}
-                onChange={(e) => setQuickTestId(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-              >
-                <option value="">-- Chưa gắn bài --</option>
-                {topicQuizzes.map((q) => (
-                  <option key={q.id} value={q.id}>
-                    {q.title} ({q.questionIds.length} câu)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Kiểm tra 2 (Mastery Check) */}
-            <div className="p-3.5 rounded-2xl bg-white border border-[#E6DCC8] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#2F3E6B]">Kiểm tra 2 (Mastery)</span>
-                <button
-                  type="button"
-                  onClick={async () => { await handleSaveDraft(); onCreateLinkedQuiz('mastery'); }}
-                  className="text-[10px] text-[#E2704A] hover:underline font-bold"
-                >
-                  + Tạo mới
-                </button>
-              </div>
-              <select
-                value={masteryCheckId}
-                onChange={(e) => setMasteryCheckId(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-              >
-                <option value="">-- Chưa gắn bài --</option>
-                {topicQuizzes.map((q) => (
-                  <option key={q.id} value={q.id}>
-                    {q.title} ({q.questionIds.length} câu)
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

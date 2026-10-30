@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Trình soạn Video: bỏ mục "Liên kết bài đi kèm"
+
+- Giáo viên chốt (30/10): chỉ bỏ phần liên kết dưới trong trình soạn Video, giữ nút "+ Thêm bài" trên dải luồng.
+- Trình soạn Video bỏ hẳn mục 4 "Liên kết bài đi kèm video này" (3 ô chọn Bài luyện tập / Kiểm tra 1 (Nhanh) / Kiểm tra 2 (Mastery) kèm nút "+ Tạo mới") cùng state, payload lưu và prop quizzes/onCreateLinkedQuiz đi kèm (prop này bên trình soạn Lý thuyết vẫn dùng nên hàm tạo quiz liên kết ở màn cha vẫn giữ). Bài tập giờ chỉ thêm qua dải luồng bằng nút "+ Thêm bài" như trước.
+- Lưu ý: dữ liệu liên kết cũ của video (practiceQuizId/quickTestId/masteryCheckId) không xóa khỏi DB; phía học sinh (VideoCard) vẫn dùng chúng làm gợi ý bài đi kèm nếu có, còn không thì tự lấy quiz cùng chủ đề theo loại — nên video cũ không mất bài đi kèm, chỉ là giáo viên không gắn/đổi được từ trình soạn Video nữa.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Trình soạn Video: bỏ chọn chủ đề + bỏ "chủ đề nhỏ"
 
 - Giáo viên báo (30/10, kèm 2 ảnh): bỏ 2 mục bên Giáo viên — ô chọn chủ đề thì video tự gắn theo chủ đề đang tạo rồi (không phải chọn nữa), còn dòng "Chủ đề: ..." hiện bên video nhỏ không có ý nghĩa.
