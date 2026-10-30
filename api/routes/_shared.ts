@@ -284,6 +284,12 @@ export function filterStateInput(body: any): Record<string, any> {
   for (const [key, col] of Object.entries(STATE_FIELD_MAP)) {
     if (body[key] === undefined) continue;
     const v = body[key];
+    // null cho current_progress nghĩa là xóa con trỏ (lưu SQL NULL) — khác
+    // với undefined (bị bỏ qua, giữ giá trị cũ) và {} (vẫn là object truthy).
+    if (col === 'current_progress' && v === null) {
+      out[col] = null;
+      continue;
+    }
     // 2026-10-28: client học sinh mới gửi last_attendance_date = '' khi
     // chưa điểm danh lần nào — MySQL STRICT mode từ chối '' cho cột DATE
     // (Error 1292) và vì handler PUT không có try/catch nên cả process

@@ -386,6 +386,7 @@ export interface StudentState {
   themePreference?: ThemeId;
   
   // Đang học dở (để nút "Học tiếp" dẫn đến đúng chỗ)
+  // null = đã xóa con trỏ (xong bài) — khác undefined (giữ giá trị cũ khi PUT).
   currentProgress?: {
     type: 'video' | 'theory' | 'quiz' | 'homework';
     topicId: string;
@@ -395,7 +396,7 @@ export interface StudentState {
     // làm thứ tự bước thay đổi — khôi phục ưu tiên theo khóa này)
     stepKey?: string;
     videoSeconds?: number;
-  };
+  } | null;
 
   // Giả lập thời gian cho Dev Panel
   devTimeMultiplier: number; // 1, 10, 60

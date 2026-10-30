@@ -106,8 +106,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return null;
   }, [liveVideos, activeTopics]);
 
-  const activeLesson = currentVideo || firstAvailableVideo;
-  const isResuming = !!currentVideo;
+  // Con trỏ ở bước 'complete' nghĩa là bài đã xong, không còn gì để tiếp tục —
+  // Trang chủ phải hiện "Bài học mới" thay vì "Đang dở" (phòng con trỏ kẹt).
+  const isAtCompleteStep = state.currentProgress?.stepKey === 'complete';
+  const activeLesson = currentVideo && !isAtCompleteStep ? currentVideo : firstAvailableVideo;
+  const isResuming = !!currentVideo && !isAtCompleteStep;
 
   // Lấy danh sách BTVN từ kho quizzes (loại homework)
   const homeworkQuizzes = (liveQuizzes || []).filter((q) => q.kind === 'homework');

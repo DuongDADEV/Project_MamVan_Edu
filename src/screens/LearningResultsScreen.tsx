@@ -205,7 +205,25 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
             .filter((q) => q.topicId === t.id)
             .map((q) => q.id)
         );
-        const topicEssays = essays.filter((e) => topicQuestionIds.has(e.questionId));
+        // Gộp theo câu: 1 học sinh + 1 câu chỉ có 1 phiếu (luật 409), nhưng phiếu
+        // cũ nộp trước luật có thể nhân đôi — hiển thị 1 khối/câu, ưu tiên phiếu
+        // đã chấm, cùng trạng thái thì giữ bản nộp đầu tiên.
+        const topicEssays = (() => {
+          const byQ = new Map<string, EssaySubmission>();
+          const rank = (s: EssaySubmission['status']) =>
+            s === 'GRADED' ? 3 : s === 'AI_SUGGESTED' ? 2 : 1;
+          for (const e of essays.filter((e) => topicQuestionIds.has(e.questionId))) {
+            const old = byQ.get(e.questionId);
+            if (
+              !old ||
+              rank(e.status) > rank(old.status) ||
+              (rank(e.status) === rank(old.status) && (e.submittedAt || 0) < (old.submittedAt || 0))
+            ) {
+              byQ.set(e.questionId, e);
+            }
+          }
+          return [...byQ.values()];
+        })();
         const graded = topicEssays.filter((e) => e.status === 'GRADED' && e.totalScore != null);
         const pending = topicEssays.filter((e) => e.status !== 'GRADED');
         const essayAvg =

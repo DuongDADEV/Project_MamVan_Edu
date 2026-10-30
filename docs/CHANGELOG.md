@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Sửa lỗi Trang chủ mãi báo "Đang dở" dù đã xong 100% + gộp phiếu tự luận trùng ở popup
+
+- Nguyên nhân "Đang dở": Trang chủ hiện "Đang dở" khi còn con trỏ học dở (currentProgress) trỏ vào 1 video, bất kể ở bước nào. Học sinh xong 100% chủ đề Ca dao (đủ 5 bước) nhưng con trỏ vẫn trỏ vào video ở đúng bước "complete": bước "Hoàn thành" chỉ đánh dấu xong luồng mà không xóa con trỏ, các handler khi tới bước hoàn thành còn đặt con trỏ vào bước complete, còn chỗ xóa duy nhất (handler quiz) dùng undefined nên khi PUT thì JSON lược bỏ mất, server giữ con trỏ cũ qua reload. Nên ấn "Học tiếp ngay" mở lại đúng video đó, xong 100% nữa, về Trang chủ vẫn "Đang dở".
+- Sửa: bước hoàn thành của màn video + màn lý thuyết xóa con trỏ bằng null (lưu được qua reload); handler quiz dùng null thay undefined; server lưu SQL NULL khi nhận null cho current_progress; Trang chủ coi con trỏ ở bước complete là không còn gì để tiếp tục (phòng con trỏ kẹt). Kèm dọn dữ liệu: xóa con trỏ kẹt của 3 học sinh Ca dao qua API (bước học đã xong không đụng vào).
+- Popup chủ đề: phần Tự luận trước đây vẽ 1 khối cho mỗi phiếu essay_submissions nên phiếu nộp trùng trước luật 1 lần (chiều 29/10, Phúc 2 phiếu, Quân 3 phiếu) hiện thành 2-3 khối giống hệt nhau. Nay gộp theo câu hỏi (1 khối/câu, ưu tiên phiếu đã chấm, cùng trạng thái giữ bản nộp đầu tiên) + dọn dữ liệu: xóa 3 phiếu thừa, giữ bản nộp đầu tiên mỗi bạn. Luật 1 lần (409) vẫn chặn phiếu mới từ tối 29/10.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Sửa lỗi lá đã thu hoạch hiện lại sau khi tải lại trang
 
 - Nguyên nhân thật: lúc tải lại trang, useLiveQuery trả null trong khi chờ dữ liệu nên danh sách quiz tạm thành rỗng — tiến độ chủ đề tính thiếu các mục quiz nên tụt dưới 100% trong chớp mắt. Effect dọn dẹp của đợt thu hoạch đã chạy đúng lúc đó và xóa nhầm dấu thu hoạch khỏi localStorage, khiến lá hiện lại vĩnh viễn.

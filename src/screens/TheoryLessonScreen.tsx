@@ -308,13 +308,17 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
         ...prev,
         ...finalUpdated,
         flaggedNeedReviewTopicIds: updatedFlagged,
-        currentProgress: {
-          type: 'theory',
-          topicId: theory.topicId,
-          itemId: theoryId,
-          stepIndex: currentStepIndex + 1,
-          stepKey: dynamicSteps[currentStepIndex + 1]?.key,
-        },
+        // Tới bước hoàn thành thì xóa con trỏ (null để PUT lưu được qua reload),
+        // không thì Trang chủ mãi báo "Đang dở" như màn video.
+        currentProgress: landsOnComplete
+          ? null
+          : {
+              type: 'theory',
+              topicId: theory.topicId,
+              itemId: theoryId,
+              stepIndex: currentStepIndex + 1,
+              stepKey: dynamicSteps[currentStepIndex + 1]?.key,
+            },
       };
     });
     setCurrentStepIndex((prev) => Math.min(prev + 1, dynamicSteps.length - 1));
@@ -400,7 +404,7 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
       questionResults: [...results, ...state.questionResults],
       essaySubmissions: essays ? [...essays, ...(state.essaySubmissions || [])] : state.essaySubmissions,
       currentProgress: isNextComplete
-        ? undefined
+        ? null
         : {
             type: 'theory',
             topicId: theory.topicId,

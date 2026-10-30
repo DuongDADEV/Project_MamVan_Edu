@@ -333,6 +333,10 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       onUpdateState((prev) => ({
         ...prev,
         ...markStepCompleted(prev, `video_flow_completed:${videoId}`),
+        // Tới bước hoàn thành thì xóa con trỏ (null để PUT lưu được qua reload).
+        // Trước đây con trỏ vẫn trỏ vào video ở bước complete nên Trang chủ
+        // mãi báo "Đang dở" dù học sinh đã xong 100%.
+        currentProgress: null,
       }));
     }
   }, [currentStep?.key, videoId]);
@@ -472,7 +476,9 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       nextState = {
         ...nextState,
         ...recBonus,
-        currentProgress: undefined,
+        // null (không phải undefined) để PUT lưu được qua reload — undefined
+        // bị JSON lược bỏ nên server giữ con trỏ cũ.
+        currentProgress: null,
       };
     } else {
       nextState.currentProgress = {
