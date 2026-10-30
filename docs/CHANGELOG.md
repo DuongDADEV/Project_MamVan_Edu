@@ -1,3 +1,9 @@
+## [dev] 2026-10-30 — Thẻ Kết quả: bỏ đếm "số lần làm", chỉ giữ "Gần nhất"
+
+- Giáo viên báo (30/10): mới học 1 lượt luồng nhưng thẻ ghi "Lịch sử: 2 lần làm" — vì luồng có 2 bài tập sau lý thuyết, mỗi bài gom thành 1 đợt theo mốc thời gian nên đếm thành 2. Con số này không có ý nghĩa nên bỏ luôn.
+- Đổi: dòng lịch sử ở thẻ chủ đề nay chỉ còn "Gần nhất <ngày giờ>" khi đã từng làm; chưa làm thì không hiện dòng này nữa. Không đổi gì khác (số lần nộp ở popup Bài kiểm tra vẫn giữ, vì mỗi lần nộp bài giao đúng là 1 lần thật).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Thẻ Kết quả: chip trạng thái 4 mức thay chip mức độ cũ
 
 - Giáo viên báo (30/10): chủ đề "Bài 3: Lý thuyết nhân vật truyện" học 100% ở màn Học bài nhưng thẻ Kết quả vẫn hiện "Chưa học".

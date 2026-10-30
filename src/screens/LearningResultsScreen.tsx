@@ -194,7 +194,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
     };
   }, [results]);
 
-  // Điểm mới theo từng chủ đề: trắc nghiệm + tự luận + lịch sử lần làm.
+  // Điểm mới theo từng chủ đề: trắc nghiệm + tự luận + thời gian gần nhất.
   const topicRows = useMemo(
     () =>
       topics.map((t) => {
@@ -593,7 +593,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
         </div>
       </div>
 
-      {/* Điểm theo chủ đề: trắc nghiệm + tự luận + lịch sử lần làm */}
+      {/* Điểm theo chủ đề: trắc nghiệm + tự luận + thời gian gần nhất */}
       <div className="bg-white rounded-2xl border border-[#E8DFD1] shadow-xs p-5 space-y-4">
         <h3 className="font-lora font-bold text-base text-[#1E1B4B]">Điểm theo từng chủ đề</h3>
         {topicRows.length === 0 ? (
@@ -657,10 +657,11 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                         <span className="text-slate-400 italic">chưa nộp bài tự luận nào</span>
                       )}
                     </p>
-                    <p className="text-xs text-slate-500">
-                      Lịch sử: {row.batches.length} lần làm
-                      {lastBatch ? ` • Gần nhất ${fmtDateTime(lastBatch.start)}` : ''}
-                    </p>
+                    {lastBatch && (
+                      <p className="text-xs text-slate-500">
+                        Gần nhất {fmtDateTime(lastBatch.start)}
+                      </p>
+                    )}
                   </div>
                   <div className="mt-3">
                     <button
