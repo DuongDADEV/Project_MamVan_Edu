@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Trang chủ chỉ gợi ý chủ đề tiếp theo cần hoàn thành (bỏ qua chủ đề đã xong 100%)
+
+- Lỗi: thẻ "Bài học đề xuất" trên trang chủ lấy video của chủ đề ĐẦU TIÊN có video trong danh sách, không kiểm tra tiến độ — nên học sinh đã xong 100% Ca dao vẫn bị gợi ý Ca dao thay vì Văn nghị luận (chủ đề tiếp theo chưa xong). Con trỏ "Đang dở" cũ trỏ vào video của chủ đề đã xong cũng gặp cùng lỗi.
+- Nay: gợi ý chỉ chọn chủ đề CHƯA hoàn thành (đúng định nghĩa `isTopicFullyComplete` — cùng chuẩn với badge "Đã hoàn thành" ở màn Học bài và màu lá): duyệt chủ đề theo thứ tự, bỏ qua chủ đề đã xong 100%, lấy video đầu tiên của chủ đề chưa xong đầu tiên — tức luôn chỉ 1 chủ đề tiếp theo cần hoàn thành. Con trỏ cũ vào chủ đề đã xong cũng bị chặn, rơi về gợi ý đó. Hết chủ đề cần hoàn thành thì thẻ hiện "Khám phá bài học mới" (về tab Học bài) thay vì gợi ý 1 chủ đề đã xong. Chưa đủ dữ liệu quiz/câu hỏi thì thẻ để trống thay vì gợi ý sai rồi mới sửa.
+- Kiểm chứng bằng dữ liệu thật từ server (topics/quizzes/questions live): Ca dao xong 100% → gợi ý video Văn nghị luận; chưa làm gì → gợi ý Ca dao (không đổi); xong hết → không gợi ý.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Popup kết quả: bỏ "Tổng N câu đã làm", tên chủ đề thành header riêng
 
 - Bỏ dòng "Tổng N câu đã làm" ở thẻ chủ đề trong màn Kết quả: con số này đếm `topicResults.length` — tức cộng dồn mọi lượt làm (làm lại cũng tính thêm), nên chủ đề chỉ có 7 câu mà hiện "Tổng 16 câu", gây hiểu lầm. Dòng "Lịch sử: N lần làm • Gần nhất …" giữ nguyên (đó mới là số liệu đúng nghĩa).

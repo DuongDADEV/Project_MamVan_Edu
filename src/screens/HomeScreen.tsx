@@ -4,10 +4,11 @@ import { REWARDS_CATALOG, mergeRewardTiers, filterDbRewardsForOwner } from '../d
 import { getLocalTodayStr, countLearningSteps } from '../logic/studentStateUtils.ts';
 import type { StudentNotification } from '../logic/studentNotifications.ts';
 import { calculateAllMastery } from '../logic/mastery.ts';
-import { buildTopicLeaf } from '../logic/topicCompletion.ts';
+import { buildTopicLeaf, isTopicFullyComplete } from '../logic/topicCompletion.ts';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { getStudentAssignments } from '../services/api/biClient.ts';
 import { formatScore } from '../utils/scoreFormat.ts';
+import type { TopicWithMeta } from '../services/types.ts';
 import type { NavTab } from '../components/Navbar.tsx';
 import { GrowthTree } from '../components/GrowthTree.tsx';
 import { ChestIllustration } from '../components/rewards/ChestIllustration.tsx';
@@ -93,24 +94,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     ? ((liveVideos || []).find((v) => v.id === state.currentProgress?.itemId) || null)
     : null;
 
+  // Đề xuất chỉ chọn chủ đề CHƯA hoàn thành: chủ đề đã xong 100% (đúng định
+  // nghĩa tiến độ luồng học) không bao giờ được gợi ý nữa, dù nó đứng đầu
+  // danh sách hay con trỏ cũ vẫn trỏ vào nó. Chưa đủ dữ liệu quiz/câu hỏi
+  // thì chưa kết luận — thẻ gợi ý để trống thay vì gợi ý sai rồi mới sửa.
+  const progressDataReady = liveQuizzes !== null && liveQuestions !== null;
+  const isTopicDone = (t: Topic) =>
+    progressDataReady &&
+    isTopicFullyComplete(
+      t as TopicWithMeta,
+      liveQuizzes || [],
+      liveQuestions || {},
+      state.completedSteps || [],
+      state.questionResults || []
+    );
+  const topicOfVideo = (videoId: string) =>
+    activeTopics.find((t) => (t.videoIds || []).includes(videoId));
+
   const firstAvailableVideo = React.useMemo(() => {
-    if (liveVideos && liveVideos.length > 0) {
-      for (const t of activeTopics) {
-        if (t.videoIds && t.videoIds.length > 0) {
-          const match = liveVideos.find((lv) => t.videoIds.includes(lv.id));
-          if (match) return match;
-        }
+    if (!liveVideos || liveVideos.length === 0) return null;
+    if (!progressDataReady) return null;
+    for (const t of activeTopics) {
+      if (isTopicDone(t)) continue;
+      if (t.videoIds && t.videoIds.length > 0) {
+        const match = liveVideos.find((lv) => t.videoIds.includes(lv.id));
+        if (match) return match;
       }
-      return liveVideos[0];
     }
     return null;
-  }, [liveVideos, activeTopics]);
+  }, [liveVideos, activeTopics, liveQuizzes, liveQuestions, state.completedSteps, state.questionResults]);
 
   // Con trỏ ở bước 'complete' nghĩa là bài đã xong, không còn gì để tiếp tục —
   // Trang chủ phải hiện "Bài học mới" thay vì "Đang dở" (phòng con trỏ kẹt).
+  // Tương tự: con trỏ cũ trỏ vào video của chủ đề đã xong 100% cũng không
+  // được tiếp tục — rơi về gợi ý chủ đề tiếp theo cần hoàn thành.
   const isAtCompleteStep = state.currentProgress?.stepKey === 'complete';
-  const activeLesson = currentVideo && !isAtCompleteStep ? currentVideo : firstAvailableVideo;
-  const isResuming = !!currentVideo && !isAtCompleteStep;
+  const resumeTopic = currentVideo ? topicOfVideo(currentVideo.id) : undefined;
+  const resumeBlocked = !!currentVideo && !!resumeTopic && isTopicDone(resumeTopic);
+  const activeLesson = currentVideo && !isAtCompleteStep && !resumeBlocked ? currentVideo : firstAvailableVideo;
+  const isResuming = !!currentVideo && !isAtCompleteStep && !resumeBlocked;
 
   // Lấy danh sách BTVN từ kho quizzes (loại homework)
   const homeworkQuizzes = (liveQuizzes || []).filter((q) => q.kind === 'homework');
