@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Trophy, Target, Zap, BookOpenCheck, Award, Lock, TrendingUp, X, MessageSquareText, CheckCircle2, XCircle, Circle, FileCheck } from 'lucide-react';
 import { StudentState, Topic, QuestionResult, EssaySubmission } from '../types.ts';
 import { QuestionWithMeta, QuizWithMeta } from '../services/types.ts';
-import { calculateAllMastery } from '../logic/mastery.ts';
+import { countTopicFlowDone } from '../logic/topicCompletion.ts';
 import { countLearningSteps } from '../logic/studentStateUtils.ts';
 import { formatScore } from '../utils/scoreFormat.ts';
 import { BADGES_CATALOG } from '../data/badges.ts';
@@ -31,13 +31,23 @@ interface LearningResultsScreenProps {
 
 const ONE_WEEK = 7 * 86400000;
 
-type TopicStatus = 'SOLID' | 'PROGRESSING' | 'NEEDS_REVIEW' | 'INSUFFICIENT_DATA';
+// Chip trạng thái chủ đề ở màn Kết quả — LUẬT 4 TRẠNG THÁI (chủ dự án 30/10,
+// thay chip mức độ cũ vốn hiện "Chưa học" cho cả chủ đề đã học 100% chỉ vì
+// chưa đủ 3 câu NHAN_BIET để tính mức độ):
+// Chưa học = luồng 0% (xám); Đang học = luồng 1-99% (xanh nước biển);
+// Hoàn thành = luồng 100% + đúng hết câu chấm tự động có đáp án (xanh lá);
+// Chưa đạt = luồng 100% nhưng chưa đúng hết (vàng, ưu tiên hơn Đang học).
+// "Đúng hết" khớp đúng khóa Đáp án ở popup chi tiết (câu có đáp án trong
+// bài cô giao: quiz luồng + BTVN + câu từng làm; chủ đề không có câu chấm
+// tự động có đáp án thì coi như không còn gì phải làm lại).
+// Chỉ đổi ô chip này; màu nền thẻ chủ đề giữ nguyên.
+type TopicStatus = 'NOT_STARTED' | 'STUDYING' | 'COMPLETED' | 'NOT_PASSED';
 
 const STATUS_META: Record<TopicStatus, { label: string; chip: string; bar: string }> = {
-  SOLID: { label: 'Đã hoàn thành', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: '#16A34A' },
-  PROGRESSING: { label: 'Đang học', chip: 'bg-sky-50 text-sky-700 border-sky-200', bar: '#38BDF8' },
-  NEEDS_REVIEW: { label: 'Cần ôn lại', chip: 'bg-amber-50 text-amber-700 border-amber-200', bar: '#FBBF24' },
-  INSUFFICIENT_DATA: { label: 'Chưa học', chip: 'bg-slate-100 text-slate-500 border-slate-200', bar: '#CBD5E1' },
+  NOT_STARTED: { label: 'Chưa học', chip: 'bg-slate-100 text-slate-500 border-slate-200', bar: '#CBD5E1' },
+  STUDYING: { label: 'Đang học', chip: 'bg-sky-50 text-sky-700 border-sky-200', bar: '#38BDF8' },
+  COMPLETED: { label: 'Hoàn thành', chip: 'bg-green-50 text-green-700 border-green-200', bar: '#16A34A' },
+  NOT_PASSED: { label: 'Chưa đạt', chip: 'bg-yellow-50 text-yellow-700 border-yellow-200', bar: '#EAB308' },
 };
 
 // Trắc nghiệm = các câu chấm tự động (single/multi/fill). Câu tự luận lấy điểm
@@ -235,21 +245,44 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
 
         const batches = groupIntoBatches(topicResults);
 
-        // Chip trạng thái tổng quát (giữ nguyên logic cũ, chỉ dùng để gắn nhãn).
-        const mastery = calculateAllMastery(results, t.id);
-        const avg = Math.round(
-          (mastery.NHAN_BIET.percentage +
-            mastery.THONG_HIEU.percentage +
-            mastery.PHAN_TICH.percentage +
-            mastery.VAN_DUNG.percentage) /
-            4
+        // Chip 4 trạng thái (luật 30/10): % luồng từ countTopicFlowDone
+        // (cùng định nghĩa với màn Học bài) + khóa đáp án như popup chi tiết.
+        const { done: flowDone, total: flowTotal } = countTopicFlowDone(
+          t,
+          quizzes,
+          questions,
+          state.completedSteps || [],
+          results
         );
-        let status: TopicStatus = 'INSUFFICIENT_DATA';
-        if (mastery.NHAN_BIET.totalQuestionsAttempted >= 3) {
-          if (avg >= 80) status = 'SOLID';
-          else if (avg >= 50) status = 'PROGRESSING';
-          else status = 'NEEDS_REVIEW';
+        const flowPct = flowTotal > 0 ? Math.round((flowDone / flowTotal) * 100) : 0;
+        const everCorrect = new Set(mcq.filter((r) => r.isCorrect).map((r) => r.questionId));
+        const attemptedIds = new Set(mcq.map((r) => r.questionId));
+        const rowIds: string[] = [];
+        const pushRow = (id: string) => {
+          if (!rowIds.includes(id)) rowIds.push(id);
+        };
+        const visibleQuizById = new Map(quizzes.map((qz) => [qz.id, qz]));
+        for (const key of t.flowOrder || []) {
+          if (typeof key !== 'string' || !key.startsWith('quiz:')) continue;
+          const qz = visibleQuizById.get(key.slice('quiz:'.length));
+          if (!qz || qz.status === 'draft' || qz.status === 'archived') continue;
+          for (const qid of qz.questionIds || []) pushRow(qid);
         }
+        for (const qz of quizzes) {
+          if (qz.topicId !== t.id || qz.kind !== 'homework') continue;
+          if (qz.status === 'draft' || qz.status === 'archived') continue;
+          for (const qid of qz.questionIds || []) pushRow(qid);
+        }
+        for (const id of attemptedIds) pushRow(id);
+        const gateQuestions = rowIds
+          .map((id) => questions[id])
+          .filter((q) => q && MCQ_TYPES.has(q.type) && resolveCorrectAnswer(q) != null);
+        const allAutoCorrect =
+          gateQuestions.length === 0 || gateQuestions.every((q) => everCorrect.has(q.id));
+        let status: TopicStatus = 'NOT_STARTED';
+        if (flowPct === 100 && allAutoCorrect) status = 'COMPLETED';
+        else if (flowPct === 100) status = 'NOT_PASSED';
+        else if (flowPct > 0) status = 'STUDYING';
         return {
           topic: t,
           mcq,
@@ -265,7 +298,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
           status,
         };
       }),
-    [topics, results, questions, essays]
+    [topics, results, questions, essays, quizzes, state.completedSteps]
   );
 
   // Tiến bộ theo tuần (6 tuần gần nhất, chỉ tính bài làm của chính học sinh)

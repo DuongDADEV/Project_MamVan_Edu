@@ -1,3 +1,11 @@
+## [dev] 2026-10-30 — Thẻ Kết quả: chip trạng thái 4 mức thay chip mức độ cũ
+
+- Giáo viên báo (30/10): chủ đề "Bài 3: Lý thuyết nhân vật truyện" học 100% ở màn Học bài nhưng thẻ Kết quả vẫn hiện "Chưa học".
+- Nguyên nhân: chip cũ lấy theo mức độ (mastery) — chỉ khi đủ 3 câu NHAN_BIET mới xếp mức, còn không thì mặc định "Chưa học". Học sinh Minh làm đúng 4/4 câu nhưng chỉ có 2 câu NHAN_BIET nên vẫn "Chưa học" dù luồng 3/3 = 100%.
+- Đổi theo đúng yêu cầu (chỉ đổi ô chip nhỏ, màu nền thẻ giữ nguyên): Chưa học = luồng 0% (xám); Đang học = luồng 1–99% (xanh nước biển); Hoàn thành = luồng 100% + đúng hết câu chấm tự động có đáp án (xanh lá); Chưa đạt = luồng 100% nhưng chưa đúng hết (vàng, ưu tiên hơn Đang học). % luồng dùng cùng định nghĩa với màn Học bài (countTopicFlowDone); "đúng hết" khớp đúng khóa Đáp án ở popup chi tiết (câu có đáp án trong bài cô giao: quiz luồng + BTVN + câu từng làm; chủ đề không có câu chấm tự động có đáp án thì coi như không còn gì phải làm lại).
+- Kiểm chứng bằng dữ liệu thật của Minh ở chủ đề này: chip cũ "Chưa học", chip mới "Hoàn thành" (luồng 3/3, khóa đáp án 3/3 câu đúng).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Sửa popup Bài tập báo sai hết dù điểm 60/60 (lỗi mapper DECIMAL + so sánh boolean)
 
 - Triệu chứng (giáo viên báo 30/10): học sinh làm "Bài kiểm tra mới" đúng 60/60 nhưng popup chi tiết báo Trắc nghiệm đúng 0/6, cả 6 câu đều "Sai".
