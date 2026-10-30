@@ -1,3 +1,8 @@
+## [dev] 2026-10-30 — Hàng đợi chấm: gộp 2 ô "Cần chấm" + "Đã có gợi ý AI" thành 1 ô
+
+- Trước đây thanh công cụ hàng đợi chấm có 2 ô chồng nhau: "Cần chấm N bài" (= bài chờ chấm + bài đã có gợi ý AI, tức mọi bài chưa chốt) và "Đã có gợi ý AI · M" (tập con trong đó). Bài có gợi ý AI vẫn cần cô chấm chốt nên 2 ô thực chất là 1 hàng đợi — nay bỏ nút "Đã có gợi ý AI" khỏi thanh công cụ, chỉ còn 1 ô "Cần chấm" (tổng chưa chốt, bấm vẫn lọc toàn bộ bài chưa chấm như cũ). Lọc riêng tập con có gợi ý AI vẫn còn trong ô chọn Trạng thái ("Đã có gợi ý AI (M)"), không mất chức năng nào; các dòng theo học sinh trong bảng vẫn hiện số bài có gợi ý như cũ.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Sửa lỗi gắn câu từ ngân hàng nhân đôi ngân hàng (QuizBuilder)
 
 - Triệu chứng (giáo viên báo 30/10): ngân hàng đang có 2 câu, gắn 2 câu đó vào "Bài luyện 2" trong chủ đề "Bài 1: Truyện ngắn" thì ngân hàng thành 4 câu.

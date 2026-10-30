@@ -4,7 +4,6 @@ import { EssaySubmission, ClassItem } from '../../../types.ts';
 import { TopicWithMeta, QuizWithMeta, QuestionWithMeta } from '../../../services/index.ts';
 import {
   Clock,
-  Sparkles,
   CheckCircle2,
   AlertTriangle,
   Search,
@@ -176,21 +175,6 @@ export const GradingQueueTable: React.FC<GradingQueueTableProps> = ({
           </span>
           <span className="text-[11px] text-slate-400">bài</span>
         </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            handleToolbarPick(statusFilter === 'AI_SUGGESTED' ? 'status:ALL' : 'status:AI_SUGGESTED')
-          }
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${
-            statusFilter === 'AI_SUGGESTED'
-              ? 'bg-purple-600 border-purple-600 text-white'
-              : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
-          }`}
-          title="Lọc riêng các bài đã có gợi ý AI"
-        >
-          <Sparkles className="w-3.5 h-3.5" /> Đã có gợi ý AI · {stats.aiSuggested}
-        </button>
 
         <div
           onClick={() => handleToolbarPick('sort:waiting_desc')}
