@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Popup chi tiết: đồng nhất màu dòng trắc nghiệm + bỏ "lần nộp" ở tiêu đề Bài kiểm tra
+
+- Giáo viên báo (30/10): màu câu đã làm ở popup Bài kiểm tra vs popup chủ đề chưa đồng nhất (bên Bài kiểm tra bôi xanh/đỏ cả dòng), và xóa chữ "lần nộp" ở tiêu đề đã gạch đỏ.
+- Nguyên nhân: popup Bài kiểm tra tô cả dòng theo trạng thái (đúng -> xanh cả câu, sai -> đỏ cả câu) do bản thiết kế `69219c9`; popup chủ đề chỉ tô icon + chữ trạng thái xám, đề giữ màu navy. Nay đổi popup Bài kiểm tra về đúng kiểu popup chủ đề: đề luôn navy, chữ Đúng/Sai/Chưa làm luôn xám, chỉ icon tô màu theo trạng thái. Hai popup giờ render dòng trắc nghiệm giống hệt nhau.
+- Tiêu đề phụ popup Bài kiểm tra bỏ hẳn "N lần nộp" (chỉ còn "Trắc nghiệm đúng X/Y câu" + phần tự luận nếu có; khi chưa tải được lần làm thì không hiện dòng tiêu đề phụ nữa).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Màn Bài tập: nút 3 trạng thái + pill số câu/số phút + gộp thẻ trùng
 
 - Giáo viên báo (30/10): bài về nhà quá hạn mà chưa làm cũng không báo gì; nút làm bài cần 3 trạng thái; chỗ số câu & số phút đổi thành biểu tượng.

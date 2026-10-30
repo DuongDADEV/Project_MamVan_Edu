@@ -970,12 +970,13 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
             <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#E8DFD1]">
               <div>
                 <h3 className="font-lora font-bold text-xl text-[#1E1B4B]">{detailTest.title}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {(detailTest.attempts || []).length} lần nộp
-                  {testSections && ` • Trắc nghiệm đúng ${testSections.mcCorrect}/${testSections.mcRows.length} câu`}
-                  {testSections && testSections.essayRows.length > 0 &&
-                    ` • Tự luận ${testSections.essayRows.length} bài (${testSections.essayGraded} đã chấm, ${testSections.essayPending} chưa chấm)`}
-                </p>
+                {testSections && (
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {`Trắc nghiệm đúng ${testSections.mcCorrect}/${testSections.mcRows.length} câu`}
+                    {testSections.essayRows.length > 0 &&
+                      ` • Tự luận ${testSections.essayRows.length} bài (${testSections.essayGraded} đã chấm, ${testSections.essayPending} chưa chấm)`}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -1008,9 +1009,9 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
                         ) : (
                           <Circle className="w-4 h-4 text-slate-300 shrink-0 mt-0.5" />
                         )}
-                        <span className={row.state === 'correct' ? 'text-[#2F6B4F]' : row.state === 'wrong' ? 'text-red-600' : 'text-[#1E1B4B]'}>
+                        <span className="text-[#1E1B4B]">
                           {row.prompt}
-                          <span className="font-bold">
+                          <span className="text-slate-500">
                             {' '}
                             • {row.state === 'correct' ? 'Đúng' : row.state === 'wrong' ? 'Sai' : 'Chưa làm'}
                           </span>
