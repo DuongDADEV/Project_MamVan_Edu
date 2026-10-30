@@ -1,3 +1,11 @@
+## [dev] 2026-10-30 — Sửa popup Bài tập báo sai hết dù điểm 60/60 (lỗi mapper DECIMAL + so sánh boolean)
+
+- Triệu chứng (giáo viên báo 30/10): học sinh làm "Bài kiểm tra mới" đúng 60/60 nhưng popup chi tiết báo Trắc nghiệm đúng 0/6, cả 6 câu đều "Sai".
+- Nguyên nhân kép, kiểm chứng bằng đúng bài 60/60 đó (attempt att_mvuzisbqs01et8, Minh, nộp 20:05): (1) MySQL DECIMAL trả về chuỗi ("10.00") nhưng `numOrNull` trong biClient chỉ nhận `typeof number` nên mọi điểm từ cột DECIMAL đều thành null ở client; (2) `is_correct` từ DB là số 1/0, còn popup mới so `isCorrect === true` nên không bao giờ khớp. Hai cái cộng lại: mọi đáp án đều "không đúng" → 0/6. Lỗi mapper có từ trước (popup cũ so `=== true/=== false` nên chỉ im lặng không hiện Đúng/Sai, không ai phát hiện); bản popup mới với trạng thái Sai tường minh mới làm nó lộ ra thành "sai hết".
+- Sửa: `numOrNull` nay parse cả chuỗi số (chuỗi rỗng/không phải số vẫn null); `isAnsCorrect` trong popup dùng `!!isCorrect` thay vì `=== true` (cộng thêm so điểm như cũ). Sửa ở mapper nên khỏi luôn cả đường điểm tự luận (scoreAwarded cũng là DECIMAL).
+- Kiểm chứng bằng dữ liệu thật của bài Minh: logic cũ cho 0/6 (tái hiện đúng lỗi), logic mới cho 6/6 (khớp thẻ 60/60).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Hàng đợi chấm: gộp 2 ô "Cần chấm" + "Đã có gợi ý AI" thành 1 ô
 
 - Trước đây thanh công cụ hàng đợi chấm có 2 ô chồng nhau: "Cần chấm N bài" (= bài chờ chấm + bài đã có gợi ý AI, tức mọi bài chưa chốt) và "Đã có gợi ý AI · M" (tập con trong đó). Bài có gợi ý AI vẫn cần cô chấm chốt nên 2 ô thực chất là 1 hàng đợi — nay bỏ nút "Đã có gợi ý AI" khỏi thanh công cụ, chỉ còn 1 ô "Cần chấm" (tổng chưa chốt, bấm vẫn lọc toàn bộ bài chưa chấm như cũ). Lọc riêng tập con có gợi ý AI vẫn còn trong ô chọn Trạng thái ("Đã có gợi ý AI (M)"), không mất chức năng nào; các dòng theo học sinh trong bảng vẫn hiện số bài có gợi ý như cũ.

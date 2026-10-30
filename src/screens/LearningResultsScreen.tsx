@@ -464,7 +464,7 @@ export const LearningResultsScreen: React.FC<LearningResultsScreenProps> = ({
       return normType(ans?.questionType);
     };
     const isAnsCorrect = (a: BiAttempt['answers'][number]) =>
-      a.isCorrect === true || (a.score != null && a.maxScore != null && a.score >= a.maxScore);
+      !!a.isCorrect || (a.score != null && a.maxScore != null && a.score >= a.maxScore);
     const everCorrect = new Set(allAnswers.filter(isAnsCorrect).map((a) => a.questionId));
     const attempted = new Set(allAnswers.map((a) => a.questionId));
     const mcRows = orderedIds

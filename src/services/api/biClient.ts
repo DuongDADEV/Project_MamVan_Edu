@@ -228,8 +228,16 @@ function str(v: unknown, fallback = ''): string {
   return typeof v === 'string' ? v : fallback;
 }
 
+// MySQL DECIMAL trả về CHUỖI ("10.00") — bản cũ chỉ nhận number nên mọi điểm
+// từ cột DECIMAL đều thành null ở client (gây popup bài tập báo sai hết dù
+// tổng điểm vẫn đúng, vì tổng đi đường khác). Chuỗi số thì parse, còn lại null.
 function numOrNull(v: unknown): number | null {
-  return typeof v === 'number' ? v : null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 export function renderResponse(responseJson: any): string {
