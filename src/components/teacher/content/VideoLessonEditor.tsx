@@ -59,7 +59,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   const [durationSec, setDurationSec] = useState<number>(video.durationSec || 600);
   const [sampleUrl, setSampleUrl] = useState(video.sampleUrl || '');
 
-  const [subtopicsText, setSubtopicsText] = useState(video.subtopics?.join(', ') || '');
   const [summaryPoints, setSummaryPoints] = useState<VideoFocusPoint[]>(
     video.summaryPoints && video.summaryPoints.length > 0
       ? video.summaryPoints
@@ -88,7 +87,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     topicId: video.topicId || topics[0]?.id || '',
     durationSec: video.durationSec || 600,
     sampleUrl: video.sampleUrl || '',
-    subtopicsText: video.subtopics?.join(', ') || '',
     summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
       ? video.summaryPoints
       : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
@@ -111,7 +109,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     setDurationSec(video.durationSec || 600);
     setSampleUrl(video.sampleUrl || '');
 
-    setSubtopicsText(video.subtopics?.join(', ') || '');
     setSummaryPoints(
       video.summaryPoints && video.summaryPoints.length > 0
         ? video.summaryPoints
@@ -128,8 +125,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
       topicId: video.topicId || topics[0]?.id || '',
       durationSec: video.durationSec || 600,
       sampleUrl: video.sampleUrl || '',
-      subtopicsText: video.subtopics?.join(', ') || '',
-      summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
+        summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
         ? video.summaryPoints
         : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
       practiceQuizId: video.practiceQuizId || '',
@@ -231,10 +227,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     topicId: d.topicId,
     durationSec: d.durationSec,
     sampleUrl: d.sampleUrl.trim(),
-    subtopics: d.subtopicsText
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
     summaryPoints: d.summaryPoints,
     practiceQuizId: d.practiceQuizId,
     quickTestId: d.quickTestId,
@@ -274,14 +266,14 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
   // Đồng bộ ref theo state + hẹn tự lưu sau 2s không gõ nữa
   useEffect(() => {
-    draftRef.current = { title, description, topicId, durationSec, sampleUrl, subtopicsText, summaryPoints, practiceQuizId, quickTestId, masteryCheckId };
+    draftRef.current = { title, description, topicId, durationSec, sampleUrl, summaryPoints, practiceQuizId, quickTestId, masteryCheckId };
     const t = setTimeout(() => {
       if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
         void saveDraft(draftRef.current, true);
       }
     }, 2000);
     return () => clearTimeout(t);
-  }, [title, description, topicId, durationSec, sampleUrl, subtopicsText, summaryPoints, practiceQuizId, quickTestId, masteryCheckId]);
+  }, [title, description, topicId, durationSec, sampleUrl, summaryPoints, practiceQuizId, quickTestId, masteryCheckId]);
 
   // Rời trình soạn: đẩy nốt phần chưa lưu (im lặng, không setState sau unmount)
   useEffect(() => {
@@ -510,23 +502,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
           <div>
             <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5">
-              Thuộc chủ đề nào? <span className="text-rose-500">*</span>
-            </label>
-            <select
-              value={topicId}
-              onChange={(e) => setTopicId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-white border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B] focus:outline-none focus:border-[#2F3E6B]"
-            >
-              {topics.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title} ({t.tag})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5">
               Mô tả ngắn gọn nội dung video
             </label>
             <input
@@ -534,19 +509,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Tóm tắt 1 câu giúp học sinh nắm được bài học..."
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-white border border-[#E6DCC8] text-xs text-[#2F3E6B] focus:outline-none focus:border-[#2F3E6B]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-[#2F3E6B] mb-1.5">
-              1–2 chủ đề nhỏ (phân cách bằng dấu phẩy)
-            </label>
-            <input
-              type="text"
-              value={subtopicsText}
-              onChange={(e) => setSubtopicsText(e.target.value)}
-              placeholder="VD: Số tiếng mỗi dòng, Cách gieo vần, Ngắt nhịp"
               className="w-full px-3.5 py-2.5 rounded-2xl bg-white border border-[#E6DCC8] text-xs text-[#2F3E6B] focus:outline-none focus:border-[#2F3E6B]"
             />
           </div>

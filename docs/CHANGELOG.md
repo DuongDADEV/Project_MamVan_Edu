@@ -1,3 +1,10 @@
+## [dev] 2026-10-30 — Trình soạn Video: bỏ chọn chủ đề + bỏ "chủ đề nhỏ"
+
+- Giáo viên báo (30/10, kèm 2 ảnh): bỏ 2 mục bên Giáo viên — ô chọn chủ đề thì video tự gắn theo chủ đề đang tạo rồi (không phải chọn nữa), còn dòng "Chủ đề: ..." hiện bên video nhỏ không có ý nghĩa.
+- Trình soạn Video (VideoLessonEditor): bỏ hẳn ô "Thuộc chủ đề nào?" — video mở từ dải luồng của chủ đề nào thì topicId đã gắn sẵn chủ đề đó từ lúc tạo, không đổi qua ô chọn nữa. State topicId vẫn giữ trong code để lưu + lọc quiz liên kết theo chủ đề, chỉ bỏ giao diện chọn. Trình soạn Lý thuyết không đụng (anh chỉ nói video).
+- Bỏ hẳn mục "1–2 chủ đề nhỏ": xóa ô nhập trong trình soạn Video, và xóa luôn dòng hiển thị "Chủ đề: ..." trên màn video học sinh (VideoLessonScreen) cùng chip #tag trong bản xem trước của giáo viên (StudentPreviewModal) để bản xem trước khớp màn thật. Dữ liệu subtopics cũ trong DB không xóa (chỉ ẩn giao diện) — video cũ vẫn giữ nguyên dữ liệu, không hiện dòng đó nữa.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Toast học sinh: căn giữa theo vùng nội dung thay vì cả cửa sổ
 
 - Giáo viên báo (30/10, kèm 2 ảnh): toast "Em đã hoàn thành bài!" và "Hoàn thành toàn bộ chủ đề..." đang nằm giữa cả màn hình, cần sang phải 1 tý để nằm giữa màn hình đề bài.

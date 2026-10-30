@@ -111,18 +111,6 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                       {videoData.title}
                     </h3>
                     <p className="text-xs text-[#8C7E6A]">{videoData.description}</p>
-                    {videoData.subtopics && videoData.subtopics.length > 0 && (
-                      <div className="flex items-center gap-1.5 flex-wrap pt-2">
-                        {videoData.subtopics.map((tag, i) => (
-                          <span
-                            key={i}
-                            className="px-2.5 py-1 rounded-xl bg-orange-50 text-[#E2704A] text-[11px] font-bold"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}

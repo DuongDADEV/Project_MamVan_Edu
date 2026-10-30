@@ -606,8 +606,6 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                 <Clock className="w-3.5 h-3.5 text-[#4F46E5]" />
                 Thời lượng: {effectiveDuration >= 60 ? `${Math.round(effectiveDuration / 60)} phút` : `${effectiveDuration} giây`}
               </span>
-              <span>·</span>
-              <span>Chủ đề: {(video.subtopics || []).join(', ')}</span>
             </div>
 
             {video.description ? (
