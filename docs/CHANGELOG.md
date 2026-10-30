@@ -1,3 +1,9 @@
+## [dev] 2026-10-30 — Gộp thông báo theo chủ đề: 1 chủ đề cập nhật chỉ còn 1 thông báo
+
+- Trước đây thông báo học sinh suy ra từ từng mục đã xuất bản nên cô đăng 1 chủ đề gồm video + 2 bài luyện tập là học sinh nhận 3 thông báo cùng tên chủ đề (ảnh báo cáo: 3 dòng "Bài 1: Ca dao tục ngữ · 25 phút trước"). Nay các mục cùng chủ đề (video/lý thuyết/bài tập, từ 2 mục trở lên) gộp thành 1 thông báo duy nhất: nhãn "Chủ đề mới cập nhật", tiêu đề là tên chủ đề, dòng phụ ghi số nội dung mới (vd "3 nội dung mới"), bấm vào mở tab Học bài đúng chủ đề đó.
+- Giữ nguyên từng cái cho 2 trường hợp: bài tập về nhà (kind homework) là bài giao riêng nên vẫn 1 thông báo/mỗi bài (bấm mở thẳng bài đó); mục không rõ chủ đề và chủ đề chỉ có 1 mục mới thì giữ thông báo lẻ cũ để bấm mở thẳng mục. Nhóm mới có id theo mốc mới nhất của chủ đề nên chủ đề có thêm mục mới sau đó sẽ báo lại 1 lần (đúng vì có nội dung mới); nhóm của các chủ đề đã thấy lẻ trước đây sẽ hiện 1 lần rồi hết khi bấm đọc.
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Sửa lỗi Trang chủ mãi báo "Đang dở" dù đã xong 100% + gộp phiếu tự luận trùng ở popup
 
 - Nguyên nhân "Đang dở": Trang chủ hiện "Đang dở" khi còn con trỏ học dở (currentProgress) trỏ vào 1 video, bất kể ở bước nào. Học sinh xong 100% chủ đề Ca dao (đủ 5 bước) nhưng con trỏ vẫn trỏ vào video ở đúng bước "complete": bước "Hoàn thành" chỉ đánh dấu xong luồng mà không xóa con trỏ, các handler khi tới bước hoàn thành còn đặt con trỏ vào bước complete, còn chỗ xóa duy nhất (handler quiz) dùng undefined nên khi PUT thì JSON lược bỏ mất, server giữ con trỏ cũ qua reload. Nên ấn "Học tiếp ngay" mở lại đúng video đó, xong 100% nữa, về Trang chủ vẫn "Đang dở".

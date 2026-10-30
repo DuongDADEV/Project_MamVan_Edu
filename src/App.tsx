@@ -517,7 +517,11 @@ export default function App() {
 
   const handleOpenNotification = (n: StudentNotification) => {
     markNotificationSeen(n.id);
-    if (n.kind === 'video') {
+    if (n.kind === 'topic' && n.topicId) {
+      setLearnFocusTopicId(n.topicId);
+      setActiveFlow(null);
+      setCurrentTab('learn');
+    } else if (n.kind === 'video') {
       setActiveFlow({ type: 'video', videoId: n.itemId });
     } else if (n.kind === 'theory') {
       setActiveFlow({ type: 'theory', theoryId: n.itemId });

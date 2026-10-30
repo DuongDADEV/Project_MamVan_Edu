@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, BookOpen, ClipboardList, Sprout, Gift, User, Flame, Clock, Palette, TrendingUp, Bell, PlayCircle, FileQuestion } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, Sprout, Gift, User, Flame, Clock, Palette, TrendingUp, Bell, PlayCircle, FileQuestion, Layers } from 'lucide-react';
 import { APP_NAME, MASCOT_NAME } from '../config.ts';
 import { StudentState } from '../types.ts';
 import { THEMES_LIST } from '../data/themes.ts';
@@ -100,13 +100,17 @@ const NotificationBell: React.FC<{
                             ? 'bg-rose-50 text-rose-500'
                             : n.kind === 'theory'
                               ? 'bg-violet-50 text-violet-500'
-                              : 'bg-emerald-50 text-emerald-600'
+                              : n.kind === 'topic'
+                                ? 'bg-amber-50 text-amber-600'
+                                : 'bg-emerald-50 text-emerald-600'
                         }`}
                       >
                         {n.kind === 'video' ? (
                           <PlayCircle className="w-4 h-4" />
                         ) : n.kind === 'theory' ? (
                           <BookOpen className="w-4 h-4" />
+                        ) : n.kind === 'topic' ? (
+                          <Layers className="w-4 h-4" />
                         ) : (
                           <FileQuestion className="w-4 h-4" />
                         )}

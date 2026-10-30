@@ -15,8 +15,9 @@ import type {
  */
 export interface StudentNotification {
   id: string;
-  kind: 'video' | 'theory' | 'quiz';
+  kind: 'video' | 'theory' | 'quiz' | 'topic';
   itemId: string;
+  topicId?: string;
   kindLabel: string;
   title: string;
   topicTitle?: string;
@@ -75,6 +76,7 @@ export function buildStudentNotifications(input: BuildInput): StudentNotificatio
         id: `notif_video_${v.id}_${ts}`,
         kind: 'video',
         itemId: v.id,
+        topicId: v.topicId,
         kindLabel: 'Bài giảng video mới',
         title: v.title,
         topicTitle: topicTitleById.get(v.topicId),
@@ -90,6 +92,7 @@ export function buildStudentNotifications(input: BuildInput): StudentNotificatio
         id: `notif_theory_${th.id}_${ts}`,
         kind: 'theory',
         itemId: th.id,
+        topicId: th.topicId,
         kindLabel: 'Bài lý thuyết mới',
         title: th.title,
         topicTitle: topicTitleById.get(th.topicId),
@@ -105,6 +108,7 @@ export function buildStudentNotifications(input: BuildInput): StudentNotificatio
         id: `notif_quiz_${q.id}_${ts}`,
         kind: 'quiz',
         itemId: q.id,
+        topicId: q.topicId,
         kindLabel: QUIZ_KIND_LABELS[q.kind] || 'Bài tập mới',
         title: q.title,
         topicTitle: topicTitleById.get(q.topicId),
@@ -114,7 +118,41 @@ export function buildStudentNotifications(input: BuildInput): StudentNotificatio
     }
   });
 
-  return out.sort((a, b) => b.publishedAt - a.publishedAt).slice(0, 20);
+  // Gộp theo chủ đề: 1 chủ đề cập nhật = 1 thông báo mang tên chủ đề, thay vì
+  // 1 thông báo cho mỗi video/lý thuyết/bài tập trong chủ đề đó (trước đây cô
+  // đăng 1 chủ đề gồm video + 2 bài luyện tập là học sinh nhận 3 thông báo).
+  // Ngoại lệ: bài tập về nhà (kind homework) là bài giao riêng nên giữ từng cái;
+  // mục không rõ chủ đề cũng giữ lẻ. Chủ đề chỉ có 1 mục mới thì giữ nguyên
+  // thông báo lẻ để bấm vào mở thẳng mục đó.
+  const grouped: StudentNotification[] = [];
+  const byTopic = new Map<string, StudentNotification[]>();
+  for (const n of out) {
+    if ((n.kind === 'quiz' && n.quizKind === 'homework') || !n.topicId || !n.topicTitle) {
+      grouped.push(n);
+      continue;
+    }
+    const arr = byTopic.get(n.topicId);
+    if (arr) arr.push(n);
+    else byTopic.set(n.topicId, [n]);
+  }
+  for (const [topicId, items] of byTopic) {
+    if (items.length === 1) {
+      grouped.push(items[0]);
+      continue;
+    }
+    const maxTs = Math.max(...items.map((i) => i.publishedAt));
+    grouped.push({
+      id: `notif_topic_${topicId}_${maxTs}`,
+      kind: 'topic',
+      itemId: topicId,
+      topicId,
+      kindLabel: 'Chủ đề mới cập nhật',
+      title: items[0].topicTitle!,
+      topicTitle: `${items.length} nội dung mới`,
+      publishedAt: maxTs,
+    });
+  }
+  return grouped.sort((a, b) => b.publishedAt - a.publishedAt).slice(0, 20);
 }
 
 export function formatRelativeTime(ts: number, now = Date.now()): string {
