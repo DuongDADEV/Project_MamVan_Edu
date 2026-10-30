@@ -107,6 +107,9 @@ export interface VideoLesson {
   thumbnailUrl?: string;
   subtopics: string[];
   summaryPoints: VideoFocusPoint[];
+  /** Nội dung tóm tắt dạng HTML từ trình soạn Word dùng chung (30/10/2026).
+      Khi có thì màn học sinh ưu tiên render HTML này, fallback về summaryPoints. */
+  summaryHtml?: string;
   practiceQuizId: string;
   quickTestId: string;
   masteryCheckId: string;
@@ -148,6 +151,9 @@ export interface TheoryLesson {
   kind?: 'summary_post_video' | 'general_topic'; // Tóm tắt sau video vs Lý thuyết chung chi tiết
   sections: TheorySection[];
   blocks?: TheoryBlock[]; // Danh sách khối trong trình soạn thảo khối
+  /** Nội dung lý thuyết dạng HTML từ trình soạn Word dùng chung (30/10/2026).
+      Khi có thì màn học sinh ưu tiên render HTML này, fallback về blocks/sections. */
+  contentHtml?: string;
   practiceQuizId: string;
   testQuizId: string;
   test2QuizId?: string;

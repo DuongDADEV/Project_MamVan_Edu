@@ -2,37 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   TheoryLessonWithMeta,
   TopicWithMeta,
-  TheoryBlock,
-  TheoryBlockType,
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
+import { RichTextEditor } from './RichTextEditor.tsx';
+import { initialBlocksFor } from '../../../logic/theoryDraft.ts';
+import { blocksToHtml, extractHeadings, htmlToText } from '../../../utils/richText.ts';
 
 import {
   ArrowLeft,
   BookOpen,
-  Heading,
-  AlignLeft,
-  List,
   Sparkles,
-  Bookmark,
-  Image as ImageIcon,
-  Plus,
-  Trash2,
-  ArrowUp,
-  ArrowDown,
   Clock,
   Eye,
   Save,
   UploadCloud,
   CheckCircle2,
-  Copy,
-  Layers,
   ListOrdered,
-  Upload,
-  Loader2,
 } from 'lucide-react';
-import { uploadLessonMedia } from '../../../services/api/storageClient.ts';
-import { initialBlocksFor, theorySectionsFromBlocks } from '../../../logic/theoryDraft.ts';
 
 interface TheoryLessonEditorProps {
   theory: TheoryLessonWithMeta;
@@ -61,9 +47,13 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   );
   const [minReadSeconds, setMinReadSeconds] = useState<number>(theory.minReadSeconds || 25);
 
-  // Khối nội dung trong block-editor — khởi tạo từ bài đang mở (blocks đã
-  // lưu > convert từ sections cũ > mẫu mặc định, xem logic/theoryDraft.ts).
-  const [blocks, setBlocks] = useState<TheoryBlock[]>(() => initialBlocksFor(theory));
+  // Nội dung lý thuyết dạng HTML (trình soạn Word dùng chung, 30/10/2026):
+  // bài đã có contentHtml thì mở thẳng, bài cũ thì convert 1 lần từ khối cũ
+  // (khối đã lưu > sections cũ > mẫu mặc định, xem logic/theoryDraft.ts).
+  // Dữ liệu khối/sections cũ không xóa khỏi DB — PATCH chỉ ghi contentHtml.
+  const [contentHtml, setContentHtml] = useState<string>(() =>
+    theory.contentHtml || blocksToHtml(initialBlocksFor(theory))
+  );
 
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
@@ -78,127 +68,39 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
     topicId: theory.topicId || topics[0]?.id || '',
     kind: theory.kind || 'general_topic',
     minReadSeconds: theory.minReadSeconds || 25,
-    blocks,
+    contentHtml,
   });
   const savedJsonRef = useRef<string>(JSON.stringify(draftRef.current));
   const savingRef = useRef(false);
 
   useEffect(() => {
-    const b = initialBlocksFor(theory);
+    const html = theory.contentHtml || blocksToHtml(initialBlocksFor(theory));
     setTitle(theory.title || '');
     setTopicId(theory.topicId || topics[0]?.id || '');
     setKind(theory.kind || 'general_topic');
     setMinReadSeconds(theory.minReadSeconds || 25);
-    setBlocks(b);
+    setContentHtml(html);
     draftRef.current = {
       title: theory.title || '',
       topicId: theory.topicId || topics[0]?.id || '',
       kind: theory.kind || 'general_topic',
       minReadSeconds: theory.minReadSeconds || 25,
-      blocks: b,
+      contentHtml: html,
           };
     savedJsonRef.current = JSON.stringify(draftRef.current);
     setSaveError(null);
   }, [theory.id]);
 
-  // Tự động ước tính thời gian đọc từ số từ trong các khối (~200 từ/phút = ~3.3 từ/giây)
+  // Tự động ước tính thời gian đọc từ số từ trong văn bản (~200 từ/phút = ~3.3 từ/giây)
   const calculateEstimatedSeconds = () => {
-    let wordCount = 0;
-    blocks.forEach((b) => {
-      if (b.content) wordCount += b.content.split(/\s+/).filter(Boolean).length;
-      if (b.exampleText) wordCount += b.exampleText.split(/\s+/).filter(Boolean).length;
-      if (b.exampleAnalysis) wordCount += b.exampleAnalysis.split(/\s+/).filter(Boolean).length;
-      if (b.takeawayText) wordCount += b.takeawayText.split(/\s+/).filter(Boolean).length;
-      if (b.items) wordCount += b.items.join(' ').split(/\s+/).filter(Boolean).length;
-    });
+    const wordCount = htmlToText(contentHtml).split(/\s+/).filter(Boolean).length;
     // Tối thiểu 10s, trung bình mỗi từ đọc trong 0.25s
     const estimated = Math.max(10, Math.round(wordCount * 0.25));
     setMinReadSeconds(estimated);
   };
 
-  // Thêm khối mới
-  const handleAddBlock = (type: TheoryBlockType) => {
-    const newBlock: TheoryBlock = {
-      id: 'b_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      type,
-      level: 2,
-      content: '',
-      items: type === 'list' ? ['Ý 1', 'Ý 2'] : undefined,
-      exampleText: type === 'example' ? '' : undefined,
-      exampleAnalysis: type === 'example' ? '' : undefined,
-      takeawayText: type === 'takeaway' ? '' : undefined,
-      imageUrl: type === 'image' ? '' : undefined,
-      caption: type === 'image' ? '' : undefined,
-    };
-    setBlocks((prev) => [...prev, newBlock]);
-  };
-
-  // Cập nhật khối
-  const handleUpdateBlock = (id: string, updates: Partial<TheoryBlock>) => {
-    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
-  };
-
-  const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
-
-  // Tải file ảnh / sơ đồ từ máy tính lên máy chủ
-  const handleImageFileUpload = async (blockId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-
-    setUploadingBlockId(blockId);
-    try {
-      const publicUrl = await uploadLessonMedia(file, 'images');
-      handleUpdateBlock(blockId, { imageUrl: publicUrl });
-    } catch (err: any) {
-      console.error('Lỗi tải file ảnh lên:', err);
-      // Fallback tự động sang FileReader DataURL
-      const reader = new FileReader();
-      reader.onload = () => {
-        handleUpdateBlock(blockId, { imageUrl: reader.result as string });
-      };
-      reader.readAsDataURL(file);
-    } finally {
-      setUploadingBlockId(null);
-    }
-  };
-
-  // Xóa khối
-  const handleDeleteBlock = (id: string) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
-  };
-
-  // Nhân bản khối
-  const handleDuplicateBlock = (index: number) => {
-    setBlocks((prev) => {
-      const copy = [...prev];
-      const target = copy[index];
-      const cloned: TheoryBlock = {
-        ...target,
-        id: 'b_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      };
-      copy.splice(index + 1, 0, cloned);
-      return copy;
-    });
-  };
-
-  // Di chuyển khối
-  const handleMoveBlock = (index: number, direction: 'up' | 'down') => {
-    setBlocks((prev) => {
-      const copy = [...prev];
-      const target = direction === 'up' ? index - 1 : index + 1;
-      if (target < 0 || target >= copy.length) return prev;
-      const temp = copy[index];
-      copy[index] = copy[target];
-      copy[target] = temp;
-      return copy;
-    });
-  };
-
-  // Mục lục tự sinh từ các khối tiêu đề
-  const tableOfContents = blocks
-    .filter((b) => b.type === 'heading' && b.content?.trim())
-    .map((b) => ({ id: b.id, title: b.content!.trim(), level: b.level || 2 }));
+  // Mục lục tự sinh từ các tiêu đề H2/H3 trong văn bản
+  const tableOfContents = extractHeadings(contentHtml);
 
   // ---- TỰ LƯU NHÁP (26/10, sửa ca mất nội dung khi chuyển bước) ----
   // Trước đây nội dung soạn chỉ sống trong state của editor, chỉ lưu khi
@@ -207,15 +109,13 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
   // xong 2s tự lưu 1 lần (chỉ khi nội dung đổi so với lần lưu trước), và
   // khi rời trình soạn thì đẩy nốt phần còn dở dang.
   const buildPayloadFromDraft = (d: typeof draftRef.current) => {
-    const sections = theorySectionsFromBlocks(d.blocks);
     return {
       id: theoryRef.current.id,
       title: d.title.trim(),
       topicId: d.topicId,
       kind: d.kind,
       minReadSeconds: d.minReadSeconds,
-      blocks: d.blocks,
-      sections: sections.length > 0 ? sections : theoryRef.current.sections,
+      contentHtml: d.contentHtml,
     };
   };
 
@@ -252,14 +152,14 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
 
   // Đồng bộ ref theo state + hẹn tự lưu sau 2s không gõ nữa
   useEffect(() => {
-    draftRef.current = { title, topicId, kind, minReadSeconds, blocks };
+    draftRef.current = { title, topicId, kind, minReadSeconds, contentHtml };
     const t = setTimeout(() => {
       if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
         void saveDraft(draftRef.current, true);
       }
     }, 2000);
     return () => clearTimeout(t);
-  }, [title, topicId, kind, minReadSeconds, blocks]);
+  }, [title, topicId, kind, minReadSeconds, contentHtml]);
 
   // Rời trình soạn: đẩy nốt phần chưa lưu (im lặng, không setState sau unmount)
   useEffect(() => {
@@ -401,374 +301,23 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
             </div>
           </div>
 
-          {/* 2. KHU SOẠN THẢO VĂN BẢN THEO KHỐI (BLOCK-BASED EDITOR) */}
-          <div className="space-y-3 min-w-0 max-w-full">
+          {/* 2. NỘI DUNG BÀI LÝ THUYẾT (trình soạn Word dùng chung) */}
+          <div className="space-y-3">
             <div>
               <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-[#7C3AED]" />
-                <span>Trình soạn thảo khối (Block Editor)</span>
+                <BookOpen className="w-3.5 h-3.5 text-[#4F46E5]" />
+                <span>Nội dung bài lý thuyết</span>
               </h4>
               <p className="text-[11px] text-[#8C7E6A] mt-0.5">
-                Thêm các khối tiêu đề, đoạn văn, danh sách, ví dụ và hình ảnh minh họa
+                Soạn như Word: bôi đen chữ rồi dùng thanh công cụ để in đậm, in nghiêng, tạo tiêu đề, danh sách, chèn ảnh. Dán từ Word vẫn giữ định dạng.
               </p>
             </div>
-
-            {/* Toolbar thêm khối nhanh */}
-            <div className="p-2 sm:p-2.5 rounded-2xl bg-[#FAF5EB] border border-[#E6DCC8] flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] font-bold text-[#8C7E6A] px-1.5 flex items-center gap-1 shrink-0">
-                <Plus className="w-3.5 h-3.5 text-[#E2704A]" />
-                <span>Thêm khối:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => handleAddBlock('heading')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
-                title="Thêm khối Tiêu đề (H2/H3)"
-              >
-                <Heading className="w-3.5 h-3.5 text-[#7C3AED]" />
-                <span>Tiêu đề</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddBlock('paragraph')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
-                title="Thêm khối Đoạn văn"
-              >
-                <AlignLeft className="w-3.5 h-3.5 text-[#2F3E6B]" />
-                <span>Đoạn văn</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddBlock('list')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
-                title="Thêm khối Danh sách"
-              >
-                <List className="w-3.5 h-3.5 text-[#0D9488]" />
-                <span>Danh sách</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddBlock('example')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
-                title="Thêm khối Ví dụ trích đoạn & Phân tích"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#E2704A]" />
-                <span>Ví dụ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddBlock('takeaway')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
-                title="Thêm khối Ghi nhớ trọng tâm"
-              >
-                <Bookmark className="w-3.5 h-3.5 text-[#F2B84B]" />
-                <span>Ghi nhớ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddBlock('image')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-xs font-bold text-[#2F3E6B] shadow-2xs hover:shadow-xs transition-all active:scale-95"
-                title="Thêm khối Hình ảnh"
-              >
-                <ImageIcon className="w-3.5 h-3.5 text-[#2563EB]" />
-                <span>Hình ảnh</span>
-              </button>
-            </div>
-
-            {/* Blocks List */}
-            <div className="space-y-3 min-w-0 max-w-full">
-              {blocks.map((block, index) => {
-                return (
-                  <div
-                    key={block.id}
-                    className="p-4 rounded-3xl bg-white border border-[#E6DCC8] shadow-2xs space-y-2.5 group relative min-w-0 max-w-full overflow-hidden"
-                  >
-                    {/* Block Toolbar */}
-                    <div className="flex items-center justify-between pb-2 border-b border-[#E6DCC8]/60 text-xs gap-2 min-w-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-5 h-5 rounded-full bg-[#FAF5EB] text-[#2F3E6B] text-[10px] font-bold flex items-center justify-center border border-[#E6DCC8] shrink-0">
-                          {index + 1}
-                        </span>
-                        <span className="font-bold text-[#2F3E6B] uppercase text-[11px] tracking-wider truncate">
-                          {block.type === 'heading' && `Tiêu đề (H${block.level || 2})`}
-                          {block.type === 'paragraph' && 'Đoạn văn'}
-                          {block.type === 'list' && 'Danh sách liệt kê'}
-                          {block.type === 'example' && 'Khối ví dụ & Phân tích'}
-                          {block.type === 'takeaway' && 'Khối ghi nhớ (Hộp viền nổi bật)'}
-                          {block.type === 'image' && 'Hình ảnh / Sơ đồ minh họa'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        {block.type === 'heading' && (
-                          <div className="flex items-center bg-[#FAF5EB] rounded-lg p-0.5 border border-[#E6DCC8] mr-1">
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateBlock(block.id, { level: 2 })}
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                (block.level || 2) === 2 ? 'bg-white text-[#2F3E6B] shadow-2xs' : 'text-[#8C7E6A]'
-                              }`}
-                            >
-                              H2
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateBlock(block.id, { level: 3 })}
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                block.level === 3 ? 'bg-white text-[#2F3E6B] shadow-2xs' : 'text-[#8C7E6A]'
-                              }`}
-                            >
-                              H3
-                            </button>
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          disabled={index === 0}
-                          onClick={() => handleMoveBlock(index, 'up')}
-                          className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] disabled:opacity-30"
-                          title="Di chuyển lên"
-                        >
-                          <ArrowUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={index === blocks.length - 1}
-                          onClick={() => handleMoveBlock(index, 'down')}
-                          className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] disabled:opacity-30"
-                          title="Di chuyển xuống"
-                        >
-                          <ArrowDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicateBlock(index)}
-                          className="p-1 rounded hover:bg-black/5 text-[#8C7E6A]"
-                          title="Nhân bản khối này"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteBlock(block.id)}
-                          className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
-                          title="Xóa khối này"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Block Content Inputs by Type */}
-                    {block.type === 'heading' && (
-                      <input
-                        type="text"
-                        value={block.content || ''}
-                        onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
-                        placeholder="Nhập tiêu đề mục (VD: 1. Đặc điểm số tiếng và nhịp điệu)..."
-                        className={`w-full min-w-0 px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] font-lora font-bold text-[#2F3E6B] ${
-                          block.level === 3 ? 'text-sm' : 'text-base'
-                        }`}
-                      />
-                    )}
-
-                    {block.type === 'paragraph' && (
-                      <textarea
-                        rows={3}
-                        value={block.content || ''}
-                        onChange={(e) => handleUpdateBlock(block.id, { content: e.target.value })}
-                        placeholder="Nội dung đoạn văn giải thích lý thuyết chi tiết..."
-                        className="w-full min-w-0 px-3.5 py-2.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] leading-relaxed resize-none"
-                      />
-                    )}
-
-                    {block.type === 'list' && (
-                      <div className="space-y-2 min-w-0 max-w-full">
-                        {(block.items || []).map((item: string, itemIdx: number) => (
-                          <div key={itemIdx} className="flex items-center gap-2 min-w-0 w-full">
-                            <span className="text-[#0D9488] font-bold shrink-0">•</span>
-                            <input
-                              type="text"
-                              value={item}
-                              onChange={(e) => {
-                                const newItems = [...(block.items || [])];
-                                newItems[itemIdx] = e.target.value;
-                                handleUpdateBlock(block.id, { items: newItems });
-                              }}
-                              className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B]"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newItems = (block.items || []).filter((_: string, i: number) => i !== itemIdx);
-                                handleUpdateBlock(block.id, { items: newItems });
-                              }}
-                              className="p-1 text-[#8C7E6A] hover:text-rose-600 shrink-0"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleUpdateBlock(block.id, {
-                              items: [...(block.items || []), ''],
-                            });
-                          }}
-                          className="text-[11px] text-[#0D9488] hover:underline font-bold flex items-center gap-1"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>Thêm gạch đầu dòng</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {block.type === 'example' && (
-                      <div className="space-y-2 p-3 rounded-2xl bg-orange-50/40 border border-orange-200 min-w-0 max-w-full overflow-hidden">
-                        <div>
-                          <label className="block text-[11px] font-bold text-[#E2704A] mb-1">
-                            Trích đoạn ngữ liệu / Ví dụ mẫu:
-                          </label>
-                          <textarea
-                            rows={2}
-                            value={block.exampleText || ''}
-                            onChange={(e) => handleUpdateBlock(block.id, { exampleText: e.target.value })}
-                            placeholder='"Hạt gạo làng ta / Có vị phù sa / Của sông Kinh Thầy..."'
-                            className="w-full min-w-0 px-3 py-1.5 rounded-xl bg-white border border-orange-200 text-xs text-[#2F3E6B] italic resize-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-[#2F3E6B] mb-1">
-                            Phân tích hướng dẫn học sinh:
-                          </label>
-                          <textarea
-                            rows={2}
-                            value={block.exampleAnalysis || ''}
-                            onChange={(e) => handleUpdateBlock(block.id, { exampleAnalysis: e.target.value })}
-                            placeholder="Mỗi dòng thơ gồm 4 tiếng, nhịp điệu nhanh, gợi tả sự hồn nhiên..."
-                            className="w-full min-w-0 px-3 py-1.5 rounded-xl bg-white border border-orange-200 text-xs text-[#2F3E6B] resize-none"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {block.type === 'takeaway' && (
-                      <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1 min-w-0 max-w-full overflow-hidden">
-                        <label className="block text-[11px] font-bold text-amber-800 flex items-center gap-1">
-                          <Bookmark className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span className="truncate">Khối ghi nhớ (Học sinh cần nắm vững):</span>
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={block.takeawayText || ''}
-                          onChange={(e) => handleUpdateBlock(block.id, { takeawayText: e.target.value })}
-                          placeholder="Quy tắc cốt lõi: Thơ bốn chữ ngắt nhịp 2/2..."
-                          className="w-full min-w-0 px-3 py-2 rounded-xl bg-white border border-amber-200 text-xs font-bold text-[#2F3E6B] resize-none"
-                        />
-                      </div>
-                    )}
-
-                    {block.type === 'image' && (
-                      <div className="space-y-3 p-3.5 rounded-2xl bg-blue-50/40 border border-blue-200 min-w-0 max-w-full overflow-hidden">
-                        {/* Khu vực tải tệp từ máy tính hoặc dán URL */}
-                        <div className="min-w-0 max-w-full">
-                          <div className="flex items-center justify-between mb-1.5 gap-2">
-                            <label className="block text-[11px] font-bold text-[#2563EB] truncate">
-                              Ảnh / Tệp sơ đồ minh họa:
-                            </label>
-                            {uploadingBlockId === block.id && (
-                              <span className="text-[11px] text-[#2563EB] flex items-center gap-1 font-semibold animate-pulse shrink-0">
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                Đang tải tệp lên...
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0 w-full">
-                            {/* Nút tải tệp từ thiết bị */}
-                            <label
-                              className={`px-3 py-1.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-[#2563EB] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 shadow-2xs hover:shadow-xs active:scale-95 ${
-                                uploadingBlockId === block.id ? 'opacity-50 pointer-events-none' : ''
-                              }`}
-                            >
-                              <Upload className="w-3.5 h-3.5 shrink-0" />
-                              <span className="whitespace-nowrap">Tải ảnh từ máy tính</span>
-                              <input
-                                type="file"
-                                accept="image/*,.pdf"
-                                className="hidden"
-                                onChange={(e) => handleImageFileUpload(block.id, e)}
-                              />
-                            </label>
-
-                            <span className="text-[11px] text-[#8C7E6A] text-center sm:text-left font-medium shrink-0">hoặc</span>
-
-                            {/* Ô nhập URL trực tiếp */}
-                            <input
-                              type="text"
-                              value={block.imageUrl || ''}
-                              onChange={(e) => handleUpdateBlock(block.id, { imageUrl: e.target.value })}
-                              placeholder="Dán link ảnh từ web (https://... /so_do.png)"
-                              className="flex-1 min-w-0 w-full px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B] placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400 truncate"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Xem trước ảnh nếu đã có */}
-                        {block.imageUrl && (
-                          <div className="p-2.5 rounded-xl bg-white border border-blue-100 flex items-center gap-3 min-w-0 max-w-full overflow-hidden">
-                            <img
-                              src={block.imageUrl}
-                              alt="Xem trước"
-                              className="w-16 h-16 object-contain rounded-lg border border-slate-200 shrink-0 bg-slate-50"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                              <p className="text-xs font-semibold text-[#2F3E6B] truncate block" title={block.imageUrl}>
-                                {block.imageUrl.startsWith('data:')
-                                  ? 'Tệp ảnh từ máy tính'
-                                  : block.imageUrl.includes('/')
-                                  ? block.imageUrl.split('/').pop() || block.imageUrl
-                                  : block.imageUrl}
-                              </p>
-                              <p className="text-[10px] text-[#10B981] font-medium flex items-center gap-1 mt-0.5 truncate">
-                                <CheckCircle2 className="w-3 h-3 shrink-0" />
-                                <span className="truncate">Đã sẵn sàng hiển thị trong bài học</span>
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateBlock(block.id, { imageUrl: '' })}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
-                              title="Xóa tệp này"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-
-                        <div>
-                          <label className="block text-[11px] font-bold text-[#2F3E6B] mb-1">
-                            Chú thích hình ảnh (Caption):
-                          </label>
-                          <input
-                            type="text"
-                            value={block.caption || ''}
-                            onChange={(e) => handleUpdateBlock(block.id, { caption: e.target.value })}
-                            placeholder="Hình 1: Sơ đồ tư duy cấu tạo từ láy bộ phận"
-                            className="w-full min-w-0 px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-xs text-[#2F3E6B]"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <RichTextEditor
+              value={contentHtml}
+              onChange={setContentHtml}
+              placeholder="Soạn nội dung bài lý thuyết tại đây…"
+              minHeight={320}
+            />
           </div>
 
         </div>
@@ -786,7 +335,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
 
             {tableOfContents.length === 0 ? (
               <p className="text-[11px] text-[#8C7E6A] italic">
-                Chưa có tiêu đề nào. Hãy thêm khối Tiêu đề để tạo mục lục.
+                Chưa có tiêu đề nào. Hãy dùng nút Tiêu đề lớn/nhỏ trên thanh công cụ để tạo mục lục.
               </p>
             ) : (
               <div className="space-y-1 text-xs">
@@ -797,7 +346,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
                       item.level === 3 ? 'pl-4 text-[11px] text-[#8C7E6A]' : 'font-bold'
                     }`}
                   >
-                    • {item.title}
+                    • {item.text}
                   </div>
                 ))}
               </div>
@@ -811,7 +360,7 @@ export const TheoryLessonEditor: React.FC<TheoryLessonEditorProps> = ({
               <span>Mẹo sư phạm Ngữ văn:</span>
             </h5>
             <p className="text-[11px] text-[#8C7E6A] leading-relaxed">
-              Các bài lý thuyết Văn 7 nên kết hợp ít nhất 1 trích đoạn văn học thực tế và 1 khối ghi nhớ nổi bật để học sinh dễ liên hệ kiến thức khi làm bài tập cảm thụ.
+              Các bài lý thuyết Văn 7 nên kết hợp ít nhất 1 trích đoạn văn học thực tế và 1 đoạn ghi nhớ in đậm nổi bật để học sinh dễ liên hệ kiến thức khi làm bài tập cảm thụ.
             </p>
           </div>
         </div>

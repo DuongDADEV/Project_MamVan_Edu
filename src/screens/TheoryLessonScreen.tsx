@@ -6,6 +6,7 @@ import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { ConfettiBurst } from '../components/ConfettiBurst.tsx';
+import { addHeadingAnchors, extractHeadings, hasHtmlContent, sanitizeHtml } from '../utils/richText.ts';
 import {
   BookOpen,
   ArrowRight,
@@ -64,6 +65,18 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
   );
   // Chỉ lý thuyết THẬT từ máy chủ — không dự phòng bằng bản mẫu (đã gỡ mockData).
   const theory = liveTheory || null;
+
+  // Nội dung HTML từ trình soạn Word dùng chung (30/10/2026): ưu tiên render
+  // HTML mới, fallback về blocks rồi sections khi bài chưa có contentHtml.
+  const hasTheoryHtml = !!theory && hasHtmlContent(theory.contentHtml);
+  const theoryHtmlHeadings = useMemo(
+    () => (theory ? extractHeadings(theory.contentHtml) : []),
+    [theory?.contentHtml]
+  );
+  const theorySafeHtml = useMemo(
+    () => (theory ? addHeadingAnchors(sanitizeHtml(theory.contentHtml)) : ''),
+    [theory?.contentHtml]
+  );
 
   const { data: liveQuizzes } = useLiveQuery<QuizWithMeta[]>(
     () => quizService.getQuizzes(undefined, false),
@@ -651,7 +664,27 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
             {/* MỤC LỤC NHANH (Table of Contents) — chỉ hiện khi nội dung render theo
                 sections (có id neo tương ứng); nhánh blocks không có neo nên ẩn để
                 tránh bấm vào mà không đi tới đâu */}
-            {!(theory.blocks && theory.blocks.length > 0) && theory.sections && theory.sections.length > 0 && (
+            {hasTheoryHtml && theoryHtmlHeadings.length > 0 && (
+            <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-2">
+                <ListTree className="w-4 h-4 text-[#8B5CF6]" />
+                <span>Mục lục bài đọc:</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {theoryHtmlHeadings.map((h, hIdx) => (
+                  <a
+                    key={hIdx}
+                    href={`#toc-${hIdx}`}
+                    className="text-xs px-3 py-1 rounded-xl bg-white border border-slate-200 hover:border-purple-300 hover:text-[#8B5CF6] text-slate-600 transition-colors"
+                  >
+                    {hIdx + 1}. {h.text}
+                  </a>
+                ))}
+              </div>
+            </div>
+            )}
+
+            {!hasTheoryHtml && !(theory.blocks && theory.blocks.length > 0) && theory.sections && theory.sections.length > 0 && (
             <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-2">
                 <ListTree className="w-4 h-4 text-[#8B5CF6]" />
@@ -672,7 +705,12 @@ export const TheoryLessonScreen: React.FC<TheoryLessonScreenProps> = ({
             )}
 
             {/* CÁC PHẦN NỘI DUNG LÝ THUYẾT (BLOCKS HOẶC SECTIONS) */}
-            {theory.blocks && theory.blocks.length > 0 ? (
+            {hasTheoryHtml ? (
+              <div
+                className="rich-text-content text-xs sm:text-sm text-slate-700 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: theorySafeHtml }}
+              />
+            ) : theory.blocks && theory.blocks.length > 0 ? (
               <div className="space-y-4">
                 {theory.blocks.map((b, bIdx) => {
                   // Khối rỗng (mẫu mới chưa nhập) không hiển thị cho học sinh

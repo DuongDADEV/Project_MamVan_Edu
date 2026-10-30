@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   VideoLessonWithMeta,
   TopicWithMeta,
-  VideoFocusPoint,
 } from '../../../services/types.ts';
 import { StatusBadge } from './StatusBadge.tsx';
+import { RichTextEditor } from './RichTextEditor.tsx';
+import { summaryPointsToHtml } from '../../../utils/richText.ts';
 
 import {
   ArrowLeft,
@@ -13,17 +14,11 @@ import {
   Link as LinkIcon,
   Clock,
   AlertTriangle,
-  Plus,
-  Trash2,
   Eye,
   UploadCloud,
   Save,
   CheckCircle2,
-  Sparkles,
   ArrowRight,
-  Layers,
-  ArrowUp,
-  ArrowDown,
 } from 'lucide-react';
 import { uploadLessonMedia } from '../../../services/api/storageClient.ts';
 
@@ -53,10 +48,16 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
   const [durationSec, setDurationSec] = useState<number>(video.durationSec || 600);
   const [sampleUrl, setSampleUrl] = useState(video.sampleUrl || '');
 
-  const [summaryPoints, setSummaryPoints] = useState<VideoFocusPoint[]>(
-    video.summaryPoints && video.summaryPoints.length > 0
-      ? video.summaryPoints
-      : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
+  // Tóm tắt sau video dạng HTML (trình soạn Word dùng chung, 30/10/2026):
+  // bài đã có summaryHtml thì mở thẳng, bài cũ thì convert 1 lần từ các ý.
+  // Dữ liệu ý cũ không xóa khỏi DB — PATCH chỉ ghi summaryHtml.
+  const [summaryHtml, setSummaryHtml] = useState<string>(() =>
+    video.summaryHtml ||
+    summaryPointsToHtml(
+      video.summaryPoints && video.summaryPoints.length > 0
+        ? video.summaryPoints
+        : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
+    )
   );
 
   // Giả lập tiến độ tải video lên
@@ -78,9 +79,13 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     topicId: video.topicId || topics[0]?.id || '',
     durationSec: video.durationSec || 600,
     sampleUrl: video.sampleUrl || '',
-    summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
-      ? video.summaryPoints
-      : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
+    summaryHtml:
+      video.summaryHtml ||
+      summaryPointsToHtml(
+        video.summaryPoints && video.summaryPoints.length > 0
+          ? video.summaryPoints
+          : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
+      ),
   });
   const savedJsonRef = useRef<string>(JSON.stringify(draftRef.current));
   const savingRef = useRef(false);
@@ -97,10 +102,13 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     setDurationSec(video.durationSec || 600);
     setSampleUrl(video.sampleUrl || '');
 
-    setSummaryPoints(
-      video.summaryPoints && video.summaryPoints.length > 0
-        ? video.summaryPoints
-        : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
+    setSummaryHtml(
+      video.summaryHtml ||
+        summaryPointsToHtml(
+          video.summaryPoints && video.summaryPoints.length > 0
+            ? video.summaryPoints
+            : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
+        )
     );
     setIsUploading(false);
     setUploadProgress(0);
@@ -110,9 +118,13 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
       topicId: video.topicId || topics[0]?.id || '',
       durationSec: video.durationSec || 600,
       sampleUrl: video.sampleUrl || '',
-        summaryPoints: video.summaryPoints && video.summaryPoints.length > 0
-        ? video.summaryPoints
-        : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }],
+        summaryHtml:
+          video.summaryHtml ||
+          summaryPointsToHtml(
+            video.summaryPoints && video.summaryPoints.length > 0
+              ? video.summaryPoints
+              : [{ title: 'Khái niệm trọng tâm', content: '', example: '' }]
+          ),
           };
     savedJsonRef.current = JSON.stringify(draftRef.current);
     setSaveError(null);
@@ -166,38 +178,6 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     }
   };
 
-  // Thêm / sửa / xóa / đổi thứ tự ý trọng tâm
-  const handleAddPoint = () => {
-    setSummaryPoints((prev) => [
-      ...prev,
-      { title: `Ý trọng tâm ${prev.length + 1}`, content: '', example: '' },
-    ]);
-  };
-
-  const handleUpdatePoint = (index: number, field: keyof VideoFocusPoint, val: string) => {
-    setSummaryPoints((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: val };
-      return copy;
-    });
-  };
-
-  const handleDeletePoint = (index: number) => {
-    setSummaryPoints((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleMovePoint = (index: number, direction: 'up' | 'down') => {
-    setSummaryPoints((prev) => {
-      const copy = [...prev];
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= copy.length) return prev;
-      const temp = copy[index];
-      copy[index] = copy[targetIndex];
-      copy[targetIndex] = temp;
-      return copy;
-    });
-  };
-
   // ---- TỰ LƯU NHÁP (26/10, cùng ca mất nội dung như trình soạn Lý thuyết) ----
   // Nội dung soạn chỉ sống trong state, rời bước là unmount -> mất phần chưa
   // lưu. Nay: gõ xong 2s tự lưu 1 lần (chỉ khi đổi so với lần lưu trước),
@@ -209,7 +189,7 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
     topicId: d.topicId,
     durationSec: d.durationSec,
     sampleUrl: d.sampleUrl.trim(),
-    summaryPoints: d.summaryPoints,
+    summaryHtml: d.summaryHtml,
   });
 
   const saveDraft = async (d: typeof draftRef.current, silent: boolean) => {
@@ -245,14 +225,14 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
   // Đồng bộ ref theo state + hẹn tự lưu sau 2s không gõ nữa
   useEffect(() => {
-    draftRef.current = { title, description, topicId, durationSec, sampleUrl, summaryPoints };
+    draftRef.current = { title, description, topicId, durationSec, sampleUrl, summaryHtml };
     const t = setTimeout(() => {
       if (JSON.stringify(draftRef.current) !== savedJsonRef.current) {
         void saveDraft(draftRef.current, true);
       }
     }, 2000);
     return () => clearTimeout(t);
-  }, [title, description, topicId, durationSec, sampleUrl, summaryPoints]);
+  }, [title, description, topicId, durationSec, sampleUrl, summaryHtml]);
 
   // Rời trình soạn: đẩy nốt phần chưa lưu (im lặng, không setState sau unmount)
   useEffect(() => {
@@ -491,101 +471,22 @@ export const VideoLessonEditor: React.FC<VideoLessonEditorProps> = ({
 
         </div>
 
-        {/* 3. KIẾN THỨC TRỌNG TÂM DƯỚI VIDEO (TÓM TẮT SAU VIDEO) */}
+        {/* 3. KIẾN THỨC TRỌNG TÂM DƯỚI VIDEO (trình soạn Word dùng chung) */}
         <div className="space-y-3 pt-3 border-t border-[#E6DCC8]">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#F2B84B]" />
-                <span>Kiến thức trọng tâm dưới video (Tóm tắt sau mỗi video)</span>
-              </h4>
-              <p className="text-[11px] text-[#8C7E6A] mt-0.5">
-                Trình soạn thảo danh sách các ý ngắn gọn kèm ví dụ trực quan cho học sinh đọc sau video
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleAddPoint}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-[#E6DCC8] hover:border-[#2F3E6B] text-[#2F3E6B] text-xs font-bold shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5 text-[#E2704A]" />
-              <span>Thêm ý trọng tâm</span>
-            </button>
+          <div>
+            <h4 className="text-xs font-bold text-[#2F3E6B] uppercase tracking-wider">
+              Kiến thức trọng tâm dưới video (Tóm tắt sau mỗi video)
+            </h4>
+            <p className="text-[11px] text-[#8C7E6A] mt-0.5">
+              Soạn như Word: bôi đen chữ rồi dùng thanh công cụ để in đậm, in nghiêng, tạo tiêu đề, danh sách, chèn ảnh. Dán từ Word vẫn giữ định dạng.
+            </p>
           </div>
-
-          <div className="space-y-3">
-            {summaryPoints.map((point, index) => (
-              <div
-                key={index}
-                className="p-4 rounded-2xl bg-white border border-[#E6DCC8] shadow-2xs space-y-2.5 relative group"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="w-5 h-5 rounded-full bg-[#FAF5EB] text-[#2F3E6B] text-[11px] font-bold flex items-center justify-center shrink-0 border border-[#E6DCC8]">
-                      {index + 1}
-                    </span>
-                    <input
-                      type="text"
-                      value={point.title}
-                      onChange={(e) => handleUpdatePoint(index, 'title', e.target.value)}
-                      placeholder="Tiêu đề ý trọng tâm (VD: Quy tắc số tiếng, Cách ngắt nhịp...)"
-                      className="flex-1 px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs font-bold text-[#2F3E6B]"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => handleMovePoint(index, 'up')}
-                      className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] disabled:opacity-30"
-                      title="Di chuyển lên"
-                    >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === summaryPoints.length - 1}
-                      onClick={() => handleMovePoint(index, 'down')}
-                      className="p-1 rounded hover:bg-black/5 text-[#8C7E6A] disabled:opacity-30"
-                      title="Di chuyển xuống"
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeletePoint(index)}
-                      className="p-1 rounded hover:bg-rose-50 text-[#8C7E6A] hover:text-rose-600"
-                      title="Xóa ý này"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <textarea
-                    rows={2}
-                    value={point.content}
-                    onChange={(e) => handleUpdatePoint(index, 'content', e.target.value)}
-                    placeholder="Nội dung giải thích chi tiết ý trọng tâm này..."
-                    className="w-full px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-xs text-[#2F3E6B] resize-none"
-                  />
-                </div>
-
-                <div>
-                  <input
-                    type="text"
-                    value={point.example || ''}
-                    onChange={(e) => handleUpdatePoint(index, 'example', e.target.value)}
-                    placeholder="Ví dụ minh họa (tùy chọn, VD: 'Hạt gạo làng ta / Có vị phù sa...')"
-                    className="w-full px-3 py-1.5 rounded-xl bg-[#FAF5EB] border border-[#E6DCC8] text-[11px] text-[#2F3E6B] italic placeholder-[#8C7E6A]/50"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          <RichTextEditor
+            value={summaryHtml}
+            onChange={setSummaryHtml}
+            placeholder="Soạn các ý trọng tâm sau video tại đây…"
+            minHeight={220}
+          />
         </div>
 
       </div>

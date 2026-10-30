@@ -6,6 +6,7 @@ import { QuizRunner } from '../components/QuizRunner.tsx';
 import { QuizResult } from '../components/QuizResult.tsx';
 import { MamMuc } from '../components/MamMuc.tsx';
 import { ConfettiBurst } from '../components/ConfettiBurst.tsx';
+import { hasHtmlContent, sanitizeHtml } from '../utils/richText.ts';
 import {
   Clock,
   ArrowRight,
@@ -220,7 +221,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
       { key: 'video', label: 'Xem video', xpBonus: 5 },
     ];
 
-    if (video?.summaryPoints && video.summaryPoints.length > 0) {
+    if (hasHtmlContent(video?.summaryHtml) || (video?.summaryPoints && video.summaryPoints.length > 0)) {
       steps.push({ key: 'summary', label: 'Trọng tâm', xpBonus: 2 });
     }
 
@@ -253,7 +254,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
 
     steps.push({ key: 'complete', label: 'Hoàn thành', xpBonus: 20 });
     return steps;
-  }, [video?.summaryPoints, practiceQuiz, quickTestQuiz, masteryQuiz]);
+  }, [video?.summaryHtml, video?.summaryPoints, practiceQuiz, quickTestQuiz, masteryQuiz]);
 
   const currentStep = dynamicSteps[currentStepIndex] || dynamicSteps[0];
 
@@ -810,6 +811,12 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
               Hãy dành ít nhất 15 giây đọc kĩ các ý cần nhớ bên dưới để nắm vững bài học nhé!
             </p>
 
+            {hasHtmlContent(video.summaryHtml) ? (
+              <div
+                className="rich-text-content text-xs sm:text-sm text-slate-700 leading-relaxed mb-8"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(video.summaryHtml) }}
+              />
+            ) : (
             <div className="space-y-4 mb-8">
               {(video.summaryPoints || []).map((point, idx) => (
                 <div
@@ -833,6 +840,7 @@ export const VideoLessonScreen: React.FC<VideoLessonScreenProps> = ({
                 </div>
               ))}
             </div>
+            )}
 
             {/* Nút điều hướng */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">

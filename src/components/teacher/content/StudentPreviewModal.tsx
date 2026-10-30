@@ -8,6 +8,7 @@ import {
 } from '../../../services/types.ts';
 import { QuizRunner } from '../../QuizRunner.tsx';
 import { MamMuc } from '../../MamMuc.tsx';
+import { hasHtmlContent, sanitizeHtml } from '../../../utils/richText.ts';
 
 interface StudentPreviewModalProps {
   isOpen: boolean;
@@ -125,6 +126,12 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                     </h4>
                   </div>
 
+                  {hasHtmlContent(videoData.summaryHtml) ? (
+                    <div
+                      className="rich-text-content text-xs sm:text-sm text-[#2F3E6B] leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(videoData.summaryHtml) }}
+                    />
+                  ) : (
                   <div className="space-y-3">
                     {(videoData.summaryPoints || []).map((pt, i) => (
                       <div
@@ -143,6 +150,7 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                       </div>
                     ))}
                   </div>
+                  )}
                 </div>
               )}
 
@@ -172,7 +180,13 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                 </h3>
               </div>
 
-              {/* Blocks Render */}
+              {/* Nội dung lý thuyết: HTML mới trước, khối cũ fallback */}
+              {hasHtmlContent(theoryData.contentHtml) ? (
+                <div
+                  className="rich-text-content text-xs sm:text-sm text-[#2F3E6B] leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(theoryData.contentHtml) }}
+                />
+              ) : (
               <div className="space-y-4">
                 {(theoryData.blocks || []).map((b, i) => (
                   <div key={b.id || i}>
@@ -233,6 +247,7 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({
                   </div>
                 ))}
               </div>
+              )}
 
               {/* Bottom "Đã hiểu" Button Preview */}
               <div className="pt-4 border-t border-[#E6DCC8] flex items-center justify-between">
