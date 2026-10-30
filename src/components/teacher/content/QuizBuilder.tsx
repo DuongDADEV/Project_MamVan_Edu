@@ -372,42 +372,17 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
     isDirtyRef.current = true;
   };
 
-  // Thêm câu hỏi từ ngân hàng
+  // Thêm câu hỏi từ ngân hàng: DÙNG LẠI câu gốc (giữ nguyên id), KHÔNG nhân bản.
+  // Ngân hàng là danh sách chung của giáo viên — code cũ tạo bản sao id mới
+  // cho mỗi câu được chọn nên mỗi lần gắn từ ngân hàng lại sinh thêm dòng
+  // trùng nội dung trong ngân hàng (vd: Truyện ngắn 2 câu -> 4 câu sau 1 lần
+  // gắn). Câu đã có trong đề thì bỏ qua, tránh trùng id trong cùng 1 đề.
   const handleImportFromBank = (imported: QuestionWithMeta[]) => {
-    // Tạo bản sao độc lập cho từng câu được chọn
-    const copies = (imported || []).filter(Boolean).map((q) => {
-      let finalOptions = q.options;
-      let finalAnswer: any = q.answer;
-
-      if (q.type === 'single' || q.type === 'multi') {
-        if (!Array.isArray(finalOptions) || finalOptions.length === 0) {
-          finalOptions = ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'];
-        }
-        // Chuẩn hóa nếu answer là dạng index chữ cái 'A', 'B', 'C', 'D'
-        if (q.type === 'single' && typeof finalAnswer === 'string') {
-          const letterIdx = ['A', 'B', 'C', 'D'].indexOf(finalAnswer.toUpperCase());
-          if (letterIdx >= 0 && finalOptions[letterIdx]) {
-            finalAnswer = finalOptions[letterIdx];
-          }
-        } else if (q.type === 'multi' && Array.isArray(finalAnswer)) {
-          finalAnswer = finalAnswer.map((a) => {
-            const letterIdx = ['A', 'B', 'C', 'D'].indexOf(String(a).toUpperCase());
-            return letterIdx >= 0 && finalOptions && finalOptions[letterIdx]
-              ? finalOptions[letterIdx]
-              : a;
-          });
-        }
-      }
-
-      return {
-        ...q,
-        id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-        topicId: topicId || q.topicId,
-        options: finalOptions,
-        answer: finalAnswer,
-      };
+    setQuestions((prev) => {
+      const existing = new Set(prev.map((q) => q.id));
+      const linked = (imported || []).filter((q) => q && !existing.has(q.id));
+      return linked.length ? [...prev, ...linked] : prev;
     });
-    setQuestions((prev) => [...prev, ...copies]);
     isDirtyRef.current = true;
   };
 
