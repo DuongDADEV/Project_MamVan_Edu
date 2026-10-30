@@ -1016,25 +1016,41 @@ attemptsRouter.get('/student-assignments', requireRole('student'), async (req: A
   for (const r of aqs) qCount.set(r.assignment_id, (qCount.get(r.assignment_id) || 0) + 1);
   const asgMap = new Map(asgs.map((a: any) => [a.id, a]));
   // Học sinh chỉ thấy bài ĐÃ GIAO (có published_at) — bản nháp không lộ.
-  res.json(
-    targets
-      .filter((t: any) => (asgMap.get(t.assignment_id) as any)?.published_at)
-      .map((t: any) => {
-        const a: any = asgMap.get(t.assignment_id) || {};
-        return {
-          targetId: t.target_id,
-          assignmentId: t.assignment_id,
-          title: a.title || t.assignment_id,
-          dueAt: t.due_at || a.due_at,
-          isTimed: !!a.is_timed,
-          timeLimitMinutes: a.time_limit_minutes,
-          questionCount: qCount.get(t.assignment_id) || 0,
-          status: t.submission_status,
-          firstSubmittedAt: t.first_submitted_at,
-          attempts: atts.filter((x: any) => x.assignment_id === t.assignment_id),
-        };
-      })
-  );
+  const rows = targets
+    .filter((t: any) => (asgMap.get(t.assignment_id) as any)?.published_at)
+    .map((t: any) => {
+      const a: any = asgMap.get(t.assignment_id) || {};
+      return {
+        targetId: t.target_id,
+        assignmentId: t.assignment_id,
+        title: a.title || t.assignment_id,
+        dueAt: t.due_at || a.due_at,
+        isTimed: !!a.is_timed,
+        timeLimitMinutes: a.time_limit_minutes,
+        questionCount: qCount.get(t.assignment_id) || 0,
+        status: t.submission_status,
+        firstSubmittedAt: t.first_submitted_at,
+        attempts: atts.filter((x: any) => x.assignment_id === t.assignment_id),
+      };
+    });
+  // Một học sinh có thể có 2 dòng target cho cùng 1 bài (vừa giao cả lớp
+  // vừa giao riêng) — gộp thành 1 dòng/bài, không hiện 2 thẻ giống hệt nhau
+  // (đã thấy ở bài "Bài kiểm tra mới" hạn 30/10). attempts của 2 dòng là
+  // một (cùng lọc theo assignment_id) nên chỉ cần giữ dòng đầu, nâng
+  // status lên SUBMITTED và giữ firstSubmittedAt sớm nhất nếu dòng sau có.
+  const merged = new Map<string, any>();
+  for (const r of rows) {
+    const oldRow = merged.get(r.assignmentId);
+    if (!oldRow) {
+      merged.set(r.assignmentId, r);
+      continue;
+    }
+    if (oldRow.status !== 'SUBMITTED' && r.status === 'SUBMITTED') oldRow.status = 'SUBMITTED';
+    if (r.firstSubmittedAt && (!oldRow.firstSubmittedAt || r.firstSubmittedAt < oldRow.firstSubmittedAt)) {
+      oldRow.firstSubmittedAt = r.firstSubmittedAt;
+    }
+  }
+  res.json([...merged.values()]);
 });
 
 // Lần làm kèm đáp án của CHÍNH học sinh đang đăng nhập — màn "Kết quả học

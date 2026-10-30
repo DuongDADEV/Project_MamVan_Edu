@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Clock, CheckCircle2, Circle, ChevronRight, Eye } from 'lucide-react';
+import { ClipboardList, Clock, CheckCircle2, Circle, ChevronRight, Eye, HelpCircle } from 'lucide-react';
 import { Topic, Quiz, TEST_QUIZ_KINDS } from '../types.ts';
 import { getStudentAssignments } from '../services/api/biClient.ts';
 import { formatScore } from '../utils/scoreFormat.ts';
@@ -71,6 +71,46 @@ function sortByDue(a: ListItem, b: ListItem): number {
   if (a.dueMs === null) return 1;
   if (b.dueMs === null) return -1;
   return a.dueMs - b.dueMs;
+}
+
+// Nút hành động ở mỗi dòng — LUẬT 3 TRẠNG THÁI (chủ dự án 30/10):
+// Đã nộp = đã có lần nộp (xanh lá nhẹ); Quá hạn, làm ngay! = quá hạn nộp mà
+// chưa nộp (đỏ nhẹ, ưu tiên hơn Làm bài); Làm bài = còn lại, kể cả đang làm
+// dở (xám nhẹ). Bài kiểm tra đã nộp vẫn giữ chữ "Xem lại" theo luật cũ
+// (kiểm tra chỉ xem lại, không tính điểm mới) nhưng cùng màu xanh đã nộp.
+// Quá hạn so theo mốc thời gian tuyệt đối (dueMs < now); bài không có hạn
+// thì không bao giờ quá hạn.
+function ActionPill({ item }: { item: ListItem }) {
+  const isTestReview =
+    item.done &&
+    item.source === 'quiz' &&
+    TEST_KINDS.includes((item as Extract<ListItem, { source: 'quiz' }>).kind);
+  const state: 'todo' | 'done' | 'overdue' = item.done
+    ? 'done'
+    : item.dueMs !== null && item.dueMs < Date.now()
+      ? 'overdue'
+      : 'todo';
+  const pill =
+    state === 'done'
+      ? 'bg-green-50 text-green-700'
+      : state === 'overdue'
+        ? 'bg-red-50 text-red-700'
+        : 'bg-slate-100 text-slate-600';
+  return (
+    <span className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${pill}`}>
+      {isTestReview ? (
+        <>
+          <Eye className="w-4 h-4" /> Xem lại
+        </>
+      ) : state === 'done' ? (
+        'Đã nộp'
+      ) : state === 'overdue' ? (
+        'Quá hạn, làm ngay!'
+      ) : (
+        'Làm bài'
+      )}
+    </span>
+  );
 }
 
 export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
@@ -226,8 +266,17 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
               <span className="flex-1 min-w-0">
                 <span className="block font-bold text-[#2F3E6B] truncate">{item.title}</span>
                 <span className="block text-xs text-[#8C7E6A] mt-0.5">
-                  {item.topicName} • {item.questionCount} câu
-                  {item.isTimed && item.timeLimitMinutes ? ` • ${item.timeLimitMinutes} phút` : ''}
+                  {item.topicName}
+                  {' • '}
+                  <HelpCircle className="inline w-3.5 h-3.5 -mt-0.5" />
+                  {` ${item.questionCount} câu`}
+                  {item.isTimed && item.timeLimitMinutes ? (
+                    <>
+                      {' • '}
+                      <Clock className="inline w-3.5 h-3.5 -mt-0.5" />
+                      {` ${item.timeLimitMinutes} phút`}
+                    </>
+                  ) : null}
                   {item.source === 'quiz' ? ` • ${(item as Extract<ListItem, { source: 'quiz' }>).kindLabel}` : ''}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-[#8C7E6A] mt-0.5">
@@ -241,19 +290,9 @@ export const AssignmentsScreen: React.FC<AssignmentsScreenProps> = ({
                     )}
                 </span>
               </span>
-              <span className="shrink-0 flex items-center gap-1 text-xs font-bold text-[#2F3E6B]">
-                {item.done &&
-                item.source === 'quiz' &&
-                TEST_KINDS.includes((item as Extract<ListItem, { source: 'quiz' }>).kind) ? (
-                  <>
-                    <Eye className="w-4 h-4" /> Xem lại
-                  </>
-                ) : item.done ? (
-                  'Đã nộp'
-                ) : (
-                  'Làm bài'
-                )}
-                <ChevronRight className="w-4 h-4" />
+              <span className="shrink-0 flex items-center gap-1">
+                <ActionPill item={item} />
+                <ChevronRight className="w-4 h-4 text-[#8C7E6A]" />
               </span>
             </button>
           ))}

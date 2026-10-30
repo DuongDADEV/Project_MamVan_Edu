@@ -1,3 +1,11 @@
+## [dev] 2026-10-30 — Màn Bài tập: nút 3 trạng thái + icon số câu/số phút + gộp thẻ trùng
+
+- Giáo viên báo (30/10): bài về nhà quá hạn mà chưa làm cũng không báo gì; nút làm bài cần 3 trạng thái; chỗ số câu & số phút đổi thành biểu tượng.
+- Nút hành động mỗi dòng nay là pill 3 trạng thái (luật 30/10): Làm bài = chưa nộp, chưa quá hạn, kể cả đang làm dở (xám nhẹ); Đã nộp = đã có lần nộp (xanh lá nhẹ); Quá hạn, làm ngay! = quá hạn nộp mà chưa nộp (đỏ nhẹ). Đã nộp thì thắng quá hạn (nộp rồi thì không báo quá hạn nữa). Bài kiểm tra đã nộp vẫn giữ chữ "Xem lại" theo luật cũ (chỉ xem lại, không tính điểm mới) nhưng cùng màu xanh đã nộp. Quá hạn so theo mốc thời gian tuyệt đối (dueAt < now); bài không có hạn thì không bao giờ quá hạn.
+- Meta dòng: số câu có icon "?" (HelpCircle) đứng trước, số phút có icon đồng hồ đứng trước; chữ số câu/số phút giữ nguyên.
+- Tiện thấy trong ảnh giáo viên gửi: 2 thẻ giống hệt nhau ("Bài kiểm tra mới", 5 câu, 35 phút, hạn 30/10) thực ra là CÙNG 1 bài (asg_mvv0y42s3gm1qk) — do vừa giao cả lớp 7a9 vừa giao riêng từng bạn nên route student-assignments trả về 2 dòng. Nay route gộp thành 1 dòng/bài (giữ dòng đầu, nâng status lên SUBMITTED và giữ firstSubmittedAt sớm nhất nếu dòng sau có; attempts 2 dòng là một nên không mất gì).
+- Sơ đồ không regen đợt này (không đổi luồng nghiệp vụ).
+
 ## [dev] 2026-10-30 — Thẻ Kết quả: bỏ đếm "số lần làm", chỉ giữ "Gần nhất"
 
 - Giáo viên báo (30/10): mới học 1 lượt luồng nhưng thẻ ghi "Lịch sử: 2 lần làm" — vì luồng có 2 bài tập sau lý thuyết, mỗi bài gom thành 1 đợt theo mốc thời gian nên đếm thành 2. Con số này không có ý nghĩa nên bỏ luôn.
